@@ -7,7 +7,7 @@ import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AuthGuard from "@/components/shared/AuthGuard";
 
-const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -31,7 +31,6 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         </div>
 
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Header mobile */}
           <header className="lg:hidden flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 sticky top-0 z-30">
             <Button
               variant="ghost"
@@ -47,7 +46,6 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
             <ThemeToggle />
           </header>
 
-          {/* Header desktop */}
           <header className="hidden lg:flex items-center justify-end px-6 py-[18px] border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 sticky top-0 z-30">
             <ThemeToggle />
           </header>
@@ -61,6 +59,4 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
       </div>
     </AuthGuard>
   );
-};
-
-export default DashboardLayout;
+}

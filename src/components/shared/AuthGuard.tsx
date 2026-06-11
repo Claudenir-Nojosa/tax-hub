@@ -8,12 +8,5 @@ export default function AuthLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <SessionProvider>
-      <section className="flex flex-col items-center py-40">
-        <Navbar />
-        {children}
-      </section>
-    </SessionProvider>
-  );
+  return <SessionProvider>{children}</SessionProvider>;
 }

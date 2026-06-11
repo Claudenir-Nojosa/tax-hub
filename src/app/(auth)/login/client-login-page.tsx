@@ -20,12 +20,7 @@ export default function ClientLoginPage() {
 
   useEffect(() => {
     if (status === "loading") return;
-
-    if (session?.user) {
-      const onboardingCompleto = (session.user as any).onboardingCompleto || false;
-      router.push(onboardingCompleto ? "/dashboard" : "/login/onboarding");
-    }
-  }, [session, status, router]);
+  }, [status]);
 
   if (status === "loading") {
     return (

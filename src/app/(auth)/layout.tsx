@@ -2,32 +2,35 @@
 
 import { usePathname } from "next/navigation";
 import { Navbar } from "@/components/landingpage/NavBar";
-import Image from "next/image";
-import Link from "next/link";
-import { SessionProvider } from "next-auth/react"; // ✅ adiciona
+import { SessionProvider, useSession } from "next-auth/react";
+
+function AuthContent({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const { data: session, status } = useSession();
+
+  const isLoginPage = pathname?.includes("/login");
+  const isSignupPage = pathname?.includes("/signup");
+  const isAuthPage = isLoginPage || isSignupPage;
+
+  // Não mostra navbar se está autenticado ou ainda carregando
+  const showNavbar = isAuthPage && !session && status !== "loading";
+
+  return (
+    <section className="flex flex-col items-center py-40">
+      {showNavbar && <Navbar />}
+      {children}
+    </section>
+  );
+}
 
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
-  const isOnboardingPage = pathname?.includes("/login/onboarding");
-
   return (
-    <SessionProvider> {/* ✅ envolve tudo */}
-      <section
-        className={`flex flex-col items-center ${isOnboardingPage ? "py-0" : "py-40"}`}
-      >
-        {!isOnboardingPage && <Navbar />}
-
-        {!isOnboardingPage && (
-          <Link href={"/"}>
-          </Link>
-        )}
-
-        {children}
-      </section>
+    <SessionProvider>
+      <AuthContent>{children}</AuthContent>
     </SessionProvider>
   );
 }

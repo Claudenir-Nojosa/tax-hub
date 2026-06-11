@@ -1,4 +1,3 @@
-// components/shared/LogoutButtonSimple.tsx
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -9,61 +8,20 @@ import { LogOut } from "lucide-react";
 import { Icons } from "../ui/loadingSpinner";
 
 interface LogoutButtonSimpleProps {
-  locale: string;
   isCollapsed?: boolean;
-  translations?: {
-    sair: string;
-    saindo: string;
-    erroLogout: string;
-  };
 }
 
-// Função auxiliar para obter tradução com fallback
-const getFallback = (lang: string, pt: string, en: string) => {
-  return lang === "en" ? en : pt;
-};
-
-export default function LogoutButtonSimple({
-  locale,
-  isCollapsed = false,
-  translations,
-}: LogoutButtonSimpleProps) {
+export default function LogoutButtonSimple({ isCollapsed = false }: LogoutButtonSimpleProps) {
   const [isLoading, setIsLoading] = useState(false);
-
-  // Fallback padrão para traduções
-  const defaultTranslations = {
-    sair: getFallback(locale, "Sair", "Logout"),
-    saindo: getFallback(locale, "Saindo...", "Logging out..."),
-    erroLogout: getFallback(
-      locale,
-      "Erro ao fazer logout",
-      "Error logging out",
-    ),
-  };
-
-  // Usar traduções fornecidas ou fallback padrão
-  const t = { ...defaultTranslations, ...translations };
 
   const handleLogout = async () => {
     setIsLoading(true);
-
     try {
-      // Fazer logout
-      await signOut({
-        redirect: true, // ← MUDADO PARA true
-        callbackUrl: `/${locale}/login`,
-      });
-
-      // O signOut com redirect:true já vai redirecionar automaticamente
-      // Não precisamos fazer mais nada
+      await signOut({ redirect: true, callbackUrl: "/login" });
     } catch (error) {
-      console.error("❌ [LOGOUT SIMPLE] Erro:", error);
-      toast.error(t.erroLogout);
-
-      // Fallback: redirecionar manualmente
-      setTimeout(() => {
-        window.location.href = `/${locale}/login`;
-      }, 300);
+      console.error("Erro no logout:", error);
+      toast.error("Erro ao fazer logout");
+      setTimeout(() => { window.location.href = "/login"; }, 300);
     }
   };
 
@@ -86,12 +44,10 @@ export default function LogoutButtonSimple({
         <LogOut className="h-4 w-4" />
       )}
 
-      {!isCollapsed && !isLoading && (
-        <span className="ml-3 text-sm">{t.sair}</span>
-      )}
-
-      {!isCollapsed && isLoading && (
-        <span className="ml-3 text-sm">{t.saindo}</span>
+      {!isCollapsed && (
+        <span className="ml-3 text-sm">
+          {isLoading ? "Saindo..." : "Sair"}
+        </span>
       )}
     </Button>
   );

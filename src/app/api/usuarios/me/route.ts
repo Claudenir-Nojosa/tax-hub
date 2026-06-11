@@ -24,7 +24,6 @@ export async function GET(request: NextRequest) {
         username: true, // ← INCLUI O USERNAME
         image: true,
         subscriptionStatus: true,
-        onboardingCompleto: true,
         createdAt: true,
         updatedAt: true,
       },

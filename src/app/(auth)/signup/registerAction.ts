@@ -136,7 +136,6 @@ export default async function registerAction(
         name: data.name.trim(),
         email: data.email.toLowerCase().trim(),
         password: hashSync(data.password),
-        onboardingCompleto: false,
         subscriptionStatus: "free",
         configuracoesUsuarios: {
           create: {
@@ -148,7 +147,6 @@ export default async function registerAction(
         id: true,
         email: true,
         name: true,
-        onboardingCompleto: true,
       },
     });
 
@@ -157,7 +155,6 @@ export default async function registerAction(
       userId: newUser.id,
       email: newUser.email,
       name: newUser.name,
-      onboardingCompleto: newUser.onboardingCompleto,
       lang: lang,
     });
 

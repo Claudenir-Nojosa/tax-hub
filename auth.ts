@@ -80,10 +80,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (existingUser) {
             user.id = existingUser.id;
 
-            // Usar casting para evitar erro de tipo
-            (user as any).onboardingCompleto =
-              existingUser.onboardingCompleto || false;
-
             const existingAccount = await db.account.findFirst({
               where: {
                 userId: existingUser.id,
@@ -123,7 +119,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.onboardingCompleto = (user as any).onboardingCompleto || false;
       }
       return token;
     },
@@ -133,8 +128,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       if (session.user && userId) {
         session.user.id = userId as string;
-        (session.user as any).onboardingCompleto =
-          token.onboardingCompleto || false;
 
         try {
           const user = await db.user.findUnique({
@@ -145,7 +138,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               email: true,
               image: true,
               subscriptionStatus: true,
-              onboardingCompleto: true,
             },
           });
 
@@ -155,7 +147,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             session.user.email = user.email;
             session.user.image = user.image;
             (session.user as any).subscriptionStatus = user.subscriptionStatus;
-            (session.user as any).onboardingCompleto = user.onboardingCompleto;
           }
         } catch (error) {
           console.error("Erro ao buscar usuário na session:", error);
