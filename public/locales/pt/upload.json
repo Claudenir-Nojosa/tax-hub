@@ -1,0 +1,23 @@
+{
+  "titulo": "Imagem de Capa",
+  "alt": {
+    "capaMeta": "Capa da meta"
+  },
+  "botoes": {
+    "adicionarImagem": "Adicionar imagem de capa"
+  },
+  "instrucoes": {
+    "formatos": "PNG, JPG, JPEG até 5MB"
+  },
+  "estados": {
+    "uploading": "Fazendo upload..."
+  },
+  "mensagens": {
+    "uploadSucesso": "Imagem carregada com sucesso"
+  },
+  "erros": {
+    "tipoInvalido": "Por favor, selecione uma imagem válida (PNG, JPG, JPEG)",
+    "tamanhoMaximo": "A imagem deve ter no máximo 5MB",
+    "upload": "Erro ao fazer upload da imagem"
+  }
+}

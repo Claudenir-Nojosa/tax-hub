@@ -1,0 +1,39 @@
+{
+  "badge": "Segurança e Privacidade",
+  "title": {
+    "yourData": "Seus dados estão",
+    "highlight": "100% protegidos"
+  },
+  "description": "Segurança de nível bancário para você gerenciar suas finanças com total tranquilidade. Sua privacidade é nossa prioridade.",
+  "layeredProtection": {
+    "title": "Proteção em todas as camadas",
+    "description": "Implementamos múltiplas camadas de segurança para garantir que suas informações financeiras estejam sempre protegidas. Do momento em que você faz login até cada transação processada, tudo é criptografado e monitorado."
+  },
+  "protection": {
+    "twoFactor": "Autenticação de dois fatores (2FA)",
+    "monitoring": "Monitoramento de atividades suspeitas",
+    "notifications": "Notificações em tempo real",
+    "noPasswords": "Nunca armazenamos senhas bancárias"
+  },
+  "features": {
+    "encryption": {
+      "title": "Criptografia de ponta",
+      "description": "Todos os dados são protegidos com criptografia AES-256, o mesmo padrão usado por bancos e instituições governamentais."
+    },
+    "control": {
+      "title": "Você controla tudo",
+      "description": "Seus dados são exclusivamente seus. Você decide o que compartilhar e pode deletar tudo a qualquer momento."
+    },
+    "compliance": {
+      "title": "Conformidade total",
+      "description": "Seguimos rigorosamente a LGPD e normas do Banco Central. Auditados constantemente por terceiros independentes."
+    },
+    "infrastructure": {
+      "title": "Infraestrutura segura",
+      "description": "Servidores em cloud tier 1 com redundância geográfica, backups automáticos e monitoramento 24/7."
+    }
+  },
+  "certifications": {
+    "title": "Certificações e Conformidades"
+  }
+}

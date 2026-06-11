@@ -1,0 +1,67 @@
+{
+  "titulos": {
+    "notificacoes": "Notificações"
+  },
+  "estados": {
+    "carregando": "Carregando notificações..."
+  },
+  "mensagens": {
+    "erroCarregar": "Erro ao carregar notificações:",
+    "lancamentoAceito": "Lançamento aceito com sucesso!",
+    "erroAceitarLancamento": "Erro ao aceitar lançamento",
+    "lancamentoRecusado": "Lançamento recusado!",
+    "erroRecusarLancamento": "Erro ao recusar lançamento",
+    "conviteAceito": "Convite aceito com sucesso!",
+    "erroAceitarConvite": "Erro ao aceitar convite",
+    "conviteRecusado": "Convite recusado!",
+    "erroRecusarConvite": "Erro ao recusar convite",
+    "conviteMetaAceito": "Convite de meta aceito com sucesso!",
+    "conviteMetaRecusado": "Convite de meta recusado!",
+    "erro": "Erro:",
+    "erroProcessar": "Erro ao processar solicitação",
+    "erroAceitarTodas": "Erro ao aceitar todas as notificações:",
+    "erroRecusarTodas": "Erro ao recusar todas as notificações:",
+    "erroProcessarTodas": "Erro ao processar todas as notificações",
+    "todasNotificacoesAceitas": "Todas as {{count}} notificações foram aceitas!",
+    "notificacoesComErro": "{{sucessos}} notificações aceitas, {{erros}} com erro",
+    "todasNotificacoesRecusadas": "Todas as {{count}} notificações foram recusadas!",
+    "notificacoesRecusadasComErro": "{{sucessos}} notificações recusadas, {{erros}} com erro",
+    "nenhumaNotificacao": "Sem notificações",
+    "semSolicitacoes": "Sem pedido de compartilhamentos"
+  },
+  "botoes": {
+    "aceitarTodos": "Aceitar Todos",
+    "recusarTodos": "Recusar Todos",
+    "processando": "Processando..."
+  },
+  "tipos": {
+    "conviteCartao": "Convite para cartão",
+    "conviteMeta": "Convite para meta",
+    "acessoLeitura": "Colaborador com acesso de leitura",
+    "despesa": "Despesa",
+    "receita": "Receita",
+    "compartilhada": "compartilhada"
+  },
+  "labels": {
+    "expiraEm": "Expira em:"
+  },
+  "acoes": {
+    "aceitar": "Aceitar",
+    "recusar": "Recusar",
+    "aceitando": "Aceitando...",
+    "recusando": "Recusando..."
+  },
+  "tempo": {
+    "agora": "agora",
+    "minuto": "minuto atrás",
+    "minutos": "minutos atrás",
+    "hora": "hora atrás",
+    "horas": "horas atrás",
+    "dia": "dia atrás",
+    "dias": "dias atrás",
+    "semana": "semana atrás",
+    "semanas": "semanas atrás",
+    "mes": "mês atrás",
+    "meses": "meses atrás"
+  }
+}

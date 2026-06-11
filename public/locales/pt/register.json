@@ -1,0 +1,33 @@
+{
+  "fields": {
+    "name": {
+      "label": "Nome",
+      "placeholder": "Fulano de Tal"
+    },
+    "email": {
+      "label": "Email",
+      "placeholder": "eu@exemplo.com"
+    },
+    "password": {
+      "label": "Senha",
+      "placeholder": "********",
+      "hint": "Mínimo 6 caracteres"
+    }
+  },
+  "buttons": {
+    "register": "Registrar",
+    "registering": "Registrando..."
+  },
+  "validation": {
+    "required": "Por favor, preencha todos os campos",
+    "email": "Por favor, insira um email válido",
+    "password": "A senha deve ter pelo menos 6 caracteres"
+  },
+  "messages": {
+    "success": "Registro realizado com sucesso! Redirecionando...",
+    "error": {
+      "duplicate": "Este email já está cadastrado",
+      "generic": "Ocorreu um erro ao registrar. Tente novamente."
+    }
+  }
+}

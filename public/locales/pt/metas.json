@@ -1,0 +1,76 @@
+{
+  "titulo": "Metas Pessoais",
+  "subtitulo": "Gerencie seus objetivos financeiros",
+  "botoes": {
+    "novaMeta": "Nova Meta",
+    "criarMeta": "Criar Meta",
+    "criarPrimeiraMeta": "Criar Primeira Meta",
+    "atualizar": "Atualizar",
+    "cancelar": "Cancelar",
+    "confirmar": "Confirmar"
+  },
+  "formulario": {
+    "tituloNovo": "Nova Meta",
+    "tituloEditar": "Editar Meta",
+    "descricaoNovo": "Crie uma nova meta financeira",
+    "descricaoEditar": "Atualize os dados da meta",
+    "tituloLabel": "Título",
+    "tituloPlaceholder": "Ex: Comprar um carro, Viagem...",
+    "descricaoLabel": "Descrição",
+    "descricaoPlaceholder": "Descrição detalhada da meta...",
+    "valorAlvoLabel": "Valor Alvo",
+    "valorAtualLabel": "Valor Atual",
+    "dataAlvoLabel": "Data Alvo",
+    "categoriaLabel": "Categoria",
+    "categoriaPlaceholder": "Ex: Veículo, Casa, Educação...",
+    "corLabel": "Cor",
+    "iconeLabel": "Ícone"
+  },
+  "status": {
+    "concluida": "Concluída",
+    "atrasada": "Atrasada",
+    "proxima": "Próxima",
+    "em_andamento": "Em andamento"
+  },
+  "progresso": {
+    "label": "Progresso"
+  },
+  "compartilhada": {
+    "por": "Compartilhada por"
+  },
+  "mensagens": {
+    "nenhumaMeta": "Nenhuma meta definida",
+    "comeceCriando": "Comece criando sua primeira meta financeira",
+    "criada": "Meta criada com sucesso!",
+    "atualizada": "Meta atualizada com sucesso!",
+    "excluida": "Meta excluída com sucesso!",
+    "valorAdicionado": "Valor de R$ {{valor}} adicionado com sucesso",
+    "diasRestantes": "{{count}} dia restante",
+    "diasRestantes_plural": "{{count}} dias restantes"
+  },
+  "estados": {
+    "carregando": "Carregando...",
+    "criando": "Criando...",
+    "atualizando": "Atualizando...",
+    "excluindo": "Excluindo..."
+  },
+  "tooltips": {
+    "adicionarValor": "Adicionar valor",
+    "editarMeta": "Editar meta",
+    "excluirMeta": "Excluir meta"
+  },
+  "confirmacao": {
+    "titulo": "Excluir Meta",
+    "descricao": "Tem certeza que deseja excluir a meta \"{{titulo}}\"? Esta ação não pode ser desfeita."
+  },
+  "erros": {
+    "carregarMetas": "Erro ao carregar metas",
+    "carregarColaboradores": "Erro ao carregar colaboradores",
+    "excluirMeta": "Erro ao excluir meta",
+    "salvarMeta": "Erro ao salvar meta",
+    "valorInvalido": "Digite um valor válido",
+    "contribuirMeta": "Erro ao contribuir para meta",
+    "adicionarValor": "Erro ao adicionar valor",
+    "contribuir": "Erro ao contribuir"
+  }
+}

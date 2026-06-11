@@ -1,0 +1,22 @@
+{
+  "title": {
+    "start": "Comece sua jornada",
+    "highlight": "financeira hoje"
+  },
+  "description": "Dê o primeiro passo rumo à liberdade financeira. Configure sua conta em minutos e veja a mágica acontecer.",
+  "button": "Criar conta gratuita",
+  "features": {
+    "secure": {
+      "title": "100% Seguro",
+      "subtitle": "Criptografia bancária"
+    },
+    "trial": {
+      "title": "7 dias grátis",
+      "subtitle": "Cancele quando quiser"
+    },
+    "loved": {
+      "title": "Adorado",
+      "subtitle": "Por milhares de usuários"
+    }
+  }
+}

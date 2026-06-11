@@ -1,0 +1,84 @@
+{
+  "titulos": {
+    "limites": "Limits",
+    "adicionarNovoLimite": "Add New Limit"
+  },
+  "subtitulos": {
+    "controleGastos": "Control your spending by category",
+    "selecioneCategoria": "Select a category to set a monthly limit"
+  },
+  "mensagens": {
+    "erroCarregarDados": "Error loading data",
+    "erroCarregarLimites": "Error loading limits and categories",
+    "erroSalvarLimite": "Error saving limit",
+    "erroAjustarLimite": "Error adjusting limit",
+    "erroExcluirLimite": "Error deleting limit",
+    "limiteDefinidoSucesso": "Limit set successfully",
+    "limiteAjustadoSucesso": "Limit adjusted successfully",
+    "limiteExcluidoSucesso": "Limit deleted successfully",
+    "nenhumLimiteDefinido": "No limits defined",
+    "iniciarLimites": "Start by setting limits for your expense categories"
+  },
+  "validacao": {
+    "valorInvalido": "Enter a valid value"
+  },
+  "status": {
+    "estourado": "Exceeded",
+    "proximoLimite": "Near limit",
+    "dentroLimite": "Within limit"
+  },
+  "limites": {
+    "gasto": "Spent",
+    "limite": "Limit",
+    "restante": "Remaining"
+  },
+  "botoes": {
+    "criarPrimeiroLimite": "Create First Limit",
+    "salvar": "Save",
+    "salvando": "Saving...",
+    "cancelar": "Cancel",
+    "excluindo": "Deleting...",
+    "confirmar": "Confirm",
+    "definirLimite": "Set Limit"
+  },
+  "menu": {
+    "ajustarLimite": "Adjust Limit",
+    "excluirLimite": "Delete Limit"
+  },
+  "formularios": {
+    "novoValorLimite": "New limit value"
+  },
+  "dialogs": {
+    "excluirLimiteTitulo": "Delete Limit",
+    "excluirLimiteDescricao": "Are you sure you want to delete the limit for this category? This action cannot be undone."
+  },
+  "meses": {
+    "janeiro": "January",
+    "fevereiro": "February",
+    "marco": "March",
+    "abril": "April",
+    "maio": "May",
+    "junho": "June",
+    "julho": "July",
+    "agosto": "August",
+    "setembro": "September",
+    "outubro": "October",
+    "novembro": "November",
+    "dezembro": "December"
+  },
+  "mesesAbreviados": {
+    "jan": "Jan",
+    "fev": "Feb",
+    "mar": "Mar",
+    "abr": "Apr",
+    "mai": "May",
+    "jun": "Jun",
+    "jul": "Jul",
+    "ago": "Aug",
+    "set": "Sep",
+    "out": "Oct",
+    "nov": "Nov",
+    "dez": "Dec",
+    "mes": "Month"
+  }
+}

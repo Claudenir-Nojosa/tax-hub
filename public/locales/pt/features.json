@@ -1,0 +1,34 @@
+{
+  "badge": "Recursos",
+  "title": {
+    "part1": "Tudo que você precisa para",
+    "part2": "dominar suas finanças"
+  },
+  "subtitle": "Ferramentas poderosas e intuitivas que transformam a maneira como você gerencia seu dinheiro",
+  "features": {
+    "financialAI": {
+      "title": "IA Financeira",
+      "description": "Análises inteligentes que aprendem com seus hábitos e oferecem insights personalizados"
+    },
+    "personalGoals": {
+      "title": "Metas Personalizadas",
+      "description": "Defina objetivos financeiros e acompanhe seu progresso em tempo real"
+    },
+    "smartAlerts": {
+      "title": "Alertas Inteligentes",
+      "description": "Defina limites de gastos por categoria e receba alertas para manter o controle total das suas finanças"
+    },
+    "visualReports": {
+      "title": "Relatórios Visuais",
+      "description": "Visualize suas finanças com gráficos interativos e dashboards intuitivos"
+    },
+    "totalSecurity": {
+      "title": "Segurança Total",
+      "description": "Criptografia de ponta e autenticação avançada protegem seus dados"
+    },
+    "automation": {
+      "title": "Automação Completa",
+      "description": "Lançamentos via WhatsApp, parcelamentos automáticos, despesas recorrentes e muito mais"
+    }
+  }
+}

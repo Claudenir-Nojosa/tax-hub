@@ -1,0 +1,57 @@
+{
+  "formulario": {
+    "informacoesBasicas": "Basic Information",
+    "nomeCartao": "Card Name",
+    "placeholderNome": "Ex: Nubank, Itaú Platinum...",
+    "bandeira": "Card Brand",
+    "placeholderBandeira": "Select brand",
+    "limiteCartao": "Card Limit",
+    "datasCartao": "Card Dates",
+    "diaFechamento": "Closing Day",
+    "diaVencimento": "Due Day",
+    "dicaFechamento": "Day the invoice closes",
+    "dicaVencimento": "Day the invoice is due",
+    "personalizacao": "Customization",
+    "corIdentificacao": "Identification Color",
+    "placeholderCor": "Select a color",
+    "observacoes": "Notes",
+    "placeholderObservacoes": "Notes about the card..."
+  },
+  "botoes": {
+    "cancelar": "Cancel",
+    "salvarAlteracoes": "Save Changes"
+  },
+  "estados": {
+    "salvando": "Saving..."
+  },
+  "mensagens": {
+    "atualizadoSucesso": "Card updated successfully!"
+  },
+  "erros": {
+    "atualizarCartao": "Error updating card"
+  },
+  "bandeiras": {
+    "visa": "Visa",
+    "mastercard": "Mastercard",
+    "americanExpress": "American Express",
+    "discover": "Discover",
+    "unionpay": "UnionPay",
+    "jcb": "JCB",
+    "diners": "Diners Club",
+    "elo": "Elo",
+    "hipercard": "Hipercard",
+    "outros": "Others"
+  },
+  "cores": {
+    "azul": "Blue",
+    "vermelho": "Red",
+    "verde": "Green",
+    "amarelo": "Yellow",
+    "roxo": "Purple",
+    "rosa": "Pink",
+    "ciano": "Cyan",
+    "laranja": "Orange",
+    "lima": "Lime",
+    "cinza": "Gray"
+  }
+}

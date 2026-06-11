@@ -1,0 +1,26 @@
+{
+  "badge": "Como Funciona",
+  "title": {
+    "simple": "Simples como",
+    "highlight": "1, 2, 3, 4"
+  },
+  "description": "Comece a transformar suas finanças em poucos minutos com nosso processo simplificado.",
+  "steps": {
+    "createAccount": {
+      "title": "Crie sua conta",
+      "description": "Cadastre-se em segundos com seu email ou google."
+    },
+    "connectAccounts": {
+      "title": "Crie categorias",
+      "description": "Informe se é receita ou despesa, customize a cor e ícone."
+    },
+    "receiveInsights": {
+      "title": "Faça os lançamentos",
+      "description": "Realize os lançamentos das receitas ou despesas, seja por áudio, mensagem, ou manual na plataforma."
+    },
+    "reachGoals": {
+      "title": "Alcance suas metas",
+      "description": "Acompanhe sua movimentação e nunca mais perca o seu controle financeiro."
+    }
+  }
+}

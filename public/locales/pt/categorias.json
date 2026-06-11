@@ -1,0 +1,61 @@
+{
+  "titulo": "Categorias",
+  "subtitulo": "Organize suas receitas e despesas por categorias",
+  "botoes": {
+    "novaCategoria": "Nova Categoria",
+    "criarPrimeira": "Criar Primeira Categoria",
+    "atualizar": "Atualizar",
+    "criar": "Criar Categoria",
+    "cancelar": "Cancelar",
+    "confirmar": "Confirmar"
+  },
+  "estados": {
+    "carregando": "Carregando categorias...",
+    "atualizando": "Atualizando...",
+    "criando": "Criando...",
+    "excluindo": "Excluindo..."
+  },
+  "stats": {
+    "total": "Total",
+    "despesas": "Despesas",
+    "receitas": "Receitas"
+  },
+  "filtros": {
+    "buscar": "Buscar categorias...",
+    "todas": "Todas",
+    "despesas": "Despesas",
+    "receitas": "Receitas"
+  },
+  "formulario": {
+    "tituloNovo": "Nova Categoria",
+    "tituloEditar": "Editar Categoria",
+    "descricaoNovo": "Crie uma nova categoria para organizar seus lançamentos",
+    "descricaoEditar": "Atualize os dados da categoria",
+    "nomeLabel": "Nome da Categoria",
+    "nomePlaceholder": "Ex: Alimentação, Transporte, Salário...",
+    "tipoLabel": "Tipo",
+    "despesa": "Despesa",
+    "receita": "Receita",
+    "corLabel": "Cor de Identificação",
+    "iconeLabel": "Ícone"
+  },
+  "confirmacao": {
+    "titulo": "Excluir Categoria",
+    "descricao": "Tem certeza que deseja excluir a categoria \"{{nome}}\"? Esta ação não pode ser desfeita."
+  },
+  "tooltips": {
+    "editar": "Editar categoria",
+    "excluir": "Excluir categoria"
+  },
+  "mensagens": {
+    "nenhumaEncontrada": "Nenhuma categoria encontrada",
+    "ajustarFiltros": "Tente ajustar os filtros ou termos de busca",
+    "criarPrimeira": "Comece criando sua primeira categoria",
+    "criada": "Categoria criada com sucesso!",
+    "atualizada": "Categoria atualizada com sucesso!",
+    "excluida": "Categoria deletada com sucesso!",
+    "erroCarregar": "Erro ao carregar categorias",
+    "erroSalvar": "Erro ao salvar categoria.",
+    "erroExcluir": "Erro ao deletar categoria."
+  }
+}

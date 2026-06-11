@@ -1,0 +1,26 @@
+{
+  "badge": "Frequently Asked Questions",
+  "title": {
+    "part1": "Questions?",
+    "part2": "We have the answers"
+  },
+  "subtitle": "Check out the most common questions about tax-hub. Didn’t find what you’re looking for? Get in touch with us!",
+  "stillHaveQuestions": "Still have questions?",
+  "contactSupport": "Contact our support",
+  "items": {
+    "q1": "How does tax-hub work?",
+    "a1": "tax-hub is an intelligent financial assistant that simplifies your transactions, sets spending limits, and makes financial control easier.",
+    "q2": "Is my financial data secure?",
+    "a2": "Yes! We use bank-level encryption (256-bit SSL) and never store your login credentials. Your data is exclusively yours and is never shared with third parties.",
+    "q3": "Can I cancel my subscription at any time?",
+    "a3": "Yes, no hassle! You can cancel your subscription at any time directly in the app. There are no cancellation fees, and you will continue to have access to the features until the end of the paid period.",
+    "q4": "How does the free trial period work?",
+    "a4": "We offer a 7-day free trial with full access to all premium features. After the trial period, you can choose whether to continue with one of our plans.",
+    "q5": "Does tax-hub work on mobile devices?",
+    "a5": "Yes! Just access the website on your mobile device, which is fully responsive and adapted for mobile use. Your data is synchronized in real time across all devices, allowing you to manage your finances from anywhere.",
+    "q6": "How does the AI analysis work?",
+    "a6": "Our artificial intelligence analyzes your spending patterns, compares them with market benchmarks, and identifies saving opportunities. It learns from your behavior and provides increasingly personalized insights over time.",
+    "q7": "Do I need financial knowledge to use it?",
+    "a7": "No! tax-hub was designed to be intuitive and accessible for everyone. Our interface is simple and clearly structured."
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "titulos": {
+    "relatoriosFinanceiros": "Relatórios Financeiros",
+    "filtros": "Filtros"
+  },
+  "subtitulos": {
+    "analiseCompleta": "Análise completa dos seus gastos e receitas"
+  },
+  "filtros": {
+    "cartao": "Cartão",
+    "selecioneCartao": "Selecione o cartão",
+    "todosCartoes": "Todos os cartões",
+    "periodo": "Período",
+    "selecionePeriodo": "Selecione o período",
+    "tipo": "Tipo",
+    "selecioneTipo": "Selecione o tipo",
+    "todos": "Todos",
+    "dataCustomizada": "Data Customizada"
+  },
+  "periodos": {
+    "ultimos7Dias": "Últimos 7 dias",
+    "ultimos30Dias": "Últimos 30 dias",
+    "ultimos90Dias": "Últimos 90 dias",
+    "ultimos12Meses": "Últimos 12 meses",
+    "todos": "Todo o período",
+    "ultimosNDias": "Últimos {{dias}} dias"
+  },
+  "tipos": {
+    "despesa": "Despesa",
+    "receita": "Receita"
+  },
+  "estatisticas": {
+    "totalDespesas": "Total de Despesas",
+    "totalReceitas": "Total de Receitas",
+    "saldo": "Saldo",
+    "superavit": "Superávit",
+    "deficit": "Déficit",
+    "lancamentosDespesa": "{{count}} lançamentos",
+    "lancamentosReceita": "{{count}} lançamentos",
+    "lancamentosCategoria": "{{count}} lançamentos",
+    "lancamentosCartao": "{{count}} lançamentos"
+  },
+  "secoes": {
+    "despesasPorCategoria": "Despesas por Categoria",
+    "distribuicaoGastos": "Distribuição dos gastos por categoria",
+    "despesasPorCartao": "Despesas por Cartão",
+    "distribuicaoGastosCartao": "Distribuição dos gastos por cartão",
+    "ultimosLancamentos": "Últimos Lançamentos",
+    "lancamentosEncontrados": "{{count}} lançamentos encontrados"
+  },
+  "botoes": {
+    "exportarPDF": "Exportar PDF",
+    "verTodosLancamentos": "Ver todos os lançamentos"
+  },
+  "mensagens": {
+    "erroCarregarDados": "Erro ao carregar dados",
+    "erroCarregarLancamentos": "Erro ao carregar lançamentos",
+    "semDadosCategorias": "Sem dados de categorias",
+    "adicionarDespesasCategorizadas": "Adicione despesas categorizadas para ver a distribuição",
+    "nenhumaDespesaEncontrada": "Nenhuma despesa encontrada",
+    "nenhumLancamentoEncontrado": "Nenhum lançamento encontrado",
+    "semDadosTitulo": "Nenhum lançamento encontrado",
+    "semDadosDescricao": "Adicione lançamentos para visualizar os relatórios"
+  },
+  "categorias": {
+    "semCategoria": "Sem Categoria"
+  },
+  "cartoes": {
+    "semCartao": "Sem Cartão"
+  },
+  "pdf": {
+    "titulo": "Relatório Financeiro",
+    "geradoEm": "Gerado em",
+    "filtrosAplicados": "Filtros Aplicados",
+    "periodo": "Período",
+    "cartao": "Cartão",
+    "estatisticasGerais": "ESTATÍSTICAS GERAIS",
+    "descricao": "Descrição",
+    "valor": "Valor",
+    "topCategorias": "TOP CATEGORIAS",
+    "categoria": "Categoria",
+    "valorGasto": "Valor Gasto",
+    "ultimosLancamentos": "ÚLTIMOS LANÇAMENTOS",
+    "data": "Data",
+    "tipo": "Tipo",
+    "pagina": "Página",
+    "de": "de",
+    "geradoPor": "Gerado pelo Finanças Pessoais",
+    "nomeArquivo": "relatorio-financeiro"
+  }
+}

@@ -1,0 +1,2 @@
+# Crie o arquivo de verificação
+echo "twilio-domain-verification=28554727263a470b8e9bfabe1d134dab" > public/.well-known/twilio-domain-verification.txt

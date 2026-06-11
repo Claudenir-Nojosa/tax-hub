@@ -1,0 +1,55 @@
+{
+  "badge": "Depoimentos",
+  "title": {
+    "what": "O que nossos",
+    "highlight": "usuários dizem"
+  },
+  "description": "Descubra como milhares de pessoas estão transformando suas finanças com nossa plataforma.",
+  "items": {
+    "0": {
+      "text": "O tax-hub revolucionou minhas finanças, automatizando controles e investimentos. A plataforma mantém tudo organizado, mesmo remotamente.",
+      "name": "Briana Patton",
+      "role": "Gerente de Operações"
+    },
+    "1": {
+      "text": "Implementar o tax-hub foi rápido e fácil. A interface personalizável tornou o uso intuitivo desde o primeiro dia.",
+      "name": "Bilal Ahmed",
+      "role": "Gerente de TI"
+    },
+    "2": {
+      "text": "O suporte é excepcional, me guiando desde a configuração e fornecendo assistência contínua, garantindo minha satisfação.",
+      "name": "Saman Malik",
+      "role": "Líder de Suporte"
+    },
+    "3": {
+      "text": "A integração perfeita do tax-hub melhorou minha organização financeira e eficiência. Recomendo pela interface intuitiva.",
+      "name": "Omar Raza",
+      "role": "CEO"
+    },
+    "4": {
+      "text": "Seus recursos robustos e suporte rápido transformaram minha gestão financeira, me tornando significativamente mais eficiente.",
+      "name": "Zainab Hussain",
+      "role": "Gerente de Projetos"
+    },
+    "5": {
+      "text": "A implementação tranquila superou expectativas. Simplificou processos, melhorando meu desempenho financeiro geral.",
+      "name": "Aliza Khan",
+      "role": "Analista de Negócios"
+    },
+    "6": {
+      "text": "Minhas finanças melhoraram com um design amigável e insights personalizados incríveis.",
+      "name": "Farhan Siddiqui",
+      "role": "Diretor de Marketing"
+    },
+    "7": {
+      "text": "Entregaram uma solução que superou expectativas, entendendo minhas necessidades e melhorando minha vida financeira.",
+      "name": "Sana Sheikh",
+      "role": "Gerente de Vendas"
+    },
+    "8": {
+      "text": "Usando o tax-hub, minha organização financeira e economia melhoraram significativamente, impulsionando meu patrimônio.",
+      "name": "Hassan Ali",
+      "role": "Gerente de E-commerce"
+    }
+  }
+}

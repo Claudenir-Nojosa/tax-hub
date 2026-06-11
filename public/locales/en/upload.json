@@ -1,0 +1,23 @@
+{
+  "titulo": "Cover Image",
+  "alt": {
+    "capaMeta": "Goal cover"
+  },
+  "botoes": {
+    "adicionarImagem": "Add cover image"
+  },
+  "instrucoes": {
+    "formatos": "PNG, JPG, JPEG up to 5MB"
+  },
+  "estados": {
+    "uploading": "Uploading..."
+  },
+  "mensagens": {
+    "uploadSucesso": "Image uploaded successfully"
+  },
+  "erros": {
+    "tipoInvalido": "Please select a valid image (PNG, JPG, JPEG)",
+    "tamanhoMaximo": "Image must be maximum 5MB",
+    "upload": "Error uploading image"
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "titulos": {
+    "limites": "Limites",
+    "adicionarNovoLimite": "Adicionar Novo Limite"
+  },
+  "subtitulos": {
+    "controleGastos": "Controle seus gastos por categoria",
+    "selecioneCategoria": "Selecione uma categoria para definir um limite mensal"
+  },
+  "mensagens": {
+    "erroCarregarDados": "Erro ao carregar dados",
+    "erroCarregarLimites": "Erro ao carregar limites e categorias",
+    "erroSalvarLimite": "Erro ao salvar limite",
+    "erroAjustarLimite": "Erro ao ajustar limite",
+    "erroExcluirLimite": "Erro ao excluir limite",
+    "limiteDefinidoSucesso": "Limite definido com sucesso",
+    "limiteAjustadoSucesso": "Limite ajustado com sucesso",
+    "limiteExcluidoSucesso": "Limite excluído com sucesso",
+    "nenhumLimiteDefinido": "Nenhum limite definido",
+    "iniciarLimites": "Comece definindo limites para suas categorias de despesas"
+  },
+  "validacao": {
+    "valorInvalido": "Digite um valor válido"
+  },
+  "status": {
+    "estourado": "Estourado",
+    "proximoLimite": "Próximo do limite",
+    "dentroLimite": "Dentro do limite"
+  },
+  "limites": {
+    "gasto": "Gasto",
+    "limite": "Limite",
+    "restante": "Restante"
+  },
+  "botoes": {
+    "criarPrimeiroLimite": "Criar Primeiro Limite",
+    "salvar": "Salvar",
+    "salvando": "Salvando...",
+    "cancelar": "Cancelar",
+    "excluindo": "Excluindo...",
+    "confirmar": "Confirmar",
+    "definirLimite": "Definir Limite"
+  },
+  "menu": {
+    "ajustarLimite": "Ajustar Limite",
+    "excluirLimite": "Excluir Limite"
+  },
+  "formularios": {
+    "novoValorLimite": "Novo valor do limite"
+  },
+  "dialogs": {
+    "excluirLimiteTitulo": "Excluir Limite",
+    "excluirLimiteDescricao": "Tem certeza que deseja excluir o limite desta categoria? Esta ação não pode ser desfeita."
+  },
+  "meses": {
+    "janeiro": "Janeiro",
+    "fevereiro": "Fevereiro",
+    "marco": "Março",
+    "abril": "Abril",
+    "maio": "Maio",
+    "junho": "Junho",
+    "julho": "Julho",
+    "agosto": "Agosto",
+    "setembro": "Setembro",
+    "outubro": "Outubro",
+    "novembro": "Novembro",
+    "dezembro": "Dezembro"
+  },
+  "mesesAbreviados": {
+    "jan": "Jan",
+    "fev": "Fev",
+    "mar": "Mar",
+    "abr": "Abr",
+    "mai": "Mai",
+    "jun": "Jun",
+    "jul": "Jul",
+    "ago": "Ago",
+    "set": "Set",
+    "out": "Out",
+    "nov": "Nov",
+    "dez": "Dez",
+    "mes": "Mês"
+  }
+}

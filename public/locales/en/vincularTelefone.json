@@ -1,0 +1,95 @@
+{
+  "titulo": "Link Phone",
+  "subtitulo": "Connect your phone to receive notifications",
+  "formulario": {
+    "labelTelefone": "Phone number",
+    "placeholderTelefone": "(11) 99999-9999",
+    "instrucaoTelefone": "Enter your number with area code",
+    "labelIdioma": "Preferred language for notifications",
+    "placeholderIdioma": "Select a language",
+    "instrucaoIdioma": "This setting defines the language of the messages you will receive."
+  },
+  "botoes": {
+    "vincularTelefone": "Link Phone",
+    "desvincular": "Unlink",
+    "salvarIdioma": "Save Language",
+    "cancelar": "Cancel",
+    "desconectar": "Disconnect"
+  },
+  "estados": {
+    "vinculando": "Linking...",
+    "desvinculando": "Unlinking...",
+    "salvando": "Saving...",
+    "salvandoConfiguracao": "Saving configuration...",
+    "processando": "Processing..."
+  },
+  "mensagens": {
+    "erroCarregar": "Error loading information",
+    "erroConfiguracoes": "Error loading settings",
+    "idiomaSalvo": "Language saved successfully!",
+    "jaVinculado": "You already have a linked phone. Unlink first to add another.",
+    "vinculadoSucesso": "Phone linked successfully!",
+    "desvinculadoSucesso": "Phone unlinked successfully!"
+  },
+  "erros": {
+    "salvarIdioma": "Error saving language",
+    "vincularTelefone": "Error linking phone",
+    "desvincularTelefone": "Error unlinking phone"
+  },
+  "labels": {
+    "usuario": "User"
+  },
+  "idiomas": {
+    "portugues": "Portuguese (Brazil)",
+    "ingles": "English (US)"
+  },
+  "cartoes": {
+    "telefoneVinculado": {
+      "titulo": "Linked Phone",
+      "descricao": "Your phone is linked and ready to receive notifications."
+    },
+    "seguranca": {
+      "titulo": "Security",
+      "descricao": "Your phone is protected and will not be shared with third parties."
+    },
+    "vincularTelefone": {
+      "titulo": "Link Phone",
+      "descricao": "Add your number to receive notifications"
+    },
+    "idioma": {
+      "titulo": "Language Preference",
+      "descricao": "Choose your notification language",
+      "atualSalvo": "Current saved language:"
+    }
+  },
+  "beneficios": {
+    "titulo": "Why connect?",
+    "subtitulo": "Advantages of using WhatsApp",
+    "alertas": {
+      "titulo": "Instant Alerts",
+      "descricao": "Receive real-time notifications about your transactions"
+    },
+    "comandos": {
+      "titulo": "Voice Commands",
+      "descricao": "Record expenses using audio - fast and practical"
+    },
+    "acesso": {
+      "titulo": "Quick Access",
+      "descricao": "Check important information without opening the app"
+    },
+    "seguranca": {
+      "titulo": "Total Security",
+      "descricao": "Your number is protected with state-of-the-art encryption"
+    }
+  },
+  "privacidade": {
+    "titulo": "Your Privacy",
+    "descricao": "We use your number only to send notifications. We will never spam or share your data.",
+    "criptografia": "Protected by end-to-end encryption"
+  },
+  "confirmacao": {
+    "titulo": "Disconnect WhatsApp",
+    "descricao": "Are you sure you want to disconnect the number {{telefone}}?",
+    "aviso": "You will not be able to make transactions via WhatsApp until you connect again."
+  }
+}

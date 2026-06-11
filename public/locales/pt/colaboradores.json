@@ -1,0 +1,43 @@
+{
+  "titulo": "Colaboradores",
+  "botoes": {
+    "convidar": "Convidar",
+    "cancelar": "Cancelar",
+    "enviarConvite": "Enviar Convite"
+  },
+  "dialog": {
+    "titulo": "Convidar Colaborador",
+    "descricao": "Envie um convite para alguém acompanhar esta meta",
+    "labelEmail": "Email do Colaborador",
+    "placeholderEmail": "colaborador@email.com"
+  },
+  "permissoes": {
+    "leitura": "Leitura",
+    "escrita": "Escrita"
+  },
+  "convites": {
+    "pendente": "Convite pendente",
+    "expiraEm": "Expira",
+    "status": {
+      "pendente": "Pendente"
+    }
+  },
+  "mensagens": {
+    "nenhumColaborador": "Nenhum colaborador",
+    "convideParaColaborar": "Convide alguém para colaborar",
+    "conviteSucesso": "Convite enviado com sucesso!",
+    "removerSucesso": "Colaborador removido com sucesso!"
+  },
+  "estados": {
+    "enviando": "Enviando..."
+  },
+  "tooltips": {
+    "removerColaborador": "Remover colaborador"
+  },
+  "erros": {
+    "emailVazio": "Digite um email válido",
+    "emailInvalido": "Digite um email válido",
+    "enviarConvite": "Erro ao enviar convite",
+    "removerColaborador": "Erro ao remover colaborador"
+  }
+}

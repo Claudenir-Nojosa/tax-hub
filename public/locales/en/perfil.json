@@ -1,0 +1,52 @@
+{
+  "titulo": "My Profile",
+  "descricao": "Manage your personal information and preferences",
+  
+  "informacoesPessoais": "Personal Information",
+  "descricaoInformacoes": {
+    "comFoto": "Click Save Changes to update your photo",
+    "semFoto": "Click the camera icon to change your profile picture"
+  },
+  
+  "cancelar": "Cancel",
+  "salvando": "Saving...",
+  "salvarAlteracoes": "Save Changes",
+  "editarFoto": "Edit Photo",
+  "removerFoto": "Remove Current Photo",
+  
+  "statusConta": "Account Status",
+  "gerenciarPlano": "Manage Plan",
+  
+  "campos": {
+    "nomeCompleto": "Full Name",
+    "email": "Email",
+    "telefone": "Phone",
+    "dataCadastro": "Registration Date",
+    "planoAtual": "Current Plan",
+    "validade": "Expiration Date",
+    "naoInformado": "Not informed"
+  },
+  
+  "notificacoes": {
+    "fotoAtualizada": "Photo updated successfully!",
+    "fotoRemovida": "Photo removed successfully!",
+    "erroAtualizar": "Error updating photo",
+    "erroRemover": "Error removing photo",
+    "arquivoInvalido": "Please select a valid image file",
+    "tamanhoExcedido": "Image must be maximum 5MB"
+  },
+  
+  "dicas": {
+    "selecionarImagem": "Click the camera icon to select a new photo",
+    "formatosSuportados": "Supported formats: JPG, PNG, WebP",
+    "tamanhoMaximo": "Maximum size: 5MB"
+  },
+  
+  "plano": {
+    "free": "Free",
+    "premium": "Premium",
+    "business": "Business",
+    "expirado": "Expired",
+    "ativo": "Active"
+  }
+}

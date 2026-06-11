@@ -1,0 +1,84 @@
+{
+  "titulos": {
+    "informacoes": "Card Information",
+    "statusLimite": "Limit Status",
+    "despesasCategoria": "Expenses by Category",
+    "lancamentosRecentes": "Recent Transactions",
+    "colaboradores": "Collaborators",
+    "editarCartao": "Edit Card"
+  },
+  "subtitulos": {
+    "distribuicaoGastos": "Expense distribution by category",
+    "totalLancamentos": "{{count}} transactions made",
+    "atualizarInformacoes": "Update your card information"
+  },
+  "labels": {
+    "bandeira": "Brand",
+    "limiteTotal": "Total Limit",
+    "fechamento": "Closing",
+    "vencimento": "Due Date",
+    "observacoes": "Notes",
+    "utilizado": "Used",
+    "disponivel": "Available",
+    "utilizacaoLimite": "Limit usage",
+    "proximaFatura": "Next invoice:",
+    "status": "Status:",
+    "descricao": "Description",
+    "data": "Date",
+    "valor": "Amount",
+    "fatura": "Invoice",
+    "emailColaborador": "Collaborator's Email",
+    "dia": "Day {{dia}}",
+    "compartilhadoPor": "Shared by {{nome}}"
+  },
+  "botoes": {
+    "voltar": "Back to Cards",
+    "verFaturas": "View Invoices",
+    "editarCartao": "Edit Card",
+    "novoLancamento": "New Transaction",
+    "convidar": "Invite",
+    "cancelar": "Cancel",
+    "enviarConvite": "Send Invite",
+    "enviando": "Sending...",
+    "verRelatorioCompleto": "View Full Report",
+    "verTodosLancamentos": "View all transactions",
+    "adicionarPrimeiro": "Add First Transaction"
+  },
+  "status": {
+    "pago": "Paid",
+    "pendente": "Pending",
+    "aberta": "Open",
+    "fechada": "Closed",
+    "paga": "Paid",
+    "vencida": "Overdue",
+    "pendenteBadge": "Pending"
+  },
+  "badges": {
+    "dono": "Owner",
+    "voce": " (You)",
+    "colaborador": "Collaborator",
+    "escrita": "Write"
+  },
+  "alertas": {
+    "limiteCritico": "Limit almost exhausted - consider reducing spending",
+    "limiteElevado": "High limit - watch next expenses"
+  },
+  "mensagens": {
+    "cartaoNaoEncontrado": "Card not found",
+    "nenhumLancamento": "No transactions found",
+    "nenhumaDespesa": "No expenses found",
+    "nenhumColaborador": "No collaborators",
+    "convideAlguem": "Invite someone to collaborate",
+    "convitePendente": "Pending invite - Expires {{data}}",
+    "conviteEnviado": "Invite sent successfully!",
+    "colaboradorRemovido": "Collaborator removed successfully!",
+    "emailInvalido": "Enter a valid email",
+    "erroCarregar": "Error loading card",
+    "erroEnviarConvite": "Error sending invite",
+    "erroRemoverColaborador": "Error removing collaborator"
+  },
+  "dialogs": {
+    "convidarTitulo": "Invite Collaborator",
+    "convidarDescricao": "Send an invite for someone to access this card"
+  }
+}

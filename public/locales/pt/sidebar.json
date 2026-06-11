@@ -1,0 +1,19 @@
+{
+  "menu": {
+    "paginaInicial": "Início",
+    "lancamentos": "Lançamentos",
+    "limites": "Limites",
+    "relatorios": "Relatórios",
+    "cartoes": "Cartões",
+    "categorias": "Categorias",
+    "pontos": "Pontos",
+    "metas": "Metas",
+    "vincularTelefone": "Vincular Telefone",
+    "bicla": "Bicla",
+    "suporte": "Suporte"
+  },
+  "usuario": {
+    "sair": "Sair",
+    "usuarioPadrao": "Usuário"
+  }
+}

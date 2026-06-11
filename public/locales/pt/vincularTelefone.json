@@ -1,0 +1,95 @@
+{
+  "titulo": "Vincular Telefone",
+  "subtitulo": "Conecte seu telefone para receber notificações",
+  "formulario": {
+    "labelTelefone": "Número de telefone",
+    "placeholderTelefone": "(11) 99999-9999",
+    "instrucaoTelefone": "Digite seu número com DDD",
+    "labelIdioma": "Idioma preferido para notificações",
+    "placeholderIdioma": "Selecione um idioma",
+    "instrucaoIdioma": "Esta configuração define o idioma das mensagens que você receberá."
+  },
+  "botoes": {
+    "vincularTelefone": "Vincular Telefone",
+    "desvincular": "Desvincular",
+    "salvarIdioma": "Salvar Idioma",
+    "cancelar": "Cancelar",
+    "desconectar": "Desconectar"
+  },
+  "estados": {
+    "vinculando": "Vinculando...",
+    "desvinculando": "Desvinculando...",
+    "salvando": "Salvando...",
+    "salvandoConfiguracao": "Salvando configuração...",
+    "processando": "Processando..."
+  },
+  "mensagens": {
+    "erroCarregar": "Erro ao carregar informações",
+    "erroConfiguracoes": "Erro ao carregar configurações",
+    "idiomaSalvo": "Idioma salvo com sucesso!",
+    "jaVinculado": "Você já possui um telefone vinculado. Desvincule primeiro para adicionar outro.",
+    "vinculadoSucesso": "Telefone vinculado com sucesso!",
+    "desvinculadoSucesso": "Telefone desvinculado com sucesso!"
+  },
+  "erros": {
+    "salvarIdioma": "Erro ao salvar idioma",
+    "vincularTelefone": "Erro ao vincular telefone",
+    "desvincularTelefone": "Erro ao desvincular telefone"
+  },
+  "labels": {
+    "usuario": "Usuário"
+  },
+  "idiomas": {
+    "portugues": "Português (Brasil)",
+    "ingles": "English (US)"
+  },
+  "cartoes": {
+    "telefoneVinculado": {
+      "titulo": "Telefone Vinculado",
+      "descricao": "Seu telefone está vinculado e pronto para receber notificações."
+    },
+    "seguranca": {
+      "titulo": "Segurança",
+      "descricao": "Seu telefone está protegido e não será compartilhado com terceiros."
+    },
+    "vincularTelefone": {
+      "titulo": "Vincular Telefone",
+      "descricao": "Adicione seu número para receber notificações"
+    },
+    "idioma": {
+      "titulo": "Preferência de Idioma",
+      "descricao": "Escolha o idioma das suas notificações",
+      "atualSalvo": "Idioma atual salvo:"
+    }
+  },
+  "beneficios": {
+    "titulo": "Por que conectar?",
+    "subtitulo": "Vantagens de usar o WhatsApp",
+    "alertas": {
+      "titulo": "Alertas Instantâneos",
+      "descricao": "Receba notificações em tempo real sobre seus lançamentos"
+    },
+    "comandos": {
+      "titulo": "Comandos por Voz",
+      "descricao": "Registre gastos usando áudio - rápido e prático"
+    },
+    "acesso": {
+      "titulo": "Acesso Rápido",
+      "descricao": "Consulte informações importantes sem abrir o app"
+    },
+    "seguranca": {
+      "titulo": "Segurança Total",
+      "descricao": "Seu número é protegido com criptografia de ponta"
+    }
+  },
+  "privacidade": {
+    "titulo": "Sua Privacidade",
+    "descricao": "Usamos seu número apenas para enviar notificações. Nunca faremos spam ou compartilharemos seus dados.",
+    "criptografia": "Protegido por criptografia de ponta a ponta"
+  },
+  "confirmacao": {
+    "titulo": "Desconectar WhatsApp",
+    "descricao": "Tem certeza que deseja desconectar o número {{telefone}}?",
+    "aviso": "Você não conseguirá realizar os lançamentos via Whatsapp até conectar novamente."
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "titulo": "Bicla",
+  "subtitulo": "Sua assistente financeira inteligente",
+  "mensagens": {
+    "saudacao": "Olá! Sou a Bicla, sua IA financeira. Posso analisar seus dados e responder perguntas sobre suas finanças. 💡",
+    "erroTecnico": "Desculpe, estou com problemas técnicos no momento. Tente novamente em alguns instantes."
+  },
+  "botoes": {
+    "limparChat": "Limpar Chat"
+  },
+  "prompts": {
+    "rapidos": {
+      "analise": "Analise minha saúde financeira",
+      "economia": "Quais áreas posso economizar?",
+      "investimento": "Me dê dicas de investimento",
+      "gastos": "Como melhorar meus gastos?"
+    }
+  },
+  "input": {
+    "placeholder": "Pergunte sobre suas finanças..."
+  },
+  "dicas": {
+    "recomendacao": "💡 Dica: Pergunte sobre gastos, investimentos, economia ou análise geral"
+  },
+  "estados": {
+    "pensando": "Bicla está pensando..."
+  },
+  "erros": {
+    "resposta": "Erro na resposta da Bicla",
+    "conexao": "Erro de conexão com a Bicla"
+  },
+  "toasts": {
+    "erroConversa": "Erro ao conversar com a Bicla"
+  }
+}

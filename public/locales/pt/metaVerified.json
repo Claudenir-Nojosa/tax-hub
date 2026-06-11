@@ -1,0 +1,13 @@
+{
+  "badge": "Parceiro Oficial",
+  "title": {
+    "meta": "Meta",
+    "verified": "Verified"
+  },
+  "description": "O tax-hub é um parceiro oficial da Meta, garantindo a máxima segurança e confiabilidade na integração com o WhatsApp. Seus dados financeiros estão protegidos pelos mais altos padrões de segurança.",
+  "features": {
+    "encrypted": "Dados Criptografados",
+    "officialApi": "API Oficial",
+    "whatsappBusiness": "WhatsApp Business"
+  }
+}

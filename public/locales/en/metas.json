@@ -1,0 +1,76 @@
+{
+  "titulo": "Personal Goals",
+  "subtitulo": "Manage your financial objectives",
+  "botoes": {
+    "novaMeta": "New Goal",
+    "criarMeta": "Create Goal",
+    "criarPrimeiraMeta": "Create First Goal",
+    "atualizar": "Update",
+    "cancelar": "Cancel",
+    "confirmar": "Confirm"
+  },
+  "formulario": {
+    "tituloNovo": "New Goal",
+    "tituloEditar": "Edit Goal",
+    "descricaoNovo": "Create a new financial goal",
+    "descricaoEditar": "Update goal data",
+    "tituloLabel": "Title",
+    "tituloPlaceholder": "Ex: Buy a car, Trip...",
+    "descricaoLabel": "Description",
+    "descricaoPlaceholder": "Detailed description of the goal...",
+    "valorAlvoLabel": "Target Amount",
+    "valorAtualLabel": "Current Amount",
+    "dataAlvoLabel": "Target Date",
+    "categoriaLabel": "Category",
+    "categoriaPlaceholder": "Ex: Vehicle, House, Education...",
+    "corLabel": "Color",
+    "iconeLabel": "Icon"
+  },
+  "status": {
+    "concluida": "Completed",
+    "atrasada": "Overdue",
+    "proxima": "Upcoming",
+    "em_andamento": "In Progress"
+  },
+  "progresso": {
+    "label": "Progress"
+  },
+  "compartilhada": {
+    "por": "Shared by"
+  },
+  "mensagens": {
+    "nenhumaMeta": "No goals defined",
+    "comeceCriando": "Start by creating your first financial goal",
+    "criada": "Goal created successfully!",
+    "atualizada": "Goal updated successfully!",
+    "excluida": "Goal deleted successfully!",
+    "valorAdicionado": "Amount of R$ {{valor}} added successfully",
+    "diasRestantes": "{{count}} day remaining",
+    "diasRestantes_plural": "{{count}} days remaining"
+  },
+  "estados": {
+    "carregando": "Loading...",
+    "criando": "Creating...",
+    "atualizando": "Updating...",
+    "excluindo": "Deleting..."
+  },
+  "tooltips": {
+    "adicionarValor": "Add amount",
+    "editarMeta": "Edit goal",
+    "excluirMeta": "Delete goal"
+  },
+  "confirmacao": {
+    "titulo": "Delete Goal",
+    "descricao": "Are you sure you want to delete the goal \"{{titulo}}\"? This action cannot be undone."
+  },
+  "erros": {
+    "carregarMetas": "Error loading goals",
+    "carregarColaboradores": "Error loading collaborators",
+    "excluirMeta": "Error deleting goal",
+    "salvarMeta": "Error saving goal",
+    "valorInvalido": "Enter a valid amount",
+    "contribuirMeta": "Error contributing to goal",
+    "adicionarValor": "Error adding amount",
+    "contribuir": "Error contributing"
+  }
+}

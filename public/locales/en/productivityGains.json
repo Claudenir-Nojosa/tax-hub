@@ -1,0 +1,27 @@
+{
+  "badge": "Productivity Gain",
+  "title": {
+    "save": "Save",
+    "highlight": "Time and Energy"
+  },
+  "description": "Compare the time spent with traditional methods and see how tax-hub transforms your financial routine",
+  "methods": {
+    "tax-hub": {
+      "name": "tax-hub",
+      "description": "Fast, automatic and intelligent"
+    },
+    "spreadsheet": {
+      "name": "Manual Spreadsheet",
+      "description": "Requires time to open, enter and save"
+    },
+    "paper": {
+      "name": "Paper Control",
+      "description": "Slow, error-prone and difficult to analyze"
+    }
+  },
+  "recommended": "Recommended",
+  "footer": {
+    "highlight": "Save up to 4 hours per week",
+    "text": "by automating your financial control"
+  }
+}

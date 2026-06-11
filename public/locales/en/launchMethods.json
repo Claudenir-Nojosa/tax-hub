@@ -1,0 +1,38 @@
+{
+  "badge": "Multiple Launch Methods",
+  "title": {
+    "part1": "Record your transactions",
+    "part2": "your way"
+  },
+  "subtitle": "Choose the method that best suits your moment. Flexibility is our priority",
+  "clickToSeeMore": "Click to see more",
+  "methods": {
+    "audio": {
+      "title": "Launch via Audio",
+      "description": "Just record an audio describing your expense or income. Our AI transcribes and categorizes automatically, making recording as natural as talking",
+      "features": [
+        "Automatic transcription",
+        "Smart categorization",
+        "Hands-free"
+      ]
+    },
+    "message": {
+      "title": "Launch via Message",
+      "description": "Send a WhatsApp message with your transaction. Our Meta API integration processes and automatically records it in your financial control",
+      "features": [
+        "Integrated WhatsApp",
+        "Instant response",
+        "Automatic confirmation"
+      ]
+    },
+    "normal": {
+      "title": "Normal Launch",
+      "description": "For those who prefer total control, our intuitive interface allows quick manual entries.",
+      "features": [
+        "Intuitive interface",
+        "Customizable fields",
+        "Receipt attachment"
+      ]
+    }
+  }
+}

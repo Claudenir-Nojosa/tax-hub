@@ -1,0 +1,18 @@
+{
+  "titulo": "Metas Pessoais",
+  "subtitulo": "Suas economias e objetivos",
+  "botoes": {
+    "novaMeta": "Nova Meta",
+    "criarPrimeira": "Criar Primeira Meta",
+    "verTodas": "Ver todas as metas"
+  },
+  "mensagens": {
+    "nenhumaMeta": "Nenhuma meta definida"
+  },
+  "status": {
+    "concluida": "Concluída",
+    "atrasada": "Atrasada",
+    "proxima": "Próxima",
+    "emAndamento": "Em andamento"
+  }
+}

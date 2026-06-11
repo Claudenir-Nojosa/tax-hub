@@ -1,0 +1,18 @@
+{
+  "titulo": "Personal Goals",
+  "subtitulo": "Your savings and objectives",
+  "botoes": {
+    "novaMeta": "New Goal",
+    "criarPrimeira": "Create First Goal",
+    "verTodas": "View all goals"
+  },
+  "mensagens": {
+    "nenhumaMeta": "No goals defined"
+  },
+  "status": {
+    "concluida": "Completed",
+    "atrasada": "Overdue",
+    "proxima": "Close",
+    "emAndamento": "In progress"
+  }
+}

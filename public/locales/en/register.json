@@ -1,0 +1,33 @@
+{
+  "fields": {
+    "name": {
+      "label": "Name",
+      "placeholder": "John Doe"
+    },
+    "email": {
+      "label": "Email",
+      "placeholder": "you@example.com"
+    },
+    "password": {
+      "label": "Password",
+      "placeholder": "********",
+      "hint": "Minimum 6 characters"
+    }
+  },
+  "buttons": {
+    "register": "Register",
+    "registering": "Registering..."
+  },
+  "validation": {
+    "required": "Please fill in all fields",
+    "email": "Please enter a valid email",
+    "password": "Password must be at least 6 characters"
+  },
+  "messages": {
+    "success": "Registration successful! Redirecting...",
+    "error": {
+      "duplicate": "This email is already registered",
+      "generic": "An error occurred during registration. Please try again."
+    }
+  }
+}

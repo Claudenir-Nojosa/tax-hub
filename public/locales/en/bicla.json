@@ -1,0 +1,43 @@
+{
+  "titulo": "Bicla",
+  "subtitulo": "Your smart financial assistant",
+
+  "mensagens": {
+    "saudacao": "Hello! I'm Bicla, your financial AI. I can analyze your data and answer questions about your finances. 💡",
+    "erroTecnico": "Sorry, I'm experiencing technical issues at the moment. Please try again in a few moments."
+  },
+
+  "botoes": {
+    "limparChat": "Clear Chat"
+  },
+
+  "prompts": {
+    "rapidos": {
+      "analise": "Analyze my financial health",
+      "economia": "Where can I save money?",
+      "investimento": "Give me investment tips",
+      "gastos": "How to improve my spending?"
+    }
+  },
+
+  "input": {
+    "placeholder": "Ask about your finances..."
+  },
+
+  "dicas": {
+    "recomendacao": "💡 Tip: Ask about expenses, investments, savings or general analysis"
+  },
+
+  "estados": {
+    "pensando": "Bicla is thinking..."
+  },
+
+  "erros": {
+    "resposta": "Error in Bicla's response",
+    "conexao": "Connection error with Bicla"
+  },
+
+  "toasts": {
+    "erroConversa": "Error talking to Bicla"
+  }
+}

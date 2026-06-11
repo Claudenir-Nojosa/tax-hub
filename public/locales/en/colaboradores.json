@@ -1,0 +1,43 @@
+{
+  "titulo": "Collaborators",
+  "botoes": {
+    "convidar": "Invite",
+    "cancelar": "Cancel",
+    "enviarConvite": "Send Invite"
+  },
+  "dialog": {
+    "titulo": "Invite Collaborator",
+    "descricao": "Send an invitation for someone to follow this goal",
+    "labelEmail": "Collaborator Email",
+    "placeholderEmail": "collaborator@email.com"
+  },
+  "permissoes": {
+    "leitura": "Read",
+    "escrita": "Write"
+  },
+  "convites": {
+    "pendente": "Pending invitation",
+    "expiraEm": "Expires",
+    "status": {
+      "pendente": "Pending"
+    }
+  },
+  "mensagens": {
+    "nenhumColaborador": "No collaborators",
+    "convideParaColaborar": "Invite someone to collaborate",
+    "conviteSucesso": "Invitation sent successfully!",
+    "removerSucesso": "Collaborator removed successfully!"
+  },
+  "estados": {
+    "enviando": "Sending..."
+  },
+  "tooltips": {
+    "removerColaborador": "Remove collaborator"
+  },
+  "erros": {
+    "emailVazio": "Enter a valid email",
+    "emailInvalido": "Enter a valid email",
+    "enviarConvite": "Error sending invitation",
+    "removerColaborador": "Error removing collaborator"
+  }
+}

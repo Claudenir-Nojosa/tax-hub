@@ -1,0 +1,84 @@
+{
+  "titulos": {
+    "informacoes": "Informações do Cartão",
+    "statusLimite": "Status do Limite",
+    "despesasCategoria": "Despesas por Categoria",
+    "lancamentosRecentes": "Lançamentos Recentes",
+    "colaboradores": "Colaboradores",
+    "editarCartao": "Editar Cartão"
+  },
+  "subtitulos": {
+    "distribuicaoGastos": "Distribuição dos gastos por categoria",
+    "totalLancamentos": "{{count}} lançamentos realizados",
+    "atualizarInformacoes": "Atualize as informações do seu cartão"
+  },
+  "labels": {
+    "bandeira": "Bandeira",
+    "limiteTotal": "Limite Total",
+    "fechamento": "Fechamento",
+    "vencimento": "Vencimento",
+    "observacoes": "Observações",
+    "utilizado": "Utilizado",
+    "disponivel": "Disponível",
+    "utilizacaoLimite": "Utilização do limite",
+    "proximaFatura": "Próxima fatura:",
+    "status": "Status:",
+    "descricao": "Descrição",
+    "data": "Data",
+    "valor": "Valor",
+    "fatura": "Fatura",
+    "emailColaborador": "Email do Colaborador",
+    "dia": "Dia {{dia}}",
+    "compartilhadoPor": "Compartilhado por {{nome}}"
+  },
+  "botoes": {
+    "voltar": "Voltar para Cartões",
+    "verFaturas": "Ver Faturas",
+    "editarCartao": "Editar Cartão",
+    "novoLancamento": "Novo Lançamento",
+    "convidar": "Convidar",
+    "cancelar": "Cancelar",
+    "enviarConvite": "Enviar Convite",
+    "enviando": "Enviando...",
+    "verRelatorioCompleto": "Ver Relatório Completo",
+    "verTodosLancamentos": "Ver todos os lançamentos",
+    "adicionarPrimeiro": "Adicionar Primeiro Lançamento"
+  },
+  "status": {
+    "pago": "Pago",
+    "pendente": "Pendente",
+    "aberta": "Em aberto",
+    "fechada": "Fechada",
+    "paga": "Paga",
+    "vencida": "Vencida",
+    "pendenteBadge": "Pendente"
+  },
+  "badges": {
+    "dono": "Dono",
+    "voce": " (Você)",
+    "colaborador": "Colaborador",
+    "escrita": "Escrita"
+  },
+  "alertas": {
+    "limiteCritico": "Limite quase esgotado - considere reduzir gastos",
+    "limiteElevado": "Limite elevado - atenção aos próximos gastos"
+  },
+  "mensagens": {
+    "cartaoNaoEncontrado": "Cartão não encontrado",
+    "nenhumLancamento": "Nenhum lançamento encontrado",
+    "nenhumaDespesa": "Nenhuma despesa encontrada",
+    "nenhumColaborador": "Nenhum colaborador",
+    "convideAlguem": "Convide alguém para colaborar",
+    "convitePendente": "Convite pendente - Expira {{data}}",
+    "conviteEnviado": "Convite enviado com sucesso!",
+    "colaboradorRemovido": "Colaborador removido com sucesso!",
+    "emailInvalido": "Digite um email válido",
+    "erroCarregar": "Erro ao carregar cartão",
+    "erroEnviarConvite": "Erro ao enviar convite",
+    "erroRemoverColaborador": "Erro ao remover colaborador"
+  },
+  "dialogs": {
+    "convidarTitulo": "Convidar Colaborador",
+    "convidarDescricao": "Envie um convite para alguém acessar este cartão"
+  }
+}

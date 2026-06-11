@@ -1,0 +1,57 @@
+{
+  "formulario": {
+    "informacoesBasicas": "Informações Básicas",
+    "nomeCartao": "Nome do Cartão",
+    "placeholderNome": "Ex: Nubank, Itaú Platinum...",
+    "bandeira": "Bandeira",
+    "placeholderBandeira": "Selecione a bandeira",
+    "limiteCartao": "Limite do Cartão",
+    "datasCartao": "Datas do Cartão",
+    "diaFechamento": "Dia de Fechamento",
+    "diaVencimento": "Dia de Vencimento",
+    "dicaFechamento": "Dia que a fatura fecha",
+    "dicaVencimento": "Dia que a fatura vence",
+    "personalizacao": "Personalização",
+    "corIdentificacao": "Cor de Identificação",
+    "placeholderCor": "Selecione uma cor",
+    "observacoes": "Observações",
+    "placeholderObservacoes": "Observações sobre o cartão..."
+  },
+  "botoes": {
+    "cancelar": "Cancelar",
+    "salvarAlteracoes": "Salvar Alterações"
+  },
+  "estados": {
+    "salvando": "Salvando..."
+  },
+  "mensagens": {
+    "atualizadoSucesso": "Cartão atualizado com sucesso!"
+  },
+  "erros": {
+    "atualizarCartao": "Erro ao atualizar cartão"
+  },
+  "bandeiras": {
+    "visa": "Visa",
+    "mastercard": "Mastercard",
+    "americanExpress": "American Express",
+    "discover": "Discover",
+    "unionpay": "UnionPay",
+    "jcb": "JCB",
+    "diners": "Diners Club",
+    "elo": "Elo",
+    "hipercard": "Hipercard",
+    "outros": "Outros"
+  },
+  "cores": {
+    "azul": "Azul",
+    "vermelho": "Vermelho",
+    "verde": "Verde",
+    "amarelo": "Amarelo",
+    "roxo": "Roxo",
+    "rosa": "Rosa",
+    "ciano": "Ciano",
+    "laranja": "Laranja",
+    "lima": "Lima",
+    "cinza": "Cinza"
+  }
+}

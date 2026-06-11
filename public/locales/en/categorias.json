@@ -1,0 +1,61 @@
+{
+  "titulo": "Categories",
+  "subtitulo": "Organize your income and expenses by categories",
+  "botoes": {
+    "novaCategoria": "New Category",
+    "criarPrimeira": "Create First Category",
+    "atualizar": "Update",
+    "criar": "Create Category",
+    "cancelar": "Cancel",
+    "confirmar": "Confirm"
+  },
+  "estados": {
+    "carregando": "Loading categories...",
+    "atualizando": "Updating...",
+    "criando": "Creating...",
+    "excluindo": "Deleting..."
+  },
+  "stats": {
+    "total": "Total",
+    "despesas": "Expenses",
+    "receitas": "Income"
+  },
+  "filtros": {
+    "buscar": "Search categories...",
+    "todas": "All",
+    "despesas": "Expenses",
+    "receitas": "Income"
+  },
+  "formulario": {
+    "tituloNovo": "New Category",
+    "tituloEditar": "Edit Category",
+    "descricaoNovo": "Create a new category to organize your entries",
+    "descricaoEditar": "Update category data",
+    "nomeLabel": "Category Name",
+    "nomePlaceholder": "Ex: Food, Transportation, Salary...",
+    "tipoLabel": "Type",
+    "despesa": "Expense",
+    "receita": "Income",
+    "corLabel": "Identification Color",
+    "iconeLabel": "Icon"
+  },
+  "confirmacao": {
+    "titulo": "Delete Category",
+    "descricao": "Are you sure you want to delete the category \"{{nome}}\"? This action cannot be undone."
+  },
+  "tooltips": {
+    "editar": "Edit category",
+    "excluir": "Delete category"
+  },
+  "mensagens": {
+    "nenhumaEncontrada": "No categories found",
+    "ajustarFiltros": "Try adjusting the filters or search terms",
+    "criarPrimeira": "Start by creating your first category",
+    "criada": "Category created successfully!",
+    "atualizada": "Category updated successfully!",
+    "excluida": "Category deleted successfully!",
+    "erroCarregar": "Error loading categories",
+    "erroSalvar": "Error saving category.",
+    "erroExcluir": "Error deleting category."
+  }
+}

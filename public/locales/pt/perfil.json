@@ -1,0 +1,52 @@
+{
+  "titulo": "Meu Perfil",
+  "descricao": "Gerencie suas informações pessoais e preferências",
+  
+  "informacoesPessoais": "Informações Pessoais",
+  "descricaoInformacoes": {
+    "comFoto": "Clique em Salvar Alterações para atualizar sua foto",
+    "semFoto": "Clique no ícone da câmera para alterar sua foto de perfil"
+  },
+  
+  "cancelar": "Cancelar",
+  "salvando": "Salvando...",
+  "salvarAlteracoes": "Salvar Alterações",
+  "editarFoto": "Editar Foto",
+  "removerFoto": "Remover Foto Atual",
+  
+  "statusConta": "Status da Conta",
+  "gerenciarPlano": "Gerenciar Plano",
+  
+  "campos": {
+    "nomeCompleto": "Nome Completo",
+    "email": "E-mail",
+    "telefone": "Telefone",
+    "dataCadastro": "Data de Cadastro",
+    "planoAtual": "Plano Atual",
+    "validade": "Validade",
+    "naoInformado": "Não informado"
+  },
+  
+  "notificacoes": {
+    "fotoAtualizada": "Foto atualizada com sucesso!",
+    "fotoRemovida": "Foto removida com sucesso!",
+    "erroAtualizar": "Erro ao atualizar foto",
+    "erroRemover": "Erro ao remover foto",
+    "arquivoInvalido": "Por favor, selecione uma imagem válida",
+    "tamanhoExcedido": "A imagem deve ter no máximo 5MB"
+  },
+  
+  "dicas": {
+    "selecionarImagem": "Clique no ícone da câmera para selecionar uma nova foto",
+    "formatosSuportados": "Formatos suportados: JPG, PNG, WebP",
+    "tamanhoMaximo": "Tamanho máximo: 5MB"
+  },
+  
+  "plano": {
+    "free": "Grátis",
+    "premium": "Premium",
+    "business": "Business",
+    "expirado": "Expirado",
+    "ativo": "Ativo"
+  }
+}
