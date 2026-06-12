@@ -8,7 +8,7 @@
     "noUnusedParameters": false,
     "strict": true,
     "esModuleInterop": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "module": "Preserve",
