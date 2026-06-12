@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Navbar } from "@/components/landingpage/NavBar";
 import { SessionProvider, useSession } from "next-auth/react";
 
 function AuthContent({ children }: { children: React.ReactNode }) {
@@ -17,7 +16,6 @@ function AuthContent({ children }: { children: React.ReactNode }) {
 
   return (
     <section className="flex flex-col items-center py-40">
-      {showNavbar && <Navbar />}
       {children}
     </section>
   );
