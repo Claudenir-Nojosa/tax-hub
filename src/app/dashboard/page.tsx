@@ -5,7 +5,7 @@ export default function DashboardPage() {
         Dashboard
       </h1>
       <p className="mt-2 text-gray-500 dark:text-gray-400">
-        Bem-vindo ao seu painel financeiro.
+        Em construção...
       </p>
     </div>
   );

@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "../../../../auth";
+import Image from "next/image";
 
 export default async function RegisterPage() {
   const session = await auth();
@@ -36,7 +37,20 @@ export default async function RegisterPage() {
           </div>
         </div>
       </div>
-      <Card className="max-w-sm w-full rounded-2xl mt-12 border-gray-200 dark:border-gray-800 shadow-xl">
+
+      <div className="flex items-center gap-3 -mt-12 mb-2">
+        <Image
+          src="https://github.com/Claudenir-Nojosa/servidor_estaticos/blob/main/logo.png?raw=true"
+          alt="tax-hub Logo"
+          width={36}
+          height={36}
+        />
+        <span className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white">
+          tax-hub
+        </span>
+      </div>
+
+      <Card className="max-w-sm w-full rounded-2xl border-gray-200 dark:border-gray-800 shadow-xl">
         <CardHeader className="space-y-3">
           <CardTitle className="text-2xl font-bold text-center text-gray-900 dark:text-white">
             Cadastre-se
