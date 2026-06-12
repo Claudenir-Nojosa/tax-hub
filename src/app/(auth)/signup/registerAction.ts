@@ -137,11 +137,6 @@ export default async function registerAction(
         email: data.email.toLowerCase().trim(),
         password: hashSync(data.password),
         subscriptionStatus: "free",
-        configuracoesUsuarios: {
-          create: {
-            idioma: lang === "en" ? "en-US" : "pt-BR",
-          },
-        },
       },
       select: {
         id: true,
