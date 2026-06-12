@@ -7,7 +7,7 @@ const publicRoutes = [
   "/forgot-password",
   "/api/webhooks/stripe",
 ];
-
+// ts
 function isRouteInList(pathname: string, routeList: string[]): boolean {
   return routeList.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
