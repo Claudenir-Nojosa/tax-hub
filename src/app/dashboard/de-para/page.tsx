@@ -105,25 +105,114 @@ function applyMappings(raw: string, mappings: Mapping[]): string {
   if (mappings.length === 0) return raw;
 
   const lines = raw.split(/\r?\n/);
-  return lines
-    .map((line) => {
-      const fields = line.split("|");
-      if (fields.length < 3) return line;
-      const reg = fields[1];
 
-      for (const m of mappings) {
-        if (reg === "0200" && fields[2]?.trim() === m.fromCode) {
-          fields[2] = m.toCode;
-          return fields.join("|");
+  // Coleta os códigos 0200 existentes no arquivo original
+  const existing0200 = new Set<string>();
+  for (const line of lines) {
+    const f = line.split("|");
+    if (f[1] === "0200") {
+      const code = (f[2] || "").trim();
+      if (code) existing0200.add(code);
+    }
+  }
+
+  // Self-mappings (fromCode === toCode) são descartados — não fazem nada útil
+  // mas destroem a linha 0200 pelo filtro de duplicidade
+  const validMappings = mappings.filter((m) => m.fromCode !== m.toCode);
+  if (validMappings.length === 0) return raw;
+
+  const mappingMap = new Map(validMappings.map((m) => [m.fromCode, m.toCode]));
+
+  // Mapa código → UNID_INV do 0200 (campo [6])
+  // Usado para corrigir o campo UNID do C170 ao renomear o código
+  const unitMap = new Map<string, string>();
+  for (const line of lines) {
+    const f = line.split("|");
+    if (f[1] === "0200") {
+      const code = (f[2] || "").trim();
+      const unit = (f[6] || "").trim();
+      if (code && unit) unitMap.set(code, unit);
+    }
+  }
+
+  // Remove linhas 0200 duplicadas e atualiza códigos em 0200/C170
+  const result = lines
+    .filter((line) => {
+      const f = line.split("|");
+      if (f[1] !== "0200") return true;
+      const code = (f[2] || "").trim();
+      const toCode = mappingMap.get(code);
+      // Se o toCode já tem 0200 no arquivo, exclui esta linha (evita duplicidade)
+      return !(toCode && existing0200.has(toCode));
+    })
+    .map((line) => {
+      const f = line.split("|");
+      if (f.length < 3) return line;
+      for (const m of validMappings) {
+        if (f[1] === "0200" && (f[2] || "").trim() === m.fromCode) {
+          f[2] = m.toCode;
+          return f.join("|");
         }
-        if (reg === "C170" && fields[3]?.trim() === m.fromCode) {
-          fields[3] = m.toCode;
-          return fields.join("|");
+        if (f[1] === "C170" && (f[3] || "").trim() === m.fromCode) {
+          f[3] = m.toCode;
+          // Corrige UNID (campo 6) para a unidade do produto de destino no 0200
+          const toUnit = unitMap.get(m.toCode);
+          if (toUnit) f[6] = toUnit;
+          return f.join("|");
         }
       }
       return line;
-    })
-    .join("\n");
+    });
+
+  // ── Atualiza registros de controle ─────────────────────────────────────────
+
+  // 0990: quantidade de linhas do Bloco 0 (o bloco 0 começa na linha 0)
+  const idx0990 = result.findIndex((l) => l.split("|")[1] === "0990");
+  if (idx0990 >= 0) {
+    const f = result[idx0990].split("|");
+    f[2] = String(idx0990 + 1); // bloco 0 vai da linha 0 até idx0990 inclusive
+    result[idx0990] = f.join("|");
+  }
+
+  // 9900|0200: contagem de registros 0200 no arquivo
+  const cnt0200 = result.filter((l) => l.split("|")[1] === "0200").length;
+  for (let i = 0; i < result.length; i++) {
+    const f = result[i].split("|");
+    if (f[1] === "9900" && (f[2] || "").trim() === "0200") {
+      f[3] = String(cnt0200);
+      result[i] = f.join("|");
+      break;
+    }
+  }
+
+  // 9999: total de linhas do arquivo (exclui strings vazias do split final)
+  const totalLines = result.filter((l) => l.length > 0).length;
+  for (let i = result.length - 1; i >= 0; i--) {
+    const f = result[i].split("|");
+    if (f[1] === "9999") {
+      f[2] = String(totalLines);
+      result[i] = f.join("|");
+      break;
+    }
+  }
+
+  return result.join("\n");
+}
+
+// Remove assinatura digital (tudo após o registro 9999) e corrige o QTD_LIN
+function stripSignature(text: string): string {
+  const lines = text.split(/\r?\n/);
+  const idx = lines.findIndex((l) => l.split("|")[1] === "9999");
+  if (idx < 0) return text;
+
+  const result = lines.slice(0, idx + 1);
+
+  // Atualiza QTD_LIN: o total de linhas é exatamente result.length (idx + 1)
+  const f = result[idx].split("|");
+  f[2] = String(result.length);
+  result[idx] = f.join("|");
+
+  return result.join("\n") + "\n";
 }
 
 // ── Componente principal ───────────────────────────────────────────────────
@@ -154,6 +243,9 @@ export default function DeParaPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [newCode, setNewCode] = useState("");
   const [newCodeSearch, setNewCodeSearch] = useState("");
+
+  // opção de remoção de assinatura digital
+  const [stripSig, setStripSig] = useState(false);
 
   // IA State
   const [showAISettings, setShowAISettings] = useState(false);
@@ -213,6 +305,7 @@ export default function DeParaPage() {
     setFilterCodes(new Set());
     setPasteText("");
     setAiSuggestions([]);
+    setStripSig(false);
     setView("upload");
     if (inputRef.current) inputRef.current.value = "";
   };
@@ -292,11 +385,12 @@ const clearAllMappings = () => {
 };
 
   const downloadResult = () => {
-    if (mappings.length === 0) {
+    if (mappings.length === 0 && !stripSig) {
       toast.error("Nenhum mapeamento definido.");
       return;
     }
-    const result = applyMappings(rawEFD, mappings);
+    let result = mappings.length > 0 ? applyMappings(rawEFD, mappings) : rawEFD;
+    if (stripSig) result = stripSignature(result);
     const blob = new Blob([result], { type: "text/plain;charset=latin1" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -336,7 +430,7 @@ const clearAllMappings = () => {
         const fromCode = row[0]?.toString().trim();
         const toCode = row[1]?.toString().trim();
         
-        if (fromCode && toCode) {
+        if (fromCode && toCode && fromCode !== toCode) {
           // Verifica se o código existe nos produtos
           const product = products.find(p => p.code === fromCode);
           if (product) {
@@ -906,14 +1000,27 @@ const clearAllMappings = () => {
           </div>
         </div>
 
-        <div className="flex justify-end">
-          <Button onClick={downloadResult} className="gap-2">
-            <Download className="h-4 w-4" />
-            Gerar arquivo com de-para aplicado
-          </Button>
-        </div>
       </>
     )}
+
+    {/* Opções de exportação — sempre visíveis na aba */}
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+      <label className="flex items-center gap-2.5 text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={stripSig}
+          onChange={(e) => setStripSig(e.target.checked)}
+          className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 accent-[#007cca]"
+        />
+        Excluir assinatura digital do arquivo
+      </label>
+      {(mappings.length > 0 || stripSig) && (
+        <Button onClick={downloadResult} className="gap-2">
+          <Download className="h-4 w-4" />
+          Gerar arquivo com de-para aplicado
+        </Button>
+      )}
+    </div>
   </>
 )}
 

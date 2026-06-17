@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronUp,
   FlipHorizontal2,
+  BookOpen,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
@@ -134,6 +135,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
         {[
   { href: "/dashboard", label: "Início", icon: Home },
   { href: "/dashboard/de-para", label: "De-Para", icon: FlipHorizontal2 },
+  { href: "/dashboard/legislacoes", label: "Legislações", icon: BookOpen },
 ].map((item) => (
   <li key={item.href}>
     <Link
