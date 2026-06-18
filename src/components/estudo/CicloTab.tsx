@@ -189,7 +189,7 @@ export default function CicloTab({ config, onChange }: Props) {
                     <p className="text-xs text-gray-400 dark:text-gray-500 italic">Nenhuma matéria</p>
                   ) : (
                     divisoes[div].map((m) => (
-                      <div key={m.nome} className={`text-xs px-2 py-1 rounded ${m.corBadge}`}>
+                      <div key={m.nome} className="text-xs px-2 py-1 rounded bg-gray-50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300">
                         {m.nome}
                       </div>
                     ))
