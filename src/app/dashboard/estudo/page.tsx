@@ -1,0 +1,229 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
+import {
+  DEFAULT_ESTUDO_STATE,
+  calcularXP,
+  calcularNivel,
+  NIVEL_CONFIG,
+  type EstudoState,
+  type TopicoState,
+  type AtividadeCalendario,
+  type ErroEntry,
+  type EstudoConfigCiclo,
+  type AtividadeTipo,
+} from "@/lib/estudo-data";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, GraduationCap, Flame } from "lucide-react";
+
+const DashboardTab = dynamic(() => import("@/components/estudo/DashboardTab"), { ssr: false });
+const EditalTab = dynamic(() => import("@/components/estudo/EditalTab"), { ssr: false });
+const CicloTab = dynamic(() => import("@/components/estudo/CicloTab"), { ssr: false });
+const CalendarioTab = dynamic(() => import("@/components/estudo/CalendarioTab"), { ssr: false });
+const CadernoErrosTab = dynamic(() => import("@/components/estudo/CadernoErrosTab"), { ssr: false });
+const TimerEstudo = dynamic(() => import("@/components/estudo/TimerEstudo"), { ssr: false });
+
+const STORAGE_KEY = "taxhub_estudo_v1";
+
+type Tab = "dashboard" | "edital" | "ciclo" | "calendario" | "caderno";
+
+const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "edital", label: "Edital", icon: BookOpen },
+  { id: "ciclo", label: "Ciclo de Estudos", icon: RotateCcw },
+  { id: "calendario", label: "Calendário", icon: CalendarDays },
+  { id: "caderno", label: "Caderno de Erros", icon: NotebookPen },
+];
+
+function loadState(): EstudoState {
+  if (typeof window === "undefined") return DEFAULT_ESTUDO_STATE;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULT_ESTUDO_STATE;
+    const parsed = JSON.parse(raw) as Partial<EstudoState>;
+    // Merge with defaults to handle new fields
+    return {
+      ...DEFAULT_ESTUDO_STATE,
+      ...parsed,
+      topicos: {
+        ...DEFAULT_ESTUDO_STATE.topicos,
+        ...(parsed.topicos ?? {}),
+      },
+      configCiclo: {
+        ...DEFAULT_ESTUDO_STATE.configCiclo,
+        ...(parsed.configCiclo ?? {}),
+        materias: {
+          ...DEFAULT_ESTUDO_STATE.configCiclo.materias,
+          ...(parsed.configCiclo?.materias ?? {}),
+        },
+      },
+    };
+  } catch {
+    return DEFAULT_ESTUDO_STATE;
+  }
+}
+
+export default function EstudoPage() {
+  const [activeTab, setActiveTab] = useState<Tab>("dashboard");
+  const [state, setState] = useState<EstudoState>(DEFAULT_ESTUDO_STATE);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    setState(loadState());
+    setLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, [state, loaded]);
+
+  const updateTopicos = useCallback((topicos: Record<string, TopicoState>) => {
+    setState((prev) => ({ ...prev, topicos }));
+  }, []);
+
+  const updateCalendario = useCallback((calendario: Record<string, AtividadeCalendario[]>) => {
+    setState((prev) => ({ ...prev, calendario }));
+  }, []);
+
+  const updateCadernoErros = useCallback((cadernoErros: ErroEntry[]) => {
+    setState((prev) => ({ ...prev, cadernoErros }));
+  }, []);
+
+  const updateConfigCiclo = useCallback((configCiclo: EstudoConfigCiclo) => {
+    setState((prev) => ({ ...prev, configCiclo }));
+  }, []);
+
+  const handleTimerSalvar = useCallback(
+    (duracao: number, tipo: AtividadeTipo, descricao: string) => {
+      const today = new Date().toISOString().split("T")[0];
+      const nova: AtividadeCalendario = {
+        id: Date.now().toString(),
+        tipo,
+        descricao,
+        duracao,
+      };
+      setState((prev) => ({
+        ...prev,
+        calendario: {
+          ...prev.calendario,
+          [today]: [...(prev.calendario[today] ?? []), nova],
+        },
+      }));
+    },
+    []
+  );
+
+  const handleSemanasOKChange = useCallback((delta: number) => {
+    setState((prev) => ({
+      ...prev,
+      semanasOK: Math.max(0, prev.semanasOK + delta),
+      streak: delta > 0 ? prev.streak + 1 : Math.max(0, prev.streak - 1),
+    }));
+  }, []);
+
+  const xp = calcularXP(state.topicos);
+  const nivel = calcularNivel(xp);
+  const nivelConfig = NIVEL_CONFIG[nivel];
+
+  if (!loaded) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-gray-400 dark:text-gray-500 text-sm">Carregando...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 md:px-6 py-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-sm">
+              <GraduationCap className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-gray-900 dark:text-white">Estudo SEFAZ-CE 2026</h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Acompanhe sua preparação para o concurso</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5">
+              <nivelConfig.icone className="h-5 w-5 text-gray-700 dark:text-gray-200" />
+              <div>
+                <div className="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                  Nível {nivel} · {nivelConfig.titulo}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">{xp} XP</div>
+              </div>
+            </div>
+            <div className="text-center bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2.5">
+              <div className="flex items-center justify-center gap-1 text-lg font-bold text-amber-600 dark:text-amber-400"><Flame className="h-5 w-5 text-orange-500" />{state.streak}</div>
+              <div className="text-xs text-amber-500 dark:text-amber-400">streak</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab bar */}
+        <div className="flex gap-0.5 mt-4 overflow-x-auto pb-px">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-all ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Timer flutuante */}
+      <TimerEstudo onSalvar={handleTimerSalvar} />
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 py-6">
+          {activeTab === "dashboard" && <DashboardTab state={state} />}
+
+          {activeTab === "edital" && (
+            <EditalTab topicos={state.topicos} onUpdate={updateTopicos} />
+          )}
+
+          {activeTab === "ciclo" && (
+            <CicloTab config={state.configCiclo} onChange={updateConfigCiclo} />
+          )}
+
+          {activeTab === "calendario" && (
+            <CalendarioTab
+              calendario={state.calendario}
+              onUpdate={updateCalendario}
+              onSemanasOKChange={handleSemanasOKChange}
+              streak={state.streak}
+              semanasOK={state.semanasOK}
+            />
+          )}
+
+          {activeTab === "caderno" && (
+            <CadernoErrosTab
+              erros={state.cadernoErros}
+              topicos={state.topicos}
+              onUpdate={updateCadernoErros}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

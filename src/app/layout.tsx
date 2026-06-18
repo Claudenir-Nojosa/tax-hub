@@ -21,6 +21,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "tax-hub",
   description: "tax-hub",
+  icons: {
+    icon: [
+      { url: "/icons/taxhub_icone_claro_favicon.png", media: "(prefers-color-scheme: light)", type: "image/png", sizes: "64x64" },
+      { url: "/icons/taxhub_icone_escuro_favicon.png", media: "(prefers-color-scheme: dark)", type: "image/png", sizes: "64x64" },
+    ],
+    apple: [
+      { url: "/icons/taxhub_icone_claro_favicon.png", sizes: "180x180" },
+    ],
+  },
 };
 
 export default async function RootLayout({

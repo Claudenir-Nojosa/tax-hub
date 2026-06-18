@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Sidebar from "@/components/shared/sideBar";
+import Sidebar from "@/components/shared/Sidebar";
 import { ThemeToggle } from "@/components/shared/themeToggle";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";

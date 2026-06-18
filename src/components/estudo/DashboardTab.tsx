@@ -1,0 +1,245 @@
+"use client";
+
+import { BookOpen, HelpCircle, CalendarCheck, CheckSquare, Medal, BarChart3, TrendingUp, Flame } from "lucide-react";
+import {
+  NIVEL_CONFIG,
+  CONQUISTAS,
+  MATERIAS,
+  calcularXP,
+  calcularNivel,
+  type EstudoState,
+  type TopicoState,
+  topicoKey,
+} from "@/lib/estudo-data";
+
+interface Props {
+  state: EstudoState;
+}
+
+function calcularConquistas(state: EstudoState) {
+  const xp = calcularXP(state.topicos);
+  const totalHorasCalendario = Object.values(state.calendario)
+    .flat()
+    .reduce((acc, a) => acc + a.duracao, 0) / 60;
+
+  return {
+    primeiro_passo: state.semanasOK >= 1,
+    primeiro_mes: state.semanasOK >= 4,
+    maratonista: Object.values(state.calendario).some((atividades) =>
+      atividades.reduce((acc, a) => acc + a.duracao, 0) >= 2000
+    ),
+    em_chamas: state.streak >= 3,
+    meio_caminho: xp >= 500,
+    expert: xp >= 1500,
+    fiscal_elite: xp >= 26100,
+    sniper_edital: state.semanasOK >= 10,
+    estudante_modelo: totalHorasCalendario >= 100,
+    sefaz_ready: totalHorasCalendario >= 200 && state.semanasOK >= 30,
+  };
+}
+
+function getProgressoMateria(nome: string, topicos: Record<string, TopicoState>) {
+  const materia = MATERIAS.find((m) => m.nome === nome);
+  if (!materia) return { estudados: 0, total: 0, perc: 0, cadernos: 0 };
+  const total = materia.topicos.length;
+  let estudados = 0;
+  let cadernos = 0;
+  materia.topicos.forEach((t) => {
+    const state = topicos[topicoKey(nome, t)];
+    if (state?.estudado) estudados++;
+    (["A", "B", "C", "D"] as const).forEach((g) => {
+      if (state && state.cadernos[g].acertos + state.cadernos[g].erros > 0) cadernos++;
+    });
+  });
+  return { estudados, total, perc: total > 0 ? Math.round((estudados / total) * 100) : 0, cadernos };
+}
+
+export default function DashboardTab({ state }: Props) {
+  const xp = calcularXP(state.topicos);
+  const nivel = calcularNivel(xp);
+  const nivelConfig = NIVEL_CONFIG[nivel];
+  const proximoNivel = NIVEL_CONFIG[nivel + 1];
+  const xpProximo = proximoNivel ? proximoNivel.xpMin : nivelConfig.xpMax;
+  const xpNivelAtual = nivelConfig.xpMin;
+  const progNivel = proximoNivel
+    ? Math.round(((xp - xpNivelAtual) / (xpProximo - xpNivelAtual)) * 100)
+    : 100;
+
+  const conquistas = calcularConquistas(state);
+
+  const totalTopicos = MATERIAS.reduce((acc, m) => acc + m.topicos.length, 0);
+  const estudados = Object.values(state.topicos).filter((t) => t.estudado).length;
+  const cadernoConcluidos = Object.values(state.topicos).reduce((acc, t) => {
+    return acc + (["A", "B", "C", "D"] as const).filter(
+      (g) => t.cadernos[g].acertos + t.cadernos[g].erros > 0
+    ).length;
+  }, 0);
+  const totalAtividades = Object.values(state.calendario).flat().length;
+
+  const NivelIcon = nivelConfig.icone;
+
+  return (
+    <div className="space-y-6">
+      {/* Level + XP hero */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="flex items-center gap-2 text-3xl font-bold mb-1">
+              <NivelIcon className="h-7 w-7" />
+              <span>Nível {nivel} — {nivelConfig.titulo}</span>
+            </div>
+            <div className="text-blue-200 text-sm">
+              {xp} XP acumulados
+              {proximoNivel && ` · faltam ${xpProximo - xp} XP para o Nível ${nivel + 1}`}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-sm text-blue-200">Streak</div>
+            <div className="flex items-center justify-end gap-1.5 text-2xl font-bold">
+              <Flame className="h-6 w-6 text-orange-300" />
+              {state.streak}
+            </div>
+            <div className="text-xs text-blue-200">semanas</div>
+          </div>
+        </div>
+        <div className="bg-blue-800/40 rounded-full h-3">
+          <div
+            className="bg-white rounded-full h-3 transition-all duration-500"
+            style={{ width: `${Math.min(progNivel, 100)}%` }}
+          />
+        </div>
+        <div className="flex justify-between mt-1 text-xs text-blue-200">
+          <span>{xpNivelAtual} XP</span>
+          <span>{progNivel}%</span>
+          <span>{xpProximo === 999999 ? "∞" : xpProximo} XP</span>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Tópicos Estudados", value: `${estudados}/${totalTopicos}`, Icon: BookOpen, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/30" },
+          { label: "Cadernos Feitos", value: cadernoConcluidos, Icon: HelpCircle, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/30" },
+          { label: "Atividades no Calendário", value: totalAtividades, Icon: CalendarCheck, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
+          { label: "Semanas OK", value: state.semanasOK, Icon: CheckSquare, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30" },
+        ].map((s) => (
+          <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center shadow-sm">
+            <div className={`flex items-center justify-center w-9 h-9 rounded-lg mx-auto mb-2 ${s.bg}`}>
+              <s.Icon className={`h-5 w-5 ${s.color}`} />
+            </div>
+            <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Conquistas */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <Medal className="h-5 w-5 text-amber-500" />
+            Conquistas
+          </h3>
+          <div className="grid grid-cols-2 gap-2">
+            {CONQUISTAS.map((c) => {
+              const unlocked = conquistas[c.id as keyof typeof conquistas];
+              const CIcon = c.icone;
+              return (
+                <div
+                  key={c.id}
+                  className={`flex items-center gap-2 p-2.5 rounded-lg border transition-all ${
+                    unlocked
+                      ? "border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700"
+                      : "border-gray-200 dark:border-gray-700 opacity-50"
+                  }`}
+                >
+                  <CIcon className={`h-5 w-5 flex-shrink-0 ${unlocked ? c.cor : "text-gray-400 dark:text-gray-600"}`} />
+                  <div className="min-w-0">
+                    <div className={`text-xs font-semibold truncate ${unlocked ? "text-amber-700 dark:text-amber-300" : "text-gray-500 dark:text-gray-400"}`}>
+                      {c.nome}
+                    </div>
+                    <div className="text-xs text-gray-400 dark:text-gray-500 truncate">{c.condicao}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Progresso por matéria */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-blue-500" />
+            Progresso por Matéria
+          </h3>
+          <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
+            {MATERIAS.map((m) => {
+              const prog = getProgressoMateria(m.nome, state.topicos);
+              return (
+                <div key={m.nome}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-xs font-medium truncate max-w-[65%] ${m.corText}`}>
+                      {m.nome}
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {prog.estudados}/{prog.total}
+                    </span>
+                  </div>
+                  <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                    <div
+                      className={`rounded-full h-1.5 transition-all duration-300 ${
+                        prog.perc === 100
+                          ? "bg-emerald-500"
+                          : prog.perc > 0
+                          ? "bg-blue-500"
+                          : "bg-gray-300 dark:bg-gray-600"
+                      }`}
+                      style={{ width: `${prog.perc}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Níveis */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-blue-500" />
+          Tabela de Níveis
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          {Object.entries(NIVEL_CONFIG).map(([n, cfg]) => {
+            const isAtual = Number(n) === nivel;
+            const CfgIcon = cfg.icone;
+            return (
+              <div
+                key={n}
+                className={`rounded-lg border p-3 text-center transition-all ${
+                  isAtual
+                    ? "border-blue-400 bg-blue-50 dark:bg-blue-950/40 dark:border-blue-600 shadow-sm"
+                    : Number(n) < nivel
+                    ? "border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 opacity-70"
+                    : "border-gray-200 dark:border-gray-700 opacity-50"
+                }`}
+              >
+                <div className="flex items-center justify-center mb-1.5">
+                  <CfgIcon className={`h-5 w-5 ${cfg.cor}`} />
+                </div>
+                <div className="text-xs font-bold text-gray-700 dark:text-gray-200 leading-tight">{cfg.titulo}</div>
+                <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                  Nv {n}
+                </div>
+                <div className="text-xs text-gray-400 dark:text-gray-500">
+                  {cfg.xpMin === 0 ? "0" : cfg.xpMin}{cfg.xpMax === 999999 ? "+" : `–${cfg.xpMax}`}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -51,6 +51,21 @@ const nextConfig: NextConfig = {
       });
     }
 
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        os: false,
+        https: false,
+        http: false,
+        stream: false,
+        crypto: false,
+        buffer: false,
+        zlib: false,
+      };
+    }
+
     return config;
   },
 };

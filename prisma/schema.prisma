@@ -26,9 +26,28 @@ model User {
   // NextAuth relationships
   accounts Account[]
   sessions Session[]
+  taxPlans TaxPlan[]
 
   username        String?   @unique
+}
 
+model TaxPlan {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  companyName String
+  cnpj        String?
+  regimeAtual String
+  estado      String
+  setor       String
+  porte       String
+  dados       Json
+  analiseIA   Json?
+  status      String   @default("draft")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Account {

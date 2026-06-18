@@ -13,6 +13,9 @@ import {
   ChevronUp,
   FlipHorizontal2,
   BookOpen,
+  Target,
+  FileSearch,
+  GraduationCap,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
@@ -97,16 +100,23 @@ export default function Sidebar({ onClose }: SidebarProps) {
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
         {!isCollapsed && (
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center">
             <Image
-              src="https://github.com/Claudenir-Nojosa/servidor_estaticos/blob/main/logo.png?raw=true"
-              alt="tax-hub Logo"
-              width={40}
-              height={40}
+              src="/icons/taxhub_logo_principal_claro_transparente.png"
+              alt="TAX Hub"
+              width={130}
+              height={36}
+              className="block dark:hidden"
+              priority
             />
-            <span className="text-xl font-bold text-gray-900 dark:text-white">
-              tax-hub
-            </span>
+            <Image
+              src="/icons/taxhub_logo_principal_escuro_transparente.png"
+              alt="TAX Hub"
+              width={130}
+              height={36}
+              className="hidden dark:block"
+              priority
+            />
           </div>
         )}
         <div className="flex items-center gap-2">
@@ -129,6 +139,28 @@ export default function Sidebar({ onClose }: SidebarProps) {
         </div>
       </div>
 
+      {/* Ícone quando colapsado */}
+      {isCollapsed && (
+        <div className="flex items-center justify-center py-4 border-b border-gray-200 dark:border-gray-800">
+          <Image
+            src="/icons/taxhub_icone_claro_transparente.png"
+            alt="TAX Hub"
+            width={56}
+            height={56}
+            className="block dark:hidden"
+            priority
+          />
+          <Image
+            src="/icons/taxhub_icone_escuro_transparente.png"
+            alt="TAX Hub"
+            width={56}
+            height={56}
+            className="hidden dark:block"
+            priority
+          />
+        </div>
+      )}
+
       {/* Nav */}
       <nav className="flex-1 p-4 overflow-y-auto">
         <ul className="space-y-1">
@@ -136,6 +168,9 @@ export default function Sidebar({ onClose }: SidebarProps) {
   { href: "/dashboard", label: "Início", icon: Home },
   { href: "/dashboard/de-para", label: "De-Para", icon: FlipHorizontal2 },
   { href: "/dashboard/legislacoes", label: "Legislações", icon: BookOpen },
+  { href: "/dashboard/planejador-tributario", label: "Planejador", icon: Target },
+  { href: "/dashboard/recuperacao-credito", label: "Recuperação", icon: FileSearch },
+  { href: "/dashboard/estudo", label: "Estudo", icon: GraduationCap },
 ].map((item) => (
   <li key={item.href}>
     <Link

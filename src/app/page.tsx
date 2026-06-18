@@ -21,17 +21,24 @@ export default async function RootPage() {
 
       {/* Content */}
       <div className="flex flex-col items-center gap-8 px-4 text-center">
-        {/* Logo + wordmark */}
-        <div className="flex items-center gap-3">
+        {/* Logo */}
+        <div className="flex items-center">
           <Image
-            src="https://github.com/Claudenir-Nojosa/servidor_estaticos/blob/main/logo.png?raw=true"
-            alt="tax-hub Logo"
-            width={40}
-            height={40}
+            src="/icons/taxhub_logo_principal_claro_transparente.png"
+            alt="TAX Hub"
+            width={180}
+            height={50}
+            className="block dark:hidden"
+            priority
           />
-          <span className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
-            tax-hub
-          </span>
+          <Image
+            src="/icons/taxhub_logo_principal_escuro_transparente.png"
+            alt="TAX Hub"
+            width={180}
+            height={50}
+            className="hidden dark:block"
+            priority
+          />
         </div>
 
         {/* Tagline */}

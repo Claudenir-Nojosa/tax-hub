@@ -56,16 +56,23 @@ export default function ClientLoginPage() {
       </div>
 
       {/* Logo acima do card */}
-     <div className="flex items-center gap-3 -mt-12 mb-2">
+      <div className="flex items-center -mt-12 mb-2">
         <Image
-          src="https://github.com/Claudenir-Nojosa/servidor_estaticos/blob/main/logo.png?raw=true"
-          alt="tax-hub Logo"
-          width={36}
-          height={36}
+          src="/icons/taxhub_logo_principal_claro_transparente.png"
+          alt="TAX Hub"
+          width={160}
+          height={46}
+          className="block dark:hidden"
+          priority
         />
-        <span className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white">
-          tax-hub
-        </span>
+        <Image
+          src="/icons/taxhub_logo_principal_escuro_transparente.png"
+          alt="TAX Hub"
+          width={160}
+          height={46}
+          className="hidden dark:block"
+          priority
+        />
       </div>
 
       <Card className="max-w-sm w-full rounded-2xl border-gray-200 dark:border-gray-800 shadow-xl">
