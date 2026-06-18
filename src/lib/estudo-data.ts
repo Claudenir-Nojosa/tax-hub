@@ -10,7 +10,7 @@ import {
 
 export type { LucideIcon };
 export type Grupo = "A" | "B" | "C" | "D";
-export type AtividadeTipo = "estudo" | "questoes" | "recall" | "caderno_erros" | "bateria";
+export type AtividadeTipo = "estudo" | "questoes" | "recall" | "caderno_erros" | "bateria" | "materia_concluida";
 
 export interface TopicoCaderno {
   acertos: number;
@@ -27,6 +27,9 @@ export interface AtividadeCalendario {
   tipo: AtividadeTipo;
   descricao: string;
   duracao: number;
+  grupo?: Grupo;
+  materia?: string;
+  topico?: string;
 }
 
 export interface ErroEntry {
@@ -146,11 +149,12 @@ export const CONQUISTAS: ConquistaConfig[] = [
 ];
 
 export const ATIVIDADE_CONFIG: Record<AtividadeTipo, { label: string; icone: LucideIcon; cor: string; corDot: string }> = {
-  estudo:        { label: "Estudo de Matéria",    icone: BookOpen,    cor: "bg-blue-100 text-blue-700 dark:bg-blue-400/20 dark:text-blue-200",       corDot: "bg-blue-500"    },
-  questoes:      { label: "Questões",              icone: HelpCircle,  cor: "bg-purple-100 text-purple-700 dark:bg-purple-400/20 dark:text-purple-200", corDot: "bg-purple-500"  },
-  recall:        { label: "Recall",                icone: RotateCcw,   cor: "bg-amber-100 text-amber-700 dark:bg-amber-400/20 dark:text-amber-200",     corDot: "bg-amber-500"   },
-  caderno_erros: { label: "Caderno de Erros",      icone: NotebookPen, cor: "bg-red-100 text-red-700 dark:bg-red-400/20 dark:text-red-200",            corDot: "bg-red-500"     },
-  bateria:       { label: "Bateria de Questões",   icone: ListChecks,  cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-200", corDot: "bg-emerald-500" },
+  estudo:            { label: "Estudo de Matéria",  icone: BookOpen,      cor: "bg-blue-100 text-blue-700 dark:bg-blue-400/20 dark:text-blue-200",         corDot: "bg-blue-500"    },
+  questoes:          { label: "Questões",            icone: HelpCircle,    cor: "bg-purple-100 text-purple-700 dark:bg-purple-400/20 dark:text-purple-200",  corDot: "bg-purple-500"  },
+  recall:            { label: "Recall",              icone: RotateCcw,     cor: "bg-amber-100 text-amber-700 dark:bg-amber-400/20 dark:text-amber-200",      corDot: "bg-amber-500"   },
+  caderno_erros:     { label: "Caderno de Erros",    icone: NotebookPen,   cor: "bg-red-100 text-red-700 dark:bg-red-400/20 dark:text-red-200",              corDot: "bg-red-500"     },
+  bateria:           { label: "Bateria de Questões", icone: ListChecks,    cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-200", corDot: "bg-emerald-500" },
+  materia_concluida: { label: "Matéria Concluída",   icone: CheckCircle2,  cor: "bg-teal-100 text-teal-700 dark:bg-teal-400/20 dark:text-teal-200",          corDot: "bg-teal-500"    },
 };
 
 export function calcularXP(

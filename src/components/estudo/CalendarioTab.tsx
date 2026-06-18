@@ -1,16 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Plus, X, Trash2, Flame, CalendarDays } from "lucide-react";
-import { ATIVIDADE_CONFIG, type AtividadeCalendario, type AtividadeTipo } from "@/lib/estudo-data";
+import {
+  ATIVIDADE_CONFIG,
+  MATERIAS,
+  type AtividadeCalendario,
+  type AtividadeTipo,
+  type Grupo,
+} from "@/lib/estudo-data";
 
-// Cores otimizadas para as células do calendário (dark mode com opacity funciona bem)
+// Cores para células e modal
 const CAL_COR: Record<AtividadeTipo, string> = {
-  estudo:        "bg-blue-100   text-blue-800   dark:bg-blue-400/20   dark:text-blue-200",
-  questoes:      "bg-purple-100 text-purple-800 dark:bg-purple-400/20 dark:text-purple-200",
-  recall:        "bg-amber-100  text-amber-800  dark:bg-amber-400/20  dark:text-amber-200",
-  caderno_erros: "bg-red-100    text-red-800    dark:bg-red-400/20    dark:text-red-200",
-  bateria:       "bg-emerald-100 text-emerald-800 dark:bg-emerald-400/20 dark:text-emerald-200",
+  estudo:            "bg-blue-100   text-blue-800   dark:bg-blue-400/20   dark:text-blue-200",
+  questoes:          "bg-purple-100 text-purple-800 dark:bg-purple-400/20 dark:text-purple-200",
+  recall:            "bg-amber-100  text-amber-800  dark:bg-amber-400/20  dark:text-amber-200",
+  caderno_erros:     "bg-red-100    text-red-800    dark:bg-red-400/20    dark:text-red-200",
+  bateria:           "bg-emerald-100 text-emerald-800 dark:bg-emerald-400/20 dark:text-emerald-200",
+  materia_concluida: "bg-teal-100   text-teal-800   dark:bg-teal-400/20   dark:text-teal-200",
+};
+
+// Cores dos grupos A/B/C/D
+const GRUPO_PILL: Record<Grupo, string> = {
+  A: "bg-blue-500 text-white",
+  B: "bg-emerald-500 text-white",
+  C: "bg-violet-500 text-white",
+  D: "bg-amber-500 text-white",
+};
+const GRUPO_OUTLINE: Record<Grupo, string> = {
+  A: "border-blue-400 text-blue-600 dark:text-blue-400",
+  B: "border-emerald-400 text-emerald-600 dark:text-emerald-400",
+  C: "border-violet-400 text-violet-600 dark:text-violet-400",
+  D: "border-amber-400 text-amber-600 dark:text-amber-400",
 };
 
 interface Props {
@@ -21,11 +42,25 @@ interface Props {
   semanasOK: number;
 }
 
-const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const DIAS_SEMANA = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+const GRUPOS: Grupo[] = ["A","B","C","D"];
 
 function dateKey(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function buildAutoDesc(tipo: AtividadeTipo, grupo: Grupo | null, materia: string, topico: string): string {
+  if (tipo === "questoes" || tipo === "bateria") {
+    const base = tipo === "questoes" ? "Questões" : "Bateria";
+    const grp = grupo ? ` Grupo ${grupo}` : "";
+    const sub = topico ? ` — ${topico}` : materia ? ` — ${materia}` : "";
+    return `${base}${grp}${sub}`;
+  }
+  if (tipo === "materia_concluida") {
+    return materia ? `Matéria Concluída — ${materia}` : "Matéria Concluída";
+  }
+  return ATIVIDADE_CONFIG[tipo].label;
 }
 
 export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange, streak, semanasOK }: Props) {
@@ -33,43 +68,61 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
   const [viewDate, setViewDate] = useState({ year: today.getFullYear(), month: today.getMonth() });
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+
+  // Form state
   const [formTipo, setFormTipo] = useState<AtividadeTipo>("estudo");
+  const [formGrupo, setFormGrupo] = useState<Grupo | null>(null);
+  const [formMateria, setFormMateria] = useState<string>("");
+  const [formTopico, setFormTopico] = useState<string>("");
   const [formDesc, setFormDesc] = useState("");
-  // String state para permitir apagar e redigitar livremente
   const [formDuracaoStr, setFormDuracaoStr] = useState("50");
 
   const { year, month } = viewDate;
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  const prevMonth = () => {
-    setViewDate(({ year, month }) => month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 });
-  };
-  const nextMonth = () => {
-    setViewDate(({ year, month }) => month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 });
-  };
+  const prevMonth = () => setViewDate(({ year, month }) => month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 });
+  const nextMonth = () => setViewDate(({ year, month }) => month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 });
 
   const openModal = (key: string) => {
     setSelectedDay(key);
     setFormTipo("estudo");
+    setFormGrupo(null);
+    setFormMateria("");
+    setFormTopico("");
     setFormDesc("");
     setFormDuracaoStr("50");
     setModalOpen(true);
   };
 
+  const handleTipoChange = useCallback((tipo: AtividadeTipo) => {
+    setFormTipo(tipo);
+    setFormGrupo(null);
+    setFormMateria("");
+    setFormTopico("");
+  }, []);
+
   const addAtividade = () => {
     if (!selectedDay) return;
+    if (formTipo === "materia_concluida" && !formMateria) return;
     const duracao = Math.max(1, parseInt(formDuracaoStr) || 1);
+    const autoDesc = buildAutoDesc(formTipo, formGrupo, formMateria, formTopico);
     const nova: AtividadeCalendario = {
       id: Date.now().toString(),
       tipo: formTipo,
-      descricao: formDesc.trim() || ATIVIDADE_CONFIG[formTipo].label,
+      descricao: formDesc.trim() || autoDesc,
       duracao,
+      ...(formGrupo ? { grupo: formGrupo } : {}),
+      ...(formMateria ? { materia: formMateria } : {}),
+      ...(formTopico ? { topico: formTopico } : {}),
     };
     const prev = calendario[selectedDay] ?? [];
     onUpdate({ ...calendario, [selectedDay]: [...prev, nova] });
     setFormDesc("");
     setFormDuracaoStr("50");
+    setFormGrupo(null);
+    setFormMateria("");
+    setFormTopico("");
   };
 
   const removeAtividade = (dayKey: string, id: string) => {
@@ -86,10 +139,17 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
   const totalMinMonth = Object.entries(calendario)
     .filter(([key]) => key.startsWith(`${year}-${String(month + 1).padStart(2, "0")}`))
     .reduce((acc, [, atividades]) => acc + atividades.reduce((a, b) => a + b.duracao, 0), 0);
-
   const diasComAtividade = Object.keys(calendario).filter((key) =>
     key.startsWith(`${year}-${String(month + 1).padStart(2, "0")}`)
   ).length;
+
+  // Derived for form
+  const showGrupo = formTipo === "questoes" || formTipo === "bateria";
+  const showMateria = formTipo === "questoes" || formTipo === "bateria" || formTipo === "materia_concluida";
+  const showTopico = (formTipo === "questoes" || formTipo === "bateria") && !!formMateria;
+  const topicosMateria = MATERIAS.find((m) => m.nome === formMateria)?.topicos ?? [];
+  const autoDescPreview = buildAutoDesc(formTipo, formGrupo, formMateria, formTopico);
+  const canAdd = formTipo !== "materia_concluida" || !!formMateria;
 
   return (
     <div className="space-y-4">
@@ -105,8 +165,7 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
         </div>
         <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-3 text-center">
           <div className="flex items-center justify-center gap-1.5 text-xl font-bold text-amber-700 dark:text-amber-300">
-            <Flame className="h-5 w-5 text-orange-500" />
-            {streak}
+            <Flame className="h-5 w-5 text-orange-500" />{streak}
           </div>
           <div className="text-xs text-amber-500 dark:text-amber-400">Semanas seguidas</div>
         </div>
@@ -142,24 +201,18 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
             const key = dateKey(year, month, day);
             const atividades = calendario[key] ?? [];
             const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
-
             return (
               <button
                 key={day}
                 type="button"
                 onClick={() => openModal(key)}
-                className={`min-h-[88px] border-r border-b border-gray-50 dark:border-gray-700/50 p-1.5 text-left hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors align-top ${
-                  isToday ? "bg-blue-50 dark:bg-blue-950/20" : ""
-                }`}
+                className={`min-h-[88px] border-r border-b border-gray-50 dark:border-gray-700/50 p-1.5 text-left hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors align-top ${isToday ? "bg-blue-50 dark:bg-blue-950/20" : ""}`}
               >
-                {/* Número do dia */}
                 <div className={`text-xs font-medium mb-1 ${isToday ? "text-blue-600 dark:text-blue-400" : "text-gray-700 dark:text-gray-300"}`}>
                   {isToday
                     ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-xs">{day}</span>
                     : day}
                 </div>
-
-                {/* Atividades */}
                 {atividades.length > 0 && (
                   <div className="space-y-0.5 mt-0.5">
                     {atividades.slice(0, 3).map((a) => {
@@ -174,9 +227,7 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
                       );
                     })}
                     {atividades.length > 3 && (
-                      <div className="text-[10px] text-gray-400 dark:text-gray-500 pl-1">
-                        +{atividades.length - 3}
-                      </div>
+                      <div className="text-[10px] text-gray-400 dark:text-gray-500 pl-1">+{atividades.length - 3}</div>
                     )}
                   </div>
                 )}
@@ -187,18 +238,16 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
 
         {/* Legenda */}
         <div className="px-4 py-2.5 border-t border-gray-100 dark:border-gray-700 flex flex-wrap gap-3">
-          {(Object.entries(ATIVIDADE_CONFIG) as [AtividadeTipo, typeof ATIVIDADE_CONFIG[AtividadeTipo]][]).map(
-            ([tipo, cfg]) => {
-              const Icon = cfg.icone;
-              return (
-                <div key={tipo} className="flex items-center gap-1.5">
-                  <div className={`h-2.5 w-2.5 rounded-full ${cfg.corDot}`} />
-                  <Icon className="h-3 w-3 text-gray-400 dark:text-gray-500" />
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{cfg.label}</span>
-                </div>
-              );
-            }
-          )}
+          {(Object.entries(ATIVIDADE_CONFIG) as [AtividadeTipo, typeof ATIVIDADE_CONFIG[AtividadeTipo]][]).map(([tipo, cfg]) => {
+            const Icon = cfg.icone;
+            return (
+              <div key={tipo} className="flex items-center gap-1.5">
+                <div className={`h-2.5 w-2.5 rounded-full ${cfg.corDot}`} />
+                <Icon className="h-3 w-3 text-gray-400 dark:text-gray-500" />
+                <span className="text-xs text-gray-500 dark:text-gray-400">{cfg.label}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -219,7 +268,7 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
             </div>
 
             {/* Atividades existentes */}
-            <div className="px-4 py-3 max-h-48 overflow-y-auto">
+            <div className="px-4 py-3 max-h-40 overflow-y-auto">
               {(calendario[selectedDay] ?? []).length === 0 ? (
                 <p className="text-xs text-gray-400 dark:text-gray-500 italic text-center py-2">Sem atividades neste dia</p>
               ) : (
@@ -247,37 +296,98 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
             <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 space-y-3">
               <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Adicionar Atividade</div>
 
-              {/* Tipo */}
-              <div className="grid grid-cols-2 gap-2">
+              {/* Tipo — grid 3 colunas */}
+              <div className="grid grid-cols-3 gap-1.5">
                 {(Object.entries(ATIVIDADE_CONFIG) as [AtividadeTipo, typeof ATIVIDADE_CONFIG[AtividadeTipo]][]).map(([tipo, cfg]) => {
                   const BtnIcon = cfg.icone;
                   return (
                     <button
                       key={tipo}
                       type="button"
-                      onClick={() => setFormTipo(tipo)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-all ${
+                      onClick={() => handleTipoChange(tipo)}
+                      className={`flex items-center gap-1.5 px-2 py-2 rounded-lg border text-xs transition-all ${
                         formTipo === tipo
                           ? `${CAL_COR[tipo]} border-current font-semibold`
                           : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"
                       }`}
                     >
                       <BtnIcon className="h-3.5 w-3.5 flex-shrink-0" />
-                      {cfg.label}
+                      <span className="truncate">{cfg.label}</span>
                     </button>
                   );
                 })}
               </div>
 
-              {/* Descrição — opcional */}
-              <input
-                type="text"
-                placeholder={`Descrição (opcional) — padrão: "${ATIVIDADE_CONFIG[formTipo].label}"`}
-                value={formDesc}
-                onChange={(e) => setFormDesc(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addAtividade()}
-                className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              {/* Seletor de Grupo (questões / bateria) */}
+              {showGrupo && (
+                <div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">Grupo <span className="text-gray-400">(opcional)</span></div>
+                  <div className="flex gap-2">
+                    {GRUPOS.map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setFormGrupo(formGrupo === g ? null : g)}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                          formGrupo === g
+                            ? GRUPO_PILL[g]
+                            : `border ${GRUPO_OUTLINE[g]} bg-transparent`
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Seletor de Matéria */}
+              {showMateria && (
+                <select
+                  value={formMateria}
+                  onChange={(e) => { setFormMateria(e.target.value); setFormTopico(""); }}
+                  className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">
+                    {formTipo === "materia_concluida" ? "Selecione a matéria *" : "Selecione a matéria (opcional)"}
+                  </option>
+                  {MATERIAS.map((m) => (
+                    <option key={m.nome} value={m.nome}>{m.nome}</option>
+                  ))}
+                </select>
+              )}
+
+              {/* Seletor de Tópico (questões / bateria + matéria selecionada) */}
+              {showTopico && (
+                <select
+                  value={formTopico}
+                  onChange={(e) => setFormTopico(e.target.value)}
+                  className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecione o tópico (opcional)</option>
+                  {topicosMateria.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              )}
+
+              {/* Preview da descrição */}
+              <div className={`text-xs px-3 py-2 rounded-lg ${CAL_COR[formTipo]}`}>
+                <span className="opacity-60">Descrição: </span>
+                <span className="font-medium">{formDesc.trim() || autoDescPreview}</span>
+              </div>
+
+              {/* Descrição customizada (opcional, exceto matéria concluída) */}
+              {formTipo !== "materia_concluida" && (
+                <input
+                  type="text"
+                  placeholder="Descrição personalizada (opcional)"
+                  value={formDesc}
+                  onChange={(e) => setFormDesc(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && canAdd && addAtividade()}
+                  className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              )}
 
               {/* Duração + botão */}
               <div className="flex items-center gap-2">
@@ -293,7 +403,8 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
                 <button
                   type="button"
                   onClick={addAtividade}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={!canAdd}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Plus className="h-3.5 w-3.5" /> Adicionar
                 </button>
