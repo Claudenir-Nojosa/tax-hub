@@ -24,9 +24,10 @@ model User {
   updatedAt            DateTime  @updatedAt
 
   // NextAuth relationships
-  accounts Account[]
-  sessions Session[]
-  taxPlans TaxPlan[]
+  accounts         Account[]
+  sessions         Session[]
+  taxPlans         TaxPlan[]
+  estudoProgresso  EstudoProgresso?
 
   username        String?   @unique
 }
@@ -48,6 +49,15 @@ model TaxPlan {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model EstudoProgresso {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dados     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Account {

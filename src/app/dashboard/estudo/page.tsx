@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import {
   DEFAULT_ESTUDO_STATE,
@@ -35,31 +35,32 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "caderno", label: "Caderno de Erros", icon: NotebookPen },
 ];
 
-function loadState(): EstudoState {
-  if (typeof window === "undefined") return DEFAULT_ESTUDO_STATE;
+function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {
+  return {
+    ...DEFAULT_ESTUDO_STATE,
+    ...parsed,
+    topicos: {
+      ...DEFAULT_ESTUDO_STATE.topicos,
+      ...(parsed.topicos ?? {}),
+    },
+    configCiclo: {
+      ...DEFAULT_ESTUDO_STATE.configCiclo,
+      ...(parsed.configCiclo ?? {}),
+      materias: {
+        ...DEFAULT_ESTUDO_STATE.configCiclo.materias,
+        ...(parsed.configCiclo?.materias ?? {}),
+      },
+    },
+  };
+}
+
+function loadFromLocalStorage(): EstudoState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_ESTUDO_STATE;
-    const parsed = JSON.parse(raw) as Partial<EstudoState>;
-    // Merge with defaults to handle new fields
-    return {
-      ...DEFAULT_ESTUDO_STATE,
-      ...parsed,
-      topicos: {
-        ...DEFAULT_ESTUDO_STATE.topicos,
-        ...(parsed.topicos ?? {}),
-      },
-      configCiclo: {
-        ...DEFAULT_ESTUDO_STATE.configCiclo,
-        ...(parsed.configCiclo ?? {}),
-        materias: {
-          ...DEFAULT_ESTUDO_STATE.configCiclo.materias,
-          ...(parsed.configCiclo?.materias ?? {}),
-        },
-      },
-    };
+    if (!raw) return null;
+    return mergeWithDefaults(JSON.parse(raw) as Partial<EstudoState>);
   } catch {
-    return DEFAULT_ESTUDO_STATE;
+    return null;
   }
 }
 
@@ -67,15 +68,43 @@ export default function EstudoPage() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [state, setState] = useState<EstudoState>(DEFAULT_ESTUDO_STATE);
   const [loaded, setLoaded] = useState(false);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Carrega: banco primeiro, localStorage como fallback
   useEffect(() => {
-    setState(loadState());
-    setLoaded(true);
+    (async () => {
+      try {
+        const res = await fetch("/api/estudo");
+        if (res.ok) {
+          const data = await res.json();
+          if (data) {
+            setState(mergeWithDefaults(data as Partial<EstudoState>));
+            setLoaded(true);
+            return;
+          }
+        }
+      } catch {
+        // silent
+      }
+      // Fallback: localStorage
+      setState(loadFromLocalStorage() ?? DEFAULT_ESTUDO_STATE);
+      setLoaded(true);
+    })();
   }, []);
 
+  // Persiste: localStorage imediato + banco com debounce de 2s
   useEffect(() => {
     if (!loaded) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      fetch("/api/estudo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(state),
+      }).catch(() => {});
+    }, 2000);
   }, [state, loaded]);
 
   const updateTopicos = useCallback((topicos: Record<string, TopicoState>) => {

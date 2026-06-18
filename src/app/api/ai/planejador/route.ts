@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { auth } from "../../../../auth";
+import db from "@/lib/db";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -186,6 +188,30 @@ Retorne APENAS um JSON válido com esta estrutura exata:
     if (!jsonMatch) throw new Error("Resposta da IA não contém JSON válido");
 
     const analise = JSON.parse(jsonMatch[0]);
+
+    // Salvar no banco associado ao usuário autenticado
+    try {
+      const session = await auth();
+      if (session?.user?.id) {
+        await db.taxPlan.create({
+          data: {
+            userId: session.user.id,
+            companyName: identificacao.nomeEmpresa || "Empresa",
+            cnpj: identificacao.cnpj || null,
+            regimeAtual: bi.regimeFederal || "nao_informado",
+            estado: bi.uf || "",
+            setor: bc.atividade || "",
+            porte: "",
+            dados: { identificacao, briefingCliente: bc, briefingInterna: bi },
+            analiseIA: analise,
+            status: "analyzed",
+          },
+        });
+      }
+    } catch (saveError) {
+      console.error("Aviso: falha ao salvar TaxPlan:", saveError);
+    }
+
     return NextResponse.json(analise);
   } catch (error) {
     console.error("Erro no planejador tributário:", error);
