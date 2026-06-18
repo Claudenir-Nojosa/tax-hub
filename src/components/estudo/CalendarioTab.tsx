@@ -57,6 +57,10 @@ function buildAutoDesc(tipo: AtividadeTipo, grupo: Grupo | null, materia: string
     const sub = topico ? ` — ${topico}` : materia ? ` — ${materia}` : "";
     return `${base}${grp}${sub}`;
   }
+  if (tipo === "estudo") {
+    const sub = topico ? ` — ${topico}` : materia ? ` — ${materia}` : "";
+    return `Estudo${sub}`;
+  }
   if (tipo === "materia_concluida") {
     return materia ? `Matéria Concluída — ${materia}` : "Matéria Concluída";
   }
@@ -145,8 +149,8 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
 
   // Derived for form
   const showGrupo = formTipo === "questoes" || formTipo === "bateria";
-  const showMateria = formTipo === "questoes" || formTipo === "bateria" || formTipo === "materia_concluida";
-  const showTopico = (formTipo === "questoes" || formTipo === "bateria") && !!formMateria;
+  const showMateria = formTipo === "estudo" || formTipo === "questoes" || formTipo === "bateria" || formTipo === "materia_concluida";
+  const showTopico = (formTipo === "estudo" || formTipo === "questoes" || formTipo === "bateria") && !!formMateria;
   const topicosMateria = MATERIAS.find((m) => m.nome === formMateria)?.topicos ?? [];
   const autoDescPreview = buildAutoDesc(formTipo, formGrupo, formMateria, formTopico);
   const canAdd = formTipo !== "materia_concluida" || !!formMateria;
