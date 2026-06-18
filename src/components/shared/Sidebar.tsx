@@ -6,11 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Home,
   Menu,
-  LogOut,
   X,
-  Crown,
-  ChevronDown,
-  ChevronUp,
   FlipHorizontal2,
   BookOpen,
   Target,
@@ -20,14 +16,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
-import { logoutAction } from "@/app/(auth)/(logout)/logoutAction";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "../ui/tooltip";
+import { usePathname } from "next/navigation";
 import LogoutButtonSimple from "./LogoutButton";
 
 interface SidebarProps {
@@ -38,7 +27,6 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState<boolean | null>(null);
   const { data: session } = useSession();
   const pathname = usePathname();
-  const router = useRouter();
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
