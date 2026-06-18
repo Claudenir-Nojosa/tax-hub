@@ -155,12 +155,12 @@ export default function EditalTab({ topicos, onUpdate }: Props) {
               <button
                 type="button"
                 onClick={() => toggleExpand(m.nome)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 border-l-4 ${m.corBorder} ${m.corBg} hover:opacity-90 transition-opacity`}
+                className={`w-full flex items-center gap-3 px-4 py-3.5 border-l-4 ${m.corBorder} hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors`}
               >
                 <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">
                   {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </span>
-                <span className={`font-semibold text-sm flex-1 text-left ${m.corText}`}>{m.nome}</span>
+                <span className="font-semibold text-sm flex-1 text-left text-gray-900 dark:text-white">{m.nome}</span>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <div className="hidden sm:flex items-center gap-2">
                     <div className="w-24 bg-gray-200 dark:bg-gray-600 rounded-full h-1.5">
