@@ -4,6 +4,15 @@ import { useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, X, Trash2, Flame, CalendarDays } from "lucide-react";
 import { ATIVIDADE_CONFIG, type AtividadeCalendario, type AtividadeTipo } from "@/lib/estudo-data";
 
+// Cores otimizadas para as células do calendário (dark mode com opacity funciona bem)
+const CAL_COR: Record<AtividadeTipo, string> = {
+  estudo:        "bg-blue-100   text-blue-800   dark:bg-blue-400/20   dark:text-blue-200",
+  questoes:      "bg-purple-100 text-purple-800 dark:bg-purple-400/20 dark:text-purple-200",
+  recall:        "bg-amber-100  text-amber-800  dark:bg-amber-400/20  dark:text-amber-200",
+  caderno_erros: "bg-red-100    text-red-800    dark:bg-red-400/20    dark:text-red-200",
+  bateria:       "bg-emerald-100 text-emerald-800 dark:bg-emerald-400/20 dark:text-emerald-200",
+};
+
 interface Props {
   calendario: Record<string, AtividadeCalendario[]>;
   onUpdate: (calendario: Record<string, AtividadeCalendario[]>) => void;
@@ -26,7 +35,8 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
   const [modalOpen, setModalOpen] = useState(false);
   const [formTipo, setFormTipo] = useState<AtividadeTipo>("estudo");
   const [formDesc, setFormDesc] = useState("");
-  const [formDuracao, setFormDuracao] = useState(50);
+  // String state para permitir apagar e redigitar livremente
+  const [formDuracaoStr, setFormDuracaoStr] = useState("50");
 
   const { year, month } = viewDate;
   const firstDay = new Date(year, month, 1).getDay();
@@ -43,21 +53,23 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
     setSelectedDay(key);
     setFormTipo("estudo");
     setFormDesc("");
-    setFormDuracao(50);
+    setFormDuracaoStr("50");
     setModalOpen(true);
   };
 
   const addAtividade = () => {
-    if (!selectedDay || !formDesc.trim()) return;
+    if (!selectedDay) return;
+    const duracao = Math.max(1, parseInt(formDuracaoStr) || 1);
     const nova: AtividadeCalendario = {
       id: Date.now().toString(),
       tipo: formTipo,
-      descricao: formDesc.trim(),
-      duracao: formDuracao,
+      descricao: formDesc.trim() || ATIVIDADE_CONFIG[formTipo].label,
+      duracao,
     };
     const prev = calendario[selectedDay] ?? [];
     onUpdate({ ...calendario, [selectedDay]: [...prev, nova] });
     setFormDesc("");
+    setFormDuracaoStr("50");
   };
 
   const removeAtividade = (dayKey: string, id: string) => {
@@ -104,21 +116,11 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         {/* Navegação */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-          <button
-            type="button"
-            onClick={prevMonth}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
-          >
+          <button type="button" onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-            {MESES[month]} {year}
-          </h3>
-          <button
-            type="button"
-            onClick={nextMonth}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
-          >
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{MESES[month]} {year}</h3>
+          <button type="button" onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors">
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
@@ -126,51 +128,55 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
         {/* Dias da semana */}
         <div className="grid grid-cols-7 border-b border-gray-100 dark:border-gray-700">
           {DIAS_SEMANA.map((d) => (
-            <div key={d} className="py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400">
-              {d}
-            </div>
+            <div key={d} className="py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400">{d}</div>
           ))}
         </div>
 
         {/* Grid de dias */}
         <div className="grid grid-cols-7">
           {Array.from({ length: firstDay }).map((_, i) => (
-            <div key={`empty-${i}`} className="h-16 border-r border-b border-gray-50 dark:border-gray-700/50" />
+            <div key={`empty-${i}`} className="min-h-[88px] border-r border-b border-gray-50 dark:border-gray-700/50" />
           ))}
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const day = i + 1;
             const key = dateKey(year, month, day);
             const atividades = calendario[key] ?? [];
-            const isToday =
-              day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
-            const tipos = [...new Set(atividades.map((a) => a.tipo))];
-            const totalMin = atividades.reduce((acc, a) => acc + a.duracao, 0);
+            const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
 
             return (
               <button
                 key={day}
                 type="button"
                 onClick={() => openModal(key)}
-                className={`h-16 border-r border-b border-gray-50 dark:border-gray-700/50 p-1 text-left hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors group ${
+                className={`min-h-[88px] border-r border-b border-gray-50 dark:border-gray-700/50 p-1.5 text-left hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors align-top ${
                   isToday ? "bg-blue-50 dark:bg-blue-950/20" : ""
                 }`}
               >
+                {/* Número do dia */}
                 <div className={`text-xs font-medium mb-1 ${isToday ? "text-blue-600 dark:text-blue-400" : "text-gray-700 dark:text-gray-300"}`}>
-                  {isToday ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-xs">{day}</span> : day}
+                  {isToday
+                    ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-xs">{day}</span>
+                    : day}
                 </div>
+
+                {/* Atividades */}
                 {atividades.length > 0 && (
-                  <div className="flex flex-wrap gap-0.5">
-                    {tipos.slice(0, 3).map((tipo) => (
-                      <div
-                        key={tipo}
-                        className={`h-1.5 w-1.5 rounded-full ${ATIVIDADE_CONFIG[tipo].corDot}`}
-                        title={ATIVIDADE_CONFIG[tipo].label}
-                      />
-                    ))}
-                    {totalMin > 0 && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500 leading-none">
-                        {Math.round(totalMin / 60)}h
-                      </span>
+                  <div className="space-y-0.5 mt-0.5">
+                    {atividades.slice(0, 3).map((a) => {
+                      const Icon = ATIVIDADE_CONFIG[a.tipo].icone;
+                      return (
+                        <div key={a.id} className={`flex items-center gap-1 rounded px-1 py-0.5 min-w-0 ${CAL_COR[a.tipo]}`}>
+                          <Icon className="h-2.5 w-2.5 flex-shrink-0" />
+                          <span className="text-[10px] leading-tight truncate">
+                            {a.descricao.length > 11 ? a.descricao.slice(0, 11) + "…" : a.descricao}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {atividades.length > 3 && (
+                      <div className="text-[10px] text-gray-400 dark:text-gray-500 pl-1">
+                        +{atividades.length - 3}
+                      </div>
                     )}
                   </div>
                 )}
@@ -196,23 +202,18 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
         </div>
       </div>
 
-      {/* Modal / painel lateral */}
+      {/* Modal */}
       {modalOpen && selectedDay && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50" onClick={() => setModalOpen(false)}>
-          <div
-            className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+
+            {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <CalendarDays className="h-4 w-4 text-blue-500" />
                 {selectedDay}
               </h3>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500"
-              >
+              <button type="button" onClick={() => setModalOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -226,17 +227,13 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
                   {(calendario[selectedDay] ?? []).map((a) => {
                     const AtivIcon = ATIVIDADE_CONFIG[a.tipo].icone;
                     return (
-                      <div key={a.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${ATIVIDADE_CONFIG[a.tipo].cor}`}>
+                      <div key={a.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${CAL_COR[a.tipo]}`}>
                         <AtivIcon className="h-3.5 w-3.5 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-medium truncate">{a.descricao}</div>
                           <div className="text-xs opacity-70">{a.duracao} min</div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => removeAtividade(selectedDay, a.id)}
-                          className="p-0.5 hover:opacity-70 flex-shrink-0"
-                        >
+                        <button type="button" onClick={() => removeAtividade(selectedDay, a.id)} className="p-0.5 hover:opacity-70 flex-shrink-0">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -249,52 +246,54 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
             {/* Form nova atividade */}
             <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 space-y-3">
               <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Adicionar Atividade</div>
+
+              {/* Tipo */}
               <div className="grid grid-cols-2 gap-2">
-                {(Object.entries(ATIVIDADE_CONFIG) as [AtividadeTipo, typeof ATIVIDADE_CONFIG[AtividadeTipo]][]).map(
-                  ([tipo, cfg]) => {
-                    const BtnIcon = cfg.icone;
-                    return (
-                      <button
-                        key={tipo}
-                        type="button"
-                        onClick={() => setFormTipo(tipo)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-all ${
-                          formTipo === tipo
-                            ? `${cfg.cor} border-current font-semibold`
-                            : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"
-                        }`}
-                      >
-                        <BtnIcon className="h-3.5 w-3.5 flex-shrink-0" />
-                        {cfg.label}
-                      </button>
-                    );
-                  }
-                )}
+                {(Object.entries(ATIVIDADE_CONFIG) as [AtividadeTipo, typeof ATIVIDADE_CONFIG[AtividadeTipo]][]).map(([tipo, cfg]) => {
+                  const BtnIcon = cfg.icone;
+                  return (
+                    <button
+                      key={tipo}
+                      type="button"
+                      onClick={() => setFormTipo(tipo)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-all ${
+                        formTipo === tipo
+                          ? `${CAL_COR[tipo]} border-current font-semibold`
+                          : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"
+                      }`}
+                    >
+                      <BtnIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                      {cfg.label}
+                    </button>
+                  );
+                })}
               </div>
+
+              {/* Descrição — opcional */}
               <input
                 type="text"
-                placeholder="Descrição (ex: Contabilidade Geral — Cap 1)"
+                placeholder={`Descrição (opcional) — padrão: "${ATIVIDADE_CONFIG[formTipo].label}"`}
                 value={formDesc}
                 onChange={(e) => setFormDesc(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addAtividade()}
                 className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+
+              {/* Duração + botão */}
               <div className="flex items-center gap-2">
                 <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Duração (min):</label>
                 <input
-                  type="number"
-                  min={5}
-                  max={600}
-                  step={5}
-                  value={formDuracao}
-                  onChange={(e) => setFormDuracao(Math.max(5, parseInt(e.target.value) || 5))}
-                  className="w-20 text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  type="text"
+                  inputMode="numeric"
+                  value={formDuracaoStr}
+                  onChange={(e) => setFormDuracaoStr(e.target.value.replace(/\D/g, ""))}
+                  onFocus={(e) => e.target.select()}
+                  className="w-20 text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
                 />
                 <button
                   type="button"
                   onClick={addAtividade}
-                  disabled={!formDesc.trim()}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <Plus className="h-3.5 w-3.5" /> Adicionar
                 </button>
