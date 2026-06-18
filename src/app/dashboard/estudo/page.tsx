@@ -151,7 +151,7 @@ export default function EstudoPage() {
     }));
   }, []);
 
-  const xp = calcularXP(state.topicos);
+  const xp = calcularXP(state.topicos, state.calendario);
   const nivel = calcularNivel(xp);
   const nivelConfig = NIVEL_CONFIG[nivel];
 

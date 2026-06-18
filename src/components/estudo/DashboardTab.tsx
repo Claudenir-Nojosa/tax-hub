@@ -17,7 +17,7 @@ interface Props {
 }
 
 function calcularConquistas(state: EstudoState) {
-  const xp = calcularXP(state.topicos);
+  const xp = calcularXP(state.topicos, state.calendario);
   const totalHorasCalendario = Object.values(state.calendario)
     .flat()
     .reduce((acc, a) => acc + a.duracao, 0) / 60;
@@ -55,7 +55,7 @@ function getProgressoMateria(nome: string, topicos: Record<string, TopicoState>)
 }
 
 export default function DashboardTab({ state }: Props) {
-  const xp = calcularXP(state.topicos);
+  const xp = calcularXP(state.topicos, state.calendario);
   const nivel = calcularNivel(xp);
   const nivelConfig = NIVEL_CONFIG[nivel];
   const proximoNivel = NIVEL_CONFIG[nivel + 1];

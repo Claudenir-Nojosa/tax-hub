@@ -153,7 +153,10 @@ export const ATIVIDADE_CONFIG: Record<AtividadeTipo, { label: string; icone: Luc
   bateria:       { label: "Bateria de Questões",   icone: ListChecks,  cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-200", corDot: "bg-emerald-500" },
 };
 
-export function calcularXP(topicos: Record<string, TopicoState>): number {
+export function calcularXP(
+  topicos: Record<string, TopicoState>,
+  calendario?: Record<string, AtividadeCalendario[]>
+): number {
   let xp = 0;
   Object.values(topicos).forEach((t) => {
     if (t.estudado) xp += 10;
@@ -161,6 +164,12 @@ export function calcularXP(topicos: Record<string, TopicoState>): number {
       if (t.cadernos[g].acertos + t.cadernos[g].erros > 0) xp += 5;
     });
   });
+  if (calendario) {
+    Object.values(calendario).flat().forEach((a) => {
+      // +1 XP a cada 15 minutos, mínimo 1 XP por atividade
+      xp += Math.max(1, Math.floor(a.duracao / 15));
+    });
+  }
   return xp;
 }
 
