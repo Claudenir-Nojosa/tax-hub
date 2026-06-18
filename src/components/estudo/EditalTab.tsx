@@ -240,9 +240,8 @@ export default function EditalTab({ topicos, onUpdate }: Props) {
                         <div className="flex flex-wrap gap-2 md:gap-1">
                           {(["A", "B", "C", "D"] as Grupo[]).map((g) => {
                             const cad = estado.cadernos[g];
-                            const perc = calcularPerc(cad.acertos, cad.erros);
                             return (
-                              <div key={g} className="flex items-center gap-1 md:w-28 md:justify-center">
+                              <div key={g} className="flex items-center gap-1">
                                 <span className={`text-xs ${GRUPO_COR[g].label} w-4 flex-shrink-0 text-center`}>{g}</span>
                                 <CadernoInput
                                   value={cad.acertos}
@@ -253,7 +252,6 @@ export default function EditalTab({ topicos, onUpdate }: Props) {
                                   value={cad.erros}
                                   onChange={(v) => updateCaderno(m.nome, t, g, "erros", v)}
                                 />
-                                <PercBadge perc={perc} />
                               </div>
                             );
                           })}
