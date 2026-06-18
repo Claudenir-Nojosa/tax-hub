@@ -37,8 +37,6 @@ export interface ErroEntry {
   materia: string;
   topico: string;
   questao: string;
-  erroDesc: string;
-  respostaCorreta: string;
   revisado: boolean;
   data: string;
 }

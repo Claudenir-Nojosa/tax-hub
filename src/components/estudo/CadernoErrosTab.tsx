@@ -14,8 +14,6 @@ const INITIAL_FORM = {
   materia: "",
   topico: "",
   questao: "",
-  erroDesc: "",
-  respostaCorreta: "",
 };
 
 export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
@@ -48,8 +46,6 @@ export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
       materia: form.materia,
       topico: form.topico,
       questao: form.questao.trim(),
-      erroDesc: form.erroDesc.trim(),
-      respostaCorreta: form.respostaCorreta.trim(),
       revisado: false,
       data: new Date().toISOString().split("T")[0],
     };
@@ -184,23 +180,9 @@ export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
                       <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">{erro.data}</span>
                     </div>
 
-                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2 leading-relaxed">
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200 leading-relaxed">
                       {erro.questao}
                     </p>
-
-                    {erro.erroDesc && (
-                      <div className="mb-2">
-                        <span className="text-xs font-semibold text-red-600 dark:text-red-400">Erro cometido: </span>
-                        <span className="text-xs text-gray-600 dark:text-gray-400">{erro.erroDesc}</span>
-                      </div>
-                    )}
-
-                    {erro.respostaCorreta && (
-                      <div>
-                        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Resposta correta: </span>
-                        <span className="text-xs text-gray-600 dark:text-gray-400">{erro.respostaCorreta}</span>
-                      </div>
-                    )}
                   </div>
 
                   <button
@@ -262,35 +244,13 @@ export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Questão / Enunciado *</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">O que errei *</label>
                 <textarea
                   value={form.questao}
                   onChange={(e) => setForm({ ...form, questao: e.target.value })}
-                  placeholder="Descreva a questão ou o ponto de dificuldade..."
+                  placeholder="Descreva o que você errou..."
                   rows={3}
                   className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-red-600 dark:text-red-400 mb-1.5">Erro cometido</label>
-                <textarea
-                  value={form.erroDesc}
-                  onChange={(e) => setForm({ ...form, erroDesc: e.target.value })}
-                  placeholder="O que você errou ou confundiu?"
-                  rows={2}
-                  className="w-full text-sm border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1.5">Resposta / Conceito correto</label>
-                <textarea
-                  value={form.respostaCorreta}
-                  onChange={(e) => setForm({ ...form, respostaCorreta: e.target.value })}
-                  placeholder="Qual é a resposta ou conceito correto?"
-                  rows={2}
-                  className="w-full text-sm border border-emerald-200 dark:border-emerald-800 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
                 />
               </div>
 
