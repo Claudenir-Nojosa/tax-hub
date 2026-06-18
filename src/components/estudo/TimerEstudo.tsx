@@ -82,8 +82,9 @@ export default function TimerEstudo({ onSalvar }: Props) {
 
   const handleSalvar = () => {
     const duracao = Math.max(1, Math.round(elapsed / 60));
-    const descricao =
-      [materia, topico].filter(Boolean).join(" — ") || "Sessão de estudo";
+    const tipoLabel = ATIVIDADE_CONFIG[tipo].label;
+    const sub = topico || materia;
+    const descricao = sub ? `${tipoLabel} — ${sub}` : tipoLabel;
     onSalvar(duracao, tipo, descricao);
     setSaved(true);
     setShowSave(false);
