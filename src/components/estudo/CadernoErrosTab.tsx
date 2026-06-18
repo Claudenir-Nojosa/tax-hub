@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Trash2, CheckCircle, Circle, X, BookOpen, Filter, NotebookPen, PartyPopper } from "lucide-react";
+import { useState, useRef } from "react";
+import { Plus, Trash2, CheckCircle, Circle, X, BookOpen, Filter, NotebookPen, PartyPopper, Highlighter } from "lucide-react";
 import { MATERIAS, type ErroEntry, type TopicoState } from "@/lib/estudo-data";
 
 interface Props {
@@ -16,12 +16,30 @@ const INITIAL_FORM = {
   questao: "",
 };
 
+function renderWithHighlights(text: string) {
+  const parts = text.split(/(==.+?==)/gs);
+  return parts.map((part, i) => {
+    if (part.startsWith("==") && part.endsWith("==") && part.length > 4) {
+      return (
+        <mark
+          key={i}
+          className="bg-yellow-200 dark:bg-yellow-500/30 text-yellow-900 dark:text-yellow-100 rounded px-0.5 not-italic"
+        >
+          {part.slice(2, -2)}
+        </mark>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
 export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
   const [filtroMateria, setFiltroMateria] = useState("");
   const [filtroRevisado, setFiltroRevisado] = useState<"todos" | "pendentes" | "revisados">("todos");
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(INITIAL_FORM);
   const [erroForm, setErroForm] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const materiaOptions = MATERIAS.map((m) => m.nome);
   const topicoOptions = form.materia
@@ -36,9 +54,25 @@ export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
     onUpdate(erros.filter((e) => e.id !== id));
   };
 
+  const handleHighlight = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    if (start === end) return;
+    const text = form.questao;
+    const selected = text.slice(start, end);
+    const newText = text.slice(0, start) + "==" + selected + "==" + text.slice(end);
+    setForm({ ...form, questao: newText });
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(start + 2, end + 2);
+    }, 0);
+  };
+
   const addErro = () => {
     if (!form.materia || !form.questao.trim()) {
-      setErroForm("Matéria e questão são obrigatórios.");
+      setErroForm("Matéria e descrição são obrigatórios.");
       return;
     }
     const novo: ErroEntry = {
@@ -181,7 +215,7 @@ export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
                     </div>
 
                     <p className="text-sm font-medium text-gray-800 dark:text-gray-200 leading-relaxed">
-                      {erro.questao}
+                      {renderWithHighlights(erro.questao)}
                     </p>
                   </div>
 
@@ -244,14 +278,30 @@ export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">O que errei *</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-gray-600 dark:text-gray-400">O que errei *</label>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={handleHighlight}
+                    title="Marcar texto selecionado"
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-500/20 hover:bg-yellow-200 dark:hover:bg-yellow-500/30 transition-colors"
+                  >
+                    <Highlighter className="h-3 w-3" />
+                    Marca-texto
+                  </button>
+                </div>
                 <textarea
+                  ref={textareaRef}
                   value={form.questao}
                   onChange={(e) => setForm({ ...form, questao: e.target.value })}
                   placeholder="Descreva o que você errou..."
-                  rows={3}
+                  rows={4}
                   className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Selecione um trecho e clique em Marca-texto para destacá-lo.
+                </p>
               </div>
 
               {erroForm && (
