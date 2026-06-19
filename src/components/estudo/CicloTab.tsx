@@ -81,7 +81,7 @@ export default function CicloTab({ config, onChange }: Props) {
                   <tr key={m.nome} className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${cfg?.incluir ? "" : "opacity-60"}`}>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${m.corBorder.replace("border-l-", "bg-")}`} />
+                        <div className={`w-2 h-2 rounded-full ${m.corDot}`} />
                         <span className="text-xs text-gray-700 dark:text-gray-300">{m.nome}</span>
                       </div>
                     </td>
