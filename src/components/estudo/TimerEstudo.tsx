@@ -10,6 +10,17 @@ interface Props {
 
 type Status = "idle" | "running" | "paused";
 
+interface TimerSnapshot {
+  status: Status;
+  acc: number;
+  startedAt: number;
+  materia: string;
+  topico: string;
+  tipo: AtividadeTipo;
+}
+
+const TIMER_KEY = "taxhub_timer_v1";
+
 function formatTime(secs: number): string {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
@@ -44,31 +55,98 @@ export default function TimerEstudo({ onSalvar }: Props) {
     setElapsed(accRef.current + Math.floor((Date.now() - startRef.current) / 1000));
   }, []);
 
+  // Restore timer state on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(TIMER_KEY);
+      if (!raw) return;
+      const snap = JSON.parse(raw) as TimerSnapshot;
+      if (!snap) return;
+
+      setMateria(snap.materia ?? "");
+      setTopico(snap.topico ?? "");
+      setTipo(snap.tipo ?? "estudo");
+
+      if (snap.status === "running" && snap.startedAt) {
+        accRef.current = snap.acc ?? 0;
+        startRef.current = snap.startedAt;
+        const restored = accRef.current + Math.floor((Date.now() - snap.startedAt) / 1000);
+        setElapsed(restored);
+        setStatus("running");
+        intervalRef.current = setInterval(tick, 500);
+        setExpanded(true);
+      } else if (snap.status === "paused") {
+        const e = snap.acc ?? 0;
+        accRef.current = e;
+        setElapsed(e);
+        setStatus("paused");
+        setExpanded(true);
+      }
+    } catch {
+      // ignore corrupt data
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const saveSnapshot = useCallback((
+    nextStatus: Status,
+    nextAcc: number,
+    nextStartedAt: number,
+    currentMateria: string,
+    currentTopico: string,
+    currentTipo: AtividadeTipo,
+  ) => {
+    const snap: TimerSnapshot = {
+      status: nextStatus,
+      acc: nextAcc,
+      startedAt: nextStartedAt,
+      materia: currentMateria,
+      topico: currentTopico,
+      tipo: currentTipo,
+    };
+    localStorage.setItem(TIMER_KEY, JSON.stringify(snap));
+  }, []);
+
+  const clearSnapshot = useCallback(() => {
+    localStorage.removeItem(TIMER_KEY);
+  }, []);
+
   const handleStart = () => {
-    startRef.current = Date.now();
+    const now = Date.now();
+    accRef.current = 0;
+    startRef.current = now;
+    setElapsed(0);
     setStatus("running");
     setShowSave(false);
     setSaved(false);
     intervalRef.current = setInterval(tick, 500);
+    saveSnapshot("running", 0, now, materia, topico, tipo);
   };
 
   const handlePause = () => {
     clearTimer();
-    accRef.current = elapsed;
+    const cur = accRef.current + Math.floor((Date.now() - startRef.current) / 1000);
+    accRef.current = cur;
     setStatus("paused");
+    saveSnapshot("paused", cur, 0, materia, topico, tipo);
   };
 
   const handleResume = () => {
-    startRef.current = Date.now();
+    const now = Date.now();
+    startRef.current = now;
     setStatus("running");
     intervalRef.current = setInterval(tick, 500);
+    saveSnapshot("running", accRef.current, now, materia, topico, tipo);
   };
 
   const handleStop = () => {
     clearTimer();
-    accRef.current = elapsed;
+    const cur = accRef.current + Math.floor((Date.now() - startRef.current) / 1000);
+    accRef.current = cur;
+    setElapsed(cur);
     setStatus("idle");
-    if (elapsed > 0) setShowSave(true);
+    if (cur > 0) setShowSave(true);
+    clearSnapshot();
   };
 
   const handleReset = () => {
@@ -78,6 +156,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
     setStatus("idle");
     setShowSave(false);
     setSaved(false);
+    clearSnapshot();
   };
 
   const handleSalvar = () => {
