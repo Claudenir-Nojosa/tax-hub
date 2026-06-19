@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Plus, Trash2, CheckCircle, Circle, X, BookOpen, Filter, NotebookPen, PartyPopper, Highlighter } from "lucide-react";
+import { Plus, Trash2, CheckCircle, Circle, X, BookOpen, Filter, NotebookPen, PartyPopper, Highlighter, Pencil } from "lucide-react";
 import { MATERIAS, type ErroEntry, type TopicoState } from "@/lib/estudo-data";
 
 interface Props {
@@ -39,6 +39,7 @@ export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(INITIAL_FORM);
   const [erroForm, setErroForm] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const materiaOptions = MATERIAS.map((m) => m.nome);
@@ -70,22 +71,45 @@ export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
     }, 0);
   };
 
-  const addErro = () => {
+  const openAdd = () => {
+    setForm(INITIAL_FORM);
+    setErroForm("");
+    setEditingId(null);
+    setModalOpen(true);
+  };
+
+  const openEdit = (erro: ErroEntry) => {
+    setForm({ materia: erro.materia, topico: erro.topico, questao: erro.questao });
+    setErroForm("");
+    setEditingId(erro.id);
+    setModalOpen(true);
+  };
+
+  const saveErro = () => {
     if (!form.materia || !form.questao.trim()) {
       setErroForm("Matéria e descrição são obrigatórios.");
       return;
     }
-    const novo: ErroEntry = {
-      id: Date.now().toString(),
-      materia: form.materia,
-      topico: form.topico,
-      questao: form.questao.trim(),
-      revisado: false,
-      data: new Date().toISOString().split("T")[0],
-    };
-    onUpdate([...erros, novo]);
+    if (editingId) {
+      onUpdate(erros.map((e) =>
+        e.id === editingId
+          ? { ...e, materia: form.materia, topico: form.topico, questao: form.questao.trim() }
+          : e
+      ));
+    } else {
+      const novo: ErroEntry = {
+        id: Date.now().toString(),
+        materia: form.materia,
+        topico: form.topico,
+        questao: form.questao.trim(),
+        revisado: false,
+        data: new Date().toISOString().split("T")[0],
+      };
+      onUpdate([...erros, novo]);
+    }
     setForm(INITIAL_FORM);
     setErroForm("");
+    setEditingId(null);
     setModalOpen(false);
   };
 
@@ -121,7 +145,7 @@ export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
         </div>
         <button
           type="button"
-          onClick={() => { setForm(INITIAL_FORM); setErroForm(""); setModalOpen(true); }}
+          onClick={openAdd}
           className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
         >
           <Plus className="h-4 w-4" /> Registrar Erro
@@ -219,13 +243,24 @@ export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => deleteErro(erro.id)}
-                    className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(erro)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                      title="Editar"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteErro(erro.id)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                      title="Excluir"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -243,7 +278,7 @@ export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <NotebookPen className="h-4 w-4 text-blue-500" />
-                Registrar Erro
+                {editingId ? "Editar Erro" : "Registrar Erro"}
               </h3>
               <button type="button" onClick={() => setModalOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400">
                 <X className="h-4 w-4" />
@@ -319,10 +354,10 @@ export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
               </button>
               <button
                 type="button"
-                onClick={addErro}
+                onClick={saveErro}
                 className="px-4 py-2 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Registrar
+                {editingId ? "Salvar" : "Registrar"}
               </button>
             </div>
           </div>

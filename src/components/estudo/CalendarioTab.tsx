@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, Flame, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Flame, CalendarDays, Pencil } from "lucide-react";
 import {
   ATIVIDADE_CONFIG,
   MATERIAS,
@@ -80,6 +80,7 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
   const [formTopico, setFormTopico] = useState<string>("");
   const [formDesc, setFormDesc] = useState("");
   const [formDuracaoStr, setFormDuracaoStr] = useState("50");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const { year, month } = viewDate;
   const firstDay = new Date(year, month, 1).getDay();
@@ -96,7 +97,18 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
     setFormTopico("");
     setFormDesc("");
     setFormDuracaoStr("50");
+    setEditingId(null);
     setModalOpen(true);
+  };
+
+  const startEdit = (a: AtividadeCalendario) => {
+    setFormTipo(a.tipo);
+    setFormGrupo(a.grupo ?? null);
+    setFormMateria(a.materia ?? "");
+    setFormTopico(a.topico ?? "");
+    setFormDesc(a.descricao);
+    setFormDuracaoStr(String(a.duracao));
+    setEditingId(a.id);
   };
 
   const handleTipoChange = useCallback((tipo: AtividadeTipo) => {
@@ -106,13 +118,21 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
     setFormTopico("");
   }, []);
 
+  const resetForm = () => {
+    setFormDesc("");
+    setFormDuracaoStr("50");
+    setFormGrupo(null);
+    setFormMateria("");
+    setFormTopico("");
+    setEditingId(null);
+  };
+
   const addAtividade = () => {
     if (!selectedDay) return;
     if (formTipo === "materia_concluida" && !formMateria) return;
     const duracao = Math.max(1, parseInt(formDuracaoStr) || 1);
     const autoDesc = buildAutoDesc(formTipo, formGrupo, formMateria, formTopico);
-    const nova: AtividadeCalendario = {
-      id: Date.now().toString(),
+    const campos = {
       tipo: formTipo,
       descricao: formDesc.trim() || autoDesc,
       duracao,
@@ -120,13 +140,18 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
       ...(formMateria ? { materia: formMateria } : {}),
       ...(formTopico ? { topico: formTopico } : {}),
     };
+
     const prev = calendario[selectedDay] ?? [];
-    onUpdate({ ...calendario, [selectedDay]: [...prev, nova] });
-    setFormDesc("");
-    setFormDuracaoStr("50");
-    setFormGrupo(null);
-    setFormMateria("");
-    setFormTopico("");
+    if (editingId) {
+      onUpdate({
+        ...calendario,
+        [selectedDay]: prev.map((a) => a.id === editingId ? { ...a, ...campos } : a),
+      });
+    } else {
+      const nova: AtividadeCalendario = { id: Date.now().toString(), ...campos };
+      onUpdate({ ...calendario, [selectedDay]: [...prev, nova] });
+    }
+    resetForm();
   };
 
   const removeAtividade = (dayKey: string, id: string) => {
@@ -280,13 +305,16 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
                   {(calendario[selectedDay] ?? []).map((a) => {
                     const AtivIcon = ATIVIDADE_CONFIG[a.tipo].icone;
                     return (
-                      <div key={a.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${CAL_COR[a.tipo]}`}>
+                      <div key={a.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${CAL_COR[a.tipo]} ${editingId === a.id ? "ring-2 ring-blue-500" : ""}`}>
                         <AtivIcon className="h-3.5 w-3.5 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-medium truncate">{a.descricao}</div>
                           <div className="text-xs opacity-70">{a.duracao} min</div>
                         </div>
-                        <button type="button" onClick={() => removeAtividade(selectedDay, a.id)} className="p-0.5 hover:opacity-70 flex-shrink-0">
+                        <button type="button" onClick={() => startEdit(a)} className="p-0.5 hover:opacity-70 flex-shrink-0" title="Editar">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button type="button" onClick={() => { removeAtividade(selectedDay, a.id); if (editingId === a.id) resetForm(); }} className="p-0.5 hover:opacity-70 flex-shrink-0" title="Excluir">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -296,9 +324,18 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
               )}
             </div>
 
-            {/* Form nova atividade */}
+            {/* Form nova / editar atividade */}
             <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 space-y-3">
-              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Adicionar Atividade</div>
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                  {editingId ? "Editar Atividade" : "Adicionar Atividade"}
+                </div>
+                {editingId && (
+                  <button type="button" onClick={resetForm} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    Cancelar edição
+                  </button>
+                )}
+              </div>
 
               {/* Tipo — grid 3 colunas */}
               <div className="grid grid-cols-3 gap-1.5">
@@ -410,7 +447,7 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
                   disabled={!canAdd}
                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <Plus className="h-3.5 w-3.5" /> Adicionar
+                  {editingId ? <><Pencil className="h-3.5 w-3.5" /> Salvar</> : <><Plus className="h-3.5 w-3.5" /> Adicionar</>}
                 </button>
               </div>
             </div>
