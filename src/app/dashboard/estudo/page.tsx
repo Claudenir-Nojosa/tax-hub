@@ -98,12 +98,20 @@ export default function EstudoPage() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
-      fetch("/api/estudo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(state),
-      }).catch(() => {});
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/estudo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(state),
+        });
+        if (!res.ok) {
+          const body = await res.text();
+          console.error("[estudo] Falha ao salvar no banco:", res.status, body);
+        }
+      } catch (err) {
+        console.error("[estudo] Erro de rede ao salvar:", err);
+      }
     }, 2000);
   }, [state, loaded]);
 
