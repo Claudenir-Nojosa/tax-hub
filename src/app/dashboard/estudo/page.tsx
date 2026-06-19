@@ -15,18 +15,19 @@ import {
   type AtividadeTipo,
   type Grupo,
 } from "@/lib/estudo-data";
-import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, GraduationCap, Flame } from "lucide-react";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, GraduationCap, Flame, BarChart2 } from "lucide-react";
 
 const DashboardTab = dynamic(() => import("@/components/estudo/DashboardTab"), { ssr: false });
 const EditalTab = dynamic(() => import("@/components/estudo/EditalTab"), { ssr: false });
 const CicloTab = dynamic(() => import("@/components/estudo/CicloTab"), { ssr: false });
 const CalendarioTab = dynamic(() => import("@/components/estudo/CalendarioTab"), { ssr: false });
 const CadernoErrosTab = dynamic(() => import("@/components/estudo/CadernoErrosTab"), { ssr: false });
+const RelatoriosTab = dynamic(() => import("@/components/estudo/RelatoriosTab"), { ssr: false });
 const TimerEstudo = dynamic(() => import("@/components/estudo/TimerEstudo"), { ssr: false });
 
 const STORAGE_KEY = "taxhub_estudo_v1";
 
-type Tab = "dashboard" | "edital" | "ciclo" | "calendario" | "caderno";
+type Tab = "dashboard" | "edital" | "ciclo" | "calendario" | "caderno" | "relatorios";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -34,6 +35,7 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "ciclo", label: "Ciclo de Estudos", icon: RotateCcw },
   { id: "calendario", label: "Calendário", icon: CalendarDays },
   { id: "caderno", label: "Caderno de Erros", icon: NotebookPen },
+  { id: "relatorios", label: "Relatórios", icon: BarChart2 },
 ];
 
 function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {
@@ -263,6 +265,8 @@ export default function EstudoPage() {
               onUpdate={updateCadernoErros}
             />
           )}
+
+          {activeTab === "relatorios" && <RelatoriosTab state={state} />}
         </div>
       </div>
     </div>
