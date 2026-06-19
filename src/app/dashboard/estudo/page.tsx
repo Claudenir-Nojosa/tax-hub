@@ -13,6 +13,7 @@ import {
   type ErroEntry,
   type EstudoConfigCiclo,
   type AtividadeTipo,
+  type Grupo,
 } from "@/lib/estudo-data";
 import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, GraduationCap, Flame } from "lucide-react";
 
@@ -132,13 +133,16 @@ export default function EstudoPage() {
   }, []);
 
   const handleTimerSalvar = useCallback(
-    (duracao: number, tipo: AtividadeTipo, descricao: string) => {
+    (duracao: number, tipo: AtividadeTipo, descricao: string, grupo?: Grupo, materia?: string, topico?: string) => {
       const today = new Date().toISOString().split("T")[0];
       const nova: AtividadeCalendario = {
         id: Date.now().toString(),
         tipo,
         descricao,
         duracao,
+        ...(grupo ? { grupo } : {}),
+        ...(materia ? { materia } : {}),
+        ...(topico ? { topico } : {}),
       };
       setState((prev) => ({
         ...prev,

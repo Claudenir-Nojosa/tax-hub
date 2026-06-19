@@ -2,10 +2,24 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Play, Pause, Square, Timer, ChevronDown, Check, RotateCcw } from "lucide-react";
-import { MATERIAS, ATIVIDADE_CONFIG, type AtividadeTipo } from "@/lib/estudo-data";
+import { MATERIAS, ATIVIDADE_CONFIG, type AtividadeTipo, type Grupo } from "@/lib/estudo-data";
+
+const GRUPOS: Grupo[] = ["A", "B", "C", "D"];
+const GRUPO_PILL: Record<Grupo, string> = {
+  A: "bg-blue-500 text-white",
+  B: "bg-emerald-500 text-white",
+  C: "bg-violet-500 text-white",
+  D: "bg-amber-500 text-white",
+};
+const GRUPO_OUTLINE: Record<Grupo, string> = {
+  A: "border-blue-400 text-blue-600 dark:text-blue-400",
+  B: "border-emerald-400 text-emerald-600 dark:text-emerald-400",
+  C: "border-violet-400 text-violet-600 dark:text-violet-400",
+  D: "border-amber-400 text-amber-600 dark:text-amber-400",
+};
 
 interface Props {
-  onSalvar: (duracao: number, tipo: AtividadeTipo, descricao: string) => void;
+  onSalvar: (duracao: number, tipo: AtividadeTipo, descricao: string, grupo?: Grupo, materia?: string, topico?: string) => void;
 }
 
 type Status = "idle" | "running" | "paused";
@@ -17,6 +31,7 @@ interface TimerSnapshot {
   materia: string;
   topico: string;
   tipo: AtividadeTipo;
+  grupo: Grupo | null;
 }
 
 const TIMER_KEY = "taxhub_timer_v1";
@@ -37,6 +52,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
   const [materia, setMateria] = useState("");
   const [topico, setTopico] = useState("");
   const [tipo, setTipo] = useState<AtividadeTipo>("estudo");
+  const [grupo, setGrupo] = useState<Grupo | null>(null);
   const [showSave, setShowSave] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -66,6 +82,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
       setMateria(snap.materia ?? "");
       setTopico(snap.topico ?? "");
       setTipo(snap.tipo ?? "estudo");
+      setGrupo(snap.grupo ?? null);
 
       if (snap.status === "running" && snap.startedAt) {
         accRef.current = snap.acc ?? 0;
@@ -95,6 +112,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
     currentMateria: string,
     currentTopico: string,
     currentTipo: AtividadeTipo,
+    currentGrupo: Grupo | null,
   ) => {
     const snap: TimerSnapshot = {
       status: nextStatus,
@@ -103,6 +121,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
       materia: currentMateria,
       topico: currentTopico,
       tipo: currentTipo,
+      grupo: currentGrupo,
     };
     localStorage.setItem(TIMER_KEY, JSON.stringify(snap));
   }, []);
@@ -120,7 +139,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
     setShowSave(false);
     setSaved(false);
     intervalRef.current = setInterval(tick, 500);
-    saveSnapshot("running", 0, now, materia, topico, tipo);
+    saveSnapshot("running", 0, now, materia, topico, tipo, grupo);
   };
 
   const handlePause = () => {
@@ -128,7 +147,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
     const cur = accRef.current + Math.floor((Date.now() - startRef.current) / 1000);
     accRef.current = cur;
     setStatus("paused");
-    saveSnapshot("paused", cur, 0, materia, topico, tipo);
+    saveSnapshot("paused", cur, 0, materia, topico, tipo, grupo);
   };
 
   const handleResume = () => {
@@ -136,7 +155,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
     startRef.current = now;
     setStatus("running");
     intervalRef.current = setInterval(tick, 500);
-    saveSnapshot("running", accRef.current, now, materia, topico, tipo);
+    saveSnapshot("running", accRef.current, now, materia, topico, tipo, grupo);
   };
 
   const handleStop = () => {
@@ -156,15 +175,24 @@ export default function TimerEstudo({ onSalvar }: Props) {
     setStatus("idle");
     setShowSave(false);
     setSaved(false);
+    setGrupo(null);
     clearSnapshot();
   };
 
   const handleSalvar = () => {
     const duracao = Math.max(1, Math.round(elapsed / 60));
-    const tipoLabel = ATIVIDADE_CONFIG[tipo].label;
-    const sub = topico || materia;
-    const descricao = sub ? `${tipoLabel} — ${sub}` : tipoLabel;
-    onSalvar(duracao, tipo, descricao);
+    let descricao: string;
+    if (tipo === "questoes" || tipo === "bateria") {
+      const base = tipo === "questoes" ? "Questões" : "Bateria";
+      const grp = grupo ? ` Grupo ${grupo}` : "";
+      const sub = topico ? ` — ${topico}` : materia ? ` — ${materia}` : "";
+      descricao = `${base}${grp}${sub}`;
+    } else {
+      const tipoLabel = ATIVIDADE_CONFIG[tipo].label;
+      const sub = topico || materia;
+      descricao = sub ? `${tipoLabel} — ${sub}` : tipoLabel;
+    }
+    onSalvar(duracao, tipo, descricao, grupo ?? undefined, materia || undefined, topico || undefined);
     setSaved(true);
     setShowSave(false);
     handleReset();
@@ -262,7 +290,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                     <button
                       key={t}
                       type="button"
-                      onClick={() => setTipo(t)}
+                      onClick={() => { setTipo(t); setGrupo(null); }}
                       disabled={isRunning}
                       className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all disabled:opacity-60 ${
                         tipo === t
@@ -276,15 +304,44 @@ export default function TimerEstudo({ onSalvar }: Props) {
                   ))}
                 </div>
               </div>
+
+              {/* Seletor de Grupo (questões / bateria) */}
+              {(tipo === "questoes" || tipo === "bateria") && (
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    Grupo <span className="text-gray-400">(opcional)</span>
+                  </label>
+                  <div className="flex gap-1.5">
+                    {GRUPOS.map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        disabled={isRunning}
+                        onClick={() => setGrupo(grupo === g ? null : g)}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all disabled:opacity-60 ${
+                          grupo === g
+                            ? GRUPO_PILL[g]
+                            : `border ${GRUPO_OUTLINE[g]} bg-transparent`
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             /* Info do tópico em execução */
-            materia && (
+            (materia || grupo) && (
               <div className="px-4 pt-3">
                 <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg px-3 py-2">
-                  <div className="text-xs font-medium text-blue-700 dark:text-blue-300 truncate">{materia}</div>
+                  {materia && <div className="text-xs font-medium text-blue-700 dark:text-blue-300 truncate">{materia}</div>}
                   {topico && (
                     <div className="text-xs text-blue-500 dark:text-blue-400 truncate mt-0.5">{topico}</div>
+                  )}
+                  {grupo && (
+                    <div className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">Grupo {grupo}</div>
                   )}
                 </div>
               </div>
