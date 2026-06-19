@@ -16,8 +16,8 @@ import {
 } from "@/lib/estudo-data";
 
 // ─── Configuração do concurso ─────────────────────────────────────────────────
-// Altere esta data quando o edital for publicado
-const DATA_CONCURSO = new Date("2026-10-25T12:00:00");
+// 1ª fase: 01/08/2026 · 2ª fase: 02/08/2026
+const DATA_CONCURSO = new Date("2026-08-01T12:00:00");
 
 // ─── Paleta de cores ──────────────────────────────────────────────────────────
 const MATERIA_COLORS = [
