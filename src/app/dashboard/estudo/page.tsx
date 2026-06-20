@@ -6,6 +6,7 @@ import {
   DEFAULT_ESTUDO_STATE,
   calcularXP,
   calcularNivel,
+  calcularStreakDias,
   NIVEL_CONFIG,
   type EstudoState,
   type TopicoState,
@@ -202,8 +203,8 @@ export default function EstudoPage() {
               </div>
             </div>
             <div className="text-center bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2.5">
-              <div className="flex items-center justify-center gap-1 text-lg font-bold text-amber-600 dark:text-amber-400"><Flame className="h-5 w-5 text-orange-500" />{state.streak}</div>
-              <div className="text-xs text-amber-500 dark:text-amber-400">streak</div>
+              <div className="flex items-center justify-center gap-1 text-lg font-bold text-amber-600 dark:text-amber-400"><Flame className="h-5 w-5 text-orange-500" />{calcularStreakDias(state.calendario)}</div>
+              <div className="text-xs text-amber-500 dark:text-amber-400">dias</div>
             </div>
           </div>
         </div>

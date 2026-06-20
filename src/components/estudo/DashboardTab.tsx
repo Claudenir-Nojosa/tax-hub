@@ -1,12 +1,13 @@
 "use client";
 
-import { BookOpen, HelpCircle, CalendarCheck, CheckSquare, Medal, BarChart3, TrendingUp, Flame } from "lucide-react";
+import { BookOpen, HelpCircle, CalendarCheck, CheckSquare, Medal, BarChart3, TrendingUp, Flame, CheckCircle2 } from "lucide-react";
 import {
   NIVEL_CONFIG,
   CONQUISTAS,
   MATERIAS,
   calcularXP,
   calcularNivel,
+  calcularStreakDias,
   type EstudoState,
   type TopicoState,
   topicoKey,
@@ -21,6 +22,7 @@ function calcularConquistas(state: EstudoState) {
   const totalHorasCalendario = Object.values(state.calendario)
     .flat()
     .reduce((acc, a) => acc + a.duracao, 0) / 60;
+  const streakDias = calcularStreakDias(state.calendario);
 
   return {
     primeiro_passo: state.semanasOK >= 1,
@@ -28,7 +30,7 @@ function calcularConquistas(state: EstudoState) {
     maratonista: Object.values(state.calendario).some((atividades) =>
       atividades.reduce((acc, a) => acc + a.duracao, 0) >= 2000
     ),
-    em_chamas: state.streak >= 3,
+    em_chamas: streakDias >= 3,
     meio_caminho: xp >= 500,
     expert: xp >= 1500,
     fiscal_elite: xp >= 26100,
@@ -92,7 +94,9 @@ function MetaDiaria({ state }: { state: EstudoState }) {
     >
       <div className="flex items-center justify-between mb-2.5">
         <div className="flex items-center gap-2">
-          <span className="text-base">{done ? "✅" : "📚"}</span>
+          {done
+            ? <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+            : <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />}
           <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">Meta de hoje</span>
         </div>
         <span className={`text-sm font-bold tabular-nums ${done ? "text-emerald-600 dark:text-emerald-400" : "text-gray-700 dark:text-gray-200"}`}>
@@ -124,6 +128,7 @@ export default function DashboardTab({ state }: Props) {
     ? Math.round(((xp - xpNivelAtual) / (xpProximo - xpNivelAtual)) * 100)
     : 100;
 
+  const streakDias = calcularStreakDias(state.calendario);
   const conquistas = calcularConquistas(state);
 
   const totalTopicos = MATERIAS.reduce((acc, m) => acc + m.topicos.length, 0);
@@ -159,9 +164,9 @@ export default function DashboardTab({ state }: Props) {
             <div className="text-sm text-blue-200">Streak</div>
             <div className="flex items-center justify-end gap-1.5 text-2xl font-bold">
               <Flame className="h-6 w-6 text-orange-300" />
-              {state.streak}
+              {streakDias}
             </div>
-            <div className="text-xs text-blue-200">semanas</div>
+            <div className="text-xs text-blue-200">dias</div>
           </div>
         </div>
         <div className="bg-blue-800/40 rounded-full h-3">

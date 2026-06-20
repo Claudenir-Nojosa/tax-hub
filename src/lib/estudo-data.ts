@@ -198,6 +198,29 @@ export function calcularMedia(cadernos: Record<Grupo, TopicoCaderno>): number {
   return Math.round(soma / grupos.length);
 }
 
+export function calcularStreakDias(calendario: Record<string, AtividadeCalendario[]>): number {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const dia = new Date(hoje);
+
+  const todayKey = dia.toISOString().split("T")[0];
+  if (!calendario[todayKey] || calendario[todayKey].length === 0) {
+    dia.setDate(dia.getDate() - 1);
+  }
+
+  let streak = 0;
+  while (true) {
+    const key = dia.toISOString().split("T")[0];
+    if (calendario[key] && calendario[key].length > 0) {
+      streak++;
+      dia.setDate(dia.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
 export function topicoKey(materia: string, topico: string): string {
   return `${materia}||${topico}`;
 }

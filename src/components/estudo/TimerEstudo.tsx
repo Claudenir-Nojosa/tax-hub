@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Play, Pause, Square, Timer, ChevronDown, Check, RotateCcw } from "lucide-react";
+import { Play, Pause, Square, Timer, ChevronDown, Check, RotateCcw, Zap, Coffee } from "lucide-react";
 import { MATERIAS, ATIVIDADE_CONFIG, type AtividadeTipo, type Grupo } from "@/lib/estudo-data";
 
 const GRUPOS: Grupo[] = ["A", "B", "C", "D"];
@@ -339,7 +339,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
       {saved && (
         <div className="flex items-center gap-2 bg-emerald-600 text-white text-xs font-medium px-3 py-2 rounded-xl shadow-lg animate-in fade-in slide-in-from-bottom-2">
           <Check className="h-3.5 w-3.5" />
-          {pomodoroMode ? "🍅 Pomodoro salvo!" : "Salvo no calendário de hoje!"}
+          {pomodoroMode ? <><Zap className="h-3.5 w-3.5" /> Pomodoro salvo!</> : "Salvo no calendário de hoje!"}
         </div>
       )}
 
@@ -387,7 +387,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                       : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                   }`}
                 >
-                  <span>🍅</span> Pomodoro
+                  <Zap className="h-3.5 w-3.5" /> Pomodoro
                 </button>
               </div>
               {pomodoroMode && (
@@ -406,7 +406,9 @@ export default function TimerEstudo({ onSalvar }: Props) {
                 : "bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900"
             }`}>
               <div className="flex items-center gap-1.5">
-                <span className="text-base">{pomodoroPhase === "work" ? "🍅" : "☕"}</span>
+                {pomodoroPhase === "work"
+                  ? <Zap className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  : <Coffee className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
                 <span className={`text-xs font-bold uppercase tracking-wide ${
                   pomodoroPhase === "work"
                     ? "text-red-700 dark:text-red-400"
@@ -416,8 +418,8 @@ export default function TimerEstudo({ onSalvar }: Props) {
                 </span>
               </div>
               {pomodoroCount > 0 && (
-                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                  🍅 × {pomodoroCount}
+                <span className="flex items-center gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  <Zap className="h-3 w-3" /> × {pomodoroCount}
                 </span>
               )}
             </div>
@@ -585,7 +587,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                     onClick={handleSkipBreak}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-xl transition-colors"
                   >
-                    <span>🍅</span> Pular pausa
+                    <Zap className="h-3.5 w-3.5" /> Pular pausa
                   </button>
                 ) : (
                   <button
@@ -694,7 +696,9 @@ export default function TimerEstudo({ onSalvar }: Props) {
           }`}
         />
         {pomodoroMode && status !== "idle" ? (
-          <span className="text-base leading-none">{pomodoroPhase === "work" ? "🍅" : "☕"}</span>
+          pomodoroPhase === "work"
+            ? <Zap className="h-4 w-4 flex-shrink-0" />
+            : <Coffee className="h-4 w-4 flex-shrink-0" />
         ) : (
           <Timer className="h-4 w-4 flex-shrink-0" />
         )}
