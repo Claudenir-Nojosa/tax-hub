@@ -138,7 +138,7 @@ export const CONQUISTAS: ConquistaConfig[] = [
   { id: "primeiro_passo", icone: Sprout,         cor: "text-emerald-600", nome: "Primeiro Passo",   condicao: "Complete sua 1ª semana de estudos" },
   { id: "primeiro_mes",   icone: CalendarCheck,  cor: "text-blue-600",    nome: "Primeiro Mês",     condicao: "Complete todas as semanas de um mês" },
   { id: "maratonista",    icone: Dumbbell,        cor: "text-orange-600",  nome: "Maratonista",      condicao: "Estude 2000+ min em uma semana" },
-  { id: "em_chamas",      icone: Flame,           cor: "text-red-600",     nome: "Em Chamas",        condicao: "3 semanas consecutivas batendo meta" },
+  { id: "em_chamas",      icone: Flame,           cor: "text-red-600",     nome: "Em Chamas",        condicao: "3 dias consecutivos estudando" },
   { id: "meio_caminho",   icone: TrendingUp,      cor: "text-violet-600",  nome: "Meio Caminho",     condicao: "Acumule 500 XP" },
   { id: "expert",         icone: Star,            cor: "text-amber-500",   nome: "Expert",           condicao: "Acumule 1500 XP" },
   { id: "fiscal_elite",   icone: Crown,           cor: "text-amber-500",   nome: "Fiscal de Elite",  condicao: "Acumule 26100 XP — nível máximo!" },
