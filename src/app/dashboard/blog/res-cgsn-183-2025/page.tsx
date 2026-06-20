@@ -34,7 +34,7 @@ export default function ArtigoResCgsn1832025() {
 
         <p className="text-lg text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
           A Resolução CGSN nº 183/2025 explicitou uma regra que muitos ignoravam: todos os débitos
-          tributários exigíveis de um mesmo titular — em qualquer inscrição cadastral — são
+          tributários exigíveis de um mesmo titular, em qualquer inscrição cadastral, são
           consolidados para fins de permanência no Simples Nacional. Entenda os cenários de risco
           e como estruturar o planejamento corretamente.
         </p>
@@ -69,7 +69,7 @@ export default function ArtigoResCgsn1832025() {
             </span>
             <span className="flex items-center gap-1.5">
               <BookOpen className="h-4 w-4" />
-              Res. CGSN nº 183/2025 — Art. 2º, §10
+              Res. CGSN nº 183/2025, Art. 2º, §10
             </span>
           </div>
         </div>
@@ -92,7 +92,7 @@ export default function ArtigoResCgsn1832025() {
           Entre as muitas alterações trazidas pela Resolução CGSN nº 183/2025, uma passa despercebida
           por quem lê o texto com pressa: a redação consolidada do{" "}
           <strong>§10 do art. 2º da Resolução CGSN nº 140/2018</strong>. O dispositivo não cria
-          uma regra nova do zero — ele torna explícita e operacionalmente clara uma consequência
+          uma regra nova do zero: ele torna explícita e operacionalmente clara uma consequência
           que já decorria da LC 123/2006, mas que na prática era frequentemente ignorada.
           O resultado é um risco relevante de planejamento tributário que todo contador e empresário
           do Simples Nacional precisa conhecer.
@@ -107,15 +107,15 @@ export default function ArtigoResCgsn1832025() {
             caput e o art. 100, ainda que em inscrições cadastrais distintas ou na qualidade de
             contribuinte individual, devem ser considerados:
           </p>
-          <p className="mt-2 ml-4">I — todas as atividades econômicas exercidas e as receitas brutas auferidas em um mesmo ano-calendário; e</p>
-          <p className="ml-4 font-semibold">II — todos os débitos tributários exigíveis."</p>
+          <p className="mt-2 ml-4">I - todas as atividades econômicas exercidas e as receitas brutas auferidas em um mesmo ano-calendário; e</p>
+          <p className="ml-4 font-semibold">II - todos os débitos tributários exigíveis."</p>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">(LC nº 123/2006, art. 3º, §19)</p>
         </div>
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
           Traduzindo: quando a Receita Federal verifica se um empresário individual (EI), um MEI ou
           qualquer optante do Simples tem direito ao regime, ela não olha apenas para aquele CNPJ
-          isolado. Ela consolida — no mesmo bolo — <strong>todas as atividades e receitas</strong>{" "}
+          isolado. Ela consolida, no mesmo bolo, <strong>todas as atividades e receitas</strong>{" "}
           que o titular exerce em qualquer registro (outros CNPJs, CPF como autônomo, produtor rural)
           e <strong>todos os débitos tributários exigíveis</strong> que existam em qualquer
           dessas inscrições. O inciso I (receitas) é a regra anti-fracionamento. O inciso II
@@ -133,22 +133,22 @@ export default function ArtigoResCgsn1832025() {
 
         <Callout>
           <strong>Regra central:</strong> Para o Simples Nacional, o sujeito de análise não é
-          o CNPJ — é a <em>pessoa</em> por trás do CNPJ. Todos os débitos do titular, em qualquer
+          o CNPJ, mas a <em>pessoa</em> por trás do CNPJ. Todos os débitos do titular, em qualquer
           registro, são consolidados.
         </Callout>
 
-        <Section title="Cenário 1 — Dívida no CPF, empresa no Simples" />
+        <Section title="Cenário 1: Dívida no CPF, empresa no Simples" />
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
           Este é o cenário mais comum e o menos percebido. O empresário abre um MEI ou uma ME e
-          mantém o Simples em dia — sem nenhum débito no CNPJ. Mas tem pendências tributárias
+          mantém o Simples em dia, sem nenhum débito no CNPJ. Mas tem pendências tributárias
           no <strong>CPF</strong>: IRPF não recolhido, contribuição previdenciária como autônomo
           em aberto, ou dívidas de um período como segurado especial.
         </p>
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
           O §10, inciso II determina que esses débitos do CPF entram no cômputo. O optante está,
-          tecnicamente, em situação impeditiva — mesmo que o CNPJ esteja limpo.
+          tecnicamente, em situação impeditiva, mesmo que o CNPJ esteja limpo.
         </p>
 
         <div className="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 p-5 mb-6 text-sm text-gray-700 dark:text-gray-300">
@@ -156,7 +156,7 @@ export default function ArtigoResCgsn1832025() {
           <p>
             Um médico atua como autônomo (CPF) e tem uma clínica no Simples (CNPJ). Se ele tem
             contribuição previdenciária em aberto como contribuinte individual, essa dívida do CPF
-            impede a manutenção da clínica no Simples — porque o titular é o mesmo e o §10
+            impede a manutenção da clínica no Simples, porque o titular é o mesmo e o §10
             consolida todos os débitos.
           </p>
         </div>
@@ -167,7 +167,7 @@ export default function ArtigoResCgsn1832025() {
           e-CAC pelo CPF do sócio/titular é etapa obrigatória do diagnóstico fiscal.
         </p>
 
-        <Section title="Cenário 2 — Dois CNPJs, dívida em um, Simples no outro" />
+        <Section title="Cenário 2: Dois CNPJs, dívida em um, Simples no outro" />
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
           É comum que um empreendedor tenha mais de um negócio formalizado: um MEI para
@@ -179,7 +179,7 @@ export default function ArtigoResCgsn1832025() {
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
           A resposta é <strong>não</strong>. O inciso II manda consolidar "todos os débitos tributários
           exigíveis" do titular, independentemente de em qual inscrição cadastral estão registrados.
-          O CNPJ limpo não está isolado — ele compartilha o mesmo titular do CNPJ com débito.
+          O CNPJ limpo não está isolado: ele compartilha o mesmo titular do CNPJ com débito.
         </p>
 
         <div className="rounded-xl border border-orange-200 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-950/20 p-5 mb-6 text-sm text-gray-700 dark:text-gray-300">
@@ -188,7 +188,7 @@ export default function ArtigoResCgsn1832025() {
             João tem um MEI de fotografia (CNPJ-A) e uma ME de consultoria (CNPJ-B) no Simples.
             O MEI acumulou DAS não pagos no último ano e foi negativado. A ME de consultoria não
             tem débitos. Pelo §10, os débitos do MEI de João impedem que sua ME permaneça no
-            Simples — o titular é o mesmo e todos os débitos são consolidados.
+            Simples, pois o titular é o mesmo e todos os débitos são consolidados.
           </p>
         </div>
 
@@ -198,13 +198,13 @@ export default function ArtigoResCgsn1832025() {
           conjunto, não cada empresa isoladamente.
         </p>
 
-        <Section title="Cenário 3 — Dívida antiga, empresa nova" />
+        <Section title="Cenário 3: Dívida antiga, empresa nova" />
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
           Este é o cenário do "recomeço": o empresário encerrou uma empresa anterior com débitos
           em aberto e abriu um novo CNPJ tentando "começar do zero" no Simples. O §10 fecha essa
-          porta. Os débitos exigíveis da empresa encerrada — se ainda não foram quitados, parcelados
-          ou extintos — seguem o titular para a nova empresa.
+          porta. Os débitos exigíveis da empresa encerrada, se ainda não foram quitados, parcelados
+          ou extintos, seguem o titular para a nova empresa.
         </p>
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
@@ -214,20 +214,20 @@ export default function ArtigoResCgsn1832025() {
         <ul className="space-y-3 mb-6 text-base text-gray-700 dark:text-gray-300">
           <li>
             <strong>Débito em cobrança ativa (exigível):</strong> impede o Simples do novo CNPJ.
-            O termo "exigível" é técnico — significa que não há suspensão da exigibilidade
+            O termo "exigível" é técnico: significa que não há suspensão da exigibilidade
             (parcelamento deferido, depósito judicial, liminar, etc.). Débito inscrito em dívida
             ativa sem garantia ou sem suspensão é exigível.
           </li>
           <li>
             <strong>Débito com exigibilidade suspensa:</strong> parcelamento em dia, depósito
-            judicial do montante integral, tutela antecipada — nesses casos, o débito <em>existe</em>{" "}
+            judicial do montante integral, tutela antecipada. Nesses casos, o débito <em>existe</em>{" "}
             mas não está <em>exigível</em>. A empresa nova pode optar pelo Simples normalmente.
           </li>
         </ul>
 
         <Callout>
           <strong>Ponto-chave para o planejamento:</strong> A palavra "exigíveis" no inciso II
-          não é decorativa. Um débito parcelado com parcelas em dia não é exigível — a
+          não é decorativa. Um débito parcelado com parcelas em dia não é exigível: a
           exigibilidade está suspensa (art. 151, VI do CTN). Isso cria uma janela de
           planejamento legítima: regularizar via parcelamento para suspender a exigibilidade
           e garantir o acesso ao Simples.
@@ -295,17 +295,17 @@ export default function ArtigoResCgsn1832025() {
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
           O planejamento correto, portanto, começa com um <strong>levantamento completo de débitos
-          do titular</strong> — CPF e todos os CNPJs associados. Identificados os débitos exigíveis,
+          do titular</strong>: CPF e todos os CNPJs associados. Identificados os débitos exigíveis,
           a estratégia de regularização (parcelamento, pagamento, depósito judicial ou discussão
           da exigibilidade) deve ser executada <em>antes</em> da opção pelo Simples ou antes
           do período de exclusão de ofício.
         </p>
 
-        <Section title="O risco da exclusão retroativa — art. 84, §5º" />
+        <Section title="O risco da exclusão retroativa (art. 84, §5º)" />
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
           Se a empresa permanece no Simples sem perceber que o titular tinha débito exigível
-          em outra inscrição, a exclusão de ofício — quando ocorre — pode ser{" "}
+          em outra inscrição, a exclusão de ofício, quando ocorre, pode ser{" "}
           <strong>retroativa</strong>. O art. 84, §5º da Res. 140/2018 determina que o efeito
           da exclusão retroage ao mês seguinte ao da ocorrência da situação impeditiva.
         </p>
@@ -314,7 +314,7 @@ export default function ArtigoResCgsn1832025() {
           Na prática: a empresa recolheu o DAS durante dois anos dentro do Simples, mas havia
           um débito exigível do titular desde o início. A exclusão retroativa pode fazer com que
           o Fisco reclassifique toda a receita desse período para o regime geral (Lucro Presumido
-          ou Lucro Real), gerando diferenças de IRPJ, CSLL, PIS e Cofins — além de multas
+          ou Lucro Real), gerando diferenças de IRPJ, CSLL, PIS e Cofins, além de multas
           e juros sobre o período.
         </p>
 
@@ -328,7 +328,7 @@ export default function ArtigoResCgsn1832025() {
 
         <ol className="list-decimal list-inside space-y-3 mb-6 text-base text-gray-700 dark:text-gray-300">
           <li>
-            <strong>Consultar a situação fiscal do CPF do titular</strong> no e-CAC (aba "Certidões e Situação Fiscal") — IRPF, contribuições previdenciárias, parcelamentos ativos.
+            <strong>Consultar a situação fiscal do CPF do titular</strong> no e-CAC (aba "Certidões e Situação Fiscal"): IRPF, contribuições previdenciárias, parcelamentos ativos.
           </li>
           <li>
             <strong>Listar todos os CNPJs vinculados ao titular</strong> (MEIs anteriores, EIs encerrados, outras MEs) e verificar a situação de cada um no Portal do Simples Nacional.
@@ -355,7 +355,7 @@ export default function ArtigoResCgsn1832025() {
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
           Na prática, isso significa que o risco de uma exclusão retroativa por débito em
-          inscrição diversa é agora <em>maior</em> — não porque a regra mudou, mas porque
+          inscrição diversa é agora <em>maior</em>. Não porque a regra mudou, mas porque
           ela está mais visível e, portanto, mais passível de ser aplicada nas fiscalizações
           cruzadas que o novo ambiente de compartilhamento de dados (arts. 70 e 72 da Res. 140/2018,
           também atualizados pela 183/2025) torna possível.
