@@ -291,9 +291,9 @@ export default function TimerEstudo({ onSalvar }: Props) {
       descricao = sub ? `${tipoLabel} — ${sub}` : tipoLabel;
     }
     onSalvar(duracao, tipo, descricao, grupo ?? undefined, materia || undefined, topico || undefined);
-    setSaved(true);
-    setShowSave(false);
     handleReset();
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
   };
 
   useEffect(() => {
@@ -601,36 +601,47 @@ export default function TimerEstudo({ onSalvar }: Props) {
             )}
 
             {status === "paused" && (
-              <>
-                <button
-                  type="button"
-                  onClick={handleResume}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-white text-sm font-medium rounded-xl transition-colors ${
-                    pomodoroMode && pomodoroPhase === "work"
-                      ? "bg-red-600 hover:bg-red-700"
-                      : "bg-blue-600 hover:bg-blue-700"
-                  }`}
-                >
-                  <Play className="h-4 w-4 fill-white" />
-                  Retomar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleStop}
-                  className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors"
-                  title="Parar e salvar"
-                >
-                  <Square className="h-4 w-4 fill-current" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors"
-                  title="Resetar"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                </button>
-              </>
+              <div className="w-full space-y-2">
+                {/* Banner de aviso: deixa claro que o timer está acumulado */}
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-center">
+                  <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                    Em pausa · <span className="font-bold">{Math.round(elapsed / 60)} min acumulados</span>
+                  </p>
+                  <p className="text-[10px] text-amber-500 dark:text-amber-500 mt-0.5">
+                    "Retomar" continua daqui. "Zerar" descarta e recomeça do zero.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleResume}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-white text-sm font-medium rounded-xl transition-colors ${
+                      pomodoroMode && pomodoroPhase === "work"
+                        ? "bg-red-600 hover:bg-red-700"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    }`}
+                  >
+                    <Play className="h-4 w-4 fill-white" />
+                    Retomar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStop}
+                    className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors"
+                    title="Parar e salvar"
+                  >
+                    <Square className="h-4 w-4 fill-current" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="flex items-center gap-1 px-3 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 dark:hover:text-red-400 text-gray-500 dark:text-gray-400 text-xs font-medium rounded-xl transition-colors"
+                    title="Zerar timer e descartar sessão atual"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" /> Zerar
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 
