@@ -16,7 +16,6 @@ import {
   type AtividadeTipo,
   type Grupo,
 } from "@/lib/estudo-data";
-import Image from "next/image";
 import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2 } from "lucide-react";
 
 const DashboardTab = dynamic(() => import("@/components/estudo/DashboardTab"), { ssr: false });
@@ -186,7 +185,8 @@ export default function EstudoPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm flex-shrink-0">
-              <Image src="/icons/sefazce.png" alt="SEFAZ-CE" width={40} height={40} className="object-cover w-full h-full" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/icons/sefazce.png" alt="SEFAZ-CE" className="object-cover w-full h-full" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-gray-900 dark:text-white">Estudo SEFAZ-CE 2026</h1>
