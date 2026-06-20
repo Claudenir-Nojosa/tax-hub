@@ -380,7 +380,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setPomodoroMode(true); setPomodoroPhase("work"); setPomodoroCount(0); }}
+                  onClick={() => { setPomodoroMode(true); setPomodoroPhase("work"); setPomodoroCount(0); setTipo("estudo"); setGrupo(null); }}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
                     pomodoroMode
                       ? "bg-white dark:bg-gray-700 text-red-600 dark:text-red-400 shadow-sm"
@@ -425,8 +425,8 @@ export default function TimerEstudo({ onSalvar }: Props) {
             </div>
           )}
 
-          {/* Selectors — quando idle */}
-          {(!isRunning || elapsed === 0) && !showSave ? (
+          {/* Matéria + Tópico — sempre visível no Pomodoro; só quando idle no cronômetro */}
+          {!showSave && (status === "idle" || pomodoroMode) && (
             <div className="px-4 pt-3 space-y-2">
               <div>
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
@@ -435,8 +435,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                 <select
                   value={materia}
                   onChange={(e) => { setMateria(e.target.value); setTopico(""); }}
-                  disabled={isRunning}
-                  className="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+                  className="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">— Só marcar o tempo —</option>
                   {MATERIAS.map((m) => (
@@ -451,8 +450,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                   <select
                     value={topico}
                     onChange={(e) => setTopico(e.target.value)}
-                    disabled={isRunning}
-                    className="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+                    className="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Tópico geral</option>
                     {topicoOptions.map((t) => (
@@ -462,72 +460,72 @@ export default function TimerEstudo({ onSalvar }: Props) {
                 </div>
               )}
 
-              {!pomodoroMode && (
-                <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Tipo de atividade</label>
-                  <div className="grid grid-cols-2 gap-1">
-                    {(["estudo", "questoes", "recall", "caderno_erros", "bateria"] as AtividadeTipo[]).map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => { setTipo(t); setGrupo(null); }}
-                        disabled={isRunning}
-                        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all disabled:opacity-60 ${
-                          tipo === t
-                            ? ATIVIDADE_CONFIG[t].cor + " border-current font-semibold"
-                            : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"
-                        }`}
-                      >
-                        {(() => { const Icon = ATIVIDADE_CONFIG[t].icone; return <Icon className="h-3.5 w-3.5 flex-shrink-0" />; })()}
-                        <span className="truncate">{ATIVIDADE_CONFIG[t].label.split(" ")[0]}</span>
-                      </button>
-                    ))}
+              {/* Tipo e Grupo — só cronômetro quando idle */}
+              {!pomodoroMode && status === "idle" && (
+                <>
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Tipo de atividade</label>
+                    <div className="grid grid-cols-2 gap-1">
+                      {(["estudo", "questoes", "recall", "caderno_erros", "bateria"] as AtividadeTipo[]).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => { setTipo(t); setGrupo(null); }}
+                          className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all ${
+                            tipo === t
+                              ? ATIVIDADE_CONFIG[t].cor + " border-current font-semibold"
+                              : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"
+                          }`}
+                        >
+                          {(() => { const Icon = ATIVIDADE_CONFIG[t].icone; return <Icon className="h-3.5 w-3.5 flex-shrink-0" />; })()}
+                          <span className="truncate">{ATIVIDADE_CONFIG[t].label.split(" ")[0]}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
 
-              {/* Seletor de Grupo — só modo cronômetro */}
-              {!pomodoroMode && (tipo === "questoes" || tipo === "bateria") && (
-                <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                    Grupo <span className="text-gray-400">(opcional)</span>
-                  </label>
-                  <div className="flex gap-1.5">
-                    {GRUPOS.map((g) => (
-                      <button
-                        key={g}
-                        type="button"
-                        disabled={isRunning}
-                        onClick={() => setGrupo(grupo === g ? null : g)}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all disabled:opacity-60 ${
-                          grupo === g
-                            ? GRUPO_PILL[g]
-                            : `border ${GRUPO_OUTLINE[g]} bg-transparent`
-                        }`}
-                      >
-                        {g}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  {(tipo === "questoes" || tipo === "bateria") && (
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        Grupo <span className="text-gray-400">(opcional)</span>
+                      </label>
+                      <div className="flex gap-1.5">
+                        {GRUPOS.map((g) => (
+                          <button
+                            key={g}
+                            type="button"
+                            onClick={() => setGrupo(grupo === g ? null : g)}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                              grupo === g
+                                ? GRUPO_PILL[g]
+                                : `border ${GRUPO_OUTLINE[g]} bg-transparent`
+                            }`}
+                          >
+                            {g}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
-          ) : !showSave ? (
-            // Info do tópico em execução
-            (materia || grupo) && (
-              <div className="px-4 pt-3">
-                <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg px-3 py-2">
-                  {materia && <div className="text-xs font-medium text-blue-700 dark:text-blue-300 truncate">{materia}</div>}
-                  {topico && (
-                    <div className="text-xs text-blue-500 dark:text-blue-400 truncate mt-0.5">{topico}</div>
-                  )}
-                  {grupo && !pomodoroMode && (
-                    <div className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">Grupo {grupo}</div>
-                  )}
-                </div>
+          )}
+
+          {/* Info panel — cronômetro rodando */}
+          {!showSave && !pomodoroMode && isRunning && elapsed > 0 && (materia || grupo) && (
+            <div className="px-4 pt-3">
+              <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg px-3 py-2">
+                {materia && <div className="text-xs font-medium text-blue-700 dark:text-blue-300 truncate">{materia}</div>}
+                {topico && (
+                  <div className="text-xs text-blue-500 dark:text-blue-400 truncate mt-0.5">{topico}</div>
+                )}
+                {grupo && (
+                  <div className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">Grupo {grupo}</div>
+                )}
               </div>
-            )
-          ) : null}
+            </div>
+          )}
 
           {/* Clock */}
           <div className="px-4 py-4 text-center">
