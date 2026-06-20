@@ -35,6 +35,17 @@ const legislacoes = [
     vigencia: "Em vigor (com alterações)",
     artigos: 108,
   },
+  {
+    href: "/dashboard/legislacoes/res-cgsn-183",
+    numero: "Res. CGSN nº 183/2025",
+    nome: "Resolução CGSN nº 183, de 26 de setembro de 2025",
+    descricao:
+      "Altera a Resolução CGSN nº 140/2018 para adequar o Simples Nacional à LC 214/2025 (Reforma Tributária) e à LC 216/2025. Inclui novos princípios do regime, administração tributária integrada, vedações ampliadas, multas pela Defis (art. 97-A), regras do MEI e efeitos temporais diferenciados.",
+    escopo: ["Simples Nacional", "MEI", "PGDAS-D", "DASN-Simei"],
+    publicacao: "13 out. 2025",
+    vigencia: "Em vigor (Art. 3º a partir de 01/01/2026)",
+    artigos: 7,
+  },
 ];
 
 export default function LegislacoesPage() {

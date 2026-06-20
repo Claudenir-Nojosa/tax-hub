@@ -4,6 +4,17 @@ import { Clock, Calendar } from "lucide-react";
 
 const artigos = [
   {
+    href: "/dashboard/blog/res-cgsn-183-2025",
+    tags: ["Simples Nacional", "CGSN", "MEI", "Reforma Tributária"],
+    titulo:
+      "Resolução CGSN nº 183/2025: o Simples Nacional na era da Reforma Tributária",
+    resumo:
+      "O CGSN atualizou o regulamento do Simples Nacional para adequá-lo às LCs 214 e 216/2025. Novos princípios, vedações ampliadas, multas pela Defis e regras do MEI consolidadas.",
+    data: "Out. 2025",
+    leitura: "10 min",
+    imagem: "/articles/RESOLUÇÃO CGSN Nº 183, DE 26 DE SETEMBRO DE 2025.png" as string | null,
+  },
+  {
     href: "/dashboard/blog/stj-pis-cofins-postos-lc-192",
     tags: ["STJ", "PIS/Cofins", "Combustíveis", "Monofasia"],
     titulo:
