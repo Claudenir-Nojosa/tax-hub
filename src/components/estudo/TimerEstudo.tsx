@@ -18,11 +18,32 @@ const GRUPO_OUTLINE: Record<Grupo, string> = {
   D: "border-amber-400 text-amber-600 dark:text-amber-400",
 };
 
+const WORK_SECS = 25 * 60;
+const BREAK_SECS = 5 * 60;
+
+function playBell() {
+  try {
+    const AudioCtx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 830;
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 1.2);
+  } catch { /* ignore */ }
+}
+
 interface Props {
   onSalvar: (duracao: number, tipo: AtividadeTipo, descricao: string, grupo?: Grupo, materia?: string, topico?: string) => void;
 }
 
 type Status = "idle" | "running" | "paused";
+type PomodoroPhase = "work" | "break";
 
 interface TimerSnapshot {
   status: Status;
@@ -32,6 +53,9 @@ interface TimerSnapshot {
   topico: string;
   tipo: AtividadeTipo;
   grupo: Grupo | null;
+  pomodoroMode?: boolean;
+  pomodoroPhase?: PomodoroPhase;
+  pomodoroCount?: number;
 }
 
 const TIMER_KEY = "taxhub_timer_v1";
@@ -45,6 +69,14 @@ function formatTime(secs: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function formatCountdown(elapsed: number, phase: PomodoroPhase): string {
+  const target = phase === "work" ? WORK_SECS : BREAK_SECS;
+  const remaining = Math.max(0, target - elapsed);
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 export default function TimerEstudo({ onSalvar }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
@@ -55,6 +87,11 @@ export default function TimerEstudo({ onSalvar }: Props) {
   const [grupo, setGrupo] = useState<Grupo | null>(null);
   const [showSave, setShowSave] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // Pomodoro
+  const [pomodoroMode, setPomodoroMode] = useState(false);
+  const [pomodoroPhase, setPomodoroPhase] = useState<PomodoroPhase>("work");
+  const [pomodoroCount, setPomodoroCount] = useState(0);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef<number>(0);
@@ -83,6 +120,9 @@ export default function TimerEstudo({ onSalvar }: Props) {
       setTopico(snap.topico ?? "");
       setTipo(snap.tipo ?? "estudo");
       setGrupo(snap.grupo ?? null);
+      if (snap.pomodoroMode) setPomodoroMode(true);
+      if (snap.pomodoroPhase) setPomodoroPhase(snap.pomodoroPhase);
+      if (snap.pomodoroCount) setPomodoroCount(snap.pomodoroCount);
 
       if (snap.status === "running" && snap.startedAt) {
         accRef.current = snap.acc ?? 0;
@@ -113,6 +153,9 @@ export default function TimerEstudo({ onSalvar }: Props) {
     currentTopico: string,
     currentTipo: AtividadeTipo,
     currentGrupo: Grupo | null,
+    currentPomodoroMode: boolean,
+    currentPomodoroPhase: PomodoroPhase,
+    currentPomodoroCount: number,
   ) => {
     const snap: TimerSnapshot = {
       status: nextStatus,
@@ -122,6 +165,9 @@ export default function TimerEstudo({ onSalvar }: Props) {
       topico: currentTopico,
       tipo: currentTipo,
       grupo: currentGrupo,
+      pomodoroMode: currentPomodoroMode,
+      pomodoroPhase: currentPomodoroPhase,
+      pomodoroCount: currentPomodoroCount,
     };
     localStorage.setItem(TIMER_KEY, JSON.stringify(snap));
   }, []);
@@ -138,8 +184,10 @@ export default function TimerEstudo({ onSalvar }: Props) {
     setStatus("running");
     setShowSave(false);
     setSaved(false);
+    const startPhase: PomodoroPhase = "work";
+    if (pomodoroMode) setPomodoroPhase(startPhase);
     intervalRef.current = setInterval(tick, 500);
-    saveSnapshot("running", 0, now, materia, topico, tipo, grupo);
+    saveSnapshot("running", 0, now, materia, topico, tipo, grupo, pomodoroMode, pomodoroMode ? startPhase : pomodoroPhase, pomodoroCount);
   };
 
   const handlePause = () => {
@@ -147,7 +195,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
     const cur = accRef.current + Math.floor((Date.now() - startRef.current) / 1000);
     accRef.current = cur;
     setStatus("paused");
-    saveSnapshot("paused", cur, 0, materia, topico, tipo, grupo);
+    saveSnapshot("paused", cur, 0, materia, topico, tipo, grupo, pomodoroMode, pomodoroPhase, pomodoroCount);
   };
 
   const handleResume = () => {
@@ -155,7 +203,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
     startRef.current = now;
     setStatus("running");
     intervalRef.current = setInterval(tick, 500);
-    saveSnapshot("running", accRef.current, now, materia, topico, tipo, grupo);
+    saveSnapshot("running", accRef.current, now, materia, topico, tipo, grupo, pomodoroMode, pomodoroPhase, pomodoroCount);
   };
 
   const handleStop = () => {
@@ -164,7 +212,8 @@ export default function TimerEstudo({ onSalvar }: Props) {
     accRef.current = cur;
     setElapsed(cur);
     setStatus("idle");
-    if (cur > 0) setShowSave(true);
+    // Não salva pausa do pomodoro manualmente
+    if (cur > 0 && !(pomodoroMode && pomodoroPhase === "break")) setShowSave(true);
     clearSnapshot();
   };
 
@@ -176,8 +225,57 @@ export default function TimerEstudo({ onSalvar }: Props) {
     setShowSave(false);
     setSaved(false);
     setGrupo(null);
+    if (pomodoroMode) {
+      setPomodoroPhase("work");
+      setPomodoroCount(0);
+    }
     clearSnapshot();
   };
+
+  const handleSkipBreak = () => {
+    clearTimer();
+    accRef.current = 0;
+    const now = Date.now();
+    startRef.current = now;
+    setElapsed(0);
+    setPomodoroPhase("work");
+    intervalRef.current = setInterval(tick, 500);
+    saveSnapshot("running", 0, now, materia, topico, tipo, grupo, pomodoroMode, "work", pomodoroCount);
+  };
+
+  // Conclusão automática de fase no modo Pomodoro
+  useEffect(() => {
+    if (!pomodoroMode || status !== "running") return;
+    const target = pomodoroPhase === "work" ? WORK_SECS : BREAK_SECS;
+    if (elapsed < target) return;
+
+    clearTimer();
+    playBell();
+
+    const now = Date.now();
+    accRef.current = 0;
+    startRef.current = now;
+
+    if (pomodoroPhase === "work") {
+      const sub = topico || materia;
+      const descricao = sub ? `Pomodoro — ${sub}` : "Pomodoro";
+      onSalvar(Math.round(WORK_SECS / 60), tipo, descricao, grupo ?? undefined, materia || undefined, topico || undefined);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+      const newCount = pomodoroCount + 1;
+      setPomodoroCount(newCount);
+      setPomodoroPhase("break");
+      setElapsed(0);
+      intervalRef.current = setInterval(tick, 500);
+      saveSnapshot("running", 0, now, materia, topico, tipo, grupo, pomodoroMode, "break", newCount);
+    } else {
+      setPomodoroPhase("work");
+      setElapsed(0);
+      intervalRef.current = setInterval(tick, 500);
+      saveSnapshot("running", 0, now, materia, topico, tipo, grupo, pomodoroMode, "work", pomodoroCount);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elapsed, pomodoroMode, pomodoroPhase, status]);
 
   const handleSalvar = () => {
     const duracao = Math.max(1, Math.round(elapsed / 60));
@@ -210,19 +308,38 @@ export default function TimerEstudo({ onSalvar }: Props) {
   const isPaused = status === "paused";
 
   const statusDot = isRunning
-    ? "bg-green-500 animate-pulse"
+    ? pomodoroMode
+      ? pomodoroPhase === "work" ? "bg-red-500 animate-pulse" : "bg-emerald-500 animate-pulse"
+      : "bg-green-500 animate-pulse"
     : isPaused
     ? "bg-amber-500"
     : elapsed > 0
     ? "bg-blue-400"
     : "bg-gray-300 dark:bg-gray-600";
 
+  const phasePerc = pomodoroMode && status !== "idle"
+    ? Math.min(100, Math.round((elapsed / (pomodoroPhase === "work" ? WORK_SECS : BREAK_SECS)) * 100))
+    : null;
+
+  const displayTime = pomodoroMode && status !== "idle"
+    ? formatCountdown(elapsed, pomodoroPhase)
+    : formatTime(elapsed);
+
+  const clockColor = isRunning
+    ? pomodoroMode
+      ? pomodoroPhase === "work" ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
+      : "text-gray-900 dark:text-white"
+    : isPaused
+    ? "text-amber-600 dark:text-amber-400"
+    : "text-gray-400 dark:text-gray-500";
+
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">
       {/* Saved toast */}
       {saved && (
         <div className="flex items-center gap-2 bg-emerald-600 text-white text-xs font-medium px-3 py-2 rounded-xl shadow-lg animate-in fade-in slide-in-from-bottom-2">
-          <Check className="h-3.5 w-3.5" /> Salvo no calendário de hoje!
+          <Check className="h-3.5 w-3.5" />
+          {pomodoroMode ? "🍅 Pomodoro salvo!" : "Salvo no calendário de hoje!"}
         </div>
       )}
 
@@ -246,8 +363,68 @@ export default function TimerEstudo({ onSalvar }: Props) {
             </button>
           </div>
 
-          {/* Selectors — opcional */}
-          {!isRunning || elapsed === 0 ? (
+          {/* Mode toggle — só quando idle */}
+          {status === "idle" && !showSave && (
+            <div className="px-4 pt-3">
+              <div className="flex rounded-lg bg-gray-100 dark:bg-gray-800 p-0.5 gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setPomodoroMode(false)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    !pomodoroMode
+                      ? "bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  }`}
+                >
+                  <Timer className="h-3.5 w-3.5" /> Cronômetro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPomodoroMode(true); setPomodoroPhase("work"); setPomodoroCount(0); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    pomodoroMode
+                      ? "bg-white dark:bg-gray-700 text-red-600 dark:text-red-400 shadow-sm"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  }`}
+                >
+                  <span>🍅</span> Pomodoro
+                </button>
+              </div>
+              {pomodoroMode && (
+                <p className="mt-1.5 text-center text-[10px] text-gray-400 dark:text-gray-500">
+                  25min trabalho · 5min pausa · salva automático
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Fase do Pomodoro — quando rodando/pausado */}
+          {pomodoroMode && status !== "idle" && (
+            <div className={`mx-4 mt-3 rounded-lg px-3 py-2 flex items-center justify-between ${
+              pomodoroPhase === "work"
+                ? "bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900"
+                : "bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900"
+            }`}>
+              <div className="flex items-center gap-1.5">
+                <span className="text-base">{pomodoroPhase === "work" ? "🍅" : "☕"}</span>
+                <span className={`text-xs font-bold uppercase tracking-wide ${
+                  pomodoroPhase === "work"
+                    ? "text-red-700 dark:text-red-400"
+                    : "text-emerald-700 dark:text-emerald-400"
+                }`}>
+                  {pomodoroPhase === "work" ? "Trabalho" : "Pausa"}
+                </span>
+              </div>
+              {pomodoroCount > 0 && (
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  🍅 × {pomodoroCount}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Selectors — quando idle */}
+          {(!isRunning || elapsed === 0) && !showSave ? (
             <div className="px-4 pt-3 space-y-2">
               <div>
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
@@ -283,30 +460,32 @@ export default function TimerEstudo({ onSalvar }: Props) {
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Tipo de atividade</label>
-                <div className="grid grid-cols-2 gap-1">
-                  {(["estudo", "questoes", "recall", "caderno_erros", "bateria"] as AtividadeTipo[]).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => { setTipo(t); setGrupo(null); }}
-                      disabled={isRunning}
-                      className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all disabled:opacity-60 ${
-                        tipo === t
-                          ? ATIVIDADE_CONFIG[t].cor + " border-current font-semibold"
-                          : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"
-                      }`}
-                    >
-                      {(() => { const Icon = ATIVIDADE_CONFIG[t].icone; return <Icon className="h-3.5 w-3.5 flex-shrink-0" />; })()}
-                      <span className="truncate">{ATIVIDADE_CONFIG[t].label.split(" ")[0]}</span>
-                    </button>
-                  ))}
+              {!pomodoroMode && (
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Tipo de atividade</label>
+                  <div className="grid grid-cols-2 gap-1">
+                    {(["estudo", "questoes", "recall", "caderno_erros", "bateria"] as AtividadeTipo[]).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => { setTipo(t); setGrupo(null); }}
+                        disabled={isRunning}
+                        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all disabled:opacity-60 ${
+                          tipo === t
+                            ? ATIVIDADE_CONFIG[t].cor + " border-current font-semibold"
+                            : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"
+                        }`}
+                      >
+                        {(() => { const Icon = ATIVIDADE_CONFIG[t].icone; return <Icon className="h-3.5 w-3.5 flex-shrink-0" />; })()}
+                        <span className="truncate">{ATIVIDADE_CONFIG[t].label.split(" ")[0]}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Seletor de Grupo (questões / bateria) */}
-              {(tipo === "questoes" || tipo === "bateria") && (
+              {/* Seletor de Grupo — só modo cronômetro */}
+              {!pomodoroMode && (tipo === "questoes" || tipo === "bateria") && (
                 <div>
                   <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
                     Grupo <span className="text-gray-400">(opcional)</span>
@@ -331,8 +510,8 @@ export default function TimerEstudo({ onSalvar }: Props) {
                 </div>
               )}
             </div>
-          ) : (
-            /* Info do tópico em execução */
+          ) : !showSave ? (
+            // Info do tópico em execução
             (materia || grupo) && (
               <div className="px-4 pt-3">
                 <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg px-3 py-2">
@@ -340,28 +519,33 @@ export default function TimerEstudo({ onSalvar }: Props) {
                   {topico && (
                     <div className="text-xs text-blue-500 dark:text-blue-400 truncate mt-0.5">{topico}</div>
                   )}
-                  {grupo && (
+                  {grupo && !pomodoroMode && (
                     <div className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">Grupo {grupo}</div>
                   )}
                 </div>
               </div>
             )
-          )}
+          ) : null}
 
           {/* Clock */}
           <div className="px-4 py-4 text-center">
-            <div
-              className={`font-mono text-4xl font-bold tabular-nums tracking-tight transition-colors ${
-                isRunning
-                  ? "text-gray-900 dark:text-white"
-                  : isPaused
-                  ? "text-amber-600 dark:text-amber-400"
-                  : "text-gray-400 dark:text-gray-500"
-              }`}
-            >
-              {formatTime(elapsed)}
+            <div className={`font-mono text-4xl font-bold tabular-nums tracking-tight transition-colors ${clockColor}`}>
+              {displayTime}
             </div>
-            {elapsed > 0 && (
+            {/* Barra de progresso no modo Pomodoro */}
+            {phasePerc !== null && (
+              <div className="mt-2 mx-2">
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                  <div
+                    className={`rounded-full h-1.5 transition-all ${
+                      pomodoroPhase === "work" ? "bg-red-500" : "bg-emerald-500"
+                    }`}
+                    style={{ width: `${phasePerc}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            {!pomodoroMode && elapsed > 0 && (
               <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                 {Math.round(elapsed / 60)} min líquidos
               </div>
@@ -374,10 +558,14 @@ export default function TimerEstudo({ onSalvar }: Props) {
               <button
                 type="button"
                 onClick={handleStart}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm"
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-white text-sm font-medium rounded-xl transition-colors shadow-sm ${
+                  pomodoroMode
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-blue-600 hover:bg-blue-700"
+                }`}
               >
                 <Play className="h-4 w-4 fill-white" />
-                {elapsed > 0 ? "Retomar" : "Iniciar"}
+                {pomodoroMode ? "Iniciar Pomodoro" : elapsed > 0 ? "Retomar" : "Iniciar"}
               </button>
             )}
 
@@ -391,14 +579,24 @@ export default function TimerEstudo({ onSalvar }: Props) {
                   <Pause className="h-4 w-4 fill-white" />
                   Pausar
                 </button>
-                <button
-                  type="button"
-                  onClick={handleStop}
-                  className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors"
-                  title="Parar e salvar"
-                >
-                  <Square className="h-4 w-4 fill-current" />
-                </button>
+                {pomodoroMode && pomodoroPhase === "break" ? (
+                  <button
+                    type="button"
+                    onClick={handleSkipBreak}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-xl transition-colors"
+                  >
+                    <span>🍅</span> Pular pausa
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStop}
+                    className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors"
+                    title="Parar e salvar"
+                  >
+                    <Square className="h-4 w-4 fill-current" />
+                  </button>
+                )}
               </>
             )}
 
@@ -407,7 +605,11 @@ export default function TimerEstudo({ onSalvar }: Props) {
                 <button
                   type="button"
                   onClick={handleResume}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors"
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-white text-sm font-medium rounded-xl transition-colors ${
+                    pomodoroMode && pomodoroPhase === "work"
+                      ? "bg-red-600 hover:bg-red-700"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  }`}
                 >
                   <Play className="h-4 w-4 fill-white" />
                   Retomar
@@ -465,7 +667,11 @@ export default function TimerEstudo({ onSalvar }: Props) {
         onClick={() => setExpanded((v) => !v)}
         className={`flex items-center gap-2.5 pl-3.5 pr-4 py-2.5 rounded-full shadow-lg border transition-all hover:shadow-xl ${
           isRunning
-            ? "bg-blue-600 border-blue-600 text-white"
+            ? pomodoroMode
+              ? pomodoroPhase === "work"
+                ? "bg-red-600 border-red-600 text-white"
+                : "bg-emerald-600 border-emerald-600 text-white"
+              : "bg-blue-600 border-blue-600 text-white"
             : isPaused
             ? "bg-amber-500 border-amber-500 text-white"
             : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200"
@@ -476,12 +682,19 @@ export default function TimerEstudo({ onSalvar }: Props) {
             isRunning ? "bg-white animate-pulse" : isPaused ? "bg-white opacity-80" : "bg-gray-300 dark:bg-gray-500"
           }`}
         />
-        <Timer className="h-4 w-4 flex-shrink-0" />
+        {pomodoroMode && status !== "idle" ? (
+          <span className="text-base leading-none">{pomodoroPhase === "work" ? "🍅" : "☕"}</span>
+        ) : (
+          <Timer className="h-4 w-4 flex-shrink-0" />
+        )}
         <span className="text-sm font-mono font-semibold tabular-nums">
-          {elapsed > 0 ? formatTime(elapsed) : "Timer"}
+          {status !== "idle" ? displayTime : "Timer"}
         </span>
-        {materia && !expanded && (
-          <span className={`hidden sm:block text-xs max-w-[120px] truncate ${isRunning ? "opacity-80" : "text-gray-400 dark:text-gray-500"}`}>
+        {pomodoroCount > 0 && !expanded && (
+          <span className="hidden sm:block text-xs opacity-80">× {pomodoroCount}</span>
+        )}
+        {materia && !expanded && status === "idle" && (
+          <span className="hidden sm:block text-xs max-w-[120px] truncate text-gray-400 dark:text-gray-500">
             · {materia.split(" ")[0]}
           </span>
         )}

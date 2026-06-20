@@ -54,6 +54,65 @@ function getProgressoMateria(nome: string, topicos: Record<string, TopicoState>)
   return { estudados, total, perc: total > 0 ? Math.round((estudados / total) * 100) : 0, cadernos };
 }
 
+const DOW_TO_KEY = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"] as const;
+
+function MetaDiaria({ state }: { state: EstudoState }) {
+  const today = new Date().toISOString().split("T")[0];
+  const dayKey = DOW_TO_KEY[new Date().getDay()];
+  const metaMin = state.configCiclo.horasPorDia[dayKey] ?? 0;
+  const estudadoMin = (state.calendario[today] ?? []).reduce((s, a) => s + a.duracao, 0);
+
+  const fmt = (min: number) => {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h > 0 && m > 0) return `${h}h${m}min`;
+    if (h > 0) return `${h}h`;
+    return `${m}min`;
+  };
+
+  if (metaMin === 0) {
+    return (
+      <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 flex items-center gap-3">
+        <span className="text-xl">☀️</span>
+        <div>
+          <div className="text-sm font-medium text-gray-700 dark:text-gray-300">Dia de descanso</div>
+          <div className="text-xs text-gray-400 dark:text-gray-500">Configure horas no Ciclo de Estudos para ver sua meta diária</div>
+        </div>
+      </div>
+    );
+  }
+
+  const perc = Math.min(100, Math.round((estudadoMin / metaMin) * 100));
+  const done = perc >= 100;
+
+  return (
+    <div className={`rounded-xl border px-5 py-4 ${done
+      ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+      : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"}`}
+    >
+      <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center gap-2">
+          <span className="text-base">{done ? "✅" : "📚"}</span>
+          <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">Meta de hoje</span>
+        </div>
+        <span className={`text-sm font-bold tabular-nums ${done ? "text-emerald-600 dark:text-emerald-400" : "text-gray-700 dark:text-gray-200"}`}>
+          {fmt(estudadoMin)} / {fmt(metaMin)}
+        </span>
+      </div>
+      <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-2">
+        <div
+          className={`rounded-full h-2 transition-all duration-500 ${done ? "bg-emerald-500" : "bg-blue-500"}`}
+          style={{ width: `${perc}%` }}
+        />
+      </div>
+      <div className="flex items-center justify-between mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+        <span>{done ? "Meta atingida! 🎉" : `Faltam ${fmt(Math.max(0, metaMin - estudadoMin))}`}</span>
+        <span>{perc}%</span>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardTab({ state }: Props) {
   const xp = calcularXP(state.topicos, state.calendario);
   const nivel = calcularNivel(xp);
@@ -80,6 +139,9 @@ export default function DashboardTab({ state }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* Meta diária */}
+      <MetaDiaria state={state} />
+
       {/* Level + XP hero */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
         <div className="flex items-center justify-between mb-4">
