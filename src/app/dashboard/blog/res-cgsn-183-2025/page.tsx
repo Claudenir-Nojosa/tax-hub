@@ -17,9 +17,8 @@ export default function ArtigoResCgsn1832025() {
 
       {/* Header */}
       <header className="mb-10">
-        {/* Tags */}
         <div className="flex flex-wrap gap-2 mb-4">
-          {["Simples Nacional", "CGSN", "MEI", "PGDAS-D", "Reforma Tributária"].map((tag) => (
+          {["Simples Nacional", "Planejamento Tributário", "CGSN 183/2025", "MEI", "Débitos"].map((tag) => (
             <span
               key={tag}
               className="rounded-full bg-blue-50 dark:bg-blue-950/40 px-3 py-1 text-xs font-medium text-[#007cca]"
@@ -30,17 +29,17 @@ export default function ArtigoResCgsn1832025() {
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white leading-tight mb-4">
-          Resolução CGSN nº 183/2025: o Simples Nacional na era da Reforma Tributária
+          A armadilha do §10: como a consolidação de dívidas do sócio afeta o acesso ao Simples Nacional
         </h1>
 
         <p className="text-lg text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
-          O CGSN publicou a primeira grande atualização do regulamento do Simples Nacional para adequá-lo
-          às Leis Complementares nº 214 e nº 216/2025. Novos princípios, vedações ampliadas, multas
-          pela Defis e regras do MEI consolidadas: o que muda na prática.
+          A Resolução CGSN nº 183/2025 explicitou uma regra que muitos ignoravam: todos os débitos
+          tributários exigíveis de um mesmo titular — em qualquer inscrição cadastral — são
+          consolidados para fins de permanência no Simples Nacional. Entenda os cenários de risco
+          e como estruturar o planejamento corretamente.
         </p>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 border-t border-gray-100 dark:border-gray-800 pt-5">
-          {/* Autor */}
           <div className="flex items-center gap-3 flex-1">
             <div className="relative h-10 w-10 flex-shrink-0 rounded-full overflow-hidden ring-2 ring-gray-200 dark:ring-gray-700">
               <Image
@@ -59,8 +58,6 @@ export default function ArtigoResCgsn1832025() {
               </p>
             </div>
           </div>
-
-          {/* Metadados */}
           <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400 dark:text-gray-500">
             <span className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4" />
@@ -68,11 +65,11 @@ export default function ArtigoResCgsn1832025() {
             </span>
             <span className="flex items-center gap-1.5">
               <Clock className="h-4 w-4" />
-              10 min de leitura
+              9 min de leitura
             </span>
             <span className="flex items-center gap-1.5">
               <BookOpen className="h-4 w-4" />
-              Resolução CGSN nº 183/2025
+              Res. CGSN nº 183/2025 — Art. 2º, §10
             </span>
           </div>
         </div>
@@ -92,233 +89,287 @@ export default function ArtigoResCgsn1832025() {
       <article className="prose-article">
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
-          A Resolução CGSN nº 183, publicada no Diário Oficial da União em 13 de outubro de 2025,
-          é a resposta do Comitê Gestor do Simples Nacional ao novo ambiente regulatório criado pela
-          Reforma Tributária. Ela altera a Resolução CGSN nº 140/2018 — o regulamento geral do
-          Simples — em vários pontos, com fundamento nos arts. 516 e 544 da LC 214/2025 (IBS e CBS)
-          e no art. 2º da LC 216/2025.
+          Entre as muitas alterações trazidas pela Resolução CGSN nº 183/2025, uma passa despercebida
+          por quem lê o texto com pressa: a redação consolidada do{" "}
+          <strong>§10 do art. 2º da Resolução CGSN nº 140/2018</strong>. O dispositivo não cria
+          uma regra nova do zero — ele torna explícita e operacionalmente clara uma consequência
+          que já decorria da LC 123/2006, mas que na prática era frequentemente ignorada.
+          O resultado é um risco relevante de planejamento tributário que todo contador e empresário
+          do Simples Nacional precisa conhecer.
         </p>
 
-        <Section title="O contexto: por que o Simples precisava ser atualizado?" />
+        <Section title="O que diz o §10 do art. 2º (texto consolidado)" />
 
-        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-          A Lei Complementar nº 214/2025 criou o IBS (Imposto sobre Bens e Serviços) e a CBS
-          (Contribuição Social sobre Bens e Serviços), que substituirão ICMS, ISS e PIS/Cofins
-          ao longo do período de transição (2026–2033). A LC 216/2025 promoveu ajustes pontuais
-          no Simples Nacional para compatibilizá-lo com esse novo sistema.
-        </p>
+        <div className="rounded-lg bg-gray-50 dark:bg-gray-900/60 border-l-4 border-gray-300 dark:border-gray-700 px-5 py-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
+          <p className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Art. 2º, §10 da Res. CGSN nº 140/2018 (redação dada pela Res. 183/2025):</p>
+          <p>
+            "Para fins do disposto nesta Resolução, em relação às entidades de que trata o inciso I do
+            caput e o art. 100, ainda que em inscrições cadastrais distintas ou na qualidade de
+            contribuinte individual, devem ser considerados:
+          </p>
+          <p className="mt-2 ml-4">I — todas as atividades econômicas exercidas e as receitas brutas auferidas em um mesmo ano-calendário; e</p>
+          <p className="ml-4 font-semibold">II — todos os débitos tributários exigíveis."</p>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">(LC nº 123/2006, art. 3º, §19)</p>
+        </div>
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
-          O Simples Nacional não foi abolido pela Reforma — ele continua como regime especial
-          para ME e EPP. Mas precisa se adaptar: novos princípios precisam ser explicitados,
-          regras de administração integrada entre os entes precisam ser formalizadas, e as
-          obrigações declaratórias (PGDAS-D, Defis, DASN-Simei) precisam ser uniformizadas.
-          A Resolução CGSN nº 183/2025 faz exatamente isso.
+          Traduzindo: quando a Receita Federal verifica se um empresário individual (EI), um MEI ou
+          qualquer optante do Simples tem direito ao regime, ela não olha apenas para aquele CNPJ
+          isolado. Ela consolida — no mesmo bolo — <strong>todas as atividades e receitas</strong>{" "}
+          que o titular exerce em qualquer registro (outros CNPJs, CPF como autônomo, produtor rural)
+          e <strong>todos os débitos tributários exigíveis</strong> que existam em qualquer
+          dessas inscrições. O inciso I (receitas) é a regra anti-fracionamento. O inciso II
+          (débitos) é o foco deste artigo.
         </p>
 
-        <Section title="Novos princípios do Simples Nacional (art. 2º-A)" />
+        <Section title="Por que o inciso II é a parte mais perigosa para o planejamento" />
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-          A primeira grande novidade estrutural é a inclusão do art. 2º-A na Res. 140/2018,
-          que elenca cinco princípios que o Simples Nacional deve observar:
-        </p>
-
-        <ol className="list-decimal list-inside space-y-2 mb-6 text-base text-gray-700 dark:text-gray-300">
-          <li><strong>Simplicidade</strong> — razão de existir do regime.</li>
-          <li><strong>Transparência</strong> — clareza sobre tributos efetivamente recolhidos no DAS.</li>
-          <li><strong>Justiça tributária</strong> — carga menor para quem fatura menos.</li>
-          <li><strong>Cooperação e integração das administrações tributárias</strong> — base do compartilhamento de dados entre RFB, SEFAZ e secretarias municipais.</li>
-          <li><strong>Defesa do meio ambiente</strong> — agenda ESG que permeia a Reforma Tributária.</li>
-        </ol>
-
-        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
-          Esses princípios já estavam na LC 123/2006 (art. 12, §2º, incluído pela LC 214/2025),
-          mas agora ficam expressamente positivados no regulamento do Simples. Para o intérprete
-          e para o concurseiro, eles servem como critério de interpretação de todo o restante
-          da Resolução.
-        </p>
-
-        <Section title="Administração integrada: o art. 2º-B e o compartilhamento de dados" />
-
-        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-          O novo art. 2º-B estabelece que União, Estados, DF e Municípios exercem a administração
-          tributária do Simples Nacional de <em>forma integrada</em>. Na prática, isso já era
-          a realidade operacional — o DAS é arrecadado pela RFB e redistribuído. Mas a
-          positivação formal ganhou força normativa com a Reforma Tributária, pois o IBS será
-          gerido por um Comitê Gestor multigovernamental.
-        </p>
-
-        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
-          A integração se materializa em três artigos atualizados: o art. 38 (PGDAS-D compartilhado),
-          o art. 70 (documentos fiscais eletrônicos compartilhados automaticamente, dispensando
-          transmissão separada) e o art. 72 (Defis compartilhada com SEFAZ e prefeituras). Para
-          o contribuinte, isso significa que uma inconsistência detectada pela RFB pode ser
-          rapidamente comunicada à secretaria estadual ou municipal.
+          A LC 123/2006 já previa, no art. 17, V, que empresa com débito com qualquer Fazenda Pública
+          não pode optar pelo Simples. O §10, inciso II vai além: ele determina que os débitos
+          de <em>qualquer inscrição cadastral</em> do mesmo titular contam para essa verificação.
+          Isso cria três cenários de risco que o planejamento tributário precisa endereçar:
         </p>
 
         <Callout>
-          <strong>Atenção prática:</strong> O MEI e a ME/EPP devem garantir que as informações
-          prestadas no PGDAS-D, na Defis e na DASN-Simei sejam consistentes entre si e com
-          os documentos fiscais emitidos. O cruzamento automático de dados entre os três entes
-          torna a inconsistência documental mais fácil de detectar.
+          <strong>Regra central:</strong> Para o Simples Nacional, o sujeito de análise não é
+          o CNPJ — é a <em>pessoa</em> por trás do CNPJ. Todos os débitos do titular, em qualquer
+          registro, são consolidados.
         </Callout>
 
-        <Section title="Vedações ampliadas: o que mudou no art. 15" />
+        <Section title="Cenário 1 — Dívida no CPF, empresa no Simples" />
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-          O art. 15 da Res. 140/2018 lista as situações que impedem o ingresso ou a permanência
-          no Simples Nacional. A Res. 183/2025 consolidou e ampliou esse rol. As alterações
-          mais relevantes para a prática:
+          Este é o cenário mais comum e o menos percebido. O empresário abre um MEI ou uma ME e
+          mantém o Simples em dia — sem nenhum débito no CNPJ. Mas tem pendências tributárias
+          no <strong>CPF</strong>: IRPF não recolhido, contribuição previdenciária como autônomo
+          em aberto, ou dívidas de um período como segurado especial.
+        </p>
+
+        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+          O §10, inciso II determina que esses débitos do CPF entram no cômputo. O optante está,
+          tecnicamente, em situação impeditiva — mesmo que o CNPJ esteja limpo.
+        </p>
+
+        <div className="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 p-5 mb-6 text-sm text-gray-700 dark:text-gray-300">
+          <p className="font-semibold text-red-700 dark:text-red-400 mb-2">⚠️ Risco concreto</p>
+          <p>
+            Um médico atua como autônomo (CPF) e tem uma clínica no Simples (CNPJ). Se ele tem
+            contribuição previdenciária em aberto como contribuinte individual, essa dívida do CPF
+            impede a manutenção da clínica no Simples — porque o titular é o mesmo e o §10
+            consolida todos os débitos.
+          </p>
+        </div>
+
+        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
+          <strong>O que fazer:</strong> Antes de optar ou renovar o Simples, o contador deve
+          verificar a situação do <em>titular</em> (CPF), não apenas do CNPJ. Consulta no
+          e-CAC pelo CPF do sócio/titular é etapa obrigatória do diagnóstico fiscal.
+        </p>
+
+        <Section title="Cenário 2 — Dois CNPJs, dívida em um, Simples no outro" />
+
+        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+          É comum que um empreendedor tenha mais de um negócio formalizado: um MEI para
+          uma atividade e uma ME para outra, ou dois EIs em segmentos distintos. Se um dos
+          CNPJs acumula débito tributário exigível e o outro está em dia, a pergunta que
+          o §10 responde de forma inequívoca é: <em>o CNPJ em dia pode continuar no Simples?</em>
+        </p>
+
+        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+          A resposta é <strong>não</strong>. O inciso II manda consolidar "todos os débitos tributários
+          exigíveis" do titular, independentemente de em qual inscrição cadastral estão registrados.
+          O CNPJ limpo não está isolado — ele compartilha o mesmo titular do CNPJ com débito.
+        </p>
+
+        <div className="rounded-xl border border-orange-200 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-950/20 p-5 mb-6 text-sm text-gray-700 dark:text-gray-300">
+          <p className="font-semibold text-orange-700 dark:text-orange-400 mb-2">Exemplo prático</p>
+          <p>
+            João tem um MEI de fotografia (CNPJ-A) e uma ME de consultoria (CNPJ-B) no Simples.
+            O MEI acumulou DAS não pagos no último ano e foi negativado. A ME de consultoria não
+            tem débitos. Pelo §10, os débitos do MEI de João impedem que sua ME permaneça no
+            Simples — o titular é o mesmo e todos os débitos são consolidados.
+          </p>
+        </div>
+
+        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
+          <strong>O que fazer:</strong> Manter todos os CNPJs de um mesmo titular em dia é condição
+          para que qualquer um deles continue no Simples. O planejamento deve enxergar o
+          conjunto, não cada empresa isoladamente.
+        </p>
+
+        <Section title="Cenário 3 — Dívida antiga, empresa nova" />
+
+        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+          Este é o cenário do "recomeço": o empresário encerrou uma empresa anterior com débitos
+          em aberto e abriu um novo CNPJ tentando "começar do zero" no Simples. O §10 fecha essa
+          porta. Os débitos exigíveis da empresa encerrada — se ainda não foram quitados, parcelados
+          ou extintos — seguem o titular para a nova empresa.
+        </p>
+
+        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+          Vale distinguir duas situações:
         </p>
 
         <ul className="space-y-3 mb-6 text-base text-gray-700 dark:text-gray-300">
           <li>
-            <strong>Inciso XXIII — locação de imóveis próprios:</strong> Explicitamente vedada.
-            A empresa cuja atividade principal seja a locação de imóveis próprios não pode optar
-            pelo Simples. Isso não é novidade em termos de LC 123/2006 (art. 17, XV), mas agora
-            está numerado e consolidado na Resolução.
+            <strong>Débito em cobrança ativa (exigível):</strong> impede o Simples do novo CNPJ.
+            O termo "exigível" é técnico — significa que não há suspensão da exigibilidade
+            (parcelamento deferido, depósito judicial, liminar, etc.). Débito inscrito em dívida
+            ativa sem garantia ou sem suspensão é exigível.
           </li>
           <li>
-            <strong>Inciso XXVI — sociedade em conta de participação (SCP):</strong> Vedação
-            nova. Por sua natureza especial (sócio ostensivo e sócio participante), a SCP é
-            incompatível com o sistema unificado de apuração do DAS.
-          </li>
-          <li>
-            <strong>Inciso XXVII — filial no exterior:</strong> Empresa com filial, sucursal,
-            agência ou representação no exterior está vedada ao Simples. Reflete a agenda
-            de conformidade tributária internacional (BEPS/OCDE).
-          </li>
-          <li>
-            <strong>Inciso XXV — pejotização:</strong> Vedação expressa quando titulares/sócios
-            mantêm relação de pessoalidade, subordinação e habitualidade com o tomador de
-            serviços — o tripé do vínculo empregatício do art. 3º da CLT.
+            <strong>Débito com exigibilidade suspensa:</strong> parcelamento em dia, depósito
+            judicial do montante integral, tutela antecipada — nesses casos, o débito <em>existe</em>{" "}
+            mas não está <em>exigível</em>. A empresa nova pode optar pelo Simples normalmente.
           </li>
         </ul>
 
-        <Section title="Art. 97-A: novo regime de multas pela Defis" />
+        <Callout>
+          <strong>Ponto-chave para o planejamento:</strong> A palavra "exigíveis" no inciso II
+          não é decorativa. Um débito parcelado com parcelas em dia não é exigível — a
+          exigibilidade está suspensa (art. 151, VI do CTN). Isso cria uma janela de
+          planejamento legítima: regularizar via parcelamento para suspender a exigibilidade
+          e garantir o acesso ao Simples.
+        </Callout>
+
+        <Section title="A estratégia do parcelamento como instrumento de planejamento" />
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-          Uma das novidades mais práticas da Resolução é a criação do art. 97-A, que estabelece
-          multas específicas para atraso, omissão ou incorreção na Defis (Declaração de
-          Informações Socioeconômicas e Fiscais das ME/EPP). A estrutura é espelhada nas
-          multas do PGDAS-D e do DASN-Simei:
+          Quando o empresário ou seu titular tem débitos tributários exigíveis, o caminho mais
+          eficiente para manter ou recuperar o Simples Nacional é o <strong>parcelamento</strong>.
+          O efeito jurídico é imediato: ao deferir o parcelamento, a Fazenda suspende a
+          exigibilidade do débito (art. 151, VI do CTN), que deixa de ser impeditivo para o Simples.
+        </p>
+
+        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+          No âmbito do Simples Nacional, o parcelamento especial é regulado pelo art. 79 da
+          LC 123/2006. Existe ainda o Refis do Simples, aberto periodicamente por lei específica.
+          Para débitos federais em geral (IRPF, previdenciária como autônomo), o PERT ou o
+          parcelamento ordinário da RFB (60 meses) também suspendem a exigibilidade.
         </p>
 
         <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-800">
-                <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">Situação</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">Multa</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">Redução</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">Situação do débito</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">Exigível?</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">Impede o Simples?</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
               <tr>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">Falta de entrega ou entrega após o prazo</td>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">2%/mês sobre tributos informados (máx. 20%)</td>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">—</td>
+                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">Débito vencido e não pago (sem garantia)</td>
+                <td className="px-4 py-3 text-red-600 dark:text-red-400 font-medium">Sim</td>
+                <td className="px-4 py-3 text-red-600 dark:text-red-400 font-medium">Sim</td>
               </tr>
               <tr>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">Entrega espontânea após prazo (antes do Fisco)</td>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">2%/mês sobre tributos informados (máx. 20%)</td>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">50% (paga-se a metade)</td>
+                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">Parcelamento deferido com parcelas em dia</td>
+                <td className="px-4 py-3 text-green-600 dark:text-green-400 font-medium">Não</td>
+                <td className="px-4 py-3 text-green-600 dark:text-green-400 font-medium">Não</td>
               </tr>
               <tr>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">Entrega após intimação</td>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">2%/mês sobre tributos informados (máx. 20%)</td>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">25% (paga-se 75%)</td>
+                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">Débito com liminar/tutela suspendendo exigibilidade</td>
+                <td className="px-4 py-3 text-green-600 dark:text-green-400 font-medium">Não</td>
+                <td className="px-4 py-3 text-green-600 dark:text-green-400 font-medium">Não</td>
               </tr>
               <tr>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">Informações incorretas ou omitidas</td>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">R$ 100 por grupo de 10 informações</td>
-                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">—</td>
+                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">Depósito judicial do montante integral</td>
+                <td className="px-4 py-3 text-green-600 dark:text-green-400 font-medium">Não</td>
+                <td className="px-4 py-3 text-green-600 dark:text-green-400 font-medium">Não</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">Parcelamento com parcela em atraso</td>
+                <td className="px-4 py-3 text-red-600 dark:text-red-400 font-medium">Sim (rescisão)</td>
+                <td className="px-4 py-3 text-red-600 dark:text-red-400 font-medium">Sim</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">Débito prescrito</td>
+                <td className="px-4 py-3 text-green-600 dark:text-green-400 font-medium">Não</td>
+                <td className="px-4 py-3 text-green-600 dark:text-green-400 font-medium">Não</td>
               </tr>
             </tbody>
           </table>
-          <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/60 text-xs text-gray-500 dark:text-gray-400">
-            Multa mínima: R$ 200,00 — independentemente do valor apurado.
-          </div>
         </div>
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
-          Antes dessa Resolução, as multas pela Defis não tinham disciplina própria no regulamento —
-          recorria-se às regras gerais da LC 123/2006. Agora, contadores e empresários têm
-          clareza sobre os valores em jogo e as oportunidades de redução.
+          O planejamento correto, portanto, começa com um <strong>levantamento completo de débitos
+          do titular</strong> — CPF e todos os CNPJs associados. Identificados os débitos exigíveis,
+          a estratégia de regularização (parcelamento, pagamento, depósito judicial ou discussão
+          da exigibilidade) deve ser executada <em>antes</em> da opção pelo Simples ou antes
+          do período de exclusão de ofício.
         </p>
 
-        <Section title="PGDAS-D: multas com vigência a partir de 2026" />
-
-        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
-          O Art. 3º desta Resolução altera o art. 98 da Res. 140/2018, que trata das multas pelo
-          PGDAS-D. A mudança é técnica mas importante: o termo inicial da multa passa a ser o dia
-          seguinte ao <em>prazo originalmente fixado</em>, independentemente de intimação. Isso
-          impede a postergação indefinida da prestação de informações sem acumulação de multa.
-          <strong> Esta alteração só produz efeitos a partir de 1º de janeiro de 2026</strong>,
-          respeitando a anterioridade nonagesimal do art. 38-A, §4º da LC 123/2006.
-        </p>
-
-        <Section title="MEI: DASN-Simei consolidada no art. 109" />
+        <Section title="O risco da exclusão retroativa — art. 84, §5º" />
 
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-          Para o MEI, a principal mudança é a consolidação no art. 109 de todas as regras da
-          DASN-Simei (Declaração Anual Única e Simplificada do MEI). Os pontos essenciais:
+          Se a empresa permanece no Simples sem perceber que o titular tinha débito exigível
+          em outra inscrição, a exclusão de ofício — quando ocorre — pode ser{" "}
+          <strong>retroativa</strong>. O art. 84, §5º da Res. 140/2018 determina que o efeito
+          da exclusão retroage ao mês seguinte ao da ocorrência da situação impeditiva.
         </p>
 
-        <ul className="space-y-2 mb-6 text-base text-gray-700 dark:text-gray-300">
-          <li><strong>Prazo:</strong> Até o último dia de maio de cada ano (31/05).</li>
-          <li><strong>Natureza declaratória:</strong> Confissão de dívida — os tributos apurados na DASN-Simei não precisam de lançamento de ofício para serem exigíveis.</li>
-          <li><strong>Retificação:</strong> Pode ser feita sem autorização prévia, mas o direito extingue-se em 5 anos do 1º dia do exercício seguinte ao declarado.</li>
-          <li><strong>Desobrigação da RAIS:</strong> Os dados do empregado informados na DASN-Simei podem ser encaminhados pelo Serpro ao MTE, dispensando a entrega da RAIS pelo MEI empregador.</li>
-          <li><strong>Cômputo consolidado:</strong> MEI que também atua como contribuinte individual ou segurado especial deve somar todas as receitas para verificar o limite do MEI (§9º do art. 100).</li>
-        </ul>
+        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+          Na prática: a empresa recolheu o DAS durante dois anos dentro do Simples, mas havia
+          um débito exigível do titular desde o início. A exclusão retroativa pode fazer com que
+          o Fisco reclassifique toda a receita desse período para o regime geral (Lucro Presumido
+          ou Lucro Real), gerando diferenças de IRPJ, CSLL, PIS e Cofins — além de multas
+          e juros sobre o período.
+        </p>
 
         <Callout>
-          <strong>Atenção para MEI empregador:</strong> Verifique se o sistema da sua secretaria
-          está configurado para enviar os dados de empregados à DASN-Simei via Serpro/MTE.
-          Se sim, você está dispensado da RAIS — se não, a entrega da RAIS ainda é obrigatória
-          até que a integração esteja operacional.
+          <strong>O custo da descoberta tardia é muito maior que o custo do diagnóstico preventivo.</strong>{" "}
+          Uma exclusão retroativa de dois anos de Simples, com reclassificação para Lucro Presumido,
+          pode resultar em uma conta tributária que torna inviável a continuidade do negócio.
         </Callout>
 
-        <Section title="O que muda para o contador e para o empresário" />
-
-        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-          Na prática, a Res. 183/2025 exige atenção em três frentes:
-        </p>
+        <Section title="Checklist de planejamento: o que verificar antes de optar pelo Simples" />
 
         <ol className="list-decimal list-inside space-y-3 mb-6 text-base text-gray-700 dark:text-gray-300">
           <li>
-            <strong>Revisar o enquadramento dos clientes no Simples</strong> com base no rol ampliado
-            de vedações do art. 15 (especialmente locação de imóveis próprios, SCP, filial no exterior
-            e pejotização).
+            <strong>Consultar a situação fiscal do CPF do titular</strong> no e-CAC (aba "Certidões e Situação Fiscal") — IRPF, contribuições previdenciárias, parcelamentos ativos.
           </li>
           <li>
-            <strong>Uniformizar o processo de entrega das três declarações</strong> (PGDAS-D, Defis e
-            DASN-Simei): mesmos prazos de atenção, mesma régua de multas, mesmos critérios de
-            declaração técnica adequada.
+            <strong>Listar todos os CNPJs vinculados ao titular</strong> (MEIs anteriores, EIs encerrados, outras MEs) e verificar a situação de cada um no Portal do Simples Nacional.
           </li>
           <li>
-            <strong>Preparar-se para 01/01/2026</strong>, quando entram em vigor as novas regras de
-            cálculo de multas do PGDAS-D (termo inicial a partir do prazo original, não da intimação).
+            <strong>Para débitos encontrados</strong>, verificar se a exigibilidade está suspensa (parcelamento, liminar, depósito) ou se o débito é exigível.
+          </li>
+          <li>
+            <strong>Regularizar débitos exigíveis</strong> antes da opção: parcelamento é a ferramenta mais rápida para suspender a exigibilidade sem necessidade de pagamento integral.
+          </li>
+          <li>
+            <strong>Manter o monitoramento contínuo</strong>: a situação que hoje não é impeditiva pode se tornar impeditiva se um parcelamento for rescindido ou um novo débito surgir.
           </li>
         </ol>
 
+        <Section title="O que muda com a Resolução CGSN nº 183/2025" />
+
+        <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+          A regra do §10, inciso II já existia implicitamente no art. 3º, §19 da LC 123/2006
+          desde 2014. O que a Res. 183/2025 faz é torná-la <strong>explícita no corpo da
+          Resolução regulamentadora</strong>, aumentando a probabilidade de que a RFB e os
+          entes fiscalizadores a apliquem ativamente em procedimentos de exclusão de ofício.
+        </p>
+
         <p className="text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-6">
-          O Simples Nacional é um dos regimes tributários mais utilizados no Brasil — são mais de
-          21 milhões de empresas optantes. Uma atualização regulatória desta magnitude merece
-          leitura cuidadosa por parte de qualquer profissional de direito tributário ou contabilidade.
+          Na prática, isso significa que o risco de uma exclusão retroativa por débito em
+          inscrição diversa é agora <em>maior</em> — não porque a regra mudou, mas porque
+          ela está mais visível e, portanto, mais passível de ser aplicada nas fiscalizações
+          cruzadas que o novo ambiente de compartilhamento de dados (arts. 70 e 72 da Res. 140/2018,
+          também atualizados pela 183/2025) torna possível.
         </p>
 
         <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Para uma análise artigo por artigo com comentários detalhados, consulte a{" "}
+            Para o texto completo da Resolução CGSN nº 183/2025 com comentários artigo a artigo, acesse a{" "}
             <Link
               href="/dashboard/legislacoes/res-cgsn-183"
               className="text-[#007cca] hover:underline font-medium"
             >
-              página de legislação da Resolução CGSN nº 183/2025
-            </Link>{" "}
-            na seção de Legislações Comentadas.
+              página de legislação comentada
+            </Link>.
           </p>
         </div>
 

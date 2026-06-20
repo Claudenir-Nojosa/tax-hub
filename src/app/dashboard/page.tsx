@@ -7,9 +7,9 @@ const artigos = [
     href: "/dashboard/blog/res-cgsn-183-2025",
     tags: ["Simples Nacional", "CGSN", "MEI", "Reforma Tributária"],
     titulo:
-      "Resolução CGSN nº 183/2025: o Simples Nacional na era da Reforma Tributária",
+      "A armadilha do §10: como a consolidação de dívidas do sócio afeta o acesso ao Simples Nacional",
     resumo:
-      "O CGSN atualizou o regulamento do Simples Nacional para adequá-lo às LCs 214 e 216/2025. Novos princípios, vedações ampliadas, multas pela Defis e regras do MEI consolidadas.",
+      "A Res. CGSN 183/2025 explicitou que todos os débitos tributários exigíveis do titular — em qualquer inscrição cadastral — são consolidados para fins de permanência no Simples. Entenda os cenários de risco e como planejar.",
     data: "Out. 2025",
     leitura: "10 min",
     imagem: "/articles/RESOLUÇÃO CGSN Nº 183, DE 26 DE SETEMBRO DE 2025.png" as string | null,
