@@ -135,16 +135,28 @@ export interface ConquistaConfig {
 }
 
 export const CONQUISTAS: ConquistaConfig[] = [
-  { id: "primeiro_passo", icone: Sprout,         cor: "text-emerald-600", nome: "Primeiro Passo",   condicao: "Complete sua 1ª semana de estudos" },
-  { id: "primeiro_mes",   icone: CalendarCheck,  cor: "text-blue-600",    nome: "Primeiro Mês",     condicao: "Complete todas as semanas de um mês" },
-  { id: "maratonista",    icone: Dumbbell,        cor: "text-orange-600",  nome: "Maratonista",      condicao: "Estude 2000+ min em uma semana" },
-  { id: "em_chamas",      icone: Flame,           cor: "text-red-600",     nome: "Em Chamas",        condicao: "3 dias consecutivos estudando" },
-  { id: "meio_caminho",   icone: TrendingUp,      cor: "text-violet-600",  nome: "Meio Caminho",     condicao: "Acumule 500 XP" },
-  { id: "expert",         icone: Star,            cor: "text-amber-500",   nome: "Expert",           condicao: "Acumule 1500 XP" },
-  { id: "fiscal_elite",   icone: Crown,           cor: "text-amber-500",   nome: "Fiscal de Elite",  condicao: "Acumule 26100 XP — nível máximo!" },
-  { id: "sniper_edital",  icone: Crosshair,       cor: "text-blue-600",    nome: "Sniper do Edital", condicao: "Marque 10+ semanas com Meta Batida" },
-  { id: "estudante_modelo", icone: GraduationCap, cor: "text-emerald-600", nome: "Estudante Modelo", condicao: "100+ horas totais de estudo" },
-  { id: "sefaz_ready",    icone: Rocket,          cor: "text-rose-600",    nome: "SEFAZ Ready",      condicao: "200+ horas totais + 30 semanas OK" },
+  { id: "primeiro_passo",    icone: Sprout,        cor: "text-emerald-600", nome: "Primeiro Passo",    condicao: "Complete sua 1ª semana de estudos" },
+  { id: "primeiro_mes",      icone: CalendarCheck, cor: "text-blue-600",    nome: "Primeiro Mês",      condicao: "Complete todas as semanas de um mês" },
+  { id: "maratonista",       icone: Dumbbell,      cor: "text-orange-600",  nome: "Maratonista",       condicao: "Estude 2000+ min em uma semana" },
+  { id: "em_chamas",         icone: Flame,         cor: "text-red-600",     nome: "Em Chamas",         condicao: "3 dias consecutivos estudando" },
+  { id: "semana_fogo",       icone: Zap,           cor: "text-orange-500",  nome: "Semana de Fogo",    condicao: "7 dias consecutivos estudando" },
+  { id: "incansavel",        icone: Swords,        cor: "text-red-700",     nome: "Incansável",        condicao: "30 dias consecutivos estudando" },
+  { id: "explorador",        icone: Sparkles,      cor: "text-violet-600",  nome: "Explorador",        condicao: "Estude 25 tópicos" },
+  { id: "construtor",        icone: Mountain,      cor: "text-emerald-700", nome: "Construtor",        condicao: "Estude 100 tópicos" },
+  { id: "meio_caminho",      icone: TrendingUp,    cor: "text-violet-600",  nome: "Meio Caminho",      condicao: "Acumule 500 XP" },
+  { id: "expert",            icone: Star,          cor: "text-amber-500",   nome: "Expert",            condicao: "Acumule 1500 XP" },
+  { id: "fiscal_elite",      icone: Crown,         cor: "text-amber-500",   nome: "Fiscal de Elite",   condicao: "Acumule 26100 XP — nível máximo!" },
+  { id: "sniper_edital",     icone: Crosshair,     cor: "text-blue-600",    nome: "Sniper do Edital",  condicao: "Marque 10+ semanas com Meta Batida" },
+  { id: "estudante_modelo",  icone: GraduationCap, cor: "text-emerald-600", nome: "Estudante Modelo",  condicao: "100+ horas totais de estudo" },
+  { id: "sefaz_ready",       icone: Rocket,        cor: "text-rose-600",    nome: "SEFAZ Ready",       condicao: "200+ horas totais + 30 semanas OK" },
+  { id: "primeira_vitoria",  icone: Trophy,        cor: "text-amber-600",   nome: "Primeira Vitória",  condicao: "Conclua 100% dos tópicos de 1 matéria" },
+  { id: "pluridisciplinar",  icone: BookMarked,    cor: "text-blue-600",    nome: "Pluridisciplinar",  condicao: "Conclua 3 matérias completamente" },
+  { id: "generalista",       icone: Compass,       cor: "text-teal-600",    nome: "Generalista",       condicao: "Conclua 5 matérias completamente" },
+  { id: "dominio_total",     icone: Diamond,       cor: "text-cyan-600",    nome: "Domínio Total",     condicao: "Conclua todas as matérias do edital" },
+  { id: "aprendiz",          icone: Pencil,        cor: "text-gray-600",    nome: "Aprendiz",          condicao: "Adicione o 1º erro ao Caderno de Erros" },
+  { id: "revisor",           icone: BadgeCheck,    cor: "text-green-600",   nome: "Revisor",           condicao: "Revise 10 erros do Caderno" },
+  { id: "praticante",        icone: HelpCircle,    cor: "text-purple-600",  nome: "Praticante",        condicao: "Faça 50 cadernos de questões" },
+  { id: "atirador",          icone: Crosshair,     cor: "text-indigo-600",  nome: "Atirador",          condicao: "Faça 200 cadernos de questões" },
 ];
 
 export const ATIVIDADE_CONFIG: Record<AtividadeTipo, { label: string; icone: LucideIcon; cor: string; corDot: string }> = {

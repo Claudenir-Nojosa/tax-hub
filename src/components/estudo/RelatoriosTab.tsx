@@ -11,7 +11,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import {
-  MATERIAS, topicoKey, calcularXP,
+  MATERIAS, topicoKey,
   type EstudoState, type TopicoState, type AtividadeTipo, type AtividadeCalendario,
 } from "@/lib/estudo-data";
 
@@ -54,7 +54,7 @@ type MateriaProg = {
 type SemanaEntry = { semana: string; horas: number };
 type HeatDay     = { date: string; horas: number; nivel: 0|1|2|3|4; isFuture: boolean; label: string };
 type BurnPoint   = { week: number; real?: number; projecao?: number };
-type XPPoint     = { week: number; xp: number };
+type XPPoint     = { date: string; xp: number };
 type BurnInfo    = {
   velocidadeSemanal: number;
   topicosRestantes: number;
@@ -228,40 +228,30 @@ function calcBurndown(
 
 function calcXPEvolution(
   calendario: Record<string, AtividadeCalendario[]>,
-  totalXP: number,
-  startDate: Date | null
 ): XPPoint[] {
-  if (!startDate || totalXP === 0) return [];
-
   const hoje = new Date();
   hoje.setHours(12, 0, 0, 0);
 
-  // Acumula minutos por semana
-  const weeklyMin: number[] = [];
-  Object.entries(calendario).forEach(([ds, ativs]) => {
-    const d = new Date(ds + "T12:00:00");
-    if (d < startDate || d > hoje) return;
-    const weekIdx = Math.floor((d.getTime() - startDate.getTime()) / (7 * 86400000));
-    const min = ativs.reduce((s, a) => s + a.duracao, 0);
-    weeklyMin[weekIdx] = (weeklyMin[weekIdx] ?? 0) + min;
+  const sorted = Object.keys(calendario)
+    .filter((d) => {
+      const dt = new Date(d + "T12:00:00");
+      return calendario[d].length > 0 && dt <= hoje;
+    })
+    .sort();
+
+  if (sorted.length === 0) return [];
+
+  let cumXP = 0;
+  return sorted.map((d) => {
+    // 1 XP a cada 15 min de atividade registrada no calendário
+    const xpDay = calendario[d].reduce((s, a) => s + Math.max(1, Math.floor(a.duracao / 15)), 0);
+    cumXP += xpDay;
+    const dt = new Date(d + "T12:00:00");
+    return {
+      date: `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}`,
+      xp: cumXP,
+    };
   });
-
-  if (!weeklyMin.length) return [];
-
-  const totalMin = weeklyMin.reduce((s, m) => s + (m ?? 0), 0);
-  if (totalMin === 0) return [];
-
-  const points: XPPoint[] = [];
-  let cumMin = 0;
-  const semanasPassadas = weeklyMin.length;
-
-  for (let w = 0; w <= semanasPassadas; w++) {
-    cumMin += weeklyMin[w] ?? 0;
-    const prop = cumMin / totalMin;
-    points.push({ week: w, xp: Math.round(totalXP * prop) });
-  }
-
-  return points;
 }
 
 // ─── Tooltip helpers ──────────────────────────────────────────────────────────
@@ -342,9 +332,8 @@ export default function RelatoriosTab({ state }: { state: EstudoState }) {
     ? Math.round((totalAcertos / (totalAcertos + totalErros)) * 100) : null;
 
   // ── Alta prioridade: burn-down e XP
-  const totalXP   = calcularXP(state.topicos, state.calendario);
   const burndown  = calcBurndown(state.topicos, state.calendario, totTops, DATA_CONCURSO);
-  const xpEvo     = calcXPEvolution(state.calendario, totalXP, burndown.startDate);
+  const xpEvo     = calcXPEvolution(state.calendario);
 
   const weekLabel = (w: number) => {
     if (!burndown.startDate) return `S${w}`;
@@ -559,7 +548,7 @@ export default function RelatoriosTab({ state }: { state: EstudoState }) {
       <div>
         <SectionTitle icon={Zap} color="bg-violet-500">XP ao Longo do Tempo</SectionTitle>
         <p className="text-xs text-gray-400 dark:text-gray-500 mb-3 ml-7">
-          XP estimado proporcionalmente às horas de estudo registradas
+          XP acumulado por dia de estudo (1 XP a cada 15 min de atividade no calendário)
         </p>
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
           {xpEvo.length < 2 ? (
@@ -575,8 +564,7 @@ export default function RelatoriosTab({ state }: { state: EstudoState }) {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="opacity-10" />
                 <XAxis
-                  dataKey="week"
-                  tickFormatter={weekLabel}
+                  dataKey="date"
                   interval={Math.max(0, Math.floor(xpEvo.length / 6) - 1)}
                   tick={{ fontSize: 10, fill: "currentColor" }}
                   className="text-gray-500 dark:text-gray-400"
@@ -591,7 +579,7 @@ export default function RelatoriosTab({ state }: { state: EstudoState }) {
                     if (!active || !payload?.length) return null;
                     return (
                       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-xl text-xs">
-                        <p className="font-semibold text-gray-900 dark:text-white mb-0.5">{weekLabel(Number(label))}</p>
+                        <p className="font-semibold text-gray-900 dark:text-white mb-0.5">{label}</p>
                         <p className="text-purple-600 dark:text-purple-400 font-bold">{payload[0].value} XP acumulados</p>
                       </div>
                     );

@@ -24,6 +24,18 @@ function calcularConquistas(state: EstudoState) {
     .reduce((acc, a) => acc + a.duracao, 0) / 60;
   const streakDias = calcularStreakDias(state.calendario);
 
+  const estudados = Object.values(state.topicos).filter((t) => t.estudado).length;
+
+  const cadernoConcluidos = Object.values(state.topicos).reduce((acc, t) => {
+    return acc + (["A", "B", "C", "D"] as const).filter(
+      (g) => t.cadernos[g].acertos + t.cadernos[g].erros > 0
+    ).length;
+  }, 0);
+
+  const materiasConcluidas = MATERIAS.filter(
+    (m) => m.topicos.length > 0 && m.topicos.every((t) => state.topicos[topicoKey(m.nome, t)]?.estudado)
+  ).length;
+
   return {
     primeiro_passo: state.semanasOK >= 1,
     primeiro_mes: state.semanasOK >= 4,
@@ -31,12 +43,24 @@ function calcularConquistas(state: EstudoState) {
       atividades.reduce((acc, a) => acc + a.duracao, 0) >= 2000
     ),
     em_chamas: streakDias >= 3,
+    semana_fogo: streakDias >= 7,
+    incansavel: streakDias >= 30,
+    explorador: estudados >= 25,
+    construtor: estudados >= 100,
     meio_caminho: xp >= 500,
     expert: xp >= 1500,
     fiscal_elite: xp >= 26100,
     sniper_edital: state.semanasOK >= 10,
     estudante_modelo: totalHorasCalendario >= 100,
     sefaz_ready: totalHorasCalendario >= 200 && state.semanasOK >= 30,
+    primeira_vitoria: materiasConcluidas >= 1,
+    pluridisciplinar: materiasConcluidas >= 3,
+    generalista: materiasConcluidas >= 5,
+    dominio_total: materiasConcluidas >= MATERIAS.length,
+    aprendiz: state.cadernoErros.length >= 1,
+    revisor: state.cadernoErros.filter((e) => e.revisado).length >= 10,
+    praticante: cadernoConcluidos >= 50,
+    atirador: cadernoConcluidos >= 200,
   };
 }
 
