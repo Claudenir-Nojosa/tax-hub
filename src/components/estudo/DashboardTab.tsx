@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, HelpCircle, CalendarCheck, CheckSquare, Medal, BarChart3, TrendingUp, Flame, CheckCircle2 } from "lucide-react";
+import { BookOpen, HelpCircle, CalendarCheck, CheckSquare, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles } from "lucide-react";
 import {
   NIVEL_CONFIG,
   CONQUISTAS,
@@ -110,7 +110,9 @@ function MetaDiaria({ state }: { state: EstudoState }) {
         />
       </div>
       <div className="flex items-center justify-between mt-1.5 text-xs text-gray-400 dark:text-gray-500">
-        <span>{done ? "Meta atingida! 🎉" : `Faltam ${fmt(Math.max(0, metaMin - estudadoMin))}`}</span>
+        {done
+          ? <span className="flex items-center gap-1">Meta atingida! <Sparkles className="h-3.5 w-3.5 text-emerald-500" /></span>
+          : <span>{`Faltam ${fmt(Math.max(0, metaMin - estudadoMin))}`}</span>}
         <span>{perc}%</span>
       </div>
     </div>
