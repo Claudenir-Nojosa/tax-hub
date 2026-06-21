@@ -55,6 +55,7 @@ type SemanaEntry = { semana: string; horas: number };
 type HeatDay     = { date: string; horas: number; nivel: 0|1|2|3|4; isFuture: boolean; label: string };
 type BurnPoint   = { week: number; real?: number; projecao?: number };
 type XPPoint     = { date: string; xp: number };
+type PontoFraco  = { materia: string; topico: string; acertos: number; erros: number; taxaErro: number; corMateria: string };
 type BurnInfo    = {
   velocidadeSemanal: number;
   topicosRestantes: number;
@@ -254,6 +255,30 @@ function calcXPEvolution(
   });
 }
 
+function calcPontosFracos(topicos: Record<string, TopicoState>): PontoFraco[] {
+  const result: PontoFraco[] = [];
+  Object.entries(topicos).forEach(([key, ts]) => {
+    const sep = key.indexOf("||");
+    if (sep === -1) return;
+    const materia = key.slice(0, sep);
+    const topico  = key.slice(sep + 2);
+    let acertos = 0, erros = 0;
+    (["A", "B", "C", "D"] as const).forEach((g) => {
+      acertos += ts.cadernos[g].acertos;
+      erros   += ts.cadernos[g].erros;
+    });
+    const total = acertos + erros;
+    if (total === 0) return;
+    const idx = MATERIAS.findIndex((m) => m.nome === materia);
+    result.push({
+      materia, topico, acertos, erros,
+      taxaErro: Math.round((erros / total) * 100),
+      corMateria: MATERIA_COLORS[Math.max(0, idx) % MATERIA_COLORS.length],
+    });
+  });
+  return result.sort((a, b) => b.taxaErro - a.taxaErro);
+}
+
 // ─── Tooltip helpers ──────────────────────────────────────────────────────────
 type TTProps = {
   active?: boolean;
@@ -331,9 +356,10 @@ export default function RelatoriosTab({ state }: { state: EstudoState }) {
   const taxaAc = totalAcertos + totalErros > 0
     ? Math.round((totalAcertos / (totalAcertos + totalErros)) * 100) : null;
 
-  // ── Alta prioridade: burn-down e XP
-  const burndown  = calcBurndown(state.topicos, state.calendario, totTops, DATA_CONCURSO);
-  const xpEvo     = calcXPEvolution(state.calendario);
+  // ── Alta prioridade: burn-down, XP e pontos fracos
+  const burndown     = calcBurndown(state.topicos, state.calendario, totTops, DATA_CONCURSO);
+  const xpEvo        = calcXPEvolution(state.calendario);
+  const pontosFracos = calcPontosFracos(state.topicos);
 
   const weekLabel = (w: number) => {
     if (!burndown.startDate) return `S${w}`;
@@ -646,6 +672,59 @@ export default function RelatoriosTab({ state }: { state: EstudoState }) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════════
+          PONTOS FRACOS
+      ════════════════════════════════════════════════ */}
+      <div>
+        <SectionTitle icon={AlertTriangle} color="bg-rose-500">Pontos Fracos</SectionTitle>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mb-3 ml-7">
+          Tópicos rankeados por taxa de erro — somente tópicos com questões registradas nas cadernos
+        </p>
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+          {pontosFracos.length === 0 ? (
+            <EmptyState msg="Registre questões nas cadernos do Edital para identificar pontos fracos" />
+          ) : (
+            <div className="space-y-3">
+              {pontosFracos.slice(0, 15).map((p, i) => {
+                const barCor  = p.taxaErro >= 50 ? "bg-red-500" : p.taxaErro >= 30 ? "bg-amber-400" : "bg-emerald-500";
+                const txtCor  = p.taxaErro >= 50 ? "text-red-600 dark:text-red-400" : p.taxaErro >= 30 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400";
+                return (
+                  <div key={`${p.materia}||${p.topico}`} className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-gray-300 dark:text-gray-600 w-5 text-right flex-shrink-0">
+                      {i + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.corMateria }} />
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate max-w-[30%]">{p.materia}</span>
+                        <span className="text-[10px] text-gray-300 dark:text-gray-700">·</span>
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate">{p.topico}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                          <div className={`rounded-full h-1.5 transition-all ${barCor}`} style={{ width: `${p.taxaErro}%` }} />
+                        </div>
+                        <span className={`text-xs font-bold tabular-nums w-9 text-right flex-shrink-0 ${txtCor}`}>
+                          {p.taxaErro}%
+                        </span>
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0 w-16 text-right">
+                          {p.acertos}✓ {p.erros}✗
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {pontosFracos.length > 15 && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 text-center pt-1 border-t border-gray-100 dark:border-gray-700">
+                  + {pontosFracos.length - 15} tópicos com questões registradas
+                </p>
+              )}
+            </div>
           )}
         </div>
       </div>
