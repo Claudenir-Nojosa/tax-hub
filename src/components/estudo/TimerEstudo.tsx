@@ -304,16 +304,18 @@ export default function TimerEstudo({ onSalvar }: Props) {
   useEffect(() => {
     if (status === "idle") {
       document.title = "Tax Hub";
-      return;
+      return () => { document.title = "Tax Hub"; };
     }
-    const time = displayTime;
+    const time = pomodoroMode
+      ? formatCountdown(elapsed, pomodoroPhase)
+      : formatTime(elapsed);
     const label = pomodoroMode
       ? pomodoroPhase === "work" ? "⚡ Pomodoro" : "☕ Pausa"
       : status === "paused" ? "⏸ Timer"
       : "⏱ Timer";
     document.title = `${time} — ${label}`;
     return () => { document.title = "Tax Hub"; };
-  }, [status, displayTime, pomodoroMode, pomodoroPhase]);
+  }, [status, elapsed, pomodoroMode, pomodoroPhase]);
 
   const topicoOptions = materia
     ? MATERIAS.find((m) => m.nome === materia)?.topicos ?? []
