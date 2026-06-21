@@ -300,6 +300,21 @@ export default function TimerEstudo({ onSalvar }: Props) {
     return () => clearTimer();
   }, [clearTimer]);
 
+  // Atualiza o título da aba com o tempo atual
+  useEffect(() => {
+    if (status === "idle") {
+      document.title = "Tax Hub";
+      return;
+    }
+    const time = displayTime;
+    const label = pomodoroMode
+      ? pomodoroPhase === "work" ? "⚡ Pomodoro" : "☕ Pausa"
+      : status === "paused" ? "⏸ Timer"
+      : "⏱ Timer";
+    document.title = `${time} — ${label}`;
+    return () => { document.title = "Tax Hub"; };
+  }, [status, displayTime, pomodoroMode, pomodoroPhase]);
+
   const topicoOptions = materia
     ? MATERIAS.find((m) => m.nome === materia)?.topicos ?? []
     : [];
