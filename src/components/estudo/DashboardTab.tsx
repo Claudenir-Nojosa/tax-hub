@@ -233,7 +233,7 @@ export default function DashboardTab({ state }: Props) {
             <Medal className="h-5 w-5 text-amber-500" />
             Conquistas
           </h3>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 max-h-[340px] overflow-y-auto pr-1">
             {CONQUISTAS.map((c) => {
               const unlocked = conquistas[c.id as keyof typeof conquistas];
               const CIcon = c.icone;
