@@ -18,7 +18,7 @@ export default function ArtigoEquiparacaoHospitalar() {
       {/* Cover */}
       <div className="relative w-full h-[220px] rounded-2xl overflow-hidden mb-8 shadow-md">
         <Image
-          src="/articles/equiparacao.jpg-20260429102700"
+          src="/articles/equiparacao.jpg"
           alt="Equiparação Hospitalar"
           fill
           className="object-cover"

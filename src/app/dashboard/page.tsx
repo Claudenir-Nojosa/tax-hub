@@ -12,7 +12,7 @@ const artigos = [
       "A equiparação hospitalar permite que clínicas médicas sejam tributadas como hospitais, com redução significativa de IRPJ e CSLL. Entenda os critérios, como solicitar o benefício e como garantir segurança jurídica no processo.",
     data: "Jun. 2025",
     leitura: "10 min",
-    imagem: "/articles/equiparacao.jpg-20260429102700" as string | null,
+    imagem: "/articles/equiparacao.jpg" as string | null,
   },
   {
     href: "/dashboard/blog/res-cgsn-183-2025",
