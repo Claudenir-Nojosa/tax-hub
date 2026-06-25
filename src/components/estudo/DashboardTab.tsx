@@ -18,7 +18,7 @@ interface Props {
 }
 
 function calcularConquistas(state: EstudoState) {
-  const xp = calcularXP(state.topicos, state.calendario);
+  const xp = calcularXP(state.topicos, state.calendario, state.cartas);
   const totalHorasCalendario = Object.values(state.calendario)
     .flat()
     .reduce((acc, a) => acc + a.duracao, 0) / 60;
@@ -144,7 +144,7 @@ function MetaDiaria({ state }: { state: EstudoState }) {
 }
 
 export default function DashboardTab({ state }: Props) {
-  const xp = calcularXP(state.topicos, state.calendario);
+  const xp = calcularXP(state.topicos, state.calendario, state.cartas);
   const nivel = calcularNivel(xp);
   const nivelConfig = NIVEL_CONFIG[nivel];
   const proximoNivel = NIVEL_CONFIG[nivel + 1];

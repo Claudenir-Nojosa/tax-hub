@@ -11,6 +11,24 @@ import {
 export type { LucideIcon };
 export type Grupo = "A" | "B" | "C" | "D";
 export type AtividadeTipo = "estudo" | "questoes" | "recall" | "caderno_erros" | "bateria" | "materia_concluida";
+export type TipoCarta = "monstro" | "armadilha" | "tesouro";
+
+export interface Carta {
+  id: string;
+  tipo: TipoCarta;
+  materia?: string;
+  topico?: string;
+  frente: string;
+  verso: string;
+  gabarito?: "verdadeiro" | "falso"; // somente para armadilha
+  intervalo: number;      // dias até próxima revisão
+  facilidade: number;     // SM-2 easiness factor (padrão 2.5)
+  repeticoes: number;     // revisões bem-sucedidas consecutivas
+  proximaRevisao: string; // YYYY-MM-DD
+  criada: string;         // YYYY-MM-DD
+  acertos: number;
+  erros: number;
+}
 
 export interface TopicoCaderno {
   acertos: number;
@@ -65,6 +83,7 @@ export interface EstudoState {
   topicos: Record<string, TopicoState>;
   calendario: Record<string, AtividadeCalendario[]>;
   cadernoErros: ErroEntry[];
+  cartas: Carta[];
   configCiclo: EstudoConfigCiclo;
   streak: number;
   semanasOK: number;
@@ -170,7 +189,8 @@ export const ATIVIDADE_CONFIG: Record<AtividadeTipo, { label: string; icone: Luc
 
 export function calcularXP(
   topicos: Record<string, TopicoState>,
-  calendario?: Record<string, AtividadeCalendario[]>
+  calendario?: Record<string, AtividadeCalendario[]>,
+  cartas: Carta[] = []
 ): number {
   let xp = 0;
   Object.values(topicos).forEach((t) => {
@@ -181,11 +201,38 @@ export function calcularXP(
   });
   if (calendario) {
     Object.values(calendario).flat().forEach((a) => {
-      // +1 XP a cada 15 minutos, mínimo 1 XP por atividade
       xp += Math.max(1, Math.floor(a.duracao / 15));
     });
   }
+  xp += cartas.reduce((sum, c) => sum + c.acertos * 2, 0);
   return xp;
+}
+
+export function calcularProximaRevisao(carta: Carta, qualidade: 0 | 1 | 2 | 3 | 4 | 5): Carta {
+  let { intervalo, facilidade, repeticoes, acertos, erros } = carta;
+  if (qualidade < 3) {
+    repeticoes = 0;
+    intervalo = 1;
+    erros += 1;
+  } else {
+    if (repeticoes === 0) intervalo = 1;
+    else if (repeticoes === 1) intervalo = 6;
+    else intervalo = Math.round(intervalo * facilidade);
+    repeticoes += 1;
+    acertos += 1;
+  }
+  facilidade = Math.max(1.3, facilidade + (0.1 - (5 - qualidade) * (0.08 + (5 - qualidade) * 0.02)));
+  const next = new Date();
+  next.setDate(next.getDate() + intervalo);
+  return {
+    ...carta,
+    intervalo,
+    facilidade: Math.round(facilidade * 100) / 100,
+    repeticoes,
+    acertos,
+    erros,
+    proximaRevisao: next.toISOString().split("T")[0],
+  };
 }
 
 export function calcularNivel(xp: number): number {
@@ -845,6 +892,7 @@ export const DEFAULT_ESTUDO_STATE: EstudoState = {
   topicos: buildDefaultTopicos(),
   calendario: {},
   cadernoErros: [],
+  cartas: [],
   configCiclo: buildDefaultConfigCiclo(),
   streak: 0,
   semanasOK: 0,

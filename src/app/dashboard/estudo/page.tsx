@@ -15,8 +15,9 @@ import {
   type EstudoConfigCiclo,
   type AtividadeTipo,
   type Grupo,
+  type Carta,
 } from "@/lib/estudo-data";
-import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2 } from "lucide-react";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers } from "lucide-react";
 
 const DashboardTab = dynamic(() => import("@/components/estudo/DashboardTab"), { ssr: false });
 const EditalTab = dynamic(() => import("@/components/estudo/EditalTab"), { ssr: false });
@@ -24,11 +25,12 @@ const CicloTab = dynamic(() => import("@/components/estudo/CicloTab"), { ssr: fa
 const CalendarioTab = dynamic(() => import("@/components/estudo/CalendarioTab"), { ssr: false });
 const CadernoErrosTab = dynamic(() => import("@/components/estudo/CadernoErrosTab"), { ssr: false });
 const RelatoriosTab = dynamic(() => import("@/components/estudo/RelatoriosTab"), { ssr: false });
+const CartasTab = dynamic(() => import("@/components/estudo/CartasTab"), { ssr: false });
 const TimerEstudo = dynamic(() => import("@/components/estudo/TimerEstudo"), { ssr: false });
 
 const STORAGE_KEY = "taxhub_estudo_v1";
 
-type Tab = "dashboard" | "edital" | "ciclo" | "calendario" | "caderno" | "relatorios";
+type Tab = "dashboard" | "edital" | "ciclo" | "calendario" | "caderno" | "relatorios" | "cartas";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -37,12 +39,14 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "calendario", label: "Calendário", icon: CalendarDays },
   { id: "caderno", label: "Caderno de Erros", icon: NotebookPen },
   { id: "relatorios", label: "Relatórios", icon: BarChart2 },
+  { id: "cartas", label: "Cartas", icon: Layers },
 ];
 
 function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {
   return {
     ...DEFAULT_ESTUDO_STATE,
     ...parsed,
+    cartas: parsed.cartas ?? [],
     topicos: {
       ...DEFAULT_ESTUDO_STATE.topicos,
       ...(parsed.topicos ?? {}),
@@ -131,6 +135,10 @@ export default function EstudoPage() {
     setState((prev) => ({ ...prev, cadernoErros }));
   }, []);
 
+  const updateCartas = useCallback((cartas: Carta[]) => {
+    setState((prev) => ({ ...prev, cartas }));
+  }, []);
+
   const updateConfigCiclo = useCallback((configCiclo: EstudoConfigCiclo) => {
     setState((prev) => ({ ...prev, configCiclo }));
   }, []);
@@ -166,7 +174,7 @@ export default function EstudoPage() {
     }));
   }, []);
 
-  const xp = calcularXP(state.topicos, state.calendario);
+  const xp = calcularXP(state.topicos, state.calendario, state.cartas);
   const nivel = calcularNivel(xp);
   const nivelConfig = NIVEL_CONFIG[nivel];
 
@@ -269,6 +277,10 @@ export default function EstudoPage() {
           )}
 
           {activeTab === "relatorios" && <RelatoriosTab state={state} />}
+
+          {activeTab === "cartas" && (
+            <CartasTab cartas={state.cartas} onChange={updateCartas} />
+          )}
         </div>
       </div>
     </div>
