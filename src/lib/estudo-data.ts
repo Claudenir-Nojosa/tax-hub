@@ -21,6 +21,7 @@ export interface Carta {
   frente: string;
   verso: string;
   gabarito?: "verdadeiro" | "falso"; // somente para armadilha
+  erroId?: string;  // vincula ao ErroEntry de origem (caderno de erros)
   intervalo: number;      // dias até próxima revisão
   facilidade: number;     // SM-2 easiness factor (padrão 2.5)
   repeticoes: number;     // revisões bem-sucedidas consecutivas

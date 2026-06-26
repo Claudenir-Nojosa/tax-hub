@@ -279,7 +279,7 @@ export default function EstudoPage() {
           {activeTab === "relatorios" && <RelatoriosTab state={state} />}
 
           {activeTab === "cartas" && (
-            <CartasTab cartas={state.cartas} onChange={updateCartas} />
+            <CartasTab cartas={state.cartas} onChange={updateCartas} cadernoErros={state.cadernoErros} />
           )}
         </div>
       </div>

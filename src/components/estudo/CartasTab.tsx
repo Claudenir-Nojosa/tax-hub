@@ -4,10 +4,10 @@ import { useState, useMemo, useRef } from "react";
 import {
   Swords, Zap, Gem, Plus, Star, ChevronRight, ArrowLeft,
   Layers, Flame, CheckCircle2, Trophy, Eye,
-  XCircle, AlertTriangle, BookOpen, Upload, Loader2,
+  XCircle, AlertTriangle, BookOpen, Loader2, NotebookPen,
 } from "lucide-react";
 import {
-  type Carta, type TipoCarta, MATERIAS, calcularProximaRevisao,
+  type Carta, type TipoCarta, type ErroEntry, MATERIAS, calcularProximaRevisao,
 } from "@/lib/estudo-data";
 
 // ── Configuração visual por tipo ──────────────────────────────────────────────
@@ -114,6 +114,7 @@ function CartaVisual({ carta, onExcluir }: { carta: Carta; onExcluir: (id: strin
         <span>✗ {carta.erros}</span>
         {taxa !== null && <span className={taxa >= 70 ? "text-emerald-400" : taxa >= 50 ? "text-amber-400" : "text-red-400"}>{taxa}%</span>}
         <span className="ml-auto">#{carta.repeticoes} rev.</span>
+        {carta.erroId && <span className="text-white/20" title="Criada do Caderno de Erros">📓</span>}
       </div>
     </div>
   );
@@ -480,7 +481,6 @@ function BaralhoItem({
       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
         <BookOpen className="h-5 w-5 text-white" />
       </div>
-
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{displayName}</p>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -497,7 +497,6 @@ function BaralhoItem({
           )}
         </div>
       </div>
-
       <div className="flex items-center gap-2 flex-shrink-0">
         {dueCount > 0 && (
           <>
@@ -617,26 +616,187 @@ function ImportReviewScreen({
   );
 }
 
+// ── CadernoSelecaoScreen ──────────────────────────────────────────────────────
+function CadernoSelecaoScreen({
+  cadernoErros,
+  erroIdsComCarta,
+  selecionadas,
+  onToggle,
+  onToggleAll,
+  onGerar,
+  loading,
+  onCancelar,
+}: {
+  cadernoErros: ErroEntry[];
+  erroIdsComCarta: Set<string>;
+  selecionadas: Set<string>;
+  onToggle: (id: string) => void;
+  onToggleAll: (selecionar: boolean) => void;
+  onGerar: () => void;
+  loading: boolean;
+  onCancelar: () => void;
+}) {
+  const disponiveis = cadernoErros.filter((e) => !erroIdsComCarta.has(e.id));
+  const jaConvertidos = cadernoErros.filter((e) => erroIdsComCarta.has(e.id));
+  const todosDisponiveis = selecionadas.size === disponiveis.length && disponiveis.length > 0;
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 min-h-[500px] flex flex-col">
+      {/* Header */}
+      <div className="flex items-start gap-3 mb-4">
+        <button onClick={onCancelar} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors mt-0.5">
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <div className="flex-1">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Caderno de Erros → Cartas</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            {disponiveis.length} disponíve{disponiveis.length !== 1 ? "is" : "l"}
+            {jaConvertidos.length > 0 && ` · ${jaConvertidos.length} já com carta`}
+          </p>
+        </div>
+        {disponiveis.length > 0 && (
+          <button
+            onClick={() => onToggleAll(!todosDisponiveis)}
+            className="text-xs text-[#007cca] hover:underline font-medium flex-shrink-0"
+          >
+            {todosDisponiveis ? "Desmarcar" : "Marcar todos"}
+          </button>
+        )}
+      </div>
+
+      {/* Empty state */}
+      {cadernoErros.length === 0 && (
+        <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
+          <NotebookPen className="h-12 w-12 text-gray-200 dark:text-gray-700 mb-3" />
+          <p className="text-gray-400 dark:text-gray-500 text-sm font-medium">Caderno de Erros está vazio.</p>
+          <p className="text-gray-300 dark:text-gray-600 text-xs mt-1">Adicione erros na aba Caderno de Erros primeiro.</p>
+        </div>
+      )}
+
+      {/* All already converted */}
+      {cadernoErros.length > 0 && disponiveis.length === 0 && (
+        <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
+          <CheckCircle2 className="h-12 w-12 text-emerald-400 mb-3" />
+          <p className="text-gray-700 dark:text-gray-200 text-sm font-semibold">Todos os erros já possuem cartas!</p>
+          <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">Adicione novos erros ao caderno para gerar mais cartas.</p>
+        </div>
+      )}
+
+      {/* List */}
+      {disponiveis.length > 0 && (
+        <div className="flex-1 overflow-y-auto space-y-2 max-h-[400px] pr-1 mb-4">
+          {disponiveis.map((erro) => {
+            const sel = selecionadas.has(erro.id);
+            return (
+              <div
+                key={erro.id}
+                onClick={() => onToggle(erro.id)}
+                className={`flex gap-3 rounded-xl border-2 p-3.5 cursor-pointer transition-all ${
+                  sel
+                    ? "border-[#007cca] bg-blue-50 dark:bg-blue-950/20"
+                    : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600"
+                }`}
+              >
+                <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                  sel ? "border-[#007cca] bg-[#007cca]" : "border-gray-300 dark:border-gray-600"
+                }`}>
+                  {sel && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-xs font-semibold truncate ${sel ? "text-[#007cca] dark:text-blue-400" : "text-gray-600 dark:text-gray-400"}`}>
+                      {erro.materia}
+                      {erro.topico ? ` · ${erro.topico}` : ""}
+                    </span>
+                    <span className="text-[10px] text-gray-300 dark:text-gray-600 flex-shrink-0 ml-auto">{erro.data}</span>
+                  </div>
+                  <p className={`text-sm leading-snug line-clamp-2 ${sel ? "text-gray-800 dark:text-gray-100" : "text-gray-600 dark:text-gray-400"}`}>
+                    {erro.questao}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Already converted (grayed out) */}
+          {jaConvertidos.length > 0 && (
+            <>
+              <p className="text-[10px] font-bold text-gray-300 dark:text-gray-600 uppercase tracking-wider pt-2">Já possuem carta</p>
+              {jaConvertidos.map((erro) => (
+                <div
+                  key={erro.id}
+                  className="flex gap-3 rounded-xl border-2 border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 p-3.5 opacity-50 cursor-not-allowed"
+                >
+                  <div className="flex-shrink-0 mt-0.5 w-5 h-5 rounded border-2 border-emerald-400 bg-emerald-400 flex items-center justify-center">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-500 truncate">
+                      {erro.materia}{erro.topico ? ` · ${erro.topico}` : ""}
+                    </p>
+                    <p className="text-sm text-gray-400 dark:text-gray-500 line-clamp-1 mt-0.5">{erro.questao}</p>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Button */}
+      {disponiveis.length > 0 && (
+        <div className="pt-4 border-t border-gray-200 dark:border-gray-700 mt-auto">
+          <button
+            onClick={onGerar}
+            disabled={selecionadas.size === 0 || loading}
+            className="w-full bg-[#007cca] hover:bg-[#006bb0] disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {loading
+              ? "Gerando cartas com IA..."
+              : `Gerar Cartas com IA (${selecionadas.size} erro${selecionadas.size !== 1 ? "s" : ""})`}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── CartasTab principal ───────────────────────────────────────────────────────
 export default function CartasTab({
   cartas,
   onChange,
+  cadernoErros = [],
 }: {
   cartas: Carta[];
   onChange: (cartas: Carta[]) => void;
+  cadernoErros?: ErroEntry[];
 }) {
-  const [view, setView] = useState<"home" | "criar" | "revisar" | "importar">("home");
+  const [view, setView] = useState<"home" | "criar" | "revisar" | "importar" | "caderno">("home");
   const [baralhoAtivo, setBaralhoAtivo] = useState<string | null>(null);
   const [cartasParaRevisarAtual, setCartasParaRevisarAtual] = useState<Carta[]>([]);
   const [criarComMateria, setCriarComMateria] = useState<string | undefined>(undefined);
-  const [importLoading, setImportLoading] = useState(false);
   const [sugestoesImport, setSugestoesImport] = useState<Carta[]>([]);
   const [selecionadasImport, setSelecionadasImport] = useState<Set<string>>(new Set());
+  const [selecionadasCaderno, setSelecionadasCaderno] = useState<Set<string>>(new Set());
+  const [loadingCaderno, setLoadingCaderno] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const hj = hoje();
   const paraHoje = useMemo(() => cartas.filter((c) => c.proximaRevisao <= hj), [cartas, hj]);
   const xpCartas = cartas.reduce((sum, c) => sum + c.acertos * 2, 0);
+
+  // IDs de erros que já têm carta vinculada
+  const erroIdsComCarta = useMemo(
+    () => new Set(cartas.map((c) => c.erroId).filter(Boolean) as string[]),
+    [cartas]
+  );
+
+  // Erros disponíveis para importar (ainda sem carta)
+  const errosDisponiveis = useMemo(
+    () => cadernoErros.filter((e) => !erroIdsComCarta.has(e.id)),
+    [cadernoErros, erroIdsComCarta]
+  );
 
   const baralhos = useMemo(() => {
     const map = new Map<string, Carta[]>();
@@ -673,27 +833,34 @@ export default function CartasTab({
     setView("revisar");
   }
 
-  async function handleXMindImport(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    setImportLoading(true);
+  function abrirCaderno() {
+    // Pré-seleciona todos os erros disponíveis
+    setSelecionadasCaderno(new Set(errosDisponiveis.map((e) => e.id)));
+    setView("caderno");
+  }
+
+  async function handleGerarDoCaderno() {
+    const errosParaGerar = cadernoErros.filter((e) => selecionadasCaderno.has(e.id));
+    if (errosParaGerar.length === 0) return;
+    setLoadingCaderno(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/ai/cartas", { method: "POST", body: fd });
+      const res = await fetch("/api/ai/cartas/caderno", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ erros: errosParaGerar }),
+      });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(body.error ?? "Erro ao processar arquivo");
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "Erro ao gerar cartas");
       }
-      const { cartas: sugestoes } = await res.json() as { cartas: Carta[] };
+      const { cartas: sugestoes } = (await res.json()) as { cartas: Carta[] };
       setSugestoesImport(sugestoes);
       setSelecionadasImport(new Set(sugestoes.map((c) => c.id)));
       setView("importar");
     } catch (err) {
-      alert("Erro ao importar XMind: " + (err instanceof Error ? err.message : "Tente novamente"));
+      alert("Erro: " + (err instanceof Error ? err.message : "Tente novamente"));
     } finally {
-      setImportLoading(false);
+      setLoadingCaderno(false);
     }
   }
 
@@ -752,7 +919,7 @@ export default function CartasTab({
     );
   }
 
-  // ── View: importar ──
+  // ── View: importar (review IA suggestions) ──
   if (view === "importar") {
     return (
       <ImportReviewScreen
@@ -770,33 +937,51 @@ export default function CartasTab({
           setSelecionadasImport(selecionar ? new Set(sugestoesImport.map((c) => c.id)) : new Set())
         }
         onSalvar={salvarImport}
+        onCancelar={() => setView("caderno")}
+      />
+    );
+  }
+
+  // ── View: caderno (seleção de erros) ──
+  if (view === "caderno") {
+    return (
+      <CadernoSelecaoScreen
+        cadernoErros={cadernoErros}
+        erroIdsComCarta={erroIdsComCarta}
+        selecionadas={selecionadasCaderno}
+        onToggle={(id) =>
+          setSelecionadasCaderno((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          })
+        }
+        onToggleAll={(selecionar) =>
+          setSelecionadasCaderno(
+            selecionar ? new Set(errosDisponiveis.map((e) => e.id)) : new Set()
+          )
+        }
+        onGerar={handleGerarDoCaderno}
+        loading={loadingCaderno}
         onCancelar={() => setView("home")}
       />
     );
   }
 
-  // ── View: home ────────────────────────────────────────────────────────────
+  // ── View: home ──────────────────────────────────────────────────────────────
   const baralhoAtivoDisplay = baralhoAtivo === "__geral__" ? "Geral (sem matéria)" : baralhoAtivo;
 
   return (
     <div className="space-y-5">
-      {/* Hidden file input */}
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".xmind"
-        className="hidden"
-        onChange={handleXMindImport}
-      />
+      {/* Hidden file input (mantido para uso futuro) */}
+      <input ref={fileRef} type="file" accept=".xmind" className="hidden" />
 
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           {baralhoAtivo && (
-            <button
-              onClick={() => setBaralhoAtivo(null)}
-              className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-            >
+            <button onClick={() => setBaralhoAtivo(null)} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
@@ -805,6 +990,21 @@ export default function CartasTab({
           </h2>
         </div>
         <div className="flex items-center gap-2">
+          {/* Botão Caderno de Erros → Cartas */}
+          {!baralhoAtivo && cadernoErros.length > 0 && (
+            <button
+              onClick={abrirCaderno}
+              className="relative flex items-center gap-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-xl text-sm font-semibold transition-all"
+            >
+              <NotebookPen className="h-4 w-4" />
+              <span className="hidden sm:inline">Do Caderno</span>
+              {errosDisponiveis.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-orange-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {errosDisponiveis.length > 9 ? "9+" : errosDisponiveis.length}
+                </span>
+              )}
+            </button>
+          )}
           <button
             onClick={() => {
               setCriarComMateria(baralhoAtivo && baralhoAtivo !== "__geral__" ? baralhoAtivo : undefined);
@@ -858,6 +1058,25 @@ export default function CartasTab({
             </div>
           )}
 
+          {/* CTA caderno de erros */}
+          {errosDisponiveis.length > 0 && (
+            <button
+              onClick={abrirCaderno}
+              className="w-full flex items-center gap-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800 rounded-xl px-4 py-3.5 hover:bg-rose-100 dark:hover:bg-rose-950/30 transition-all text-left"
+            >
+              <div className="w-9 h-9 rounded-lg bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center flex-shrink-0">
+                <NotebookPen className="h-4.5 w-4.5 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">
+                  {errosDisponiveis.length} erro{errosDisponiveis.length !== 1 ? "s" : ""} do Caderno sem carta
+                </p>
+                <p className="text-xs text-rose-500 dark:text-rose-400 mt-0.5">Clique para gerar cartas com IA a partir dos seus erros</p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-rose-400 flex-shrink-0" />
+            </button>
+          )}
+
           {/* Baralhos */}
           {cartas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -893,7 +1112,6 @@ export default function CartasTab({
       {/* ── Detalhe do Baralho ── */}
       {baralhoAtivo && (
         <>
-          {/* CTA revisar este baralho */}
           {paraHojeBaralho.length > 0 && (
             <div className="bg-gradient-to-r from-amber-600 to-orange-500 rounded-2xl p-4 flex items-center justify-between shadow-xl shadow-orange-500/20">
               <div className="text-white font-bold flex items-center gap-2">
@@ -909,7 +1127,6 @@ export default function CartasTab({
             </div>
           )}
 
-          {/* Tipos no baralho */}
           {cartasBaralho.length > 0 && (
             <div className="grid grid-cols-3 gap-3">
               {(["monstro", "armadilha", "tesouro"] as TipoCarta[]).map((t) => {
@@ -931,7 +1148,6 @@ export default function CartasTab({
             </div>
           )}
 
-          {/* Grid de cartas */}
           {cartasBaralho.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Layers className="h-14 w-14 text-gray-200 dark:text-gray-700 mb-3" />
