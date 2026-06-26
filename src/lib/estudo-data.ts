@@ -16,6 +16,7 @@ export type TipoCarta = "monstro" | "armadilha" | "tesouro" | "boss";
 export interface Carta {
   id: string;
   tipo: TipoCarta;
+  tipoOriginal?: TipoCarta; // tipo antes de escalar para Boss
   materia?: string;
   topico?: string;
   frente: string;

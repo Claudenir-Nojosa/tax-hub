@@ -182,9 +182,13 @@ function SessaoRevisao({
 
   function avaliar(qualidade: 0 | 1 | 2 | 3 | 4 | 5) {
     let atualizada = calcularProximaRevisao(carta, qualidade);
-    // Escalação automática: 3+ erros acumulados vira Boss
+    // Escalação: 3+ erros acumulados → Boss (salva tipo original)
     if (atualizada.erros >= 3 && atualizada.tipo !== "boss") {
-      atualizada = { ...atualizada, tipo: "boss" };
+      atualizada = { ...atualizada, tipoOriginal: atualizada.tipo, tipo: "boss" };
+    }
+    // Regressão: Boss com 3 acertos consecutivos → volta ao tipo original
+    if (atualizada.tipo === "boss" && atualizada.repeticoes >= 3 && atualizada.tipoOriginal) {
+      atualizada = { ...atualizada, tipo: atualizada.tipoOriginal, tipoOriginal: undefined, erros: 0 };
     }
     const novoResultado = [...resultado, atualizada];
     const xpExtra = qualidade >= 3 ? 2 : 0;
