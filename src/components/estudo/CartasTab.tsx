@@ -181,7 +181,11 @@ function SessaoRevisao({
   const carta = fila[idx];
 
   function avaliar(qualidade: 0 | 1 | 2 | 3 | 4 | 5) {
-    const atualizada = calcularProximaRevisao(carta, qualidade);
+    let atualizada = calcularProximaRevisao(carta, qualidade);
+    // Escalação automática: 3+ erros acumulados vira Boss
+    if (atualizada.erros >= 3 && atualizada.tipo !== "boss") {
+      atualizada = { ...atualizada, tipo: "boss" };
+    }
     const novoResultado = [...resultado, atualizada];
     const xpExtra = qualidade >= 3 ? 2 : 0;
     const novoXP = xpGanho + xpExtra;
