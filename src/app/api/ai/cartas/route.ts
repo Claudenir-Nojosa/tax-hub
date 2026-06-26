@@ -76,11 +76,11 @@ Analise este conteúdo extraído de um mapa mental XMind e gere flashcards para 
 
 CONTEÚDO DO MAPA MENTAL:
 \`\`\`
-${conteudo.slice(0, 6000)}
+${conteudo.slice(0, 20000)}
 \`\`\`
 
 REGRAS:
-1. Gere entre 8 e 20 flashcards, cobrindo os conceitos mais importantes
+1. Gere um flashcard para CADA conceito/tópico relevante do mapa. Não existe limite máximo — cubra tudo que tiver no conteúdo. Para mapas grandes, gere 40-80 cards.
 2. Use os 3 tipos de carta de forma equilibrada:
    - "monstro": pergunta dissertativa aberta (ex: "Explique a diferença entre isenção e imunidade")
    - "armadilha": afirmação para marcar Verdadeiro ou Falso — inclua o campo "gabarito": "verdadeiro" ou "falso"
@@ -105,7 +105,7 @@ Retorne APENAS um JSON válido com esta estrutura:
 
     const completion = await client.chat.completions.create({
       model: "gpt-4o",
-      max_tokens: 4096,
+      max_tokens: 16384,
       temperature: 0.3,
       response_format: { type: "json_object" },
       messages: [
