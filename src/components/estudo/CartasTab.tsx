@@ -22,6 +22,7 @@ const CARTA_CONFIG = {
     sombra: "shadow-blue-500/20",
     badge: "bg-blue-600",
     glow: "shadow-blue-500/40",
+    imagem: "/icons/monstro 1.png",
   },
   armadilha: {
     nome: "Armadilha",
@@ -33,6 +34,7 @@ const CARTA_CONFIG = {
     sombra: "shadow-red-500/20",
     badge: "bg-red-600",
     glow: "shadow-red-500/40",
+    imagem: "/icons/armadilha.png",
   },
   tesouro: {
     nome: "Tesouro",
@@ -44,6 +46,19 @@ const CARTA_CONFIG = {
     sombra: "shadow-amber-400/20",
     badge: "bg-amber-500",
     glow: "shadow-amber-400/40",
+    imagem: "/icons/tesouro.png",
+  },
+  boss: {
+    nome: "Boss",
+    texto: "CARTA BOSS",
+    descricao: "Questão desafiadora com múltiplos conceitos envolvidos",
+    icone: Trophy,
+    cor: "from-purple-900 to-violet-950",
+    borda: "border-purple-500",
+    sombra: "shadow-purple-500/20",
+    badge: "bg-purple-700",
+    glow: "shadow-purple-500/40",
+    imagem: "/icons/monstro boss.png",
   },
 } as const;
 
@@ -89,32 +104,55 @@ function CartaVisual({ carta, onExcluir }: { carta: Carta; onExcluir: (id: strin
     : null;
 
   return (
-    <div className={`relative rounded-2xl border-2 ${cfg.borda} bg-gradient-to-b ${cfg.cor} shadow-xl ${cfg.sombra} p-4 flex flex-col gap-3 group`}>
+    <div className={`relative rounded-2xl border-2 ${cfg.borda} bg-gradient-to-b ${cfg.cor} shadow-xl ${cfg.sombra} flex flex-col group overflow-hidden`}>
+      {/* Botão excluir */}
       <button
         onClick={() => onExcluir(carta.id)}
-        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-red-400 text-xs font-bold px-1"
+        className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-red-400 text-xs font-bold px-1"
         title="Excluir carta"
       >
         ✕
       </button>
-      <div className={`inline-flex items-center gap-1 ${cfg.badge} rounded-full px-2 py-0.5 w-fit`}>
-        <Icon className="h-3 w-3 text-white" />
-        <span className="text-[10px] font-bold text-white tracking-wider">{cfg.texto}</span>
+
+      {/* Área da imagem */}
+      <div className="flex items-center justify-center pt-5 pb-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={cfg.imagem}
+          alt={cfg.nome}
+          className="h-24 w-24 object-contain drop-shadow-2xl"
+        />
       </div>
-      <p className="text-sm text-white/90 leading-snug line-clamp-3 flex-1">{carta.frente}</p>
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] text-white/40 truncate max-w-[55%]">{carta.materia ?? "Geral"}</span>
-        <span className={`text-[10px] font-bold flex items-center gap-0.5 ${due.urgente ? "text-amber-400" : "text-white/40"}`}>
-          {due.urgente && <Flame className="h-2.5 w-2.5" />}
-          {due.texto}
-        </span>
+
+      {/* Badge */}
+      <div className="px-4 pb-2">
+        <div className={`inline-flex items-center gap-1 ${cfg.badge} rounded-full px-2 py-0.5`}>
+          <Icon className="h-3 w-3 text-white" />
+          <span className="text-[10px] font-bold text-white tracking-wider">{cfg.texto}</span>
+        </div>
       </div>
-      <div className="flex items-center gap-3 text-[10px] text-white/30 border-t border-white/10 pt-2">
-        <span>✓ {carta.acertos}</span>
-        <span>✗ {carta.erros}</span>
-        {taxa !== null && <span className={taxa >= 70 ? "text-emerald-400" : taxa >= 50 ? "text-amber-400" : "text-red-400"}>{taxa}%</span>}
-        <span className="ml-auto">#{carta.repeticoes} rev.</span>
-        {carta.erroId && <span className="text-white/20" title="Criada do Caderno de Erros">📓</span>}
+
+      {/* Texto da carta */}
+      <div className="px-4 pb-3 flex-1">
+        <p className="text-sm text-white/90 leading-snug line-clamp-3">{carta.frente}</p>
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 pb-4 flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-white/40 truncate max-w-[55%]">{carta.materia ?? "Geral"}</span>
+          <span className={`text-[10px] font-bold flex items-center gap-0.5 ${due.urgente ? "text-amber-400" : "text-white/40"}`}>
+            {due.urgente && <Flame className="h-2.5 w-2.5" />}
+            {due.texto}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 text-[10px] text-white/30 border-t border-white/10 pt-1.5">
+          <span>✓ {carta.acertos}</span>
+          <span>✗ {carta.erros}</span>
+          {taxa !== null && <span className={taxa >= 70 ? "text-emerald-400" : taxa >= 50 ? "text-amber-400" : "text-red-400"}>{taxa}%</span>}
+          <span className="ml-auto">#{carta.repeticoes} rev.</span>
+          {carta.erroId && <span className="text-white/20" title="Criada do Caderno de Erros">📓</span>}
+        </div>
       </div>
     </div>
   );
@@ -204,15 +242,27 @@ function SessaoRevisao({
         </div>
       </div>
 
-      <div className={`relative w-full max-w-lg rounded-2xl border-2 ${cfg.borda} bg-gradient-to-b ${cfg.cor} shadow-2xl ${cfg.glow} p-6 mb-6 min-h-[280px] flex flex-col`}>
+      <div className={`relative w-full max-w-lg rounded-2xl border-2 ${cfg.borda} bg-gradient-to-b ${cfg.cor} shadow-2xl ${cfg.glow} p-6 mb-6 min-h-[320px] flex flex-col overflow-hidden`}>
         {xpFlash && (
           <div className="absolute top-3 right-4 text-amber-400 font-bold text-xl pointer-events-none animate-bounce">
             +2 XP ⚡
           </div>
         )}
+
+        {/* Badge */}
         <div className={`inline-flex items-center gap-1.5 ${cfg.badge} rounded-full px-3 py-1 mb-4 w-fit`}>
           <Icon className="h-3.5 w-3.5 text-white" />
           <span className="text-xs font-bold text-white tracking-wider">{cfg.texto}</span>
+        </div>
+
+        {/* Imagem da carta */}
+        <div className="flex items-center justify-center mb-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={cfg.imagem}
+            alt={cfg.nome}
+            className="h-28 w-28 object-contain drop-shadow-2xl"
+          />
         </div>
 
         {!flipped ? (
@@ -314,21 +364,25 @@ function FormCriarCarta({
   const frenteLabel =
     tipo === "monstro" ? "Pergunta dissertativa" :
     tipo === "armadilha" ? "Afirmação (Verdadeiro ou Falso?)" :
+    tipo === "boss" ? "Questão desafiadora (múltiplos conceitos)" :
     "Texto com lacuna (use ___ para indicar a lacuna)";
 
   const versoLabel =
     tipo === "monstro" ? "Resposta / Gabarito" :
     tipo === "armadilha" ? "Explicação da resposta" :
+    tipo === "boss" ? "Resolução completa e fundamentação" :
     "Texto completo (preenche a lacuna)";
 
   const frentePlaceholder =
     tipo === "monstro" ? "Ex: Explique a diferença entre isenção e imunidade tributária." :
     tipo === "armadilha" ? "Ex: A isenção impede o aproveitamento do crédito de ICMS." :
+    tipo === "boss" ? "Ex: Analise o tratamento do ICMS diferencial de alíquota nas operações interestaduais com base na EC 87/2015 e a responsabilidade do destinatário." :
     "Ex: O lançamento por homologação ocorre quando ___.";
 
   const versoPlaceholder =
     tipo === "monstro" ? "Ex: A isenção é a dispensa legal do pagamento do tributo devido, enquanto a imunidade é uma vedação constitucional..." :
     tipo === "armadilha" ? "Ex: A afirmação é FALSA. O STF firmou que a isenção não gera direito ao crédito de ICMS porque..." :
+    tipo === "boss" ? "Ex: A EC 87/2015 estendeu o DIFAL para operações com consumidor final não contribuinte, criando responsabilidade compartilhada entre estados..." :
     "Ex: O lançamento por homologação ocorre quando a legislação atribui ao sujeito passivo o dever de antecipar o pagamento sem prévio exame da autoridade administrativa.";
 
   return (
@@ -342,8 +396,8 @@ function FormCriarCarta({
 
       <div className="mb-6">
         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-3">Tipo de Carta</label>
-        <div className="grid grid-cols-3 gap-3">
-          {(["monstro", "armadilha", "tesouro"] as TipoCarta[]).map((t) => {
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {(["monstro", "armadilha", "tesouro", "boss"] as TipoCarta[]).map((t) => {
             const cfg = CARTA_CONFIG[t];
             const Icon = cfg.icone;
             const sel = tipo === t;
@@ -472,6 +526,7 @@ function BaralhoItem({
   const monstro = cartas.filter((c) => c.tipo === "monstro").length;
   const armadilha = cartas.filter((c) => c.tipo === "armadilha").length;
   const tesouro = cartas.filter((c) => c.tipo === "tesouro").length;
+  const boss = cartas.filter((c) => c.tipo === "boss").length;
 
   return (
     <div
@@ -488,6 +543,7 @@ function BaralhoItem({
           {monstro > 0 && <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-full font-medium">{monstro}M</span>}
           {armadilha > 0 && <span className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded-full font-medium">{armadilha}A</span>}
           {tesouro > 0 && <span className="text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full font-medium">{tesouro}T</span>}
+          {boss > 0 && <span className="text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded-full font-medium">{boss}B</span>}
           {taxa !== null && (
             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
               taxa >= 70 ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" :
@@ -1128,8 +1184,8 @@ export default function CartasTab({
           )}
 
           {cartasBaralho.length > 0 && (
-            <div className="grid grid-cols-3 gap-3">
-              {(["monstro", "armadilha", "tesouro"] as TipoCarta[]).map((t) => {
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {(["monstro", "armadilha", "tesouro", "boss"] as TipoCarta[]).map((t) => {
                 const cfg = CARTA_CONFIG[t];
                 const Icon = cfg.icone;
                 const count = cartasBaralho.filter((c) => c.tipo === t).length;

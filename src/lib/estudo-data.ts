@@ -11,7 +11,7 @@ import {
 export type { LucideIcon };
 export type Grupo = "A" | "B" | "C" | "D";
 export type AtividadeTipo = "estudo" | "questoes" | "recall" | "caderno_erros" | "bateria" | "cartas" | "materia_concluida";
-export type TipoCarta = "monstro" | "armadilha" | "tesouro";
+export type TipoCarta = "monstro" | "armadilha" | "tesouro" | "boss";
 
 export interface Carta {
   id: string;
