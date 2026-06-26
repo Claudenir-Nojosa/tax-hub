@@ -5,12 +5,12 @@ import {
   Sparkles, Sun, Sunrise, TrendingUp, Mountain, Swords, BadgeCheck, Medal,
   Diamond, Infinity as InfinityIcon, Crown,
   CalendarCheck, Dumbbell, GraduationCap, CheckCircle2,
-  HelpCircle, RotateCcw, NotebookPen, ListChecks,
+  HelpCircle, RotateCcw, NotebookPen, ListChecks, Layers,
 } from "lucide-react";
 
 export type { LucideIcon };
 export type Grupo = "A" | "B" | "C" | "D";
-export type AtividadeTipo = "estudo" | "questoes" | "recall" | "caderno_erros" | "bateria" | "materia_concluida";
+export type AtividadeTipo = "estudo" | "questoes" | "recall" | "caderno_erros" | "bateria" | "cartas" | "materia_concluida";
 export type TipoCarta = "monstro" | "armadilha" | "tesouro";
 
 export interface Carta {
@@ -184,6 +184,7 @@ export const ATIVIDADE_CONFIG: Record<AtividadeTipo, { label: string; icone: Luc
   recall:            { label: "Recall",              icone: RotateCcw,     cor: "bg-amber-100 text-amber-700 dark:bg-amber-400/20 dark:text-amber-200",      corDot: "bg-amber-500"   },
   caderno_erros:     { label: "Caderno de Erros",    icone: NotebookPen,   cor: "bg-red-100 text-red-700 dark:bg-red-400/20 dark:text-red-200",              corDot: "bg-red-500"     },
   bateria:           { label: "Bateria de Questões", icone: ListChecks,    cor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-200", corDot: "bg-emerald-500" },
+  cartas:            { label: "Revisão de Cartas",   icone: Layers,        cor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-400/20 dark:text-indigo-200",     corDot: "bg-indigo-500"  },
   materia_concluida: { label: "Matéria Concluída",   icone: CheckCircle2,  cor: "bg-teal-100 text-teal-700 dark:bg-teal-400/20 dark:text-teal-200",          corDot: "bg-teal-500"    },
 };
 

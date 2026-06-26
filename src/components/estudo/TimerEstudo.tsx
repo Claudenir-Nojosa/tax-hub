@@ -483,7 +483,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                   <div>
                     <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Tipo de atividade</label>
                     <div className="grid grid-cols-2 gap-1">
-                      {(["estudo", "questoes", "recall", "caderno_erros", "bateria"] as AtividadeTipo[]).map((t) => (
+                      {(["estudo", "questoes", "recall", "caderno_erros", "bateria", "cartas"] as AtividadeTipo[]).map((t) => (
                         <button
                           key={t}
                           type="button"

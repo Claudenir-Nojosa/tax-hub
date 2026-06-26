@@ -33,6 +33,7 @@ const TIPO_CONFIG: Record<AtividadeTipo, { nome: string; cor: string }> = {
   recall:            { nome: "Recall",             cor: "#10b981" },
   caderno_erros:     { nome: "Caderno de Erros",  cor: "#f59e0b" },
   bateria:           { nome: "Bateria de Provas",  cor: "#ef4444" },
+  cartas:            { nome: "Revisão de Cartas",  cor: "#6366f1" },
   materia_concluida: { nome: "Matéria Concluída", cor: "#06b6d4" },
 };
 

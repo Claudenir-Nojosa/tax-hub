@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import {
   Swords, Zap, Gem, Plus, Star, ChevronRight, ArrowLeft,
   Layers, Flame, CheckCircle2, Trophy, Eye,
+  XCircle, AlertTriangle,
 } from "lucide-react";
 import {
   type Carta, type TipoCarta, MATERIAS, calcularProximaRevisao,
@@ -273,18 +274,18 @@ function SessaoRevisao({
         <div className="grid grid-cols-4 gap-2 w-full max-w-lg">
           {(
             [
-              { label: "Errei", q: 0 as const, cor: "bg-red-600 hover:bg-red-500", emoji: "😭" },
-              { label: "Difícil", q: 2 as const, cor: "bg-orange-500 hover:bg-orange-400", emoji: "😓" },
-              { label: "Lembrei", q: 4 as const, cor: "bg-blue-600 hover:bg-blue-500", emoji: "🙂" },
-              { label: "Fácil", q: 5 as const, cor: "bg-emerald-600 hover:bg-emerald-500", emoji: "🤩" },
+              { label: "Errei",   q: 0 as const, cor: "bg-red-600 hover:bg-red-500",         Icon: XCircle },
+              { label: "Difícil", q: 2 as const, cor: "bg-orange-500 hover:bg-orange-400",   Icon: AlertTriangle },
+              { label: "Lembrei", q: 4 as const, cor: "bg-blue-600 hover:bg-blue-500",       Icon: CheckCircle2 },
+              { label: "Fácil",   q: 5 as const, cor: "bg-emerald-600 hover:bg-emerald-500", Icon: Star },
             ] as const
-          ).map(({ label, q, cor, emoji }) => (
+          ).map(({ label, q, cor, Icon }) => (
             <button
               key={label}
               onClick={() => avaliar(q)}
               className={`${cor} text-white py-3 rounded-xl font-semibold text-sm flex flex-col items-center gap-1 transition-all active:scale-95 shadow-md`}
             >
-              <span className="text-base">{emoji}</span>
+              <Icon className="h-5 w-5" />
               <span>{label}</span>
             </button>
           ))}

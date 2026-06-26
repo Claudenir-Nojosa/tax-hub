@@ -17,6 +17,7 @@ const CAL_COR: Record<AtividadeTipo, string> = {
   recall:            "bg-amber-100  text-amber-800  dark:bg-amber-400/20  dark:text-amber-200",
   caderno_erros:     "bg-red-100    text-red-800    dark:bg-red-400/20    dark:text-red-200",
   bateria:           "bg-emerald-100 text-emerald-800 dark:bg-emerald-400/20 dark:text-emerald-200",
+  cartas:            "bg-indigo-100  text-indigo-800  dark:bg-indigo-400/20  dark:text-indigo-200",
   materia_concluida: "bg-teal-100   text-teal-800   dark:bg-teal-400/20   dark:text-teal-200",
 };
 
