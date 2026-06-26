@@ -806,14 +806,6 @@ export default function CartasTab({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => fileRef.current?.click()}
-            disabled={importLoading}
-            className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-xl text-sm font-semibold transition-all"
-          >
-            {importLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            <span className="hidden sm:inline">{importLoading ? "Processando..." : "Importar XMind"}</span>
-          </button>
-          <button
             onClick={() => {
               setCriarComMateria(baralhoAtivo && baralhoAtivo !== "__geral__" ? baralhoAtivo : undefined);
               setView("criar");
@@ -871,21 +863,13 @@ export default function CartasTab({
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Layers className="h-14 w-14 text-gray-200 dark:text-gray-700 mb-3" />
               <p className="text-gray-400 dark:text-gray-500 text-sm font-medium mb-1">Nenhum baralho criado ainda.</p>
-              <p className="text-gray-300 dark:text-gray-600 text-xs mb-6">Crie cartas manualmente ou importe um mapa mental XMind.</p>
-              <div className="flex gap-3 flex-wrap justify-center">
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                >
-                  <Upload className="h-4 w-4" /> Importar XMind
-                </button>
-                <button
-                  onClick={() => { setCriarComMateria(undefined); setView("criar"); }}
-                  className="flex items-center gap-2 bg-[#007cca] text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md"
-                >
-                  <Plus className="h-4 w-4" /> Criar primeira carta
-                </button>
-              </div>
+              <p className="text-gray-300 dark:text-gray-600 text-xs mb-6">Crie cartas para começar a revisão espaçada inteligente.</p>
+              <button
+                onClick={() => { setCriarComMateria(undefined); setView("criar"); }}
+                className="flex items-center gap-2 bg-[#007cca] text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md"
+              >
+                <Plus className="h-4 w-4" /> Criar primeira carta
+              </button>
             </div>
           ) : (
             <div className="space-y-2">
