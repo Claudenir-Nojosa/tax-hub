@@ -3,6 +3,8 @@ import OpenAI from "openai";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+const BATCH_SIZE = 15;
+
 interface ErroPayload {
   id: string;
   materia: string;
@@ -10,22 +12,15 @@ interface ErroPayload {
   questao: string;
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const { erros } = (await request.json()) as { erros: ErroPayload[] };
+function buildPrompt(lote: ErroPayload[]): string {
+  const conteudo = lote
+    .map(
+      (e, i) =>
+        `[${i + 1}] erroId="${e.id}"\nMatéria: ${e.materia} | Tópico: ${e.topico}\nQuestão/Anotação: ${e.questao}`
+    )
+    .join("\n\n---\n\n");
 
-    if (!erros || erros.length === 0) {
-      return NextResponse.json({ error: "Nenhum erro enviado" }, { status: 400 });
-    }
-
-    const conteudo = erros
-      .map(
-        (e, i) =>
-          `[${i + 1}] erroId="${e.id}"\nMatéria: ${e.materia} | Tópico: ${e.topico}\nQuestão/Anotação: ${e.questao}`
-      )
-      .join("\n\n---\n\n");
-
-    const prompt = `Você é especialista em criação de flashcards para concursos públicos brasileiros (área tributária/fiscal — SEFAZ-CE).
+  return `Você é especialista em criação de flashcards para concursos públicos brasileiros (área tributária/fiscal — SEFAZ-CE).
 
 O estudante registrou os seguintes erros no Caderno de Erros. Para cada erro, crie 1 a 3 flashcards que ajudem a fixar exatamente o conceito que causou o erro.
 
@@ -57,27 +52,48 @@ Retorne APENAS um JSON válido:
     }
   ]
 }`;
+}
 
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o",
-      max_tokens: 8192,
-      temperature: 0.3,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content:
-            "Você é especialista em criação de flashcards para concursos públicos. Responda SEMPRE em JSON válido conforme a estrutura solicitada. O campo erroId deve copiar EXATAMENTE o id fornecido.",
-        },
-        { role: "user", content: prompt },
-      ],
-    });
+async function processarLote(lote: ErroPayload[]): Promise<Record<string, unknown>[]> {
+  const completion = await client.chat.completions.create({
+    model: "gpt-4o",
+    max_tokens: 8192,
+    temperature: 0.3,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content:
+          "Você é especialista em criação de flashcards para concursos públicos. Responda SEMPRE em JSON válido conforme a estrutura solicitada. O campo erroId deve copiar EXATAMENTE o id fornecido.",
+      },
+      { role: "user", content: buildPrompt(lote) },
+    ],
+  });
 
-    const text = completion.choices[0].message.content ?? "{}";
-    const parsed = JSON.parse(text) as { cartas?: Record<string, unknown>[] };
+  const text = completion.choices[0].message.content ?? "{}";
+  const parsed = JSON.parse(text) as { cartas?: Record<string, unknown>[] };
+  return parsed.cartas ?? [];
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { erros } = (await request.json()) as { erros: ErroPayload[] };
+
+    if (!erros || erros.length === 0) {
+      return NextResponse.json({ error: "Nenhum erro enviado" }, { status: 400 });
+    }
+
+    // Divide em lotes de BATCH_SIZE para não exceder max_tokens
+    const lotes: ErroPayload[][] = [];
+    for (let i = 0; i < erros.length; i += BATCH_SIZE) {
+      lotes.push(erros.slice(i, i + BATCH_SIZE));
+    }
+
+    const resultados = await Promise.all(lotes.map(processarLote));
+    const todasCartas = resultados.flat();
 
     const today = new Date().toISOString().split("T")[0];
-    const cartas = (parsed.cartas ?? []).map((c, i) => ({
+    const cartas = todasCartas.map((c, i) => ({
       id: `caderno_${Date.now()}_${i}_${Math.random().toString(36).slice(2)}`,
       tipo: c.tipo ?? "monstro",
       materia: c.materia ?? undefined,
