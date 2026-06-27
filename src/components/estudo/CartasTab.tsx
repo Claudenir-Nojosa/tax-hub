@@ -4,7 +4,7 @@ import { useState, useMemo, useRef } from "react";
 import {
   Swords, Zap, Gem, Plus, Star, ChevronRight, ArrowLeft,
   Layers, Flame, CheckCircle2, Trophy, Eye,
-  XCircle, AlertTriangle, BookOpen, Loader2, NotebookPen,
+  XCircle, AlertTriangle, BookOpen, Loader2, NotebookPen, Pencil,
 } from "lucide-react";
 import {
   type Carta, type TipoCarta, type ErroEntry, MATERIAS, calcularProximaRevisao,
@@ -95,7 +95,7 @@ function labelDue(carta: Carta): { texto: string; urgente: boolean } {
 }
 
 // ── CartaVisual ───────────────────────────────────────────────────────────────
-function CartaVisual({ carta, onExcluir }: { carta: Carta; onExcluir: (id: string) => void }) {
+function CartaVisual({ carta, onExcluir, onEditar }: { carta: Carta; onExcluir: (id: string) => void; onEditar: (carta: Carta) => void }) {
   const cfg = CARTA_CONFIG[carta.tipo];
   const Icon = cfg.icone;
   const due = labelDue(carta);
@@ -105,7 +105,14 @@ function CartaVisual({ carta, onExcluir }: { carta: Carta; onExcluir: (id: strin
 
   return (
     <div className={`relative rounded-2xl border-2 ${cfg.borda} bg-gradient-to-b ${cfg.cor} shadow-xl ${cfg.sombra} flex flex-col group overflow-hidden`}>
-      {/* Botão excluir */}
+      {/* Botões de ação */}
+      <button
+        onClick={() => onEditar(carta)}
+        className="absolute top-2 right-8 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-blue-300"
+        title="Editar carta"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
       <button
         onClick={() => onExcluir(carta.id)}
         className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-red-400 text-xs font-bold px-1"
@@ -336,17 +343,19 @@ function FormCriarCarta({
   onSalvar,
   onCancelar,
   materiaDefault,
+  cartaParaEditar,
 }: {
   onSalvar: (carta: Carta) => void;
   onCancelar: () => void;
   materiaDefault?: string;
+  cartaParaEditar?: Carta;
 }) {
-  const [tipo, setTipo] = useState<TipoCarta>("monstro");
-  const [materia, setMateria] = useState(materiaDefault ?? "");
-  const [topico, setTopico] = useState("");
-  const [frente, setFrente] = useState("");
-  const [verso, setVerso] = useState("");
-  const [gabarito, setGabarito] = useState<"verdadeiro" | "falso">("verdadeiro");
+  const [tipo, setTipo] = useState<TipoCarta>(cartaParaEditar?.tipo ?? "monstro");
+  const [materia, setMateria] = useState(cartaParaEditar?.materia ?? materiaDefault ?? "");
+  const [topico, setTopico] = useState(cartaParaEditar?.topico ?? "");
+  const [frente, setFrente] = useState(cartaParaEditar?.frente ?? "");
+  const [verso, setVerso] = useState(cartaParaEditar?.verso ?? "");
+  const [gabarito, setGabarito] = useState<"verdadeiro" | "falso">(cartaParaEditar?.gabarito ?? "verdadeiro");
 
   const topicosDisponiveis = useMemo(
     () => MATERIAS.find((m) => m.nome === materia)?.topicos ?? [],
@@ -357,16 +366,28 @@ function FormCriarCarta({
 
   function salvar() {
     if (!podesSalvar) return;
-    onSalvar(
-      novaCarta({
+    if (cartaParaEditar) {
+      onSalvar({
+        ...cartaParaEditar,
         tipo,
         materia: materia || undefined,
         topico: topico || undefined,
         frente: frente.trim(),
         verso: verso.trim(),
         gabarito: tipo === "armadilha" ? gabarito : undefined,
-      })
-    );
+      });
+    } else {
+      onSalvar(
+        novaCarta({
+          tipo,
+          materia: materia || undefined,
+          topico: topico || undefined,
+          frente: frente.trim(),
+          verso: verso.trim(),
+          gabarito: tipo === "armadilha" ? gabarito : undefined,
+        })
+      );
+    }
   }
 
   const frenteLabel =
@@ -399,7 +420,9 @@ function FormCriarCarta({
         <button onClick={onCancelar} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white">Nova Carta</h2>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+          {cartaParaEditar ? "Editar Carta" : "Nova Carta"}
+        </h2>
       </div>
 
       <div className="mb-6">
@@ -507,7 +530,7 @@ function FormCriarCarta({
         disabled={!podesSalvar}
         className="w-full bg-[#007cca] hover:bg-[#006bb0] disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-sm transition-all"
       >
-        Criar Carta
+        {cartaParaEditar ? "Salvar Alterações" : "Criar Carta"}
       </button>
     </div>
   );
@@ -840,6 +863,7 @@ export default function CartasTab({
   const [baralhoAtivo, setBaralhoAtivo] = useState<string | null>(null);
   const [cartasParaRevisarAtual, setCartasParaRevisarAtual] = useState<Carta[]>([]);
   const [criarComMateria, setCriarComMateria] = useState<string | undefined>(undefined);
+  const [cartaEditando, setCartaEditando] = useState<Carta | null>(null);
   const [sugestoesImport, setSugestoesImport] = useState<Carta[]>([]);
   const [selecionadasImport, setSelecionadasImport] = useState<Set<string>>(new Set());
   const [selecionadasCaderno, setSelecionadasCaderno] = useState<Set<string>>(new Set());
@@ -941,6 +965,17 @@ export default function CartasTab({
     setView("home");
   }
 
+  function handleSalvarEdicao(cartaAtualizada: Carta) {
+    onChange(cartas.map((c) => c.id === cartaAtualizada.id ? cartaAtualizada : c));
+    setCartaEditando(null);
+    setView("home");
+  }
+
+  function abrirEdicao(carta: Carta) {
+    setCartaEditando(carta);
+    setView("criar");
+  }
+
   function handleConcluirRevisao(atualizadas: Carta[]) {
     const map = new Map(atualizadas.map((c) => [c.id, c]));
     onChange(cartas.map((c) => map.get(c.id) ?? c));
@@ -957,9 +992,10 @@ export default function CartasTab({
     return (
       <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 min-h-[500px]">
         <FormCriarCarta
-          onSalvar={handleSalvarCarta}
-          onCancelar={() => setView("home")}
+          onSalvar={cartaEditando ? handleSalvarEdicao : handleSalvarCarta}
+          onCancelar={() => { setCartaEditando(null); setView("home"); }}
           materiaDefault={criarComMateria}
+          cartaParaEditar={cartaEditando ?? undefined}
         />
       </div>
     );
@@ -1220,7 +1256,7 @@ export default function CartasTab({
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {cartasBaralho.map((carta) => (
-                <CartaVisual key={carta.id} carta={carta} onExcluir={handleExcluir} />
+                <CartaVisual key={carta.id} carta={carta} onExcluir={handleExcluir} onEditar={abrirEdicao} />
               ))}
             </div>
           )}
