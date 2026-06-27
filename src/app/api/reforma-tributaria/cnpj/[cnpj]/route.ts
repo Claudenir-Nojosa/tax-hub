@@ -14,14 +14,47 @@ export async function GET(
   try {
     const res = await fetch(
       `https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`,
-      { next: { revalidate: 86400 } } // cache 24h
+      {
+        headers: { "User-Agent": "TaxHub/1.0 (taxhubapp.vercel.app)" },
+        next: { revalidate: 86400 },
+      }
     )
 
-    if (!res.ok) {
+    if (res.status === 404) {
       return NextResponse.json(
         { error: "CNPJ não encontrado na Receita Federal" },
         { status: 404 }
       )
+    }
+
+    if (!res.ok) {
+      // Fallback: tenta receitaws.me
+      const fallback = await fetch(
+        `https://receitaws.com.br/v1/cnpj/${cnpjLimpo}`,
+        { headers: { "User-Agent": "TaxHub/1.0" } }
+      )
+      if (!fallback.ok) {
+        return NextResponse.json(
+          { error: "CNPJ não encontrado. Tente novamente." },
+          { status: 404 }
+        )
+      }
+      const fb = await fallback.json()
+      return NextResponse.json({
+        cnpj: cnpjLimpo,
+        razaoSocial: fb.nome,
+        nomeFantasia: fb.fantasia || null,
+        simplesNacional: fb.simples === "Sim",
+        mei: fb.mei === "Sim",
+        uf: fb.uf,
+        municipio: fb.municipio,
+        cnaePrincipal: fb.atividade_principal?.[0]?.text || null,
+        cnaeCode: fb.atividade_principal?.[0]?.code || null,
+        situacaoCadastral: fb.situacao,
+        naturezaJuridica: fb.natureza_juridica,
+        capitalSocial: null,
+        porte: fb.porte,
+      })
     }
 
     const data = await res.json()
