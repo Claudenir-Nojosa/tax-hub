@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, HelpCircle, CalendarCheck, CheckSquare, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles } from "lucide-react";
+import { BookOpen, HelpCircle, Target, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles } from "lucide-react";
 import {
   NIVEL_CONFIG,
   CONQUISTAS,
@@ -159,12 +159,13 @@ export default function DashboardTab({ state }: Props) {
 
   const totalTopicos = MATERIAS.reduce((acc, m) => acc + m.topicos.length, 0);
   const estudados = Object.values(state.topicos).filter((t) => t.estudado).length;
-  const cadernoConcluidos = Object.values(state.topicos).reduce((acc, t) => {
-    return acc + (["A", "B", "C", "D"] as const).filter(
-      (g) => t.cadernos[g].acertos + t.cadernos[g].erros > 0
-    ).length;
-  }, 0);
-  const totalAtividades = Object.values(state.calendario).flat().length;
+  const percEdital = totalTopicos > 0 ? Math.round((estudados / totalTopicos) * 100) : 0;
+
+  const totalQuestoes = Object.values(state.topicos).reduce((acc, t) =>
+    acc + (["A", "B", "C", "D"] as const).reduce((s, g) => s + t.cadernos[g].acertos + t.cadernos[g].erros, 0), 0);
+  const totalAcertosCaderno = Object.values(state.topicos).reduce((acc, t) =>
+    acc + (["A", "B", "C", "D"] as const).reduce((s, g) => s + t.cadernos[g].acertos, 0), 0);
+  const percAcertos = totalQuestoes > 0 ? Math.round((totalAcertosCaderno / totalQuestoes) * 100) : 0;
 
   const NivelIcon = nivelConfig.icone;
 
@@ -212,9 +213,9 @@ export default function DashboardTab({ state }: Props) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "Tópicos Estudados", value: `${estudados}/${totalTopicos}`, Icon: BookOpen, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/30" },
-          { label: "Cadernos Feitos", value: cadernoConcluidos, Icon: HelpCircle, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/30" },
-          { label: "Atividades no Calendário", value: totalAtividades, Icon: CalendarCheck, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
-          { label: "Semanas OK", value: state.semanasOK, Icon: CheckSquare, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30" },
+          { label: "% do Edital", value: `${percEdital}%`, Icon: TrendingUp, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/30" },
+          { label: "Questões Feitas", value: totalQuestoes, Icon: HelpCircle, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
+          { label: "% de Acertos", value: totalQuestoes > 0 ? `${percAcertos}%` : "—", Icon: Target, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30" },
         ].map((s) => (
           <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center shadow-sm">
             <div className={`flex items-center justify-center w-9 h-9 rounded-lg mx-auto mb-2 ${s.bg}`}>
