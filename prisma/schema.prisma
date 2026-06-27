@@ -30,7 +30,10 @@ model User {
   estudoProgresso  EstudoProgresso?
 
   username        String?   @unique
+
+  empresasReforma  EmpresaReforma[]
 }
+
 
 model TaxPlan {
   id          String   @id @default(cuid())
@@ -85,4 +88,42 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmpresaReforma {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cnpj                String
+  razaoSocial         String
+  nomeFantasia        String?
+  regime              String    // SIMPLES_I | SIMPLES_II | SIMPLES_III | LUCRO_PRESUMIDO | LUCRO_REAL
+  simplesNacional     Boolean   @default(false)
+  uf                  String
+  municipio           String?
+  cnaePrincipal       String?
+  faturamento         Float
+  aliquotaICMS        Float
+  aliquotaICMSCompras Float     @default(0)
+  temIPI              Boolean   @default(false)
+  aliquotaIPI         Float?
+  percentualIPISaidas Float?
+  temFCBF             Boolean   @default(false)
+  fcbfPercentual      Float?
+  fcbfBaseCalculo     Float?
+  parametrosExtra     Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  simulacoes          SimulacaoReforma[]
+
+  @@unique([userId, cnpj])
+}
+
+model SimulacaoReforma {
+  id         String         @id @default(cuid())
+  empresaId  String
+  empresa    EmpresaReforma @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  premissas  Json
+  resultados Json
+  createdAt  DateTime       @default(now())
 }

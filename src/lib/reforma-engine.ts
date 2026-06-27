@@ -1,0 +1,205 @@
+// Motor de cálculo da Reforma Tributária (EC 132/2023 + LC 214/2025)
+// Alíquotas baseadas nas premissas da planilha Renova Embalagens
+
+export type PremissaAno = {
+  cbs: number       // Contribuição sobre Bens e Serviços
+  ibsUF: number     // IBS estadual
+  ibsMUN: number    // IBS municipal
+  icmsReducao: number // fator de redução do ICMS (1.0 = 100%, 0 = extinto)
+  ipiAtivo: boolean   // IPI ainda vigente (extinto a partir de 2027 fora ZFM)
+}
+
+export const PREMISSAS_PADRAO: Record<number, PremissaAno> = {
+  2026: { cbs: 0.009,  ibsUF: 0.001,  ibsMUN: 0.000,  icmsReducao: 1.00, ipiAtivo: true  },
+  2027: { cbs: 0.087,  ibsUF: 0.0005, ibsMUN: 0.0005, icmsReducao: 1.00, ipiAtivo: false },
+  2028: { cbs: 0.087,  ibsUF: 0.0005, ibsMUN: 0.0005, icmsReducao: 1.00, ipiAtivo: false },
+  2029: { cbs: 0.088,  ibsUF: 0.0175, ibsMUN: 0.0087, icmsReducao: 0.90, ipiAtivo: false },
+  2030: { cbs: 0.088,  ibsUF: 0.0342, ibsMUN: 0.0171, icmsReducao: 0.80, ipiAtivo: false },
+  2031: { cbs: 0.088,  ibsUF: 0.0502, ibsMUN: 0.0251, icmsReducao: 0.70, ipiAtivo: false },
+  2032: { cbs: 0.088,  ibsUF: 0.0656, ibsMUN: 0.0328, icmsReducao: 0.60, ipiAtivo: false },
+  2033: { cbs: 0.088,  ibsUF: 0.1227, ibsMUN: 0.0543, icmsReducao: 0.00, ipiAtivo: false },
+}
+
+export const ANOS_TRANSICAO = [2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033]
+
+export type RegimeTributario =
+  | "SIMPLES_I"
+  | "SIMPLES_II"
+  | "SIMPLES_III"
+  | "LUCRO_PRESUMIDO"
+  | "LUCRO_REAL"
+
+// Alíquotas nominais do Simples Nacional por anexo (faixa 1 até R$180k)
+// Fonte: LC 123/2006 com vigência 2024
+export const SIMPLES_ALIQUOTAS: Record<string, { nominal: number; descricao: string }> = {
+  SIMPLES_I:   { nominal: 0.04,   descricao: "Comércio (Anexo I)" },
+  SIMPLES_II:  { nominal: 0.045,  descricao: "Indústria (Anexo II)" },
+  SIMPLES_III: { nominal: 0.06,   descricao: "Serviços (Anexo III)" },
+}
+
+export type InputSimulacao = {
+  faturamento: number           // receita bruta anual (R$)
+  regime: RegimeTributario
+  simplesNacional: boolean
+  aliquotaICMS: number          // ex: 0.12
+  aliquotaICMSCompras: number   // para crédito (ex: 0.12)
+  temIPI: boolean
+  aliquotaIPI: number           // ex: 0.15
+  percentualIPISaidas: number   // ex: 0.8 (80% das saídas com IPI)
+  temFCBF: boolean
+  fcbfPercentual: number        // ex: 0.02 (2%)
+  fcbfBaseCalculoMensal: number // base de cálculo mensal do FCBF (R$)
+  premissas?: Record<number, PremissaAno> // override das premissas padrão
+}
+
+export type ResultadoAno = {
+  ano: number
+  // Carga atual (baseline — sem reforma)
+  pisCofinsAtual: number
+  icmsAtual: number
+  ipiAtual: number
+  cargaAtualTotal: number
+  cargaAtualPct: number
+
+  // Carga com a reforma
+  cbs: number
+  ibsUF: number
+  ibsMUN: number
+  ibsCbsTotal: number
+  icmsReforma: number
+  ipiReforma: number
+  creditoCompras: number
+  cargaReformaTotal: number
+  cargaReformaPct: number
+
+  // Delta
+  delta: number        // positivo = mais caro, negativo = economia
+  deltaPct: number     // delta / faturamento
+
+  // FCBF
+  fcbfEconomia: number
+  cargaLiquidaComFcbf: number
+  cargaLiquidaPct: number
+
+  // Comparativo Simples (se aplicável)
+  cargaSimplesNominal: number
+  cargaSimplesPct: number
+  diferencaSimplesPct: number  // Simples - ReformaRegular (positivo = Simples mais caro)
+
+  // Metadados
+  ipiExtinto: boolean
+  icmsReducaoFator: number
+  ibsTotal: number
+  ibsCbsPct: number
+}
+
+function calcularCargaSimples(faturamento: number, regime: RegimeTributario): number {
+  const aliq = SIMPLES_ALIQUOTAS[regime]
+  if (!aliq) return 0
+  return faturamento * aliq.nominal
+}
+
+export function calcularSimulacao(input: InputSimulacao): ResultadoAno[] {
+  const premissas = input.premissas ?? PREMISSAS_PADRAO
+  const fcbfBaseAnual = input.fcbfBaseCalculoMensal * 12
+
+  // Carga atual PIS/COFINS (regime regular: cumulativo 3.65% ou não-cumulativo 9.25% com crédito)
+  // Para simplificação usamos 3.65% (cumulativo/presumido) ou 7.6% líquido para real
+  // O usuário pode ajustar nas premissas
+  const pisCofinsRate = (input.regime === "LUCRO_REAL") ? 0.0925 : 0.0365
+
+  return ANOS_TRANSICAO.map((ano) => {
+    const p = premissas[ano]
+
+    // --- Carga ATUAL (baseline sem reforma) ---
+    const pisCofinsAtual = input.simplesNacional ? 0 : input.faturamento * pisCofinsRate
+    const icmsAtual = input.faturamento * input.aliquotaICMS
+    const ipiAtual = (input.temIPI && p.ipiAtivo)
+      ? input.faturamento * input.percentualIPISaidas * input.aliquotaIPI
+      : (input.temIPI && ano === 2026) // 2026 IPI ainda vigente
+        ? input.faturamento * input.percentualIPISaidas * input.aliquotaIPI
+        : 0
+    const cargaAtualTotal = pisCofinsAtual + icmsAtual + ipiAtual
+
+    // --- Carga REFORMA ---
+    const cbs      = input.faturamento * p.cbs
+    const ibsUF    = input.faturamento * p.ibsUF
+    const ibsMUN   = input.faturamento * p.ibsMUN
+    const ibsCbsTotal = cbs + ibsUF + ibsMUN
+
+    const icmsReforma = input.faturamento * input.aliquotaICMS * p.icmsReducao
+
+    const ipiReforma = (input.temIPI && p.ipiAtivo)
+      ? input.faturamento * input.percentualIPISaidas * input.aliquotaIPI
+      : 0
+
+    // Crédito de IBS/CBS nas compras (non-cumulatividade plena do IVA)
+    const creditoCompras = input.faturamento * input.aliquotaICMSCompras
+      * (p.cbs + p.ibsUF + p.ibsMUN)
+      / (p.cbs + p.ibsUF + p.ibsMUN > 0 ? 1 : 1) // crédito proporcional às compras
+
+    // Para Simples: os sócios pagam IBS/CBS fora do DAS a partir de 2027
+    // Aqui calculamos a carga equivalente do regime regular para comparação
+    const cargaReformaTotal = ibsCbsTotal + icmsReforma + ipiReforma - creditoCompras
+
+    const delta    = cargaReformaTotal - cargaAtualTotal
+    const deltaPct = delta / input.faturamento
+
+    // --- FCBF ---
+    // Benefício expira gradualmente com o ICMS (redução = fator de redução ICMS)
+    const fcbfEconomia = input.temFCBF && p.icmsReducao > 0
+      ? fcbfBaseAnual * input.fcbfPercentual * p.icmsReducao
+      : 0
+    const cargaLiquidaComFcbf = cargaReformaTotal - fcbfEconomia
+
+    // --- Simples Nacional ---
+    const cargaSimplesNominal = input.simplesNacional
+      ? calcularCargaSimples(input.faturamento, input.regime)
+      : calcularCargaSimples(input.faturamento, input.regime) // para comparativo mesmo se não for simples
+    const cargaSimplesPct = cargaSimplesNominal / input.faturamento
+    const diferencaSimplesPct = cargaSimplesPct - (cargaReformaTotal / input.faturamento)
+
+    return {
+      ano,
+      pisCofinsAtual,
+      icmsAtual,
+      ipiAtual,
+      cargaAtualTotal,
+      cargaAtualPct: cargaAtualTotal / input.faturamento,
+      cbs,
+      ibsUF,
+      ibsMUN,
+      ibsCbsTotal,
+      icmsReforma,
+      ipiReforma,
+      creditoCompras,
+      cargaReformaTotal: Math.max(0, cargaReformaTotal),
+      cargaReformaPct: Math.max(0, cargaReformaTotal) / input.faturamento,
+      delta,
+      deltaPct,
+      fcbfEconomia,
+      cargaLiquidaComFcbf: Math.max(0, cargaLiquidaComFcbf),
+      cargaLiquidaPct: Math.max(0, cargaLiquidaComFcbf) / input.faturamento,
+      cargaSimplesNominal,
+      cargaSimplesPct,
+      diferencaSimplesPct,
+      ipiExtinto: !p.ipiAtivo,
+      icmsReducaoFator: p.icmsReducao,
+      ibsTotal: ibsUF + ibsMUN,
+      ibsCbsPct: (cbs + ibsUF + ibsMUN) / input.faturamento,
+    }
+  })
+}
+
+export function formatarMoeda(value: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+export function formatarPorcentagem(value: number, decimais = 1): string {
+  return `${(value * 100).toFixed(decimais)}%`
+}

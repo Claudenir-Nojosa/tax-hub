@@ -1,0 +1,236 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { useParams, useRouter } from "next/navigation"
+import { toast } from "sonner"
+import { Scale, ChevronRight } from "lucide-react"
+import Step1Empresa, { type EmpresaData } from "@/components/reforma/Step1Empresa"
+import Step2Premissas, { type PremissasData, defaultPremissas } from "@/components/reforma/Step2Premissas"
+import Step3Simulacao from "@/components/reforma/Step3Simulacao"
+import Step4Analise from "@/components/reforma/Step4Analise"
+import type { ResultadoAno } from "@/lib/reforma-engine"
+
+const STEPS = ["Empresa", "Premissas", "Simulação", "Análise"]
+
+const defaultEmpresa: EmpresaData = {
+  cnpj: "",
+  razaoSocial: "",
+  nomeFantasia: "",
+  regime: "",
+  simplesNacional: false,
+  uf: "",
+  municipio: "",
+  cnaePrincipal: "",
+  faturamento: 0,
+}
+
+export default function EmpresaWizardPage() {
+  const params = useParams()
+  const router = useRouter()
+  const isNova = params.empresaId === "nova"
+  const empresaId = isNova ? null : (params.empresaId as string)
+
+  const [step, setStep] = useState(0)
+  const [empresa, setEmpresa] = useState<EmpresaData>(defaultEmpresa)
+  const [premissas, setPremissas] = useState<PremissasData>(defaultPremissas())
+  const [resultados, setResultados] = useState<ResultadoAno[]>([])
+  const [savedEmpresaId, setSavedEmpresaId] = useState<string | null>(empresaId)
+  const [loadingSimulacao, setLoadingSimulacao] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // Carrega empresa existente
+  useEffect(() => {
+    if (!empresaId) return
+    fetch(`/api/reforma-tributaria/empresas/${empresaId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setEmpresa({
+          cnpj: data.cnpj,
+          razaoSocial: data.razaoSocial,
+          nomeFantasia: data.nomeFantasia ?? "",
+          regime: data.regime,
+          simplesNacional: data.simplesNacional,
+          uf: data.uf,
+          municipio: data.municipio ?? "",
+          cnaePrincipal: data.cnaePrincipal ?? "",
+          faturamento: data.faturamento,
+        })
+        setPremissas(
+          defaultPremissas(data.aliquotaICMS)
+        )
+        // Carrega premissas extras
+        setPremissas({
+          aliquotaICMS: data.aliquotaICMS,
+          aliquotaICMSCompras: data.aliquotaICMSCompras,
+          temIPI: data.temIPI,
+          aliquotaIPI: data.aliquotaIPI ?? 0,
+          percentualIPISaidas: data.percentualIPISaidas ?? 0,
+          temFCBF: data.temFCBF,
+          fcbfPercentual: data.fcbfPercentual ?? 0,
+          fcbfBaseCalculo: data.fcbfBaseCalculo ?? 0,
+          premissasAnuais: defaultPremissas().premissasAnuais,
+        })
+        // Se tem simulação, carrega resultados
+        if (data.simulacoes?.length > 0) {
+          setResultados(data.simulacoes[0].resultados as ResultadoAno[])
+        }
+      })
+      .catch(() => toast.error("Erro ao carregar empresa"))
+  }, [empresaId])
+
+  const salvarEmpresa = async (): Promise<string | null> => {
+    try {
+      const res = await fetch("/api/reforma-tributaria/empresas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cnpj: empresa.cnpj,
+          razaoSocial: empresa.razaoSocial,
+          nomeFantasia: empresa.nomeFantasia || null,
+          regime: empresa.regime,
+          simplesNacional: empresa.simplesNacional,
+          uf: empresa.uf,
+          municipio: empresa.municipio,
+          cnaePrincipal: empresa.cnaePrincipal,
+          faturamento: empresa.faturamento,
+          aliquotaICMS: premissas.aliquotaICMS,
+          aliquotaICMSCompras: premissas.aliquotaICMSCompras,
+          temIPI: premissas.temIPI,
+          aliquotaIPI: premissas.aliquotaIPI,
+          percentualIPISaidas: premissas.percentualIPISaidas,
+          temFCBF: premissas.temFCBF,
+          fcbfPercentual: premissas.fcbfPercentual,
+          fcbfBaseCalculo: premissas.fcbfBaseCalculo,
+        }),
+      })
+      const data = await res.json()
+      return data.id
+    } catch {
+      return null
+    }
+  }
+
+  const rodarSimulacao = async () => {
+    setLoadingSimulacao(true)
+    setStep(2)
+    try {
+      // Salva empresa primeiro
+      const id = await salvarEmpresa()
+      if (!id) throw new Error("Falha ao salvar empresa")
+      setSavedEmpresaId(id)
+
+      const res = await fetch("/api/reforma-tributaria/simulacao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          empresaId: id,
+          premissasOverride: premissas.premissasAnuais,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setResultados(data.resultados)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao calcular simulação")
+      setStep(1)
+    } finally {
+      setLoadingSimulacao(false)
+    }
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      toast.success("Simulação salva com sucesso!")
+      router.push("/dashboard/reforma-tributaria")
+    } catch {
+      toast.error("Erro ao salvar")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto py-8 px-4">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-6">
+        <Scale className="h-5 w-5 text-blue-500" />
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+          {isNova ? "Nova Empresa" : empresa.razaoSocial || "Empresa"}
+        </h1>
+      </div>
+
+      {/* Steps indicator */}
+      <div className="flex items-center gap-1 mb-8 overflow-x-auto">
+        {STEPS.map((label, i) => (
+          <div key={label} className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => i < step && setStep(i)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                i === step
+                  ? "bg-blue-600 text-white"
+                  : i < step
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 cursor-pointer hover:bg-blue-200"
+                  : "bg-gray-100 text-gray-400 dark:bg-gray-800 cursor-default"
+              }`}
+            >
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                i === step ? "bg-white/20" : i < step ? "bg-blue-200" : "bg-gray-200 dark:bg-gray-700"
+              }`}>
+                {i + 1}
+              </span>
+              {label}
+            </button>
+            {i < STEPS.length - 1 && <ChevronRight className="h-3 w-3 text-gray-300" />}
+          </div>
+        ))}
+      </div>
+
+      {/* Step content */}
+      <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-6">
+        {step === 0 && (
+          <Step1Empresa
+            data={empresa}
+            onChange={setEmpresa}
+            onNext={() => setStep(1)}
+          />
+        )}
+        {step === 1 && (
+          <Step2Premissas
+            data={premissas}
+            onChange={setPremissas}
+            onBack={() => setStep(0)}
+            onNext={rodarSimulacao}
+          />
+        )}
+        {step === 2 && (
+          <Step3Simulacao
+            resultados={resultados}
+            temFCBF={premissas.temFCBF}
+            loading={loadingSimulacao}
+            onBack={() => setStep(1)}
+            onNext={() => setStep(3)}
+          />
+        )}
+        {step === 3 && (
+          <Step4Analise
+            resultados={resultados}
+            regime={empresa.regime}
+            temFCBF={premissas.temFCBF}
+            razaoSocial={empresa.razaoSocial}
+            faturamento={empresa.faturamento}
+            onBack={() => setStep(2)}
+            onSave={handleSave}
+            saving={saving}
+          />
+        )}
+      </div>
+
+      {savedEmpresaId && (
+        <p className="text-xs text-center text-gray-400 mt-4">
+          ID da empresa: {savedEmpresaId}
+        </p>
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,163 @@
+"use client"
+
+import dynamic from "next/dynamic"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Loader2, TrendingDown, TrendingUp } from "lucide-react"
+import type { ResultadoAno } from "@/lib/reforma-engine"
+import { formatarMoeda, formatarPorcentagem } from "@/lib/reforma-engine"
+
+const TransicaoChart = dynamic(() => import("./TransicaoChart"), {
+  ssr: false,
+  loading: () => <div className="h-[360px] flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>,
+})
+
+interface Props {
+  resultados: ResultadoAno[]
+  temFCBF: boolean
+  loading: boolean
+  onBack: () => void
+  onNext: () => void
+}
+
+export default function Step3Simulacao({ resultados, temFCBF, loading, onBack, onNext }: Props) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <span className="ml-3 text-gray-500">Calculando simulação...</span>
+      </div>
+    )
+  }
+
+  if (!resultados.length) {
+    return (
+      <div className="text-center py-10 text-gray-500">
+        <p>Nenhum resultado disponível. Volte e configure as premissas.</p>
+        <Button variant="outline" onClick={onBack} className="mt-4">← Voltar</Button>
+      </div>
+    )
+  }
+
+  const deltaAcumulado = resultados.reduce((s, r) => s + r.delta, 0)
+  const economiaFCBF = resultados.reduce((s, r) => s + r.fcbfEconomia, 0)
+
+  return (
+    <div className="space-y-8">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+          <p className="text-xs text-gray-500 mb-1">Delta acumulado 2026–2033</p>
+          <p className={`text-lg font-bold ${deltaAcumulado < 0 ? "text-green-600" : "text-red-600"}`}>
+            {formatarMoeda(deltaAcumulado)}
+          </p>
+          <p className="text-xs text-gray-400">
+            {deltaAcumulado < 0 ? "Economia com a reforma" : "Custo adicional com a reforma"}
+          </p>
+        </div>
+        {temFCBF && (
+          <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <p className="text-xs text-gray-500 mb-1">Economia FCBF 2026–2032</p>
+            <p className="text-lg font-bold text-green-600">{formatarMoeda(economiaFCBF)}</p>
+            <p className="text-xs text-gray-400">Crédito presumido acumulado</p>
+          </div>
+        )}
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+          <p className="text-xs text-gray-500 mb-1">Carga em 2033 (pós-reforma)</p>
+          <p className="text-lg font-bold text-blue-600">
+            {formatarPorcentagem(resultados[resultados.length - 1].cargaReformaPct)}
+          </p>
+          <p className="text-xs text-gray-400">Da receita bruta</p>
+        </div>
+      </div>
+
+      {/* Gráfico */}
+      <div>
+        <h3 className="font-semibold text-sm mb-4">Evolução da Carga Tributária 2026–2033</h3>
+        <TransicaoChart resultados={resultados} temFCBF={temFCBF} />
+        <p className="text-xs text-gray-400 mt-2 text-center">
+          Barras empilhadas = composição da carga reforma | Linha amarela = carga atual (baseline)
+          {temFCBF && " | Linha verde = carga líquida com FCBF"}
+        </p>
+      </div>
+
+      {/* Tabela detalhada */}
+      <div>
+        <h3 className="font-semibold text-sm mb-4">Detalhamento por Ano</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                <th className="text-left py-2 px-3 font-medium">Ano</th>
+                <th className="text-right py-2 px-3 font-medium">Carga Atual</th>
+                <th className="text-right py-2 px-3 font-medium">IBS+CBS</th>
+                <th className="text-right py-2 px-3 font-medium">ICMS</th>
+                <th className="text-right py-2 px-3 font-medium">Crédito</th>
+                <th className="text-right py-2 px-3 font-medium">Carga Reforma</th>
+                {temFCBF && <th className="text-right py-2 px-3 font-medium">FCBF</th>}
+                {temFCBF && <th className="text-right py-2 px-3 font-medium">Carga Líq.</th>}
+                <th className="text-right py-2 px-3 font-medium">Delta</th>
+                <th className="text-center py-2 px-3 font-medium">ICMS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {resultados.map((r) => (
+                <tr key={r.ano} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                  <td className="py-2 px-3 font-medium">{r.ano}</td>
+                  <td className="py-2 px-3 text-right">
+                    <div>{formatarMoeda(r.cargaAtualTotal)}</div>
+                    <div className="text-gray-400">{formatarPorcentagem(r.cargaAtualPct)}</div>
+                  </td>
+                  <td className="py-2 px-3 text-right text-blue-600">
+                    {formatarMoeda(r.ibsCbsTotal)}
+                    <div className="text-gray-400">{formatarPorcentagem(r.ibsCbsPct)}</div>
+                  </td>
+                  <td className="py-2 px-3 text-right">{formatarMoeda(r.icmsReforma)}</td>
+                  <td className="py-2 px-3 text-right text-green-600">-{formatarMoeda(r.creditoCompras)}</td>
+                  <td className="py-2 px-3 text-right font-medium">
+                    {formatarMoeda(r.cargaReformaTotal)}
+                    <div className="text-gray-400">{formatarPorcentagem(r.cargaReformaPct)}</div>
+                  </td>
+                  {temFCBF && (
+                    <td className="py-2 px-3 text-right text-green-600">
+                      {r.fcbfEconomia > 0 ? `-${formatarMoeda(r.fcbfEconomia)}` : "—"}
+                    </td>
+                  )}
+                  {temFCBF && (
+                    <td className="py-2 px-3 text-right font-medium">
+                      {formatarMoeda(r.cargaLiquidaComFcbf)}
+                    </td>
+                  )}
+                  <td className="py-2 px-3 text-right">
+                    <Badge
+                      variant={r.delta < 0 ? "default" : "destructive"}
+                      className={`text-xs ${r.delta < 0 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : ""}`}
+                    >
+                      {r.delta < 0
+                        ? <><TrendingDown className="h-3 w-3 inline mr-1" />{formatarMoeda(Math.abs(r.delta))}</>
+                        : <><TrendingUp className="h-3 w-3 inline mr-1" />+{formatarMoeda(r.delta)}</>
+                      }
+                    </Badge>
+                  </td>
+                  <td className="py-2 px-3 text-center text-gray-500">
+                    {r.ipiExtinto
+                      ? <span className="text-orange-500">IPI extinto</span>
+                      : `${(r.icmsReducaoFator * 100).toFixed(0)}%`
+                    }
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="flex justify-between">
+        <Button variant="outline" onClick={onBack}>← Ajustar Premissas</Button>
+        <Button onClick={onNext} className="bg-blue-600 hover:bg-blue-700 text-white">
+          Ver Análise Comparativa →
+        </Button>
+      </div>
+    </div>
+  )
+}

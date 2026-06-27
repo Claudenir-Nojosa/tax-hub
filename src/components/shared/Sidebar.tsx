@@ -12,6 +12,7 @@ import {
   Target,
   FileSearch,
   GraduationCap,
+  Scale,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
@@ -159,6 +160,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
   { href: "/dashboard/planejador-tributario", label: "Planejador", icon: Target },
   { href: "/dashboard/recuperacao-credito", label: "Recuperação", icon: FileSearch },
   { href: "/dashboard/estudo", label: "Estudo", icon: GraduationCap },
+  { href: "/dashboard/reforma-tributaria", label: "Reforma Tributária", icon: Scale },
 ].map((item) => (
   <li key={item.href}>
     <Link
