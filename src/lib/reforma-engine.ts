@@ -195,9 +195,10 @@ export type InputSimulacaoXml = {
   dadosXml: {
     totalBaseIbsCbs: number
     totalVICMS: number
+    totalVPIS: number
+    totalVCOFINS: number
     totalVIPI: number
     totalVProd: number
-    fatorAnualizacao: number
     aliquotaICMSEfetiva: number
     aliquotaIPIEfetiva: number
     percentualIPISaidas: number
@@ -215,35 +216,41 @@ export type InputSimulacaoXml = {
 export function calcularSimulacaoXml(input: InputSimulacaoXml): ResultadoAno[] {
   const premissas = input.premissas ?? PREMISSAS_PADRAO
   const { dadosXml } = input
-  const fa = dadosXml.fatorAnualizacao
 
-  // Bases anualizadas — dados reais das NF-e
-  const baseIbsCbsAnual = dadosXml.totalBaseIbsCbs * fa
-  const vICMSAnual      = dadosXml.totalVICMS * fa
-  const vIPIAnual       = dadosXml.totalVIPI * fa
-  const faturamento     = dadosXml.totalVProd * fa
+  // Usa os dados do XML diretamente — sem anualização
+  // Para projeção anual, o usuário importa 12 meses de dados
+  const baseIbsCbs  = dadosXml.totalBaseIbsCbs
+  const vICMS       = dadosXml.totalVICMS
+  const vIPI        = dadosXml.totalVIPI
+  const faturamento = dadosXml.totalVProd
 
-  const pisCofinsRate = input.regime === "LUCRO_REAL" ? 0.0925 : 0.0365
-  const fcbfBaseAnual = input.fcbfBaseCalculoMensal * 12
+  // Carga atual real do XML (PIS/COFINS e ICMS reais — não estimados)
+  const pisCofinsAtualReal = dadosXml.totalVPIS + dadosXml.totalVCOFINS
+  const icmsAtualReal      = vICMS
+  const ipiAtualReal       = vIPI
+
+  // FCBF: proporcional ao período importado (base mensal × meses)
+  const fcbfBaseperiodo = input.fcbfBaseCalculoMensal * dadosXml.mesesImportados
 
   return ANOS_TRANSICAO.map((ano) => {
     const p = premissas[ano]
 
-    // Carga atual (baseline)
-    const pisCofinsAtual = input.simplesNacional ? 0 : faturamento * pisCofinsRate
-    const icmsAtual      = vICMSAnual
-    const ipiAtual       = (p.ipiAtivo || ano === 2026) ? vIPIAnual : 0
+    // Carga atual (valores reais do XML)
+    const pisCofinsAtual  = input.simplesNacional ? 0 : pisCofinsAtualReal
+    const icmsAtual       = icmsAtualReal
+    const ipiAtual        = (p.ipiAtivo || ano === 2026) ? ipiAtualReal : 0
     const cargaAtualTotal = pisCofinsAtual + icmsAtual + ipiAtual
 
-    // Carga reforma — usa base real dos XMLs
-    const cbs      = baseIbsCbsAnual * p.cbs
-    const ibsUF    = baseIbsCbsAnual * p.ibsUF
-    const ibsMUN   = baseIbsCbsAnual * p.ibsMUN
+    // Carga reforma — base real (vProd - ICMS - PIS - COFINS)
+    const cbs         = baseIbsCbs * p.cbs
+    const ibsUF       = baseIbsCbs * p.ibsUF
+    const ibsMUN      = baseIbsCbs * p.ibsMUN
     const ibsCbsTotal = cbs + ibsUF + ibsMUN
 
-    const icmsReforma = vICMSAnual * p.icmsReducao
-    const ipiReforma  = p.ipiAtivo ? vIPIAnual : 0
+    const icmsReforma = vICMS * p.icmsReducao
+    const ipiReforma  = p.ipiAtivo ? vIPI : 0
 
+    // Crédito de compras (proporcional ao período)
     const creditoCompras = faturamento * input.aliquotaICMSCompras
       * (p.cbs + p.ibsUF + p.ibsMUN)
 
@@ -253,7 +260,7 @@ export function calcularSimulacaoXml(input: InputSimulacaoXml): ResultadoAno[] {
     const deltaPct = faturamento > 0 ? delta / faturamento : 0
 
     const fcbfEconomia = input.temFCBF && p.icmsReducao > 0
-      ? fcbfBaseAnual * input.fcbfPercentual * p.icmsReducao
+      ? fcbfBaseperiodo * input.fcbfPercentual * p.icmsReducao
       : 0
     const cargaLiquidaComFcbf = cargaReformaTotal - fcbfEconomia
 

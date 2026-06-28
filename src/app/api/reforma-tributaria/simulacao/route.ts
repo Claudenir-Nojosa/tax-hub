@@ -66,11 +66,12 @@ export async function POST(req: NextRequest) {
   if (shouldUseXml) {
     const xmlInput: InputSimulacaoXml = {
       dadosXml: {
-        totalBaseIbsCbs: dadosXml.totalBaseIbsCbs,
-        totalVICMS:      dadosXml.totalVICMS,
-        totalVIPI:       dadosXml.totalVIPI,
-        totalVProd:      dadosXml.totalVProd,
-        fatorAnualizacao: 12 / dadosXml.mesesImportados,
+        totalBaseIbsCbs:     dadosXml.totalBaseIbsCbs,
+        totalVICMS:          dadosXml.totalVICMS,
+        totalVPIS:           dadosXml.totalVPIS,
+        totalVCOFINS:        dadosXml.totalVCOFINS,
+        totalVIPI:           dadosXml.totalVIPI,
+        totalVProd:          dadosXml.totalVProd,
         aliquotaICMSEfetiva: dadosXml.aliquotaICMSEfetiva,
         aliquotaIPIEfetiva:  dadosXml.aliquotaIPIEfetiva,
         percentualIPISaidas: dadosXml.percentualIPISaidas,
