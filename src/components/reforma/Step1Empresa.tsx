@@ -97,7 +97,7 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
         <div className="flex gap-2">
           <Input
             value={formatCNPJ(cnpjInput)}
-            onChange={(e) => setCnpjInput(e.target.value)}
+            onChange={(e) => setCnpjInput(e.target.value.replace(/\D/g, "").slice(0, 14))}
             placeholder="00.000.000/0000-00"
             className="font-mono"
             onKeyDown={(e) => e.key === "Enter" && buscarCNPJ()}
