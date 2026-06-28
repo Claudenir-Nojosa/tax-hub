@@ -210,7 +210,7 @@ export async function processarArquivos(
     totalVIPI,
     totalVBCICMS,
     totalBaseIbsCbs,
-    aliquotaICMSEfetiva: totalVBCICMS > 0 ? totalVICMS / totalVBCICMS : 0,
+    aliquotaICMSEfetiva: totalVProd > 0 ? totalVICMS / totalVProd : 0,
     aliquotaIPIEfetiva:  totalVBCIPI > 0  ? totalVIPI / totalVBCIPI   : 0,
     percentualIPISaidas: totalItens > 0   ? itensComIPI / totalItens   : 0,
     mesesImportados,
