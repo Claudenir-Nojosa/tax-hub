@@ -26,15 +26,19 @@ function calcularConquistas(state: EstudoState) {
 
   const estudados = Object.values(state.topicos).filter((t) => t.estudado).length;
 
-  const cadernoConcluidos = Object.values(state.topicos).reduce((acc, t) => {
-    return acc + (["A", "B", "C", "D"] as const).filter(
-      (g) => t.cadernos[g].acertos + t.cadernos[g].erros > 0
-    ).length;
-  }, 0);
+  // Total real de questões: soma de acertos + erros em todos os cadernos de todos os tópicos
+  const totalQuestoes = Object.values(state.topicos).reduce((acc, t) =>
+    acc + (["A", "B", "C", "D"] as const).reduce((s, g) => s + t.cadernos[g].acertos + t.cadernos[g].erros, 0), 0
+  );
 
   const materiasConcluidas = MATERIAS.filter(
     (m) => m.topicos.length > 0 && m.topicos.every((t) => state.topicos[topicoKey(m.nome, t)]?.estudado)
   ).length;
+
+  // Cartas conquistas
+  const totalCartas = state.cartas?.length ?? 0;
+  const totalAcertosCartas = state.cartas?.reduce((acc, c) => acc + (c.acertos ?? 0), 0) ?? 0;
+  const bossDerrotado = state.cartas?.some(c => c.tipo === "boss" && (c.repeticoes ?? 0) >= 3) ?? false;
 
   return {
     primeiro_passo: state.semanasOK >= 1,
@@ -57,10 +61,13 @@ function calcularConquistas(state: EstudoState) {
     pluridisciplinar: materiasConcluidas >= 3,
     generalista: materiasConcluidas >= 5,
     dominio_total: materiasConcluidas >= MATERIAS.length,
-    aprendiz: state.cadernoErros.length >= 1,
-    revisor: state.cadernoErros.filter((e) => e.revisado).length >= 10,
-    praticante: cadernoConcluidos >= 50,
-    atirador: cadernoConcluidos >= 200,
+    praticante: totalQuestoes >= 50,
+    atirador: totalQuestoes >= 200,
+    primeiro_baralho: totalCartas >= 10,
+    colecionador: totalCartas >= 50,
+    mestre_cartas: totalAcertosCartas >= 100,
+    boss_derrotado: bossDerrotado,
+    invicto: false, // calculado externamente via sessão de revisão
   };
 }
 

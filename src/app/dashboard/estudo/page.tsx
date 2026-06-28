@@ -17,7 +17,9 @@ import {
   type Grupo,
   type Carta,
 } from "@/lib/estudo-data";
-import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers } from "lucide-react";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers, RefreshCw, GitCompare } from "lucide-react";
+import type { ConcursoData, MateriaConcurso } from "@/lib/estudo-data";
+import Link from "next/link";
 
 const DashboardTab = dynamic(() => import("@/components/estudo/DashboardTab"), { ssr: false });
 const EditalTab = dynamic(() => import("@/components/estudo/EditalTab"), { ssr: false });
@@ -27,10 +29,11 @@ const CadernoErrosTab = dynamic(() => import("@/components/estudo/CadernoErrosTa
 const RelatoriosTab = dynamic(() => import("@/components/estudo/RelatoriosTab"), { ssr: false });
 const CartasTab = dynamic(() => import("@/components/estudo/CartasTab"), { ssr: false });
 const TimerEstudo = dynamic(() => import("@/components/estudo/TimerEstudo"), { ssr: false });
+const CompararEditaisTab = dynamic(() => import("@/components/estudo/CompararEditaisTab"), { ssr: false });
 
 const STORAGE_KEY = "taxhub_estudo_v1";
 
-type Tab = "dashboard" | "edital" | "ciclo" | "calendario" | "caderno" | "relatorios" | "cartas";
+type Tab = "dashboard" | "edital" | "ciclo" | "calendario" | "caderno" | "relatorios" | "cartas" | "comparar";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -40,6 +43,7 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "caderno", label: "Caderno de Erros", icon: NotebookPen },
   { id: "relatorios", label: "Relatórios", icon: BarChart2 },
   { id: "cartas", label: "Cartas", icon: Layers },
+  { id: "comparar", label: "Comparar Editais", icon: GitCompare },
 ];
 
 function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {
@@ -76,25 +80,34 @@ export default function EstudoPage() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [state, setState] = useState<EstudoState>(DEFAULT_ESTUDO_STATE);
   const [loaded, setLoaded] = useState(false);
+  const [concursoAtivo, setConcursoAtivo] = useState<(ConcursoData & { id: string }) | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Carrega: banco primeiro, localStorage como fallback
+  // Migra e carrega concurso principal
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/estudo");
+        await fetch("/api/estudo/migrar", { method: "POST" });
+        const res = await fetch("/api/concurso");
         if (res.ok) {
-          const data = await res.json();
-          if (data) {
-            setState(mergeWithDefaults(data as Partial<EstudoState>));
-            setLoaded(true);
-            return;
+          const lista = await res.json() as (ConcursoData & { id: string })[];
+          const principal = lista.find(c => c.isPrincipal) ?? lista[0] ?? null;
+          if (principal) {
+            setConcursoAtivo(principal);
+            const progressoRes = await fetch(`/api/concurso/${principal.id}/progresso`);
+            if (progressoRes.ok) {
+              const dados = await progressoRes.json();
+              if (dados) {
+                setState(mergeWithDefaults(dados as Partial<EstudoState>));
+                setLoaded(true);
+                return;
+              }
+            }
           }
         }
       } catch {
         // silent
       }
-      // Fallback: localStorage
       setState(loadFromLocalStorage() ?? DEFAULT_ESTUDO_STATE);
       setLoaded(true);
     })();
@@ -108,7 +121,10 @@ export default function EstudoPage() {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
       try {
-        const res = await fetch("/api/estudo", {
+        const url = concursoAtivo
+          ? `/api/concurso/${concursoAtivo.id}/progresso`
+          : "/api/estudo";
+        const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(state),
@@ -121,7 +137,7 @@ export default function EstudoPage() {
         console.error("[estudo] Erro de rede ao salvar:", err);
       }
     }, 2000);
-  }, [state, loaded]);
+  }, [state, loaded, concursoAtivo]);
 
   const updateTopicos = useCallback((topicos: Record<string, TopicoState>) => {
     setState((prev) => ({ ...prev, topicos }));
@@ -192,13 +208,27 @@ export default function EstudoPage() {
       <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 md:px-6 py-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm flex-shrink-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/icons/sefazce.png" alt="SEFAZ-CE" className="object-cover w-full h-full" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm flex-shrink-0 bg-blue-600/20 flex items-center justify-center">
+              {concursoAtivo?.foto ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={concursoAtivo.foto} alt={concursoAtivo.nome} className="object-cover w-full h-full" />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src="/icons/sefazce.png" alt="concurso" className="object-cover w-full h-full" />
+              )}
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900 dark:text-white">Estudo SEFAZ-CE 2026</h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Acompanhe sua preparação para o concurso</p>
+              <h1 className="text-lg font-bold text-gray-900 dark:text-white">
+                {concursoAtivo?.nome ?? "Estudo SEFAZ-CE 2026"}
+              </h1>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {concursoAtivo?.orgao ?? "Acompanhe sua preparação para o concurso"}
+                </p>
+                <Link href="/dashboard/estudo/concursos" className="text-xs text-blue-500 hover:text-blue-400 flex items-center gap-0.5">
+                  <RefreshCw className="h-3 w-3" /> Trocar
+                </Link>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -251,7 +281,11 @@ export default function EstudoPage() {
           {activeTab === "dashboard" && <DashboardTab state={state} />}
 
           {activeTab === "edital" && (
-            <EditalTab topicos={state.topicos} onUpdate={updateTopicos} />
+            <EditalTab
+              topicos={state.topicos}
+              onUpdate={updateTopicos}
+              materiasConcurso={concursoAtivo?.materias as MateriaConcurso[] | undefined}
+            />
           )}
 
           {activeTab === "ciclo" && (
@@ -281,6 +315,8 @@ export default function EstudoPage() {
           {activeTab === "cartas" && (
             <CartasTab cartas={state.cartas} onChange={updateCartas} cadernoErros={state.cadernoErros} />
           )}
+
+          {activeTab === "comparar" && <CompararEditaisTab />}
         </div>
       </div>
     </div>

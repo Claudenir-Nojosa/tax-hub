@@ -8,12 +8,14 @@ import {
   topicoKey,
   type TopicoState,
   type Grupo,
+  type MateriaConcurso,
 } from "@/lib/estudo-data";
 import { ChevronDown, ChevronRight, Search, CheckSquare, Square } from "lucide-react";
 
 interface Props {
   topicos: Record<string, TopicoState>;
   onUpdate: (topicos: Record<string, TopicoState>) => void;
+  materiasConcurso?: MateriaConcurso[]; // se passado, usa em vez de MATERIAS hardcoded
 }
 
 function CadernoInput({
@@ -57,7 +59,19 @@ function PercBadge({ perc }: { perc: number }) {
   return <span className={`text-xs ${cor}`}>{perc === 0 ? "—" : `${perc}%`}</span>;
 }
 
-export default function EditalTab({ topicos, onUpdate }: Props) {
+const COR_BORDER: Record<string, string> = {
+  sky: "border-l-sky-500", blue: "border-l-blue-500", emerald: "border-l-emerald-500",
+  violet: "border-l-violet-500", rose: "border-l-rose-500", amber: "border-l-amber-500",
+  teal: "border-l-teal-500", indigo: "border-l-indigo-500", pink: "border-l-pink-500",
+  cyan: "border-l-cyan-500", lime: "border-l-lime-500", orange: "border-l-orange-500",
+  purple: "border-l-purple-500", red: "border-l-red-500", green: "border-l-green-500",
+  yellow: "border-l-yellow-500",
+};
+
+export default function EditalTab({ topicos, onUpdate, materiasConcurso }: Props) {
+  const materiasAtivas = materiasConcurso
+    ? materiasConcurso.map(m => ({ ...m, corBorder: COR_BORDER[m.cor] ?? "border-l-gray-400" }))
+    : MATERIAS;
   const [busca, setBusca] = useState("");
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
 
@@ -89,7 +103,7 @@ export default function EditalTab({ topicos, onUpdate }: Props) {
   };
 
   const marcarTodos = (materia: string, estudado: boolean) => {
-    const m = MATERIAS.find((m) => m.nome === materia);
+    const m = materiasAtivas.find((m) => m.nome === materia);
     if (!m) return;
     const updated = { ...topicos };
     m.topicos.forEach((t) => {
@@ -99,7 +113,7 @@ export default function EditalTab({ topicos, onUpdate }: Props) {
     onUpdate(updated);
   };
 
-  const materiasFiltradas = MATERIAS.map((m) => ({
+  const materiasFiltradas = materiasAtivas.map((m) => ({
     ...m,
     topicos: m.topicos.filter((t) =>
       busca === "" ||

@@ -1,11 +1,12 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  Sprout, Leaf, BookOpen, BookMarked, Pencil, Brain, Lightbulb, Target, Crosshair,
-  Zap, Flame, Star, Shield, ShieldCheck, Award, Trophy, Gem, Compass, Rocket,
-  Sparkles, Sun, Sunrise, TrendingUp, Mountain, Swords, BadgeCheck, Medal,
+  Sprout, Leaf, BookOpen, BookMarked, Brain, Target, Crosshair,
+  Zap, Flame, Star, Award, Trophy, Gem, Compass, Rocket,
+  Sparkles, TrendingUp, Mountain, Swords, BadgeCheck, Medal,
   Diamond, Infinity as InfinityIcon, Crown,
   CalendarCheck, Dumbbell, GraduationCap, CheckCircle2,
   HelpCircle, RotateCcw, NotebookPen, ListChecks, Layers,
+  Shield, ShieldCheck, Lightbulb, Sun, Sunrise, Pencil,
 } from "lucide-react";
 
 export type { LucideIcon };
@@ -91,6 +92,26 @@ export interface EstudoState {
   semanasOK: number;
 }
 
+// --- Tipos de Concurso ---
+
+export interface MateriaConcurso {
+  id: string;
+  nome: string;
+  cor: string;        // tailwind color key (ex: "sky", "blue", "emerald")
+  topicos: string[];
+  peso?: number;      // % no edital
+}
+
+export interface ConcursoData {
+  id: string;
+  nome: string;
+  orgao?: string;
+  foto?: string;
+  dataProva?: string; // ISO date
+  isPrincipal: boolean;
+  materias: MateriaConcurso[];
+}
+
 export interface MateriaDef {
   nome: string;
   codigo: number;
@@ -174,10 +195,13 @@ export const CONQUISTAS: ConquistaConfig[] = [
   { id: "pluridisciplinar",  icone: BookMarked,    cor: "text-blue-600",    nome: "Pluridisciplinar",  condicao: "Conclua 3 matérias completamente" },
   { id: "generalista",       icone: Compass,       cor: "text-teal-600",    nome: "Generalista",       condicao: "Conclua 5 matérias completamente" },
   { id: "dominio_total",     icone: Diamond,       cor: "text-cyan-600",    nome: "Domínio Total",     condicao: "Conclua todas as matérias do edital" },
-  { id: "aprendiz",          icone: Pencil,        cor: "text-gray-600",    nome: "Aprendiz",          condicao: "Adicione o 1º erro ao Caderno de Erros" },
-  { id: "revisor",           icone: BadgeCheck,    cor: "text-green-600",   nome: "Revisor",           condicao: "Revise 10 erros do Caderno" },
-  { id: "praticante",        icone: HelpCircle,    cor: "text-purple-600",  nome: "Praticante",        condicao: "Faça 50 cadernos de questões" },
-  { id: "atirador",          icone: Crosshair,     cor: "text-indigo-600",  nome: "Atirador",          condicao: "Faça 200 cadernos de questões" },
+  { id: "praticante",        icone: HelpCircle,    cor: "text-purple-600",  nome: "Praticante",        condicao: "Faça 50 questões" },
+  { id: "atirador",          icone: Crosshair,     cor: "text-indigo-600",  nome: "Atirador",          condicao: "Faça 200 questões" },
+  { id: "primeiro_baralho",  icone: Layers,        cor: "text-violet-600",  nome: "Primeiro Baralho",  condicao: "Crie 10 cartas" },
+  { id: "colecionador",      icone: Gem,           cor: "text-amber-600",   nome: "Colecionador",      condicao: "Crie 50 cartas" },
+  { id: "mestre_cartas",     icone: Star,          cor: "text-yellow-500",  nome: "Mestre das Cartas", condicao: "100 acertos em revisões de cartas" },
+  { id: "boss_derrotado",    icone: Swords,        cor: "text-red-600",     nome: "Boss Derrotado",    condicao: "Derrote uma carta Boss (3 acertos consecutivos)" },
+  { id: "invicto",           icone: Shield,        cor: "text-cyan-600",    nome: "Invicto",           condicao: "20 revisões de cartas sem errar" },
 ];
 
 export const ATIVIDADE_CONFIG: Record<AtividadeTipo, { label: string; icone: LucideIcon; cor: string; corDot: string }> = {
