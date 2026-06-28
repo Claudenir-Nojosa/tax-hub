@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { Scale, ChevronRight } from "lucide-react"
 import Step1Empresa, { type EmpresaData } from "@/components/reforma/Step1Empresa"
@@ -28,10 +28,13 @@ const defaultEmpresa: EmpresaData = {
 export default function EmpresaWizardPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const isNova = params.empresaId === "nova"
   const empresaId = isNova ? null : (params.empresaId as string)
+  const viewMode = searchParams.get("view") === "analise"
+  const editMode = searchParams.get("edit") === "true"
 
-  const [step, setStep] = useState(0)
+  const [step, setStep] = useState(viewMode ? 3 : 0)
   const [empresa, setEmpresa] = useState<EmpresaData>(defaultEmpresa)
   const [premissas, setPremissas] = useState<PremissasData>(defaultPremissas())
   const [resultados, setResultados] = useState<ResultadoAno[]>([])
@@ -205,14 +208,16 @@ export default function EmpresaWizardPage() {
 
       {/* Steps indicator */}
       <div className="flex items-center gap-1 mb-8 overflow-x-auto">
-        {STEPS.map((label, i) => (
+        {STEPS.map((label, i) => {
+          const canNavigate = i < step || (editMode && savedEmpresaId !== null)
+          return (
           <div key={label} className="flex items-center gap-1 shrink-0">
             <button
-              onClick={() => i < step && setStep(i)}
+              onClick={() => canNavigate && setStep(i)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 i === step
                   ? "bg-blue-600 text-white"
-                  : i < step
+                  : canNavigate
                   ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 cursor-pointer hover:bg-blue-200"
                   : "bg-gray-100 text-gray-400 dark:bg-gray-800 cursor-default"
               }`}
@@ -226,7 +231,8 @@ export default function EmpresaWizardPage() {
             </button>
             {i < STEPS.length - 1 && <ChevronRight className="h-3 w-3 text-gray-300" />}
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Step content */}

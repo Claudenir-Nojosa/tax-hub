@@ -91,11 +91,26 @@ export default function EmpresaCard({ empresa, onDelete }: Props) {
         </div>
       )}
 
-      <Link href={`/dashboard/reforma-tributaria/${empresa.id}`} className="mt-auto">
-        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm">
-          {ultimaSimulacao ? "Ver / Atualizar Simulação" : "Iniciar Simulação"}
-        </Button>
-      </Link>
+      {ultimaSimulacao ? (
+        <div className="mt-auto flex gap-2">
+          <Link href={`/dashboard/reforma-tributaria/${empresa.id}?view=analise`} className="flex-1">
+            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm">
+              Visualizar
+            </Button>
+          </Link>
+          <Link href={`/dashboard/reforma-tributaria/${empresa.id}?edit=true`} className="flex-1">
+            <Button variant="outline" className="w-full text-sm">
+              Editar
+            </Button>
+          </Link>
+        </div>
+      ) : (
+        <Link href={`/dashboard/reforma-tributaria/${empresa.id}`} className="mt-auto">
+          <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm">
+            Iniciar Simulação
+          </Button>
+        </Link>
+      )}
     </div>
   )
 }
