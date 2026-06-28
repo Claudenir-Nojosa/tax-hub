@@ -43,6 +43,7 @@ function EmpresaWizardInner() {
   const editMode = searchParams.get("edit") === "true"
 
   const [step, setStep] = useState(viewMode ? 3 : 0)
+  const [loadingEmpresa, setLoadingEmpresa] = useState(!isNova)
   const [empresa, setEmpresa] = useState<EmpresaData>(defaultEmpresa)
   const [premissas, setPremissas] = useState<PremissasData>(defaultPremissas())
   const [resultados, setResultados] = useState<ResultadoAno[]>([])
@@ -89,8 +90,9 @@ function EmpresaWizardInner() {
           setResultados(data.simulacoes[0].resultados as ResultadoAno[])
           setUsouXml(data.simulacoes[0].usouXml ?? false)
         }
+        setLoadingEmpresa(false)
       })
-      .catch(() => toast.error("Erro ao carregar empresa"))
+      .catch(() => { toast.error("Erro ao carregar empresa"); setLoadingEmpresa(false) })
 
     // Carrega dados XML se existirem
     fetch(`/api/reforma-tributaria/xml?empresaId=${empresaId}`)
@@ -280,6 +282,7 @@ function EmpresaWizardInner() {
             temFCBF={premissas.temFCBF}
             razaoSocial={empresa.razaoSocial}
             faturamento={empresa.faturamento}
+            loading={loadingEmpresa}
             onBack={() => setStep(2)}
             onSave={handleSave}
             saving={saving}

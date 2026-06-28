@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, CheckCircle2, Info } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Info, Loader2 } from "lucide-react"
 import type { ResultadoAno } from "@/lib/reforma-engine"
 import { SIMPLES_ALIQUOTAS } from "@/lib/reforma-engine"
 import { formatarMoeda, formatarPorcentagem } from "@/lib/reforma-engine"
@@ -13,6 +13,7 @@ interface Props {
   temFCBF: boolean
   razaoSocial: string
   faturamento: number
+  loading?: boolean
   onBack: () => void
   onSave: () => void
   saving: boolean
@@ -24,10 +25,20 @@ export default function Step4Analise({
   temFCBF,
   razaoSocial,
   faturamento,
+  loading,
   onBack,
   onSave,
   saving,
 }: Props) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <span className="ml-3 text-gray-500">Carregando simulação...</span>
+      </div>
+    )
+  }
+
   const isSimples = regime.startsWith("SIMPLES")
   const simplesInfo = SIMPLES_ALIQUOTAS[regime]
 
