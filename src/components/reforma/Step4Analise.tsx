@@ -38,6 +38,15 @@ export default function Step4Analise({
   const economiaFCBF = resultados.reduce((s, r) => s + r.fcbfEconomia, 0)
   const cargaFinal2033 = resultados[resultados.length - 1]
 
+  if (!resultados.length || !cargaFinal2033) {
+    return (
+      <div className="flex items-center justify-center py-16 text-gray-400 text-sm">
+        Nenhuma simulação disponível. Volte e rode a simulação primeiro.
+        <Button variant="outline" onClick={onBack} className="ml-4">← Voltar</Button>
+      </div>
+    )
+  }
+
   const fmt2 = (v: number) =>
     new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
 
