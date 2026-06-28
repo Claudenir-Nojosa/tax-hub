@@ -208,13 +208,13 @@ export default function EstudoPage() {
       <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 md:px-6 py-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm flex-shrink-0 bg-blue-600/20 flex items-center justify-center">
+            <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center">
               {concursoAtivo?.foto ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={concursoAtivo.foto} alt={concursoAtivo.nome} className="object-cover w-full h-full" />
+                <img src={concursoAtivo.foto} alt={concursoAtivo.nome} className="max-w-[40px] max-h-[40px] w-auto h-auto object-contain rounded-lg" />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src="/icons/sefazce.png" alt="concurso" className="object-cover w-full h-full" />
+                <img src="/icons/sefazce.png" alt="concurso" className="max-w-[40px] max-h-[40px] w-auto h-auto object-contain rounded-lg" />
               )}
             </div>
             <div>
