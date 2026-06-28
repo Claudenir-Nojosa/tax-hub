@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { auth } from "../../../../../auth";
 import type { MateriaConcurso } from "@/lib/estudo-data";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const CORES = [
   "sky","blue","emerald","violet","rose","amber","teal","indigo",
@@ -43,13 +43,14 @@ TEXTO DO EDITAL:
 ${body.texto}`;
 
   try {
-    const response = await client.messages.create({
-      model: "claude-opus-4-8",
+    const response = await client.chat.completions.create({
+      model: "gpt-4o",
       max_tokens: 8192,
+      response_format: { type: "json_object" },
       messages: [{ role: "user", content: prompt }],
     });
 
-    const content = response.content[0]?.type === "text" ? response.content[0].text : "";
+    const content = response.choices[0]?.message?.content ?? "{}";
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return NextResponse.json({ error: "IA não retornou JSON válido" }, { status: 422 });
 
