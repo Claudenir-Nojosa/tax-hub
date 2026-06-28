@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import { auth } from "../../../../../auth";
 import type { MateriaConcurso } from "@/lib/estudo-data";
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const CORES = [
   "sky","blue","emerald","violet","rose","amber","teal","indigo",
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const prompt = `Você é um assistente especializado em análise de editais de concursos públicos brasileiros.
 
-Analise o PDF do edital a seguir e extraia todas as matérias (disciplinas) e seus tópicos/conteúdos programáticos.
+Analise o PDF do edital e extraia TODAS as matérias (disciplinas) e seus tópicos/conteúdos programáticos.
 
 Retorne APENAS um JSON válido no seguinte formato, sem nenhum texto adicional:
 {
@@ -37,38 +37,42 @@ Retorne APENAS um JSON válido no seguinte formato, sem nenhum texto adicional:
 }
 
 Regras:
-- id deve ser em minúsculas, sem acentos, espaços substituídos por underscore
-- nome deve ser o nome oficial da matéria como aparece no edital
-- topicos deve listar cada tópico/conteúdo individualmente
-- Ignore informações sobre datas, inscrições, taxas, etc. Foque apenas no conteúdo programático.`;
+- id: minúsculas, sem acentos, espaços → underscore, apenas a-z 0-9 _
+- nome: exatamente como aparece no edital
+- topicos: cada item do conteúdo programático individualmente
+- Ignore datas, inscrições, taxas, regras do concurso. Foque só no conteúdo programático.`;
 
   try {
-    const response = await client.chat.completions.create({
-      model: "gpt-4o",
+    const response = await client.messages.create({
+      model: "claude-opus-4-8",
+      max_tokens: 8192,
       messages: [
         {
           role: "user",
           content: [
             {
-              type: "text",
-              text: prompt,
+              type: "document",
+              source: {
+                type: "base64",
+                media_type: "application/pdf",
+                data: base64,
+              },
             },
             {
-              type: "image_url",
-              image_url: {
-                url: `data:application/pdf;base64,${base64}`,
-                detail: "high",
-              },
+              type: "text",
+              text: prompt,
             },
           ],
         },
       ],
-      max_tokens: 4096,
-      response_format: { type: "json_object" },
     });
 
-    const content = response.choices[0]?.message?.content ?? "{}";
-    const parsed = JSON.parse(content) as { materias?: { id: string; nome: string; topicos: string[] }[] };
+    const content = response.content[0]?.type === "text" ? response.content[0].text : "";
+    // Extrai JSON mesmo que venha com texto ao redor
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return NextResponse.json({ error: "IA não retornou JSON válido" }, { status: 422 });
+
+    const parsed = JSON.parse(jsonMatch[0]) as { materias?: { id: string; nome: string; topicos: string[] }[] };
 
     if (!parsed.materias || !Array.isArray(parsed.materias)) {
       return NextResponse.json({ error: "IA não retornou matérias válidas" }, { status: 422 });
