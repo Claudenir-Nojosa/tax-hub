@@ -76,7 +76,9 @@ export default function ConcursosPage() {
 
   const formatData = (iso?: string) => {
     if (!iso) return null
-    return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
+    // Força parse sem conversão de fuso: pega só a parte YYYY-MM-DD
+    const [y, m, d] = iso.split("T")[0].split("-").map(Number)
+    return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
   }
 
   return (
