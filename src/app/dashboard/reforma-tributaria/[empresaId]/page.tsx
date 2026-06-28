@@ -76,9 +76,37 @@ export default function EmpresaWizardPage() {
         // Se tem simulação, carrega resultados
         if (data.simulacoes?.length > 0) {
           setResultados(data.simulacoes[0].resultados as ResultadoAno[])
+          setUsouXml(data.simulacoes[0].usouXml ?? false)
         }
       })
       .catch(() => toast.error("Erro ao carregar empresa"))
+
+    // Carrega dados XML se existirem
+    fetch(`/api/reforma-tributaria/xml?empresaId=${empresaId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.totalItens > 0) {
+          setDadosXml({
+            periodos: data.periodos,
+            totalNFs: data.totalNFs,
+            totalItens: data.totalItens,
+            totalVProd: data.totalVProd,
+            totalVICMS: data.totalVICMS,
+            totalVPIS: data.totalVPIS,
+            totalVCOFINS: data.totalVCOFINS,
+            totalVIPI: data.totalVIPI,
+            totalVBCICMS: 0,
+            totalBaseIbsCbs: data.totalBaseIbsCbs,
+            aliquotaICMSEfetiva: data.aliquotaICMSEfetiva,
+            aliquotaIPIEfetiva: data.aliquotaIPIEfetiva,
+            percentualIPISaidas: data.percentualIPISaidas,
+            mesesImportados: data.mesesImportados,
+            fatorAnualizacao: 12 / data.mesesImportados,
+            itens: data.itens ?? [],
+          })
+        }
+      })
+      .catch(() => {/* sem dados XML é ok */})
   }, [empresaId])
 
   const salvarEmpresa = async (): Promise<string | null> => {
@@ -117,10 +145,20 @@ export default function EmpresaWizardPage() {
     setLoadingSimulacao(true)
     setStep(2)
     try {
-      // Salva empresa primeiro
+      // Salva empresa primeiro para garantir ID real
       const id = await salvarEmpresa()
       if (!id) throw new Error("Falha ao salvar empresa")
       setSavedEmpresaId(id)
+
+      // Se há dados XML no estado (pode ter sido importado antes do ID existir),
+      // salva agora com o ID real da empresa
+      if (dadosXml) {
+        await fetch("/api/reforma-tributaria/xml", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ empresaId: id, dadosXml }),
+        })
+      }
 
       const res = await fetch("/api/reforma-tributaria/simulacao", {
         method: "POST",
