@@ -38,8 +38,105 @@ export default function Step4Analise({
   const economiaFCBF = resultados.reduce((s, r) => s + r.fcbfEconomia, 0)
   const cargaFinal2033 = resultados[resultados.length - 1]
 
+  const fmt2 = (v: number) =>
+    new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
+
+  const cargaAtualBase = resultados[0]?.cargaAtualTotal ?? 0
+
   return (
     <div className="space-y-8">
+
+      {/* Tabela estilo Excel — composição por tributo */}
+      <section>
+        <h3 className="font-semibold text-sm mb-3 text-gray-900 dark:text-white">
+          Composição da Carga Tributária por Ano
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="bg-gray-700 text-white">
+                <th className="text-left py-2 px-3 font-semibold border border-gray-600 min-w-[160px]">TRIBUTO</th>
+                {resultados.map((r) => (
+                  <th key={r.ano} className="text-right py-2 px-3 font-semibold border border-gray-600 min-w-[100px]">{r.ano}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {/* PIS/COFINS */}
+              <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/30">
+                <td className="py-2 px-3 border border-gray-200 dark:border-gray-700">PIS/COFINS (Cumulativo)</td>
+                {resultados.map((r) => (
+                  <td key={r.ano} className="py-2 px-3 text-right border border-gray-200 dark:border-gray-700">
+                    {r.pisCofinsAtual > 0 ? fmt2(r.pisCofinsAtual) : <span className="text-gray-400">-</span>}
+                  </td>
+                ))}
+              </tr>
+              {/* ICMS */}
+              <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/30">
+                <td className="py-2 px-3 border border-gray-200 dark:border-gray-700">ICMS (Não cumulativo)</td>
+                {resultados.map((r) => (
+                  <td key={r.ano} className="py-2 px-3 text-right border border-gray-200 dark:border-gray-700">
+                    {r.icmsReforma > 0 ? fmt2(r.icmsReforma) : <span className="text-gray-400">-</span>}
+                  </td>
+                ))}
+              </tr>
+              {/* IPI */}
+              <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/30">
+                <td className="py-2 px-3 border border-gray-200 dark:border-gray-700">IPI (Não cumulativo)</td>
+                {resultados.map((r) => (
+                  <td key={r.ano} className="py-2 px-3 text-right border border-gray-200 dark:border-gray-700">
+                    {r.ipiReforma > 0 ? fmt2(r.ipiReforma) : <span className="text-gray-400">-</span>}
+                  </td>
+                ))}
+              </tr>
+              {/* CBS */}
+              <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/30">
+                <td className="py-2 px-3 border border-gray-200 dark:border-gray-700">CBS (Não cumulativo)</td>
+                {resultados.map((r) => (
+                  <td key={r.ano} className={`py-2 px-3 text-right border border-gray-200 dark:border-gray-700 ${r.ano === 2026 ? "text-gray-400 italic" : "text-blue-600 dark:text-blue-400"}`}>
+                    {fmt2(r.cbs)}
+                  </td>
+                ))}
+              </tr>
+              {/* IBS */}
+              <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/30">
+                <td className="py-2 px-3 border border-gray-200 dark:border-gray-700">IBS (Não cumulativo)</td>
+                {resultados.map((r) => (
+                  <td key={r.ano} className={`py-2 px-3 text-right border border-gray-200 dark:border-gray-700 ${r.ano === 2026 ? "text-gray-400 italic" : "text-blue-500 dark:text-blue-300"}`}>
+                    {fmt2(r.ibsTotal)}
+                  </td>
+                ))}
+              </tr>
+              {/* VALOR TOTAL */}
+              <tr className="bg-gray-100 dark:bg-gray-800 font-semibold border-t-2 border-gray-400">
+                <td className="py-2 px-3 border border-gray-300 dark:border-gray-600">VALOR TOTAL</td>
+                {resultados.map((r) => (
+                  <td key={r.ano} className="py-2 px-3 text-right border border-gray-300 dark:border-gray-600">
+                    {fmt2(r.cargaReformaTotal)}
+                  </td>
+                ))}
+              </tr>
+              {/* IMPACTO */}
+              <tr className="bg-gray-50 dark:bg-gray-800/50">
+                <td className="py-2 px-3 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400">
+                  IMPACTO CARGA TRIBUTÁRIA
+                </td>
+                {resultados.map((r) => {
+                  const pct = cargaAtualBase > 0 ? (r.cargaReformaTotal - cargaAtualBase) / cargaAtualBase : 0
+                  const isBase = r.ano === 2026
+                  return (
+                    <td key={r.ano} className={`py-2 px-3 text-right border border-gray-200 dark:border-gray-700 font-medium ${isBase ? "text-gray-400" : pct < 0 ? "text-green-600" : "text-red-600"}`}>
+                      {isBase ? "-" : `${pct >= 0 ? "+" : ""}${(pct * 100).toFixed(2)}%`}
+                    </td>
+                  )
+                })}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">* Análise sem considerar os créditos de IBS/CBS.</p>
+      </section>
+
       {/* Resumo Executivo */}
       <section className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-5">
         <h3 className="font-semibold mb-3 text-blue-900 dark:text-blue-100">Resumo Executivo — {razaoSocial}</h3>
