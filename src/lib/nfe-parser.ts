@@ -130,11 +130,24 @@ function parseNFeXml(xmlStr: string): { nNF: string; dhEmi: string; itens: ItemN
   }
 }
 
+export class RarNotSupportedError extends Error {
+  constructor() {
+    super("Arquivos .rar não são suportados. Por favor, extraia os XMLs e importe como .xml ou .zip.")
+    this.name = "RarNotSupportedError"
+  }
+}
+
 export async function processarArquivos(
   files: File[],
   onProgress?: (atual: number, total: number) => void
 ): Promise<DadosReaisXml> {
   const xmlStrings: string[] = []
+
+  // Detecta RAR antes de processar
+  const rarFiles = Array.from(files).filter((f) => f.name.toLowerCase().endsWith(".rar"))
+  if (rarFiles.length > 0) {
+    throw new RarNotSupportedError()
+  }
 
   let processados = 0
   const totalFiles = files.length

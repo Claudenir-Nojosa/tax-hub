@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Upload, X, FileText, Loader2, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react"
 import { toast } from "sonner"
-import { processarArquivos, type DadosReaisXml } from "@/lib/nfe-parser"
+import { processarArquivos, RarNotSupportedError, type DadosReaisXml } from "@/lib/nfe-parser"
 import { formatarMoeda } from "@/lib/reforma-engine"
 
 interface Props {
@@ -51,7 +51,14 @@ export default function XmlImportPanel({ empresaId, dadosXml, onDadosXml }: Prop
         toast.success(`${fmt(dados.totalNFs)} notas processadas — ${dados.mesesImportados} ${dados.mesesImportados === 1 ? "mês" : "meses"}`)
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao processar XMLs")
+      if (e instanceof RarNotSupportedError) {
+        toast.error(e.message, {
+          description: "Windows: clique com botão direito no .rar → Extrair aqui → selecione os .xml ou compacte em .zip",
+          duration: 8000,
+        })
+      } else {
+        toast.error(e instanceof Error ? e.message : "Erro ao processar XMLs")
+      }
     } finally {
       setLoading(false)
       setSaving(false)
@@ -214,7 +221,10 @@ export default function XmlImportPanel({ empresaId, dadosXml, onDadosXml }: Prop
             Arraste XMLs ou ZIPs aqui
           </p>
           <p className="text-xs text-gray-500">
-            Aceita .xml individual ou .zip com múltiplas NF-es · Processado 100% no browser
+            Aceita <strong>.xml</strong> individual ou <strong>.zip</strong> com múltiplas NF-es
+          </p>
+          <p className="text-xs text-gray-400">
+            Arquivo .rar? Extraia primeiro (clique direito → Extrair aqui) e importe como .zip ou .xml
           </p>
           <Button variant="outline" size="sm" className="mt-1 pointer-events-none">
             Selecionar arquivos
