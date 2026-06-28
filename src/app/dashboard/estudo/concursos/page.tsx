@@ -111,7 +111,7 @@ export default function ConcursosPage() {
               {/* Header */}
               <div className="flex items-start gap-3">
                 {c.foto ? (
-                  <img src={c.foto} alt={c.nome} className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                  <img src={c.foto} alt={c.nome} className="w-12 h-12 rounded-lg object-contain shrink-0" />
                 ) : (
                   <div className="w-12 h-12 rounded-lg bg-blue-600/20 flex items-center justify-center shrink-0">
                     <BookOpen className="h-6 w-6 text-blue-400" />
