@@ -45,7 +45,7 @@ ${body.texto}`;
   try {
     const response = await client.chat.completions.create({
       model: "gpt-4o",
-      max_tokens: 8192,
+      max_tokens: 16384,
       response_format: { type: "json_object" },
       messages: [{ role: "user", content: prompt }],
     });
