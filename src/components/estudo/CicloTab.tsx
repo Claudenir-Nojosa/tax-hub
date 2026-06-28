@@ -1,11 +1,12 @@
 "use client";
 
 import { Settings2, Clock, RotateCcw } from "lucide-react";
-import { MATERIAS, type EstudoConfigCiclo, type ConfigMateria } from "@/lib/estudo-data";
+import { MATERIAS, type EstudoConfigCiclo, type ConfigMateria, type MateriaBase } from "@/lib/estudo-data";
 
 interface Props {
   config: EstudoConfigCiclo;
   onChange: (config: EstudoConfigCiclo) => void;
+  materiasConcurso?: MateriaBase[];
 }
 
 const DIAS = [
@@ -24,7 +25,8 @@ function minutosParaHoras(min: number): string {
   return h > 0 ? (m > 0 ? `${h}h${m}min` : `${h}h`) : `${m}min`;
 }
 
-export default function CicloTab({ config, onChange }: Props) {
+export default function CicloTab({ config, onChange, materiasConcurso }: Props) {
+  const MATERIAS_ATIVAS: MateriaBase[] = materiasConcurso ?? MATERIAS;
   const updateMateria = (nome: string, field: keyof ConfigMateria, value: unknown) => {
     onChange({
       ...config,
@@ -44,7 +46,7 @@ export default function CicloTab({ config, onChange }: Props) {
 
   const totalMin = Object.values(config.horasPorDia).reduce((a, b) => a + b, 0);
 
-  const materiasAtivas = MATERIAS.filter((m) => config.materias[m.nome]?.incluir);
+  const materiasAtivas = MATERIAS_ATIVAS.filter((m) => config.materias[m.nome]?.incluir);
   const divisoes = {
     A: materiasAtivas.filter((m) => config.materias[m.nome]?.divisao === "A"),
     B: materiasAtivas.filter((m) => config.materias[m.nome]?.divisao === "B"),
@@ -75,13 +77,13 @@ export default function CicloTab({ config, onChange }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {MATERIAS.map((m) => {
+              {MATERIAS_ATIVAS.map((m) => {
                 const cfg = config.materias[m.nome];
                 return (
                   <tr key={m.nome} className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${cfg?.incluir ? "" : "opacity-60"}`}>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${m.corDot}`} />
+                        <div className={`w-2 h-2 rounded-full ${"corDot" in m ? (m as {corDot:string}).corDot : "bg-blue-500"}`} />
                         <span className="text-xs text-gray-700 dark:text-gray-300">{m.nome}</span>
                       </div>
                     </td>

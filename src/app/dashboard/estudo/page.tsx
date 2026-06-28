@@ -18,7 +18,7 @@ import {
   type Carta,
 } from "@/lib/estudo-data";
 import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers, RefreshCw, GitCompare } from "lucide-react";
-import type { ConcursoData, MateriaConcurso } from "@/lib/estudo-data";
+import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
 
 const DashboardTab = dynamic(() => import("@/components/estudo/DashboardTab"), { ssr: false });
@@ -97,17 +97,19 @@ export default function EstudoPage() {
             const progressoRes = await fetch(`/api/concurso/${principal.id}/progresso`);
             if (progressoRes.ok) {
               const dados = await progressoRes.json();
-              if (dados) {
-                setState(mergeWithDefaults(dados as Partial<EstudoState>));
-                setLoaded(true);
-                return;
-              }
+              // Se tem progresso, usa; se não tem (concurso novo), começa do zero
+              setState(dados ? mergeWithDefaults(dados as Partial<EstudoState>) : DEFAULT_ESTUDO_STATE);
+            } else {
+              setState(DEFAULT_ESTUDO_STATE);
             }
+            setLoaded(true);
+            return;
           }
         }
       } catch {
         // silent
       }
+      // Fallback só se não conseguiu carregar nenhum concurso
       setState(loadFromLocalStorage() ?? DEFAULT_ESTUDO_STATE);
       setLoaded(true);
     })();
@@ -278,7 +280,9 @@ export default function EstudoPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-6">
-          {activeTab === "dashboard" && <DashboardTab state={state} />}
+          {activeTab === "dashboard" && (
+            <DashboardTab state={state} materiasConcurso={concursoAtivo?.materias as MateriaBase[] | undefined} />
+          )}
 
           {activeTab === "edital" && (
             <EditalTab
@@ -289,7 +293,11 @@ export default function EstudoPage() {
           )}
 
           {activeTab === "ciclo" && (
-            <CicloTab config={state.configCiclo} onChange={updateConfigCiclo} />
+            <CicloTab
+              config={state.configCiclo}
+              onChange={updateConfigCiclo}
+              materiasConcurso={concursoAtivo?.materias as MateriaBase[] | undefined}
+            />
           )}
 
           {activeTab === "calendario" && (
@@ -310,7 +318,9 @@ export default function EstudoPage() {
             />
           )}
 
-          {activeTab === "relatorios" && <RelatoriosTab state={state} />}
+          {activeTab === "relatorios" && (
+            <RelatoriosTab state={state} materiasConcurso={concursoAtivo?.materias as MateriaBase[] | undefined} />
+          )}
 
           {activeTab === "cartas" && (
             <CartasTab cartas={state.cartas} onChange={updateCartas} cadernoErros={state.cadernoErros} />

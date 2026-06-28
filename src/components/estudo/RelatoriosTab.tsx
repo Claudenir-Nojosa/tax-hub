@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import {
   MATERIAS, topicoKey,
-  type EstudoState, type TopicoState, type AtividadeTipo, type AtividadeCalendario,
+  type EstudoState, type TopicoState, type AtividadeTipo, type AtividadeCalendario, type MateriaBase,
 } from "@/lib/estudo-data";
 
 // ─── Configuração do concurso ─────────────────────────────────────────────────
@@ -91,8 +91,8 @@ function distribuicaoPorTipo(calendario: Record<string, AtividadeCalendario[]>):
     .sort((a, b) => b.horas - a.horas);
 }
 
-function calcProgressoMaterias(topicos: Record<string, TopicoState>): MateriaProg[] {
-  return MATERIAS.map((m, i) => {
+function calcProgressoMaterias(topicos: Record<string, TopicoState>, materiasAtivas: MateriaBase[] = MATERIAS): MateriaProg[] {
+  return materiasAtivas.map((m, i) => {
     const total = m.topicos.length;
     let estudados = 0, acertos = 0, erros = 0;
     m.topicos.forEach((t) => {
@@ -270,7 +270,7 @@ function calcPontosFracos(topicos: Record<string, TopicoState>): PontoFraco[] {
     });
     const total = acertos + erros;
     if (total === 0) return;
-    const idx = MATERIAS.findIndex((m) => m.nome === materia);
+    const idx = (MATERIAS as {nome:string}[]).findIndex((m) => m.nome === materia);
     result.push({
       materia, topico, acertos, erros,
       taxaErro: Math.round((erros / total) * 100),
@@ -329,11 +329,12 @@ function SectionTitle({ children, icon: Icon, color }: { children: React.ReactNo
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function RelatoriosTab({ state }: { state: EstudoState }) {
+export default function RelatoriosTab({ state, materiasConcurso }: { state: EstudoState; materiasConcurso?: MateriaBase[] }) {
+  const MATERIAS_ATIVAS: MateriaBase[] = materiasConcurso ?? MATERIAS;
   // ── Dados existentes
   const diasData  = horasPorDiaSemana(state.calendario);
   const tiposData = distribuicaoPorTipo(state.calendario);
-  const materias  = calcProgressoMaterias(state.topicos);
+  const materias  = calcProgressoMaterias(state.topicos, MATERIAS_ATIVAS);
   const semanal   = historicoSemanal(state.calendario);
   const heatmap   = buildHeatmap(state.calendario);
 
@@ -343,7 +344,7 @@ export default function RelatoriosTab({ state }: { state: EstudoState }) {
   const totalHoras = Math.round((totalMin / 60) * 10) / 10;
   const diasC      = Object.values(state.calendario).filter((a) => a.length > 0).length;
   const mediaH     = diasC > 0 ? Math.round((totalHoras / diasC) * 10) / 10 : 0;
-  const totTops    = MATERIAS.reduce((s, m) => s + m.topicos.length, 0);
+  const totTops    = MATERIAS_ATIVAS.reduce((s, m) => s + m.topicos.length, 0);
   const estudados  = Object.values(state.topicos).filter((t) => t.estudado).length;
   const percEd     = totTops > 0 ? Math.round((estudados / totTops) * 100) : 0;
 

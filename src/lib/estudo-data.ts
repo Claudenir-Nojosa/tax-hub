@@ -112,6 +112,8 @@ export interface ConcursoData {
   materias: MateriaConcurso[];
 }
 
+export type MateriaBase = { nome: string; topicos: string[] };
+
 export interface MateriaDef {
   nome: string;
   codigo: number;

@@ -10,14 +10,17 @@ import {
   calcularStreakDias,
   type EstudoState,
   type TopicoState,
+  type MateriaConcurso,
+  type MateriaBase,
   topicoKey,
 } from "@/lib/estudo-data";
 
 interface Props {
   state: EstudoState;
+  materiasConcurso?: MateriaBase[];
 }
 
-function calcularConquistas(state: EstudoState) {
+function calcularConquistas(state: EstudoState, materiasAtivas: MateriaBase[] = MATERIAS) {
   const xp = calcularXP(state.topicos, state.calendario, state.cartas);
   const totalHorasCalendario = Object.values(state.calendario)
     .flat()
@@ -31,7 +34,7 @@ function calcularConquistas(state: EstudoState) {
     acc + (["A", "B", "C", "D"] as const).reduce((s, g) => s + t.cadernos[g].acertos + t.cadernos[g].erros, 0), 0
   );
 
-  const materiasConcluidas = MATERIAS.filter(
+  const materiasConcluidas = materiasAtivas.filter(
     (m) => m.topicos.length > 0 && m.topicos.every((t) => state.topicos[topicoKey(m.nome, t)]?.estudado)
   ).length;
 
@@ -60,7 +63,7 @@ function calcularConquistas(state: EstudoState) {
     primeira_vitoria: materiasConcluidas >= 1,
     pluridisciplinar: materiasConcluidas >= 3,
     generalista: materiasConcluidas >= 5,
-    dominio_total: materiasConcluidas >= MATERIAS.length,
+    dominio_total: materiasConcluidas >= materiasAtivas.length,
     praticante: totalQuestoes >= 50,
     atirador: totalQuestoes >= 200,
     primeiro_baralho: totalCartas >= 10,
@@ -71,8 +74,8 @@ function calcularConquistas(state: EstudoState) {
   };
 }
 
-function getProgressoMateria(nome: string, topicos: Record<string, TopicoState>) {
-  const materia = MATERIAS.find((m) => m.nome === nome);
+function getProgressoMateria(nome: string, topicos: Record<string, TopicoState>, materiasAtivas: MateriaBase[] = MATERIAS) {
+  const materia = materiasAtivas.find((m) => m.nome === nome);
   if (!materia) return { estudados: 0, total: 0, perc: 0, cadernos: 0 };
   const total = materia.topicos.length;
   let estudados = 0;
@@ -150,7 +153,8 @@ function MetaDiaria({ state }: { state: EstudoState }) {
   );
 }
 
-export default function DashboardTab({ state }: Props) {
+export default function DashboardTab({ state, materiasConcurso }: Props) {
+  const MATERIAS_ATIVAS: MateriaBase[] = materiasConcurso ?? MATERIAS;
   const xp = calcularXP(state.topicos, state.calendario, state.cartas);
   const nivel = calcularNivel(xp);
   const nivelConfig = NIVEL_CONFIG[nivel];
@@ -162,9 +166,9 @@ export default function DashboardTab({ state }: Props) {
     : 100;
 
   const streakDias = calcularStreakDias(state.calendario);
-  const conquistas = calcularConquistas(state);
+  const conquistas = calcularConquistas(state, MATERIAS_ATIVAS);
 
-  const totalTopicos = MATERIAS.reduce((acc, m) => acc + m.topicos.length, 0);
+  const totalTopicos = MATERIAS_ATIVAS.reduce((acc, m) => acc + m.topicos.length, 0);
   const estudados = Object.values(state.topicos).filter((t) => t.estudado).length;
   const percEdital = totalTopicos > 0 ? Math.round((estudados / totalTopicos) * 100) : 0;
 
@@ -274,12 +278,12 @@ export default function DashboardTab({ state }: Props) {
             Progresso por Matéria
           </h3>
           <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
-            {MATERIAS.map((m) => {
-              const prog = getProgressoMateria(m.nome, state.topicos);
+            {MATERIAS_ATIVAS.map((m) => {
+              const prog = getProgressoMateria(m.nome, state.topicos, MATERIAS_ATIVAS);
               return (
                 <div key={m.nome}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className={`text-xs font-medium truncate max-w-[65%] ${m.corText}`}>
+                    <span className={`text-xs font-medium truncate max-w-[65%] ${"corText" in m ? (m as {corText: string}).corText : "text-gray-700 dark:text-gray-300"}`}>
                       {m.nome}
                     </span>
                     <span className="text-xs text-gray-500 dark:text-gray-400">
