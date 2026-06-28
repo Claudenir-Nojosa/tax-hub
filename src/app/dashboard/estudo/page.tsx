@@ -31,7 +31,8 @@ const CartasTab = dynamic(() => import("@/components/estudo/CartasTab"), { ssr: 
 const TimerEstudo = dynamic(() => import("@/components/estudo/TimerEstudo"), { ssr: false });
 const CompararEditaisTab = dynamic(() => import("@/components/estudo/CompararEditaisTab"), { ssr: false });
 
-const STORAGE_KEY = "taxhub_estudo_v1";
+const storageKey = (concursoId: string | null) =>
+  concursoId ? `taxhub_estudo_c_${concursoId}` : "taxhub_estudo_v1";
 
 type Tab = "dashboard" | "edital" | "ciclo" | "calendario" | "caderno" | "relatorios" | "cartas" | "comparar";
 
@@ -66,9 +67,9 @@ function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {
   };
 }
 
-function loadFromLocalStorage(): EstudoState | null {
+function loadFromLocalStorage(concursoId: string | null): EstudoState | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey(concursoId));
     if (!raw) return null;
     return mergeWithDefaults(JSON.parse(raw) as Partial<EstudoState>);
   } catch {
@@ -110,7 +111,7 @@ export default function EstudoPage() {
         // silent
       }
       // Fallback só se não conseguiu carregar nenhum concurso
-      setState(loadFromLocalStorage() ?? DEFAULT_ESTUDO_STATE);
+      setState(loadFromLocalStorage(null) ?? DEFAULT_ESTUDO_STATE);
       setLoaded(true);
     })();
   }, []);
@@ -118,7 +119,7 @@ export default function EstudoPage() {
   // Persiste: localStorage imediato + banco com debounce de 2s
   useEffect(() => {
     if (!loaded) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(storageKey(concursoAtivo?.id ?? null), JSON.stringify(state));
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
