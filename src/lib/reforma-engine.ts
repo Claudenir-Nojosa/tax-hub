@@ -250,11 +250,11 @@ export function calcularSimulacaoXml(input: InputSimulacaoXml): ResultadoAno[] {
     const icmsReforma = vICMS * p.icmsReducao
     const ipiReforma  = p.ipiAtivo ? vIPI : 0
 
-    // Crédito de compras (proporcional ao período)
-    const creditoCompras = faturamento * input.aliquotaICMSCompras
-      * (p.cbs + p.ibsUF + p.ibsMUN)
+    // Sem crédito de compras: a engine XML usa dados brutos de saídas
+    // (entradas seriam necessárias para calcular crédito real)
+    const creditoCompras = 0
 
-    const cargaReformaTotal = ibsCbsTotal + icmsReforma + ipiReforma - creditoCompras
+    const cargaReformaTotal = ibsCbsTotal + icmsReforma + ipiReforma
 
     const delta    = cargaReformaTotal - cargaAtualTotal
     const deltaPct = faturamento > 0 ? delta / faturamento : 0

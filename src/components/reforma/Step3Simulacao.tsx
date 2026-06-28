@@ -98,9 +98,9 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
               <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                 <th className="text-left py-2 px-3 font-medium">Ano</th>
                 <th className="text-right py-2 px-3 font-medium">Carga Atual</th>
-                <th className="text-right py-2 px-3 font-medium">IBS+CBS</th>
+                <th className="text-right py-2 px-3 font-medium">CBS</th>
+                <th className="text-right py-2 px-3 font-medium">IBS</th>
                 <th className="text-right py-2 px-3 font-medium">ICMS</th>
-                <th className="text-right py-2 px-3 font-medium">Crédito</th>
                 <th className="text-right py-2 px-3 font-medium">Carga Reforma</th>
                 {temFCBF && <th className="text-right py-2 px-3 font-medium">FCBF</th>}
                 {temFCBF && <th className="text-right py-2 px-3 font-medium">Carga Líq.</th>}
@@ -117,11 +117,12 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
                     <div className="text-gray-400">{formatarPorcentagem(r.cargaAtualPct)}</div>
                   </td>
                   <td className="py-2 px-3 text-right text-blue-600">
-                    {formatarMoeda(r.ibsCbsTotal)}
-                    <div className="text-gray-400">{formatarPorcentagem(r.ibsCbsPct)}</div>
+                    {formatarMoeda(r.cbs)}
+                  </td>
+                  <td className="py-2 px-3 text-right text-blue-500">
+                    {formatarMoeda(r.ibsTotal)}
                   </td>
                   <td className="py-2 px-3 text-right">{formatarMoeda(r.icmsReforma)}</td>
-                  <td className="py-2 px-3 text-right text-green-600">-{formatarMoeda(r.creditoCompras)}</td>
                   <td className="py-2 px-3 text-right font-medium">
                     {formatarMoeda(r.cargaReformaTotal)}
                     <div className="text-gray-400">{formatarPorcentagem(r.cargaReformaPct)}</div>
