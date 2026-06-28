@@ -100,12 +100,12 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
                 <th className="text-right py-2 px-3 font-medium">Carga Atual</th>
                 <th className="text-right py-2 px-3 font-medium">CBS</th>
                 <th className="text-right py-2 px-3 font-medium">IBS</th>
+                <th className="text-center py-2 px-3 font-medium text-gray-400">ICMS %</th>
                 <th className="text-right py-2 px-3 font-medium">ICMS</th>
                 <th className="text-right py-2 px-3 font-medium">Carga Reforma</th>
                 {temFCBF && <th className="text-right py-2 px-3 font-medium">FCBF</th>}
                 {temFCBF && <th className="text-right py-2 px-3 font-medium">Carga Líq.</th>}
                 <th className="text-right py-2 px-3 font-medium">Delta</th>
-                <th className="text-center py-2 px-3 font-medium">ICMS</th>
               </tr>
             </thead>
             <tbody>
@@ -121,6 +121,9 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
                   </td>
                   <td className="py-2 px-3 text-right text-blue-500">
                     {formatarMoeda(r.ibsTotal)}
+                  </td>
+                  <td className="py-2 px-3 text-center text-gray-400 text-xs">
+                    {(r.icmsReducaoFator * 100).toFixed(0)}%
                   </td>
                   <td className="py-2 px-3 text-right">{formatarMoeda(r.icmsReforma)}</td>
                   <td className="py-2 px-3 text-right font-medium">
@@ -147,12 +150,6 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
                         : <><TrendingUp className="h-3 w-3 inline mr-1" />+{formatarMoeda(r.delta)}</>
                       }
                     </Badge>
-                  </td>
-                  <td className="py-2 px-3 text-center text-gray-500">
-                    {r.ipiExtinto
-                      ? <span className="text-orange-500">IPI extinto</span>
-                      : `${(r.icmsReducaoFator * 100).toFixed(0)}%`
-                    }
                   </td>
                 </tr>
               ))}
