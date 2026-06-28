@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { Scale, ChevronRight } from "lucide-react"
@@ -26,6 +26,14 @@ const defaultEmpresa: EmpresaData = {
 }
 
 export default function EmpresaWizardPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-20 text-gray-400 text-sm">Carregando...</div>}>
+      <EmpresaWizardInner />
+    </Suspense>
+  )
+}
+
+function EmpresaWizardInner() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
