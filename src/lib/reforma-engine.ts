@@ -191,6 +191,108 @@ export function calcularSimulacao(input: InputSimulacao): ResultadoAno[] {
   })
 }
 
+export type InputSimulacaoXml = {
+  dadosXml: {
+    totalBaseIbsCbs: number
+    totalVICMS: number
+    totalVIPI: number
+    totalVProd: number
+    fatorAnualizacao: number
+    aliquotaICMSEfetiva: number
+    aliquotaIPIEfetiva: number
+    percentualIPISaidas: number
+    mesesImportados: number
+  }
+  regime: RegimeTributario
+  simplesNacional: boolean
+  aliquotaICMSCompras: number
+  temFCBF: boolean
+  fcbfPercentual: number
+  fcbfBaseCalculoMensal: number
+  premissas?: Record<number, PremissaAno>
+}
+
+export function calcularSimulacaoXml(input: InputSimulacaoXml): ResultadoAno[] {
+  const premissas = input.premissas ?? PREMISSAS_PADRAO
+  const { dadosXml } = input
+  const fa = dadosXml.fatorAnualizacao
+
+  // Bases anualizadas — dados reais das NF-e
+  const baseIbsCbsAnual = dadosXml.totalBaseIbsCbs * fa
+  const vICMSAnual      = dadosXml.totalVICMS * fa
+  const vIPIAnual       = dadosXml.totalVIPI * fa
+  const faturamento     = dadosXml.totalVProd * fa
+
+  const pisCofinsRate = input.regime === "LUCRO_REAL" ? 0.0925 : 0.0365
+  const fcbfBaseAnual = input.fcbfBaseCalculoMensal * 12
+
+  return ANOS_TRANSICAO.map((ano) => {
+    const p = premissas[ano]
+
+    // Carga atual (baseline)
+    const pisCofinsAtual = input.simplesNacional ? 0 : faturamento * pisCofinsRate
+    const icmsAtual      = vICMSAnual
+    const ipiAtual       = (p.ipiAtivo || ano === 2026) ? vIPIAnual : 0
+    const cargaAtualTotal = pisCofinsAtual + icmsAtual + ipiAtual
+
+    // Carga reforma — usa base real dos XMLs
+    const cbs      = baseIbsCbsAnual * p.cbs
+    const ibsUF    = baseIbsCbsAnual * p.ibsUF
+    const ibsMUN   = baseIbsCbsAnual * p.ibsMUN
+    const ibsCbsTotal = cbs + ibsUF + ibsMUN
+
+    const icmsReforma = vICMSAnual * p.icmsReducao
+    const ipiReforma  = p.ipiAtivo ? vIPIAnual : 0
+
+    const creditoCompras = faturamento * input.aliquotaICMSCompras
+      * (p.cbs + p.ibsUF + p.ibsMUN)
+
+    const cargaReformaTotal = ibsCbsTotal + icmsReforma + ipiReforma - creditoCompras
+
+    const delta    = cargaReformaTotal - cargaAtualTotal
+    const deltaPct = faturamento > 0 ? delta / faturamento : 0
+
+    const fcbfEconomia = input.temFCBF && p.icmsReducao > 0
+      ? fcbfBaseAnual * input.fcbfPercentual * p.icmsReducao
+      : 0
+    const cargaLiquidaComFcbf = cargaReformaTotal - fcbfEconomia
+
+    const cargaSimplesNominal = calcularCargaSimples(faturamento, input.regime)
+    const cargaSimplesPct     = faturamento > 0 ? cargaSimplesNominal / faturamento : 0
+    const diferencaSimplesPct = cargaSimplesPct - (Math.max(0, cargaReformaTotal) / faturamento)
+
+    return {
+      ano,
+      pisCofinsAtual,
+      icmsAtual,
+      ipiAtual,
+      cargaAtualTotal,
+      cargaAtualPct: faturamento > 0 ? cargaAtualTotal / faturamento : 0,
+      cbs,
+      ibsUF,
+      ibsMUN,
+      ibsCbsTotal,
+      icmsReforma,
+      ipiReforma,
+      creditoCompras,
+      cargaReformaTotal: Math.max(0, cargaReformaTotal),
+      cargaReformaPct: faturamento > 0 ? Math.max(0, cargaReformaTotal) / faturamento : 0,
+      delta,
+      deltaPct,
+      fcbfEconomia,
+      cargaLiquidaComFcbf: Math.max(0, cargaLiquidaComFcbf),
+      cargaLiquidaPct: faturamento > 0 ? Math.max(0, cargaLiquidaComFcbf) / faturamento : 0,
+      cargaSimplesNominal,
+      cargaSimplesPct,
+      diferencaSimplesPct,
+      ipiExtinto: !p.ipiAtivo,
+      icmsReducaoFator: p.icmsReducao,
+      ibsTotal: ibsUF + ibsMUN,
+      ibsCbsPct: faturamento > 0 ? (cbs + ibsUF + ibsMUN) / faturamento : 0,
+    }
+  })
+}
+
 export function formatarMoeda(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",

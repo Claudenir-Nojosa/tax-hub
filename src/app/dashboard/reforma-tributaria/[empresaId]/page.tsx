@@ -9,6 +9,7 @@ import Step2Premissas, { type PremissasData, defaultPremissas } from "@/componen
 import Step3Simulacao from "@/components/reforma/Step3Simulacao"
 import Step4Analise from "@/components/reforma/Step4Analise"
 import type { ResultadoAno } from "@/lib/reforma-engine"
+import type { DadosReaisXml } from "@/lib/nfe-parser"
 
 const STEPS = ["Empresa", "Premissas", "Simulação", "Análise"]
 
@@ -37,6 +38,8 @@ export default function EmpresaWizardPage() {
   const [savedEmpresaId, setSavedEmpresaId] = useState<string | null>(empresaId)
   const [loadingSimulacao, setLoadingSimulacao] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [dadosXml, setDadosXml] = useState<DadosReaisXml | null>(null)
+  const [usouXml, setUsouXml] = useState(false)
 
   // Carrega empresa existente
   useEffect(() => {
@@ -125,11 +128,13 @@ export default function EmpresaWizardPage() {
         body: JSON.stringify({
           empresaId: id,
           premissasOverride: premissas.premissasAnuais,
+          usarXml: dadosXml !== null,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setResultados(data.resultados)
+      setUsouXml(data.usouXml ?? false)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao calcular simulação")
       setStep(1)
@@ -201,6 +206,9 @@ export default function EmpresaWizardPage() {
             onChange={setPremissas}
             onBack={() => setStep(0)}
             onNext={rodarSimulacao}
+            empresaId={savedEmpresaId || "nova"}
+            dadosXml={dadosXml}
+            onDadosXml={setDadosXml}
           />
         )}
         {step === 2 && (
@@ -208,6 +216,7 @@ export default function EmpresaWizardPage() {
             resultados={resultados}
             temFCBF={premissas.temFCBF}
             loading={loadingSimulacao}
+            usouXml={usouXml}
             onBack={() => setStep(1)}
             onNext={() => setStep(3)}
           />

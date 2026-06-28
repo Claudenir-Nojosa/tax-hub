@@ -115,6 +115,7 @@ model EmpresaReforma {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   simulacoes          SimulacaoReforma[]
+  dadosXml            DadosXmlReforma?
 
   @@unique([userId, cnpj])
 }
@@ -125,5 +126,27 @@ model SimulacaoReforma {
   empresa    EmpresaReforma @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   premissas  Json
   resultados Json
+  usouXml    Boolean        @default(false)
   createdAt  DateTime       @default(now())
+}
+
+model DadosXmlReforma {
+  id                  String         @id @default(cuid())
+  empresaId           String         @unique
+  empresa             EmpresaReforma @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  periodos            String[]
+  totalNFs            Int
+  totalItens          Int
+  totalVProd          Float
+  totalVICMS          Float
+  totalVPIS           Float
+  totalVCOFINS        Float
+  totalVIPI           Float
+  totalBaseIbsCbs     Float
+  aliquotaICMSEfetiva Float
+  aliquotaIPIEfetiva  Float
+  percentualIPISaidas Float
+  mesesImportados     Int
+  itens               Json
+  createdAt           DateTime       @default(now())
 }

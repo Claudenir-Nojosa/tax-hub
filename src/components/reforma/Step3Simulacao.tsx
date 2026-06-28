@@ -16,11 +16,12 @@ interface Props {
   resultados: ResultadoAno[]
   temFCBF: boolean
   loading: boolean
+  usouXml?: boolean
   onBack: () => void
   onNext: () => void
 }
 
-export default function Step3Simulacao({ resultados, temFCBF, loading, onBack, onNext }: Props) {
+export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, onBack, onNext }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -73,7 +74,14 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, onBack, o
 
       {/* Gráfico */}
       <div>
-        <h3 className="font-semibold text-sm mb-4">Evolução da Carga Tributária 2026–2033</h3>
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="font-semibold text-sm">Evolução da Carga Tributária 2026–2033</h3>
+          {usouXml && (
+            <Badge className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border-blue-300">
+              Dados reais (NF-e)
+            </Badge>
+          )}
+        </div>
         <TransicaoChart resultados={resultados} temFCBF={temFCBF} />
         <p className="text-xs text-gray-400 mt-2 text-center">
           Barras empilhadas = composição da carga reforma | Linha amarela = carga atual (baseline)

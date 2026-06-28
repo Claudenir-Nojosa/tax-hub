@@ -5,6 +5,10 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { PREMISSAS_PADRAO, ANOS_TRANSICAO, type PremissaAno } from "@/lib/reforma-engine"
+import type { DadosReaisXml } from "@/lib/nfe-parser"
+import dynamic from "next/dynamic"
+
+const XmlImportPanel = dynamic(() => import("./XmlImportPanel"), { ssr: false })
 
 export type PremissasData = {
   aliquotaICMS: number
@@ -37,12 +41,15 @@ interface Props {
   onChange: (d: PremissasData) => void
   onBack: () => void
   onNext: () => void
+  empresaId: string
+  dadosXml: DadosReaisXml | null
+  onDadosXml: (dados: DadosReaisXml | null) => void
 }
 
 const pct = (v: number) => `${(v * 100).toFixed(2)}`
 const fromPct = (s: string) => parseFloat(s) / 100 || 0
 
-export default function Step2Premissas({ data, onChange, onBack, onNext }: Props) {
+export default function Step2Premissas({ data, onChange, onBack, onNext, empresaId, dadosXml, onDadosXml }: Props) {
   const set = (patch: Partial<PremissasData>) => onChange({ ...data, ...patch })
 
   const setPremissaAno = (ano: number, field: keyof PremissaAno, raw: string) => {
@@ -58,8 +65,40 @@ export default function Step2Premissas({ data, onChange, onBack, onNext }: Props
 
   const resetPremissas = () => set({ premissasAnuais: structuredClone(PREMISSAS_PADRAO) as Record<number, PremissaAno> })
 
+  // Quando XML é importado, auto-preenche alíquotas efetivas
+  const handleDadosXml = (dados: DadosReaisXml | null) => {
+    onDadosXml(dados)
+    if (dados) {
+      onChange({
+        ...data,
+        aliquotaICMS: dados.aliquotaICMSEfetiva || data.aliquotaICMS,
+        temIPI: dados.aliquotaIPIEfetiva > 0,
+        aliquotaIPI: dados.aliquotaIPIEfetiva || data.aliquotaIPI,
+        percentualIPISaidas: dados.percentualIPISaidas || data.percentualIPISaidas,
+      })
+    }
+  }
+
   return (
     <div className="space-y-8">
+      {/* XML Import */}
+      <section>
+        <h3 className="font-semibold text-sm mb-3 text-gray-900 dark:text-white">
+          Importar XMLs de Saídas
+          <span className="ml-2 text-xs font-normal text-gray-500">(opcional, mas recomendado — usa dados reais das NF-e)</span>
+        </h3>
+        <XmlImportPanel
+          empresaId={empresaId}
+          dadosXml={dadosXml}
+          onDadosXml={handleDadosXml}
+        />
+        {dadosXml && (
+          <p className="mt-2 text-xs text-green-700 dark:text-green-400">
+            ✓ Alíquotas preenchidas automaticamente dos XMLs. Você pode ajustá-las abaixo se necessário.
+          </p>
+        )}
+      </section>
+
       {/* Tributação Atual */}
       <section>
         <h3 className="font-semibold text-sm mb-4 text-gray-900 dark:text-white">Tributação Atual</h3>
