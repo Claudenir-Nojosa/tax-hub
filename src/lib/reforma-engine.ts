@@ -259,11 +259,13 @@ export function calcularSimulacaoXml(input: InputSimulacaoXml): ResultadoAno[] {
 
     const ipiReforma  = p.ipiAtivo ? vIPI : 0
 
-    // Em período de teste (2026): IBS/CBS compensados por crédito PIS/COFINS — efeito líquido zero
-    const ibsCbsNaCarga = p.periodoTeste ? 0 : ibsCbsTotal
-    const creditoCompras = 0
+    // Em período de teste (2026): IBS/CBS compensados, PIS/COFINS ainda vigentes → Carga Reforma = Carga Atual
+    // A partir de 2027: PIS/COFINS extintos, substituídos pelo CBS
+    const ibsCbsNaCarga   = p.periodoTeste ? 0 : ibsCbsTotal
+    const pisCofinsCarga  = p.periodoTeste ? pisCofinsAtual : 0
+    const creditoCompras  = 0
 
-    const cargaReformaTotal = ibsCbsNaCarga + icmsReforma + ipiReforma
+    const cargaReformaTotal = ibsCbsNaCarga + pisCofinsCarga + icmsReforma + ipiReforma
 
     const delta    = cargaReformaTotal - cargaAtualTotal
     const deltaPct = faturamento > 0 ? delta / faturamento : 0

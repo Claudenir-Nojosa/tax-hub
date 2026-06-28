@@ -7,6 +7,9 @@ import { Loader2, TrendingDown, TrendingUp } from "lucide-react"
 import type { ResultadoAno } from "@/lib/reforma-engine"
 import { formatarMoeda, formatarPorcentagem } from "@/lib/reforma-engine"
 
+const fmt = (v: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
+
 const TransicaoChart = dynamic(() => import("./TransicaoChart"), {
   ssr: false,
   loading: () => <div className="h-[360px] flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>,
@@ -113,33 +116,33 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
                 <tr key={r.ano} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                   <td className="py-2 px-3 font-medium">{r.ano}</td>
                   <td className="py-2 px-3 text-right">
-                    <div>{formatarMoeda(r.cargaAtualTotal)}</div>
+                    <div>{fmt(r.cargaAtualTotal)}</div>
                     <div className="text-gray-400">{formatarPorcentagem(r.cargaAtualPct)}</div>
                   </td>
                   <td className="py-2 px-3 text-right text-blue-600">
-                    {formatarMoeda(r.cbs)}
+                    {fmt(r.cbs)}
                     {r.ano === 2026 && <div className="text-xs text-gray-400 italic">teste</div>}
                   </td>
                   <td className="py-2 px-3 text-right text-blue-500">
-                    {formatarMoeda(r.ibsTotal)}
+                    {fmt(r.ibsTotal)}
                     {r.ano === 2026 && <div className="text-xs text-gray-400 italic">teste</div>}
                   </td>
                   <td className="py-2 px-3 text-center text-gray-400 text-xs">
                     {(r.icmsReducaoFator * 100).toFixed(0)}%
                   </td>
-                  <td className="py-2 px-3 text-right">{formatarMoeda(r.icmsReforma)}</td>
+                  <td className="py-2 px-3 text-right">{fmt(r.icmsReforma)}</td>
                   <td className="py-2 px-3 text-right font-medium">
-                    {formatarMoeda(r.cargaReformaTotal)}
+                    {fmt(r.cargaReformaTotal)}
                     <div className="text-gray-400">{formatarPorcentagem(r.cargaReformaPct)}</div>
                   </td>
                   {temFCBF && (
                     <td className="py-2 px-3 text-right text-green-600">
-                      {r.fcbfEconomia > 0 ? `-${formatarMoeda(r.fcbfEconomia)}` : "—"}
+                      {r.fcbfEconomia > 0 ? `-${fmt(r.fcbfEconomia)}` : "—"}
                     </td>
                   )}
                   {temFCBF && (
                     <td className="py-2 px-3 text-right font-medium">
-                      {formatarMoeda(r.cargaLiquidaComFcbf)}
+                      {fmt(r.cargaLiquidaComFcbf)}
                     </td>
                   )}
                   <td className="py-2 px-3 text-right">
@@ -148,8 +151,8 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
                       className={`text-xs ${r.delta < 0 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : ""}`}
                     >
                       {r.delta < 0
-                        ? <><TrendingDown className="h-3 w-3 inline mr-1" />{formatarMoeda(Math.abs(r.delta))}</>
-                        : <><TrendingUp className="h-3 w-3 inline mr-1" />+{formatarMoeda(r.delta)}</>
+                        ? <><TrendingDown className="h-3 w-3 inline mr-1" />{fmt(Math.abs(r.delta))}</>
+                        : <><TrendingUp className="h-3 w-3 inline mr-1" />+{fmt(r.delta)}</>
                       }
                     </Badge>
                   </td>
