@@ -63,8 +63,8 @@ export default function Step4Analise({
         </div>
       </section>
 
-      {/* Simples Nacional vs Regime Regular */}
-      <section>
+      {/* Simples Nacional vs Regime Regular — só mostra se empresa for Simples */}
+      {isSimples && <section>
         <h3 className="font-semibold text-sm mb-4 text-gray-900 dark:text-white">
           Comparativo: Simples Nacional vs Regime Regular
         </h3>
@@ -126,7 +126,7 @@ export default function Step4Analise({
           </div>
         )}
 
-        {!anoMigracao && isSimples && (
+        {!anoMigracao && (
           <div className="mt-4 flex items-start gap-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-3">
             <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
             <p className="text-xs text-green-800 dark:text-green-300">
@@ -134,7 +134,7 @@ export default function Step4Analise({
             </p>
           </div>
         )}
-      </section>
+      </section>}
 
       {/* FCBF */}
       {temFCBF && (
