@@ -118,9 +118,11 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
                   </td>
                   <td className="py-2 px-3 text-right text-blue-600">
                     {formatarMoeda(r.cbs)}
+                    {r.ano === 2026 && <div className="text-xs text-gray-400 italic">teste</div>}
                   </td>
                   <td className="py-2 px-3 text-right text-blue-500">
                     {formatarMoeda(r.ibsTotal)}
+                    {r.ano === 2026 && <div className="text-xs text-gray-400 italic">teste</div>}
                   </td>
                   <td className="py-2 px-3 text-center text-gray-400 text-xs">
                     {(r.icmsReducaoFator * 100).toFixed(0)}%

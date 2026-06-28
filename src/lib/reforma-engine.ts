@@ -7,10 +7,11 @@ export type PremissaAno = {
   ibsMUN: number    // IBS municipal
   icmsReducao: number // fator de redução do ICMS (1.0 = 100%, 0 = extinto)
   ipiAtivo: boolean   // IPI ainda vigente (extinto a partir de 2027 fora ZFM)
+  periodoTeste?: boolean // IBS/CBS em fase de teste (2026) — compensado por crédito PIS/COFINS, não onerava a carga
 }
 
 export const PREMISSAS_PADRAO: Record<number, PremissaAno> = {
-  2026: { cbs: 0.009,  ibsUF: 0.001,  ibsMUN: 0.000,  icmsReducao: 1.00, ipiAtivo: true  },
+  2026: { cbs: 0.009,  ibsUF: 0.001,  ibsMUN: 0.000,  icmsReducao: 1.00, ipiAtivo: true, periodoTeste: true },
   2027: { cbs: 0.087,  ibsUF: 0.0005, ibsMUN: 0.0005, icmsReducao: 1.00, ipiAtivo: false },
   2028: { cbs: 0.087,  ibsUF: 0.0005, ibsMUN: 0.0005, icmsReducao: 1.00, ipiAtivo: false },
   2029: { cbs: 0.088,  ibsUF: 0.0175, ibsMUN: 0.0087, icmsReducao: 0.90, ipiAtivo: false },
@@ -133,14 +134,12 @@ export function calcularSimulacao(input: InputSimulacao): ResultadoAno[] {
       ? input.faturamento * input.percentualIPISaidas * input.aliquotaIPI
       : 0
 
-    // Crédito de IBS/CBS nas compras (non-cumulatividade plena do IVA)
     const creditoCompras = input.faturamento * input.aliquotaICMSCompras
       * (p.cbs + p.ibsUF + p.ibsMUN)
-      / (p.cbs + p.ibsUF + p.ibsMUN > 0 ? 1 : 1) // crédito proporcional às compras
 
-    // Para Simples: os sócios pagam IBS/CBS fora do DAS a partir de 2027
-    // Aqui calculamos a carga equivalente do regime regular para comparação
-    const cargaReformaTotal = ibsCbsTotal + icmsReforma + ipiReforma - creditoCompras
+    // Em período de teste (2026): IBS/CBS são compensados por crédito PIS/COFINS — efeito líquido zero
+    const ibsCbsNaCarga = p.periodoTeste ? 0 : ibsCbsTotal
+    const cargaReformaTotal = ibsCbsNaCarga + icmsReforma + ipiReforma - creditoCompras
 
     const delta    = cargaReformaTotal - cargaAtualTotal
     const deltaPct = delta / input.faturamento
@@ -250,11 +249,11 @@ export function calcularSimulacaoXml(input: InputSimulacaoXml): ResultadoAno[] {
     const icmsReforma = vICMS * p.icmsReducao
     const ipiReforma  = p.ipiAtivo ? vIPI : 0
 
-    // Sem crédito de compras: a engine XML usa dados brutos de saídas
-    // (entradas seriam necessárias para calcular crédito real)
+    // Em período de teste (2026): IBS/CBS compensados por crédito PIS/COFINS — efeito líquido zero
+    const ibsCbsNaCarga = p.periodoTeste ? 0 : ibsCbsTotal
     const creditoCompras = 0
 
-    const cargaReformaTotal = ibsCbsTotal + icmsReforma + ipiReforma
+    const cargaReformaTotal = ibsCbsNaCarga + icmsReforma + ipiReforma
 
     const delta    = cargaReformaTotal - cargaAtualTotal
     const deltaPct = faturamento > 0 ? delta / faturamento : 0
