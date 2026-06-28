@@ -41,18 +41,26 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
   const [saving, setSaving] = useState(false)
   const [parsindoPdf, setParsindoPdf] = useState(false)
 
-  const handlePdf = async (file: File) => {
+  const [textoEdital, setTextoEdital] = useState("")
+  const [mostrarTextarea, setMostrarTextarea] = useState(false)
+
+  const handleProcessarTexto = async () => {
+    if (!textoEdital.trim()) { toast.error("Cole o texto do edital primeiro"); return }
     setParsindoPdf(true)
     try {
-      const fd = new FormData()
-      fd.append("file", file)
-      const res = await fetch("/api/ai/edital-pdf", { method: "POST", body: fd })
+      const res = await fetch("/api/ai/edital-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto: textoEdital }),
+      })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? "Erro ao processar PDF")
+      if (!res.ok) throw new Error(data.error ?? "Erro ao processar edital")
       setMaterias(data.materias as MateriaConcurso[])
+      setTextoEdital("")
+      setMostrarTextarea(false)
       toast.success(`${data.materias.length} matérias extraídas do edital!`)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao processar PDF")
+      toast.error(e instanceof Error ? e.message : "Erro ao processar edital")
     } finally {
       setParsindoPdf(false)
     }
@@ -126,21 +134,39 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
             </div>
           </div>
 
-          {/* Upload PDF edital */}
-          <div className="rounded-lg border border-dashed border-gray-600 p-4">
-            <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-blue-400 shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-200">Importar Edital (PDF)</p>
-                <p className="text-xs text-gray-400">Extração automática de matérias e tópicos via IA</p>
+          {/* Importar via texto colado */}
+          <div className="rounded-lg border border-dashed border-gray-600 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-blue-400 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-gray-200">Importar Conteúdo Programático via IA</p>
+                  <p className="text-xs text-gray-400">Cole o texto do edital e a IA extrai as matérias automaticamente</p>
+                </div>
               </div>
-              <label className="cursor-pointer">
-                <input type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePdf(f) }} />
-                <Button variant="outline" size="sm" disabled={parsindoPdf} className="pointer-events-none">
-                  {parsindoPdf ? <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Processando...</> : "Selecionar PDF"}
-                </Button>
-              </label>
+              <Button variant="outline" size="sm" onClick={() => setMostrarTextarea(v => !v)}>
+                {mostrarTextarea ? "Fechar" : "Colar texto"}
+              </Button>
             </div>
+            {mostrarTextarea && (
+              <div className="space-y-2">
+                <textarea
+                  value={textoEdital}
+                  onChange={e => setTextoEdital(e.target.value)}
+                  placeholder="Cole aqui o conteúdo programático do edital..."
+                  rows={8}
+                  className="w-full text-xs bg-gray-700 border border-gray-600 text-gray-100 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
+                />
+                <Button
+                  onClick={handleProcessarTexto}
+                  disabled={parsindoPdf || !textoEdital.trim()}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  size="sm"
+                >
+                  {parsindoPdf ? <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Processando com IA...</> : "Extrair matérias com IA"}
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Matérias */}

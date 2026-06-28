@@ -14,22 +14,18 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const formData = await req.formData();
-  const file = formData.get("file") as File | null;
-  if (!file) return NextResponse.json({ error: "Arquivo não enviado" }, { status: 400 });
+  const body = await req.json() as { texto?: string };
+  if (!body.texto?.trim()) return NextResponse.json({ error: "Texto do edital não enviado" }, { status: 400 });
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const base64 = buffer.toString("base64");
+  const prompt = `Você é um especialista em análise de editais de concursos públicos brasileiros.
 
-  const prompt = `Você é um assistente especializado em análise de editais de concursos públicos brasileiros.
+Analise o texto abaixo (conteúdo programático de um edital) e extraia todas as matérias (disciplinas) com seus respectivos tópicos.
 
-Analise o PDF do edital e extraia TODAS as matérias (disciplinas) e seus tópicos/conteúdos programáticos.
-
-Retorne APENAS um JSON válido no seguinte formato, sem nenhum texto adicional:
+Retorne APENAS um JSON válido, sem texto adicional, no formato:
 {
   "materias": [
     {
-      "id": "nome_da_materia_sem_espacos",
+      "id": "nome_sem_espacos_sem_acentos",
       "nome": "Nome Exato da Matéria",
       "topicos": ["Tópico 1", "Tópico 2", "..."]
     }
@@ -38,42 +34,26 @@ Retorne APENAS um JSON válido no seguinte formato, sem nenhum texto adicional:
 
 Regras:
 - id: minúsculas, sem acentos, espaços → underscore, apenas a-z 0-9 _
-- nome: exatamente como aparece no edital
-- topicos: cada item do conteúdo programático individualmente
-- Ignore datas, inscrições, taxas, regras do concurso. Foque só no conteúdo programático.`;
+- nome: exatamente como aparece no edital (com acentos)
+- topicos: cada item/subtema individualmente, sem numeração
+- Ignore cabeçalhos, datas, regras do concurso — foque só no conteúdo programático
+- Agrupe subtópicos numerados (ex: "1.1", "1.2") dentro da matéria correspondente
+
+TEXTO DO EDITAL:
+${body.texto}`;
 
   try {
     const response = await client.messages.create({
       model: "claude-opus-4-8",
       max_tokens: 8192,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: base64,
-              },
-            },
-            {
-              type: "text",
-              text: prompt,
-            },
-          ],
-        },
-      ],
+      messages: [{ role: "user", content: prompt }],
     });
 
     const content = response.content[0]?.type === "text" ? response.content[0].text : "";
-    // Extrai JSON mesmo que venha com texto ao redor
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return NextResponse.json({ error: "IA não retornou JSON válido" }, { status: 422 });
 
     const parsed = JSON.parse(jsonMatch[0]) as { materias?: { id: string; nome: string; topicos: string[] }[] };
-
     if (!parsed.materias || !Array.isArray(parsed.materias)) {
       return NextResponse.json({ error: "IA não retornou matérias válidas" }, { status: 422 });
     }
@@ -88,6 +68,6 @@ Regras:
     return NextResponse.json({ materias });
   } catch (err) {
     console.error("[edital-pdf] erro:", err);
-    return NextResponse.json({ error: "Erro ao processar PDF com IA" }, { status: 500 });
+    return NextResponse.json({ error: "Erro ao processar edital com IA" }, { status: 500 });
   }
 }
