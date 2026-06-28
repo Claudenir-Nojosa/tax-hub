@@ -87,7 +87,7 @@ export default function Step4Analise({
                 <td className="py-2 px-3 border border-gray-200 dark:border-gray-700">PIS/COFINS (Cumulativo)</td>
                 {resultados.map((r) => (
                   <td key={r.ano} className="py-2 px-3 text-right border border-gray-200 dark:border-gray-700">
-                    {r.pisCofinsAtual > 0 ? fmt2(r.pisCofinsAtual) : <span className="text-gray-400">-</span>}
+                    {r.ano === 2026 && r.pisCofinsAtual > 0 ? fmt2(r.pisCofinsAtual) : <span className="text-gray-400">-</span>}
                   </td>
                 ))}
               </tr>
