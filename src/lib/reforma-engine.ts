@@ -246,7 +246,17 @@ export function calcularSimulacaoXml(input: InputSimulacaoXml): ResultadoAno[] {
     const ibsMUN      = baseIbsCbs * p.ibsMUN
     const ibsCbsTotal = cbs + ibsUF + ibsMUN
 
-    const icmsReforma = vICMS * p.icmsReducao
+    // ICMS reforma:
+    // 2026 (periodoTeste): usa o ICMS real do XML (sem alterar base)
+    // 2027+: base_ICMS = (baseIbsCbs + IBS + CBS) / (1 − aliq×reducao) → ICMS = base × aliq×reducao
+    let icmsReforma: number
+    if (p.periodoTeste) {
+      icmsReforma = vICMS
+    } else {
+      const aliq = dadosXml.aliquotaICMSEfetiva * p.icmsReducao
+      icmsReforma = aliq < 1 ? (baseIbsCbs + ibsCbsTotal) * aliq / (1 - aliq) : 0
+    }
+
     const ipiReforma  = p.ipiAtivo ? vIPI : 0
 
     // Em período de teste (2026): IBS/CBS compensados por crédito PIS/COFINS — efeito líquido zero
