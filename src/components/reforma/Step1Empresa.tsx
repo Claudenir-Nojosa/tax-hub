@@ -169,10 +169,15 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
       <div className="space-y-2">
         <Label>Faturamento Anual Estimado (R$)</Label>
         <Input
-          type="number"
-          value={data.faturamento || ""}
-          onChange={(e) => onChange({ ...data, faturamento: Number(e.target.value) })}
-          placeholder="Ex: 5000000"
+          type="text"
+          inputMode="numeric"
+          value={data.faturamento ? new Intl.NumberFormat("pt-BR").format(data.faturamento) : ""}
+          onChange={(e) => {
+            const raw = e.target.value.replace(/[R$\s]/g, "").replace(/\./g, "").replace(",", ".")
+            const num = parseFloat(raw)
+            onChange({ ...data, faturamento: isNaN(num) ? 0 : num })
+          }}
+          placeholder="Ex: 12.670.021"
         />
         <p className="text-xs text-gray-500">
           Receita bruta anual — base para o cálculo das simulações
