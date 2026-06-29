@@ -74,8 +74,9 @@ export async function POST(req: NextRequest) {
       if (!file) return NextResponse.json({ error: "Arquivo não enviado" }, { status: 400 });
 
       const buffer = Buffer.from(await file.arrayBuffer());
+      // Importa o lib interno para evitar o bug do pdf-parse no Vercel (leitura de test files)
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
+      const pdfParse = require("pdf-parse/lib/pdf-parse.js") as (buf: Buffer) => Promise<{ text: string }>;
       const parsed = await pdfParse(buffer);
       texto = parsed.text;
     } else {
