@@ -291,6 +291,7 @@ function EmpresaWizardInner() {
             temFCBF={premissas.temFCBF}
             loading={loadingSimulacao}
             usouXml={usouXml}
+            nomeEmpresa={empresa.razaoSocial}
             onBack={() => setStep(1)}
             onNext={() => setStep(3)}
           />

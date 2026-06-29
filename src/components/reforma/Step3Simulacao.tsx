@@ -3,9 +3,10 @@
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, TrendingDown, TrendingUp } from "lucide-react"
+import { Loader2, TrendingDown, TrendingUp, FileSpreadsheet } from "lucide-react"
 import type { ResultadoAno } from "@/lib/reforma-engine"
 import { formatarMoeda, formatarPorcentagem } from "@/lib/reforma-engine"
+import { exportarSimulacaoExcel } from "@/lib/export-simulacao-excel"
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
@@ -20,11 +21,12 @@ interface Props {
   temFCBF: boolean
   loading: boolean
   usouXml?: boolean
+  nomeEmpresa?: string
   onBack: () => void
   onNext: () => void
 }
 
-export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, onBack, onNext }: Props) {
+export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, nomeEmpresa, onBack, onNext }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -174,11 +176,21 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
         </div>
       </div>
 
-      <div className="flex justify-between">
+      <div className="flex justify-between items-center">
         <Button variant="outline" onClick={onBack}>← Ajustar Premissas</Button>
-        <Button onClick={onNext} className="bg-blue-600 hover:bg-blue-700 text-white">
-          Ver Análise Comparativa →
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => exportarSimulacaoExcel(resultados, temFCBF, nomeEmpresa)}
+            className="gap-2"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            Exportar Excel
+          </Button>
+          <Button onClick={onNext} className="bg-blue-600 hover:bg-blue-700 text-white">
+            Ver Análise Comparativa →
+          </Button>
+        </div>
       </div>
     </div>
   )
