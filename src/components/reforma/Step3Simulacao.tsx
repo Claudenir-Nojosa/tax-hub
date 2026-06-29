@@ -7,6 +7,8 @@ import { Loader2, TrendingDown, TrendingUp, FileSpreadsheet } from "lucide-react
 import type { ResultadoAno } from "@/lib/reforma-engine"
 import { formatarMoeda, formatarPorcentagem } from "@/lib/reforma-engine"
 import { exportarSimulacaoExcel } from "@/lib/export-simulacao-excel"
+import type { DadosReaisXml } from "@/lib/nfe-parser"
+import type { DadosEfd } from "@/lib/efd-parser"
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
@@ -23,11 +25,13 @@ interface Props {
   usouXml?: boolean
   nomeEmpresa?: string
   regime?: string
+  dadosXml?: DadosReaisXml | null
+  dadosEfd?: DadosEfd | null
   onBack: () => void
   onNext: () => void
 }
 
-export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, nomeEmpresa, regime, onBack, onNext }: Props) {
+export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, nomeEmpresa, regime, dadosXml, dadosEfd, onBack, onNext }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -182,7 +186,7 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => exportarSimulacaoExcel(resultados, temFCBF, nomeEmpresa, regime)}
+            onClick={() => exportarSimulacaoExcel(resultados, temFCBF, nomeEmpresa, regime, dadosXml, dadosEfd)}
             className="gap-2"
           >
             <FileSpreadsheet className="h-4 w-4" />

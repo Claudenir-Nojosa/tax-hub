@@ -293,6 +293,8 @@ function EmpresaWizardInner() {
             usouXml={usouXml}
             nomeEmpresa={empresa.razaoSocial}
             regime={empresa.regime}
+            dadosXml={dadosXml}
+            dadosEfd={dadosEfd}
             onBack={() => setStep(1)}
             onNext={() => setStep(3)}
           />

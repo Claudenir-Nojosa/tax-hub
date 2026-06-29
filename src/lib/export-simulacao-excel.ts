@@ -1,5 +1,8 @@
 import ExcelJS from "exceljs"
 import type { ResultadoAno } from "./reforma-engine"
+import { PREMISSAS_PADRAO } from "./reforma-engine"
+import type { DadosReaisXml, ItemNFe } from "./nfe-parser"
+import type { DadosEfd, RegistroC190 } from "./efd-parser"
 
 // ── Paleta ────────────────────────────────────────────────────────────────────
 const COR = {
@@ -8,7 +11,6 @@ const COR = {
   azulHeader:   "FFD6E4F7",
   azulSubtotal: "FFBDD7EE",
   verde:        "FFE2EFDA",
-  verdeDelta:   "FF70AD47",
   vermelho:     "FFFCE4D6",
   cinzaFundo:   "FFF5F5F5",
   amarelo:      "FFFFF2CC",
@@ -17,14 +19,15 @@ const COR = {
   cinzaTexto:   "FF595959",
 }
 
-const BRL = "#,##0.00"
-const BRL_PAR = `#,##0.00;[Red]-#,##0.00;"-"`
-const PCT = "0.00%"
-const PCT_PAR = `0.00%;[Red]-0.00%;"-"`
+const BRL  = "#,##0.00"
+const BRLP = `#,##0.00;[Red]-#,##0.00;"-"`
+const PCT  = "0.00%"
+const PCTP = `0.00%;[Red]-0.00%;"-"`
+const ALQ  = "0.00%"
 
-// ── Helpers de formatação ─────────────────────────────────────────────────────
+// ── Helper central de estilo ──────────────────────────────────────────────────
 
-function styleCell(
+function sc(
   cell: ExcelJS.Cell,
   opts: {
     value?: ExcelJS.CellValue
@@ -37,8 +40,8 @@ function styleCell(
     numFmt?: string
     indent?: number
     wrap?: boolean
-    borderBottom?: "thin" | "medium" | "hair"
-    borderTop?: "thin" | "medium" | "hair"
+    bt?: "thin" | "medium" | "hair"  // border-top
+    bb?: "thin" | "medium" | "hair"  // border-bottom
   },
 ) {
   if (opts.value !== undefined) cell.value = opts.value
@@ -50,130 +53,440 @@ function styleCell(
     size: opts.size ?? 10,
     color: { argb: opts.color ?? COR.preto },
   }
-  cell.alignment = {
-    horizontal: opts.align ?? "left",
-    vertical: "middle",
-    wrapText: opts.wrap,
-    indent: opts.indent,
-  }
+  cell.alignment = { horizontal: opts.align ?? "left", vertical: "middle", wrapText: opts.wrap, indent: opts.indent }
   if (opts.numFmt) cell.numFmt = opts.numFmt
-  if (opts.borderBottom || opts.borderTop) {
+  if (opts.bt || opts.bb) {
     cell.border = {
-      bottom: opts.borderBottom ? { style: opts.borderBottom, color: { argb: COR.azulSecao } } : undefined,
-      top:    opts.borderTop    ? { style: opts.borderTop,    color: { argb: COR.azulSecao } } : undefined,
+      top:    opts.bt ? { style: opts.bt, color: { argb: COR.azulSecao } } : undefined,
+      bottom: opts.bb ? { style: opts.bb, color: { argb: COR.azulSecao } } : undefined,
     }
   }
 }
 
-function tituloAba(
-  ws: ExcelJS.Worksheet,
-  rowNum: number,
-  cols: number,
-  texto: string,
-  sub?: string,
-) {
-  ws.mergeCells(rowNum, 1, rowNum, cols)
-  const cell = ws.getCell(rowNum, 1)
-  styleCell(cell, { value: texto, bg: COR.azulTitulo, bold: true, size: 14, color: COR.branco, align: "center" })
-  ws.getRow(rowNum).height = 30
+// ── Blocos reutilizáveis ──────────────────────────────────────────────────────
+
+function titulo(ws: ExcelJS.Worksheet, r: number, cols: number, txt: string, sub?: string) {
+  ws.mergeCells(r, 1, r, cols)
+  sc(ws.getCell(r, 1), { value: txt, bg: COR.azulTitulo, bold: true, size: 14, color: COR.branco, align: "center" })
+  ws.getRow(r).height = 30
   if (sub) {
-    ws.mergeCells(rowNum + 1, 1, rowNum + 1, cols)
-    const sub_cell = ws.getCell(rowNum + 1, 1)
-    styleCell(sub_cell, { value: sub, bg: COR.azulSecao, bold: false, size: 10, color: COR.branco, align: "center", italic: true })
-    ws.getRow(rowNum + 1).height = 18
+    ws.mergeCells(r + 1, 1, r + 1, cols)
+    sc(ws.getCell(r + 1, 1), { value: sub, bg: COR.azulSecao, size: 10, color: COR.branco, align: "center", italic: true })
+    ws.getRow(r + 1).height = 18
   }
 }
 
-function cabecalhoSecao(ws: ExcelJS.Worksheet, rowNum: number, cols: number, texto: string) {
-  ws.mergeCells(rowNum, 1, rowNum, cols)
-  const cell = ws.getCell(rowNum, 1)
-  styleCell(cell, { value: texto, bg: COR.azulSecao, bold: true, size: 11, color: COR.branco, indent: 1 })
-  ws.getRow(rowNum).height = 20
+function secao(ws: ExcelJS.Worksheet, r: number, cols: number, txt: string) {
+  ws.mergeCells(r, 1, r, cols)
+  sc(ws.getCell(r, 1), { value: txt, bg: COR.azulSecao, bold: true, size: 11, color: COR.branco, indent: 1 })
+  ws.getRow(r).height = 20
 }
 
-function cabecalhoColunas(ws: ExcelJS.Worksheet, rowNum: number, headers: string[]) {
-  headers.forEach((h, i) => {
-    const cell = ws.getCell(rowNum, i + 1)
-    styleCell(cell, {
-      value: h,
-      bg: COR.azulHeader,
-      bold: true,
-      size: 10,
-      align: i === 0 ? "left" : "center",
-      indent: i === 0 ? 1 : 0,
-      borderBottom: "medium",
+function headers(ws: ExcelJS.Worksheet, r: number, hdrs: string[]) {
+  hdrs.forEach((h, i) => {
+    sc(ws.getCell(r, i + 1), {
+      value: h, bg: COR.azulHeader, bold: true, size: 9,
+      align: i === 0 ? "left" : "center", indent: i === 0 ? 1 : 0, bb: "medium", wrap: true,
     })
   })
-  ws.getRow(rowNum).height = 18
+  ws.getRow(r).height = 32
 }
 
-function linhasDados(
-  ws: ExcelJS.Worksheet,
-  rowNum: number,
-  cols: (string | number | null | undefined)[],
+function vazio(ws: ExcelJS.Worksheet, r: number) { ws.getRow(r).height = 8 }
+
+function linhaDados(
+  ws: ExcelJS.Worksheet, r: number,
+  vals: (ExcelJS.CellValue)[],
   fmts: string[],
-  opts?: { bg?: string; bold?: boolean; color?: string; borderTop?: "thin" | "medium" },
+  opts?: { bg?: string; bold?: boolean; color?: string; bt?: "thin" | "medium" },
 ) {
-  cols.forEach((v, i) => {
-    const cell = ws.getCell(rowNum, i + 1)
-    styleCell(cell, {
-      value: v ?? null,
-      bg: opts?.bg,
-      bold: opts?.bold,
-      size: 10,
-      color: opts?.color,
+  vals.forEach((v, i) => {
+    sc(ws.getCell(r, i + 1), {
+      value: v ?? null, bg: opts?.bg, bold: opts?.bold, size: 9, color: opts?.color,
       align: i === 0 ? "left" : "right",
-      numFmt: v !== null && v !== undefined && typeof v === "number" ? fmts[i] : undefined,
-      indent: i === 0 ? 2 : 0,
-      borderTop: i === 0 ? opts?.borderTop : undefined,
+      numFmt: typeof v === "number" ? fmts[i] : undefined,
+      indent: i === 0 ? 1 : 0, bt: i === 0 ? opts?.bt : undefined,
     })
   })
-  ws.getRow(rowNum).height = 16
+  ws.getRow(r).height = 15
 }
 
-function linhaVazia(ws: ExcelJS.Worksheet, rowNum: number) {
-  ws.getRow(rowNum).height = 8
-}
-
-function totalLinha(
-  ws: ExcelJS.Worksheet,
-  rowNum: number,
-  cols: number,
-  label: string,
-  valor: number,
-  pct: number,
-  bg: string,
-  colorTexto: string,
+function linhaTotal(
+  ws: ExcelJS.Worksheet, r: number, ncols: number,
+  label: string, vals: (number | null)[], fmts: string[],
+  bg: string, cor: string,
 ) {
-  // Col A: label
-  const cA = ws.getCell(rowNum, 1)
-  styleCell(cA, { value: label, bg, bold: true, size: 10, color: colorTexto, indent: 1, borderTop: "medium" })
-  // Col B e C: vazio
-  for (let c = 2; c <= cols - 2; c++) {
-    const cell = ws.getCell(rowNum, c)
-    styleCell(cell, { bg, borderTop: "medium" })
+  sc(ws.getCell(r, 1), { value: label, bg, bold: true, size: 10, color: cor, indent: 1, bt: "medium" })
+  for (let c = 2; c <= ncols - vals.length; c++) {
+    sc(ws.getCell(r, c), { bg, bt: "medium" })
   }
-  // Col D: valor
-  const cD = ws.getCell(rowNum, cols - 1)
-  styleCell(cD, { value: valor, bg, bold: true, size: 10, color: colorTexto, align: "right", numFmt: BRL_PAR, borderTop: "medium" })
-  // Col E: %
-  const cE = ws.getCell(rowNum, cols)
-  styleCell(cE, { value: pct, bg, bold: true, size: 10, color: colorTexto, align: "right", numFmt: PCT, borderTop: "medium" })
-  ws.getRow(rowNum).height = 18
+  vals.forEach((v, i) => {
+    sc(ws.getCell(r, ncols - vals.length + 1 + i), {
+      value: v, bg, bold: true, size: 10, color: cor, align: "right",
+      numFmt: typeof v === "number" ? fmts[i] : undefined, bt: "medium",
+    })
+  })
+  ws.getRow(r).height = 18
 }
 
-// ── Aba por Ano ───────────────────────────────────────────────────────────────
+// ── Aba de ano: versão XML granular ───────────────────────────────────────────
+// Colunas: NF | Data | Item | Produto | CFOP | CST | Alíq ICMS |
+//          vProd | BC ICMS | ICMS | PIS | COFINS | IPI | Base IBS/CBS |
+//          CBS | IBS UF | IBS MUN | IBS/CBS Total | ICMS Reforma | IPI Reforma |
+//          Carga Atual | Carga Reforma | Delta
 
-function criarAbaAno(
+function criarAbaAnoXml(
+  wb: ExcelJS.Workbook,
+  r: ResultadoAno,
+  empresa: string,
+  regime: string,
+  xml: DadosReaisXml,
+) {
+  const NCOLS = 23
+  const ws = wb.addWorksheet(String(r.ano), { views: [{ showGridLines: false }] })
+  ws.columns = [
+    { key: "nf",      width: 12 },  // A NF
+    { key: "data",    width: 10 },  // B Data
+    { key: "item",    width: 6  },  // C Item
+    { key: "prod",    width: 28 },  // D Produto
+    { key: "cfop",    width: 7  },  // E CFOP
+    { key: "cst",     width: 6  },  // F CST
+    { key: "aliqICMS",width: 8  },  // G Alíq ICMS
+    { key: "vProd",   width: 14 },  // H vProd
+    { key: "bcICMS",  width: 14 },  // I BC ICMS
+    { key: "icms",    width: 12 },  // J ICMS
+    { key: "pis",     width: 10 },  // K PIS
+    { key: "cof",     width: 10 },  // L COFINS
+    { key: "ipi",     width: 10 },  // M IPI
+    { key: "baseIBS", width: 14 },  // N Base IBS/CBS
+    { key: "cbs",     width: 12 },  // O CBS
+    { key: "ibsuf",   width: 12 },  // P IBS UF
+    { key: "ibsmun",  width: 12 },  // Q IBS MUN
+    { key: "ibstot",  width: 12 },  // R IBS/CBS Total
+    { key: "icmsRf",  width: 12 },  // S ICMS Reforma
+    { key: "ipiRf",   width: 10 },  // T IPI Reforma
+    { key: "cAtual",  width: 14 },  // U Carga Atual
+    { key: "cReform", width: 14 },  // V Carga Reforma
+    { key: "delta",   width: 14 },  // W Delta
+  ]
+
+  const p = PREMISSAS_PADRAO[r.ano]
+  const fat = xml.fatorAnualizacao  // = 12 / mesesImportados
+
+  let row = 1
+  titulo(ws, row, NCOLS,
+    `ANÁLISE TRIBUTÁRIA — ${r.ano} — DADOS POR ITEM DE NF-e`,
+    `${empresa.toUpperCase()} · ${regime.toUpperCase()} · Projeção anual (fator ${fat.toFixed(2)}x — base: ${xml.mesesImportados} mês${xml.mesesImportados > 1 ? "es" : ""})`,
+  )
+  row += 3
+
+  secao(ws, row++, NCOLS, "  SAÍDAS — COMPOSIÇÃO POR ITEM DE NF-e  (valores anualizados)")
+  headers(ws, row++, [
+    "NF", "Data", "Item", "Produto",
+    "CFOP", "CST", "Alíq ICMS",
+    "vProd (R$)", "BC ICMS (R$)", "ICMS (R$)", "PIS (R$)", "COFINS (R$)", "IPI (R$)",
+    "Base IBS/CBS (R$)",
+    "CBS (R$)", "IBS UF (R$)", "IBS MUN (R$)", "IBS/CBS Total (R$)",
+    "ICMS Reforma (R$)", "IPI Reforma (R$)",
+    "Carga Atual (R$)", "Carga Reforma (R$)", "Delta (R$)",
+  ])
+
+  // Totais para conferência
+  let totVProd = 0, totICMS = 0, totPIS = 0, totCOF = 0, totIPI = 0
+  let totBase = 0, totCBS = 0, totIBSUF = 0, totIBSMUN = 0
+  let totICMSRf = 0, totIPIRf = 0, totCAtual = 0, totCReforma = 0, totDelta = 0
+
+  xml.itens.forEach((it: ItemNFe, idx: number) => {
+    const f = fat
+    const vProd    = it.vProd    * f
+    const bcICMS   = it.vBCICMS  * f
+    const icmsA    = it.vICMS    * f
+    const pisA     = it.vPIS     * f
+    const cofA     = it.vCOFINS  * f
+    const ipiA     = it.vIPI     * f
+    const baseIBS  = it.baseIbsCbs * f
+
+    const cbs      = baseIBS * p.cbs
+    const ibsUF    = baseIBS * p.ibsUF
+    const ibsMUN   = baseIBS * p.ibsMUN
+    const ibsTot   = cbs + ibsUF + ibsMUN
+    const icmsRf   = icmsA * p.icmsReducao
+    const ipiRf    = p.ipiAtivo ? ipiA : 0
+
+    const cAtual   = icmsA + pisA + cofA + ipiA
+    const cReforma = ibsTot + icmsRf + ipiRf
+    const delta    = cReforma - cAtual
+
+    totVProd += vProd; totICMS += icmsA; totPIS += pisA; totCOF += cofA; totIPI += ipiA
+    totBase  += baseIBS; totCBS += cbs; totIBSUF += ibsUF; totIBSMUN += ibsMUN
+    totICMSRf += icmsRf; totIPIRf += ipiRf; totCAtual += cAtual
+    totCReforma += cReforma; totDelta += delta
+
+    const bg = idx % 2 === 0 ? COR.cinzaFundo : COR.branco
+    const deltaBg = delta < 0 ? COR.verde : (delta > 0 ? COR.vermelho : bg)
+    linhaDados(ws, row, [
+      it.nNF, it.dhEmi, it.nItem, it.xProd,
+      it.cfop, it.cstICMS, it.pICMS / 100,
+      vProd, bcICMS, icmsA, pisA, cofA, ipiA,
+      baseIBS, cbs, ibsUF, ibsMUN, ibsTot,
+      icmsRf, ipiRf,
+      cAtual, cReforma, delta,
+    ], [
+      "@", "@", "0", "@",
+      "@", "@", ALQ,
+      BRL, BRL, BRL, BRL, BRL, BRL,
+      BRL, BRL, BRL, BRL, BRL,
+      BRL, BRL,
+      BRL, BRL, BRLP,
+    ], { bg: delta === 0 ? bg : deltaBg })
+    row++
+  })
+
+  // Linha total saídas
+  linhaTotal(ws, row++, NCOLS, "TOTAL SAÍDAS", [
+    totVProd, totICMS, totPIS, totCOF, totIPI,
+    totBase, totCBS, totIBSUF, totIBSMUN, totCBS + totIBSUF + totIBSMUN,
+    totICMSRf, totIPIRf, totCAtual, totCReforma, totDelta,
+  ], [BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRLP],
+  COR.azulTitulo, COR.branco)
+  vazio(ws, row++)
+
+  // ── Crédito nas entradas (agregado do ResultadoAno — entradas não vêm do XML de saídas) ──
+  secao(ws, row++, NCOLS, "  CRÉDITO IBS/CBS NAS ENTRADAS (base consolidada do período)")
+  headers(ws, row++, ["Descrição", ...Array(NCOLS - 2).fill(""), "Crédito (R$)"])
+  linhaDados(ws, row++,
+    ["(-) Crédito IBS/CBS sobre compras" + (r.usouEfd ? "  ★ base EFD (VL_OPR)" : " (estimativa)"),
+     ...Array(NCOLS - 2).fill(null), -r.creditoCompras],
+    ["@", ...Array(NCOLS - 2).fill("@"), BRLP],
+    { bg: COR.verde, color: "FF375623" },
+  )
+  vazio(ws, row++)
+
+  // ── Resumo do ano ──
+  secao(ws, row++, NCOLS, "  POSIÇÃO LÍQUIDA DO ANO")
+  headers(ws, row++, ["Indicador", ...Array(NCOLS - 3).fill(""), "Valor (R$)", "% Receita"])
+  const fat2 = r.cargaAtualPct > 0 ? r.cargaAtualTotal / r.cargaAtualPct : 0
+  const resumo: [string, number, number][] = [
+    ["Carga Total Atual (baseline)",         r.cargaAtualTotal,   r.cargaAtualPct],
+    ["IBS/CBS + ICMS Reforma (bruto)",        r.cargaReformaTotal + r.creditoCompras, (r.cargaReformaTotal + r.creditoCompras) / (fat2 || 1)],
+    ["(-) Crédito IBS/CBS Entradas",          -r.creditoCompras,   fat2 > 0 ? -r.creditoCompras / fat2 : 0],
+    ["Carga Total Reforma (líquida)",         r.cargaReformaTotal, r.cargaReformaPct],
+  ]
+  resumo.forEach(([lbl, val, pct], i) => {
+    const bg = lbl.startsWith("(-)") ? COR.verde : (i % 2 === 0 ? COR.cinzaFundo : COR.branco)
+    linhaDados(ws, row++,
+      [lbl, ...Array(NCOLS - 3).fill(null), val, pct],
+      ["@", ...Array(NCOLS - 3).fill("@"), BRLP, PCT],
+      { bg, color: lbl.startsWith("(-)") ? "FF375623" : undefined },
+    )
+  })
+  const deltaBg  = r.delta < 0 ? COR.verde : COR.vermelho
+  const deltaCor = r.delta < 0 ? "FF375623" : "FF9C0006"
+  linhaTotal(ws, row++, NCOLS,
+    r.delta < 0 ? "▼ ECONOMIA com a Reforma" : "▲ CUSTO ADICIONAL com a Reforma",
+    [r.delta, r.deltaPct], [BRLP, PCT],
+    deltaBg, deltaCor,
+  )
+
+  if (temFCBFFromResultado(r)) {
+    vazio(ws, row++)
+    linhaDados(ws, row++,
+      ["(-) Economia FCBF", ...Array(NCOLS - 3).fill(null), -r.fcbfEconomia, r.cargaAtualPct > 0 ? -r.fcbfEconomia / fat2 : 0],
+      ["@", ...Array(NCOLS - 3).fill("@"), BRLP, PCT],
+      { bg: COR.verde, color: "FF375623" },
+    )
+    linhaTotal(ws, row++, NCOLS, "Carga Líquida com FCBF",
+      [r.cargaLiquidaComFcbf, r.cargaLiquidaPct], [BRLP, PCT],
+      COR.azulTitulo, COR.branco,
+    )
+  }
+}
+
+// ── Aba de ano: versão EFD C190 granular ──────────────────────────────────────
+// Colunas: CFOP | CST | Alíq ICMS | VL_OPR | BC ICMS | VL ICMS |
+//          Base IBS/CBS | CBS | IBS UF | IBS MUN | IBS/CBS Total |
+//          ICMS Reforma | Carga Atual ICMS | Carga Reforma | Delta
+
+function criarAbaAnoEfd(
+  wb: ExcelJS.Workbook,
+  r: ResultadoAno,
+  empresa: string,
+  regime: string,
+  efd: DadosEfd,
+) {
+  const NCOLS = 15
+  const ws = wb.addWorksheet(String(r.ano), { views: [{ showGridLines: false }] })
+  ws.columns = [
+    { key: "cfop",    width: 8  },  // A CFOP
+    { key: "cst",     width: 6  },  // B CST
+    { key: "aliq",    width: 9  },  // C Alíq ICMS
+    { key: "vlopr",   width: 16 },  // D VL_OPR
+    { key: "bcicms",  width: 14 },  // E BC ICMS
+    { key: "vlicms",  width: 14 },  // F VL ICMS
+    { key: "baseIBS", width: 16 },  // G Base IBS/CBS
+    { key: "cbs",     width: 13 },  // H CBS
+    { key: "ibsuf",   width: 13 },  // I IBS UF
+    { key: "ibsmun",  width: 13 },  // J IBS MUN
+    { key: "ibstot",  width: 13 },  // K IBS/CBS Total
+    { key: "icmsrf",  width: 13 },  // L ICMS Reforma
+    { key: "cAtual",  width: 14 },  // M Carga Atual (ICMS)
+    { key: "cReform", width: 14 },  // N Carga Reforma
+    { key: "delta",   width: 14 },  // O Delta
+  ]
+
+  const p   = PREMISSAS_PADRAO[r.ano]
+  const fat = efd.mesesImportados > 0 ? 12 / efd.mesesImportados : 1
+
+  let row = 1
+  titulo(ws, row, NCOLS,
+    `ANÁLISE TRIBUTÁRIA — ${r.ano} — DADOS EFD C190 POR CFOP/CST`,
+    `${empresa.toUpperCase()} · ${regime.toUpperCase()} · Projeção anual (fator ${fat.toFixed(2)}x — base: ${efd.mesesImportados} mês${efd.mesesImportados > 1 ? "es" : ""})`,
+  )
+  row += 3
+
+  // ── SAÍDAS ──
+  secao(ws, row++, NCOLS, "  SAÍDAS — REGISTROS C190 (valores anualizados)")
+  headers(ws, row++, [
+    "CFOP", "CST", "Alíq ICMS",
+    "VL_OPR (R$)", "BC ICMS (R$)", "VL ICMS (R$)",
+    "Base IBS/CBS (R$)",
+    "CBS (R$)", "IBS UF (R$)", "IBS MUN (R$)", "IBS/CBS Total (R$)",
+    "ICMS Reforma (R$)",
+    "Carga Atual ICMS (R$)", "Carga Reforma (R$)", "Delta (R$)",
+  ])
+
+  let sVlOpr = 0, sBcICMS = 0, sVlICMS = 0
+  let sCBS = 0, sIBSUF = 0, sIBSMUN = 0, sICMSRf = 0
+  let sCAtual = 0, sCReforma = 0, sDelta = 0
+
+  efd.c190Saidas.forEach((reg: RegistroC190, idx: number) => {
+    const vlOpr   = reg.vlOpr   * fat
+    const bcICMS  = reg.vlBCICMS * fat
+    const vlICMS  = reg.vlICMS  * fat
+    const baseIBS = vlOpr  // VL_OPR = base IBS/CBS (valor total da operação)
+
+    const cbs    = baseIBS * p.cbs
+    const ibsUF  = baseIBS * p.ibsUF
+    const ibsMUN = baseIBS * p.ibsMUN
+    const ibsTot = cbs + ibsUF + ibsMUN
+    const icmsRf = vlICMS  * p.icmsReducao
+
+    const cAtual  = vlICMS
+    const cReform = ibsTot + icmsRf
+    const delta   = cReform - cAtual
+
+    sVlOpr += vlOpr; sBcICMS += bcICMS; sVlICMS += vlICMS
+    sCBS += cbs; sIBSUF += ibsUF; sIBSMUN += ibsMUN; sICMSRf += icmsRf
+    sCAtual += cAtual; sCReforma += cReform; sDelta += delta
+
+    const bg     = idx % 2 === 0 ? COR.cinzaFundo : COR.branco
+    const deltaBg = delta < 0 ? COR.verde : (delta > 0 ? COR.vermelho : bg)
+    linhaDados(ws, row++,
+      [reg.cfop, reg.cst, reg.aliqICMS / 100, vlOpr, bcICMS, vlICMS, baseIBS, cbs, ibsUF, ibsMUN, ibsTot, icmsRf, cAtual, cReform, delta],
+      ["@", "@", ALQ, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRLP],
+      { bg: delta === 0 ? bg : deltaBg },
+    )
+  })
+
+  linhaTotal(ws, row++, NCOLS, "TOTAL SAÍDAS",
+    [sVlOpr, sBcICMS, sVlICMS, sVlOpr, sCBS, sIBSUF, sIBSMUN, sCBS + sIBSUF + sIBSMUN, sICMSRf, sCAtual, sCReforma, sDelta],
+    [BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRLP],
+    COR.azulTitulo, COR.branco,
+  )
+  vazio(ws, row++)
+
+  // ── ENTRADAS (crédito) ──
+  secao(ws, row++, NCOLS, "  ENTRADAS — CRÉDITO IBS/CBS (Registros C190 — valores anualizados)")
+  headers(ws, row++, [
+    "CFOP", "CST", "Alíq ICMS",
+    "VL_OPR (R$)", "BC ICMS (R$)", "VL ICMS (R$)",
+    "Base Crédito (R$)",
+    "CBS (R$)", "IBS UF (R$)", "IBS MUN (R$)", "IBS/CBS Total (R$)",
+    "ICMS Crédito (R$)",
+    "Crédito IBS/CBS (R$)", "", "",
+  ])
+
+  let eVlOpr = 0, eBcICMS = 0, eVlICMS = 0, eCredIBS = 0
+
+  efd.c190Entradas.forEach((reg: RegistroC190, idx: number) => {
+    const vlOpr  = reg.vlOpr   * fat
+    const bcICMS = reg.vlBCICMS * fat
+    const vlICMS = reg.vlICMS  * fat
+    const baseC  = vlOpr
+
+    const cbs    = baseC * p.cbs
+    const ibsUF  = baseC * p.ibsUF
+    const ibsMUN = baseC * p.ibsMUN
+    const ibsTot = cbs + ibsUF + ibsMUN
+
+    eVlOpr += vlOpr; eBcICMS += bcICMS; eVlICMS += vlICMS; eCredIBS += ibsTot
+
+    linhaDados(ws, row++,
+      [reg.cfop, reg.cst, reg.aliqICMS / 100, vlOpr, bcICMS, vlICMS, baseC, cbs, ibsUF, ibsMUN, ibsTot, vlICMS, ibsTot, null, null],
+      ["@", "@", ALQ, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, BRL, "@", "@"],
+      { bg: idx % 2 === 0 ? COR.verde : "FFD9EAD3" },
+    )
+  })
+
+  linhaTotal(ws, row++, NCOLS, "TOTAL ENTRADAS (crédito)",
+    [eVlOpr, eBcICMS, eVlICMS, eVlOpr, null, null, null, null, eCredIBS, null, null, null],
+    [BRL, BRL, BRL, BRL, "@", "@", "@", "@", BRLP, "@", "@", "@"],
+    COR.azulSecao, COR.branco,
+  )
+  vazio(ws, row++)
+
+  // ── Posição líquida ──
+  secao(ws, row++, NCOLS, "  POSIÇÃO LÍQUIDA DO ANO")
+  headers(ws, row++, ["Indicador", ...Array(NCOLS - 3).fill(""), "Valor (R$)", "% Receita"])
+  const fat2 = r.cargaAtualPct > 0 ? r.cargaAtualTotal / r.cargaAtualPct : 0
+  const resumo: [string, number, number][] = [
+    ["Carga Total Atual — PIS/COFINS + ICMS + IPI (baseline)", r.cargaAtualTotal, r.cargaAtualPct],
+    ["IBS/CBS + ICMS Reforma (bruto)",                         r.cargaReformaTotal + r.creditoCompras, fat2 > 0 ? (r.cargaReformaTotal + r.creditoCompras) / fat2 : 0],
+    ["(-) Crédito IBS/CBS Entradas" + (r.usouEfd ? "  ★ EFD" : ""), -r.creditoCompras, fat2 > 0 ? -r.creditoCompras / fat2 : 0],
+    ["Carga Total Reforma (líquida)",                          r.cargaReformaTotal, r.cargaReformaPct],
+  ]
+  resumo.forEach(([lbl, val, pct], i) => {
+    const bg  = lbl.startsWith("(-)") ? COR.verde : (i % 2 === 0 ? COR.cinzaFundo : COR.branco)
+    const cor = lbl.startsWith("(-)") ? "FF375623" : undefined
+    linhaDados(ws, row++,
+      [lbl, ...Array(NCOLS - 3).fill(null), val, pct],
+      ["@", ...Array(NCOLS - 3).fill("@"), BRLP, PCT],
+      { bg, color: cor },
+    )
+  })
+  const dBg  = r.delta < 0 ? COR.verde : COR.vermelho
+  const dCor = r.delta < 0 ? "FF375623" : "FF9C0006"
+  linhaTotal(ws, row++, NCOLS,
+    r.delta < 0 ? "▼ ECONOMIA com a Reforma" : "▲ CUSTO ADICIONAL com a Reforma",
+    [r.delta, r.deltaPct], [BRLP, PCT],
+    dBg, dCor,
+  )
+
+  if (temFCBFFromResultado(r)) {
+    vazio(ws, row++)
+    linhaDados(ws, row++,
+      ["(-) Economia FCBF", ...Array(NCOLS - 3).fill(null), -r.fcbfEconomia, fat2 > 0 ? -r.fcbfEconomia / fat2 : 0],
+      ["@", ...Array(NCOLS - 3).fill("@"), BRLP, PCT],
+      { bg: COR.verde, color: "FF375623" },
+    )
+    linhaTotal(ws, row++, NCOLS, "Carga Líquida com FCBF",
+      [r.cargaLiquidaComFcbf, r.cargaLiquidaPct], [BRLP, PCT],
+      COR.azulTitulo, COR.branco,
+    )
+  }
+}
+
+// ── Aba de ano: resumo agregado (fallback sem dados raw) ──────────────────────
+
+function criarAbaAnoResumo(
   wb: ExcelJS.Workbook,
   r: ResultadoAno,
   temFCBF: boolean,
   empresa: string,
   regime: string,
 ) {
+  const NCOLS = 5
   const ws = wb.addWorksheet(String(r.ano), { views: [{ showGridLines: false }] })
-
-  // Larguras das colunas
   ws.columns = [
     { key: "tributo", width: 38 },
     { key: "base",    width: 20 },
@@ -182,104 +495,62 @@ function criarAbaAno(
     { key: "pct",     width: 14 },
   ]
 
-  const NCOLS = 5
   const fat = r.cargaAtualPct > 0 ? r.cargaAtualTotal / r.cargaAtualPct : 0
-
   let row = 1
 
-  // ── Título ──
-  tituloAba(ws, row, NCOLS, `SIMULAÇÃO REFORMA TRIBUTÁRIA — ${r.ano}`, `${empresa.toUpperCase()} · ${regime.toUpperCase()}`)
-  row += 3 // título + subtítulo + vazio
+  titulo(ws, row, NCOLS, `SIMULAÇÃO REFORMA TRIBUTÁRIA — ${r.ano}`, `${empresa.toUpperCase()} · ${regime.toUpperCase()}`)
+  row += 3
 
-  // ── CARGA ATUAL ──
-  cabecalhoSecao(ws, row++, NCOLS, "  REGIME ATUAL (BASELINE)")
-  cabecalhoColunas(ws, row++, ["Tributo", "Base de Cálculo (R$)", "Alíquota Efetiva", "Valor (R$)", "% Receita Bruta"])
-
-  const atualRows: [string, number, number, number, number][] = [
-    ["PIS/COFINS",  fat, fat > 0 ? r.pisCofinsAtual / fat : 0, r.pisCofinsAtual, fat > 0 ? r.pisCofinsAtual / fat : 0],
-    ["ICMS",        fat, fat > 0 ? r.icmsAtual / fat : 0,       r.icmsAtual,      fat > 0 ? r.icmsAtual / fat : 0],
-    ["IPI",         fat, fat > 0 ? r.ipiAtual / fat : 0,        r.ipiAtual,       fat > 0 ? r.ipiAtual / fat : 0],
-  ]
-  const bgAtual = [COR.cinzaFundo, COR.branco, COR.cinzaFundo]
-  atualRows.forEach(([nome, base, aliq, valor, pct], i) => {
-    linhasDados(ws, row++, [nome, base, aliq, valor, pct], ["@", BRL, PCT, BRL_PAR, PCT_PAR], { bg: bgAtual[i] })
+  secao(ws, row++, NCOLS, "  REGIME ATUAL (BASELINE)")
+  headers(ws, row++, ["Tributo", "Base de Cálculo (R$)", "Alíquota Efetiva", "Valor (R$)", "% Receita Bruta"])
+  const bgA = [COR.cinzaFundo, COR.branco, COR.cinzaFundo]
+  ;([
+    ["PIS/COFINS", fat, fat > 0 ? r.pisCofinsAtual / fat : 0, r.pisCofinsAtual, fat > 0 ? r.pisCofinsAtual / fat : 0],
+    ["ICMS",       fat, fat > 0 ? r.icmsAtual / fat : 0,       r.icmsAtual,      fat > 0 ? r.icmsAtual / fat : 0],
+    ["IPI",        fat, fat > 0 ? r.ipiAtual / fat : 0,        r.ipiAtual,       fat > 0 ? r.ipiAtual / fat : 0],
+  ] as [string, number, number, number, number][]).forEach(([nm, b, a, v, p], i) => {
+    linhaDados(ws, row++, [nm, b, a, v, p], ["@", BRL, PCT, BRLP, PCTP], { bg: bgA[i] })
   })
-  totalLinha(ws, row++, NCOLS, "TOTAL CARGA ATUAL", r.cargaAtualTotal, r.cargaAtualPct, COR.azulTitulo, COR.branco)
-  linhaVazia(ws, row++)
+  linhaTotal(ws, row++, NCOLS, "TOTAL CARGA ATUAL", [r.cargaAtualTotal, r.cargaAtualPct], [BRLP, PCT], COR.azulTitulo, COR.branco)
+  vazio(ws, row++)
 
-  // ── CARGA REFORMA ──
-  cabecalhoSecao(ws, row++, NCOLS, "  CARGA COM A REFORMA TRIBUTÁRIA (IBS/CBS)")
-  cabecalhoColunas(ws, row++, ["Tributo", "Base de Cálculo (R$)", "Alíquota Efetiva", "Valor (R$)", "% Receita Bruta"])
-
-  const reformaRows: [string, number | null, number | null, number, number][] = [
-    ["CBS — Contribuição sobre Bens e Serviços (federal)", fat, fat > 0 ? r.cbs / fat : 0, r.cbs, fat > 0 ? r.cbs / fat : 0],
-    ["IBS — Imposto sobre Bens e Serviços (UF estadual)", fat, fat > 0 ? r.ibsUF / fat : 0, r.ibsUF, fat > 0 ? r.ibsUF / fat : 0],
-    ["IBS — Imposto sobre Bens e Serviços (Municipal)",   fat, fat > 0 ? r.ibsMUN / fat : 0, r.ibsMUN, fat > 0 ? r.ibsMUN / fat : 0],
-  ]
-  const bgReforma = [COR.cinzaFundo, COR.branco, COR.cinzaFundo]
-  reformaRows.forEach(([nome, base, aliq, valor, pct], i) => {
-    linhasDados(ws, row++, [nome, base, aliq, valor, pct], ["@", BRL, PCT, BRL_PAR, PCT_PAR], { bg: bgReforma[i] })
+  secao(ws, row++, NCOLS, "  CARGA COM A REFORMA TRIBUTÁRIA (IBS/CBS)")
+  headers(ws, row++, ["Tributo", "Base de Cálculo (R$)", "Alíquota Efetiva", "Valor (R$)", "% Receita Bruta"])
+  ;([
+    ["CBS — federal",          fat, fat > 0 ? r.cbs / fat : 0,     r.cbs,     fat > 0 ? r.cbs / fat : 0],
+    ["IBS — UF estadual",      fat, fat > 0 ? r.ibsUF / fat : 0,   r.ibsUF,   fat > 0 ? r.ibsUF / fat : 0],
+    ["IBS — Municipal",        fat, fat > 0 ? r.ibsMUN / fat : 0,  r.ibsMUN,  fat > 0 ? r.ibsMUN / fat : 0],
+  ] as [string, number, number, number, number][]).forEach(([nm, b, a, v, p], i) => {
+    linhaDados(ws, row++, [nm, b, a, v, p], ["@", BRL, PCT, BRLP, PCTP], { bg: [COR.cinzaFundo, COR.branco, COR.cinzaFundo][i] })
   })
-
   // Subtotal IBS/CBS
-  const cellSub = ws.getCell(row, 1)
-  ws.mergeCells(row, 1, row, 1)
-  styleCell(cellSub, { value: "  Subtotal IBS/CBS", bg: COR.azulSubtotal, bold: true, size: 10, indent: 1, borderTop: "thin" })
-  styleCell(ws.getCell(row, 2), { value: null, bg: COR.azulSubtotal, borderTop: "thin" })
-  styleCell(ws.getCell(row, 3), { value: fat > 0 ? r.ibsCbsPct : null, bg: COR.azulSubtotal, bold: true, align: "right", numFmt: PCT, borderTop: "thin" })
-  styleCell(ws.getCell(row, 4), { value: r.ibsCbsTotal, bg: COR.azulSubtotal, bold: true, align: "right", numFmt: BRL, borderTop: "thin" })
-  styleCell(ws.getCell(row, 5), { value: r.ibsCbsPct, bg: COR.azulSubtotal, bold: true, align: "right", numFmt: PCT, borderTop: "thin" })
-  ws.getRow(row).height = 16
-  row++
+  linhaDados(ws, row++, ["  Subtotal IBS/CBS", null, r.ibsCbsPct, r.ibsCbsTotal, r.ibsCbsPct],
+    ["@", "@", PCT, BRL, PCT], { bg: COR.azulSubtotal, bold: true })
 
-  linhasDados(ws, row++, ["ICMS Residual (fator " + (r.icmsReducaoFator * 100).toFixed(0) + "%)", fat, fat > 0 ? r.icmsReforma / fat : 0, r.icmsReforma, fat > 0 ? r.icmsReforma / fat : 0], ["@", BRL, PCT, BRL_PAR, PCT_PAR], { bg: COR.branco })
-  linhasDados(ws, row++, [r.ipiExtinto ? "IPI — EXTINTO (R$ 0)" : "IPI Residual", null, null, r.ipiReforma, fat > 0 ? r.ipiReforma / fat : 0], ["@", "@", "@", BRL_PAR, PCT_PAR], { bg: COR.cinzaFundo })
+  linhaDados(ws, row++, ["ICMS Residual (fator " + (r.icmsReducaoFator * 100).toFixed(0) + "%)", fat, fat > 0 ? r.icmsReforma / fat : 0, r.icmsReforma, fat > 0 ? r.icmsReforma / fat : 0],
+    ["@", BRL, PCT, BRLP, PCTP], { bg: COR.branco })
+  linhaDados(ws, row++, [r.ipiExtinto ? "IPI — EXTINTO" : "IPI Residual", null, null, r.ipiReforma, fat > 0 ? r.ipiReforma / fat : 0],
+    ["@", "@", "@", BRLP, PCTP], { bg: COR.cinzaFundo })
+  linhaDados(ws, row++, ["(-) Crédito IBS/CBS nas Entradas" + (r.usouEfd ? "  ★ EFD" : ""), null, null, -r.creditoCompras, fat > 0 ? -r.creditoCompras / fat : 0],
+    ["@", "@", "@", BRLP, PCTP], { bg: COR.verde, color: "FF375623" })
+  linhaTotal(ws, row++, NCOLS, "TOTAL CARGA REFORMA", [r.cargaReformaTotal, r.cargaReformaPct], [BRLP, PCT], COR.azulSecao, COR.branco)
+  vazio(ws, row++)
 
-  // Crédito IBS/CBS (verde)
-  linhasDados(ws, row++,
-    ["(-) Crédito IBS/CBS nas Entradas" + (r.usouEfd ? "  ★ base EFD" : ""), null, null, -r.creditoCompras, fat > 0 ? -r.creditoCompras / fat : 0],
-    ["@", "@", "@", BRL_PAR, PCT_PAR],
-    { bg: COR.verde, color: "FF375623" },
-  )
-
-  totalLinha(ws, row++, NCOLS, "TOTAL CARGA REFORMA", r.cargaReformaTotal, r.cargaReformaPct, COR.azulSecao, COR.branco)
-  linhaVazia(ws, row++)
-
-  // ── FCBF ──
   if (temFCBF) {
-    cabecalhoSecao(ws, row++, NCOLS, "  FUNDO DE COMBATE À POBREZA (FCBF)")
-    cabecalhoColunas(ws, row++, ["Item", "", "", "Valor (R$)", "% Receita Bruta"])
-    linhasDados(ws, row++, ["(-) Economia FCBF (crédito presumido)", null, null, -r.fcbfEconomia, fat > 0 ? -r.fcbfEconomia / fat : 0], ["@", "@", "@", BRL_PAR, PCT_PAR], { bg: COR.verde, color: "FF375623" })
-    totalLinha(ws, row++, NCOLS, "CARGA LÍQUIDA COM FCBF", r.cargaLiquidaComFcbf, r.cargaLiquidaPct, COR.azulTitulo, COR.branco)
-    linhaVazia(ws, row++)
+    secao(ws, row++, NCOLS, "  FUNDO DE COMBATE À POBREZA (FCBF)")
+    headers(ws, row++, ["Item", "", "", "Valor (R$)", "% Receita"])
+    linhaDados(ws, row++, ["(-) Economia FCBF", null, null, -r.fcbfEconomia, fat > 0 ? -r.fcbfEconomia / fat : 0],
+      ["@", "@", "@", BRLP, PCTP], { bg: COR.verde, color: "FF375623" })
+    linhaTotal(ws, row++, NCOLS, "CARGA LÍQUIDA COM FCBF", [r.cargaLiquidaComFcbf, r.cargaLiquidaPct], [BRLP, PCT], COR.azulTitulo, COR.branco)
+    vazio(ws, row++)
   }
 
-  // ── VARIAÇÃO ──
-  cabecalhoSecao(ws, row++, NCOLS, "  VARIAÇÃO ANUAL (DELTA REFORMA vs. ATUAL)")
-  cabecalhoColunas(ws, row++, ["Indicador", "", "", "Valor (R$)", "Variação (%)"])
-
-  const deltaBg = r.delta < 0 ? COR.verde : COR.vermelho
-  const deltaColor = r.delta < 0 ? "FF375623" : "FF9C0006"
-  const deltaLabel = r.delta < 0
-    ? "▼ ECONOMIA com a Reforma"
-    : "▲ CUSTO ADICIONAL com a Reforma"
-
-  linhasDados(ws, row++, [deltaLabel, null, null, r.delta, r.deltaPct], ["@", "@", "@", BRL_PAR, PCT_PAR], { bg: deltaBg, bold: true, color: deltaColor })
-  linhaVazia(ws, row++)
-
-  // ── METADADOS ──
-  cabecalhoSecao(ws, row++, NCOLS, "  PREMISSAS DO PERÍODO")
-  cabecalhoColunas(ws, row++, ["Parâmetro", "Valor", "", "", ""])
-  const meta = [
-    ["Ano do período",                    String(r.ano)],
-    ["Fator de redução ICMS",             (r.icmsReducaoFator * 100).toFixed(0) + "%"],
-    ["IPI extinto neste período",         r.ipiExtinto ? "Sim" : "Não"],
-    ["Base de crédito EFD utilizada",     r.usouEfd ? "Sim (VL_OPR real)" : "Não (estimativa)"],
-    ["Faturamento estimado (R$)",         fat.toFixed(2)],
-  ]
-  meta.forEach(([k, v], i) => {
-    linhasDados(ws, row++, [k, v, "", "", ""], ["@", "@", "@", "@", "@"], { bg: i % 2 === 0 ? COR.cinzaFundo : COR.branco })
-  })
+  secao(ws, row++, NCOLS, "  VARIAÇÃO ANUAL (DELTA)")
+  headers(ws, row++, ["Indicador", "", "", "Valor (R$)", "Variação (%)"])
+  const dBg = r.delta < 0 ? COR.verde : COR.vermelho
+  const dC  = r.delta < 0 ? "FF375623" : "FF9C0006"
+  linhaDados(ws, row++, [r.delta < 0 ? "▼ ECONOMIA com a Reforma" : "▲ CUSTO ADICIONAL", null, null, r.delta, r.deltaPct],
+    ["@", "@", "@", BRLP, PCTP], { bg: dBg, bold: true, color: dC })
 }
 
 // ── Aba Resumo Comparativo ────────────────────────────────────────────────────
@@ -294,131 +565,109 @@ function criarAbaResumo(
   const ws = wb.addWorksheet("Resumo Comparativo", { views: [{ showGridLines: false }] })
   const anos = resultados.map((r) => r.ano)
   const NCOLS = 1 + anos.length
-
-  // Larguras
-  ws.columns = [
-    { key: "label", width: 40 },
-    ...anos.map(() => ({ width: 20 })),
-  ]
+  ws.columns = [{ key: "label", width: 40 }, ...anos.map(() => ({ width: 20 }))]
 
   let row = 1
-
-  // Título
-  tituloAba(ws, row, NCOLS, "TOTAL DOS TRIBUTOS INDIRETOS — REFORMA TRIBUTÁRIA", `${empresa.toUpperCase()} · ${regime.toUpperCase()} · EC 132/2023 + LC 214/2025`)
+  titulo(ws, row, NCOLS, "TOTAL DOS TRIBUTOS INDIRETOS — REFORMA TRIBUTÁRIA",
+    `${empresa.toUpperCase()} · ${regime.toUpperCase()} · EC 132/2023 + LC 214/2025`)
   row += 3
 
-  // Cabeçalho de anos
-  const hRow = ws.getRow(row)
-  hRow.height = 20
-  styleCell(ws.getCell(row, 1), { value: "TRIBUTO / INDICADOR", bg: COR.azulTitulo, bold: true, size: 10, color: COR.branco, align: "center", indent: 1 })
+  ws.getRow(row).height = 20
+  sc(ws.getCell(row, 1), { value: "TRIBUTO / INDICADOR", bg: COR.azulTitulo, bold: true, size: 10, color: COR.branco, align: "center", indent: 1 })
   anos.forEach((ano, i) => {
-    styleCell(ws.getCell(row, 2 + i), { value: ano, bg: COR.azulTitulo, bold: true, size: 11, color: COR.branco, align: "center", numFmt: "0" })
+    sc(ws.getCell(row, 2 + i), { value: ano, bg: COR.azulTitulo, bold: true, size: 11, color: COR.branco, align: "center", numFmt: "0" })
   })
   row++
 
-  const numRow = (label: string, vals: (number|null)[], bg: string, bold = false, numFmt = BRL_PAR, color?: string) => {
+  const nr = (label: string, vals: (number | null)[], bg: string, bold = false, fmt = BRLP, cor?: string) => {
     ws.getRow(row).height = 16
-    styleCell(ws.getCell(row, 1), { value: label, bg, bold, size: 10, color: color ?? COR.preto, indent: 2 })
+    sc(ws.getCell(row, 1), { value: label, bg, bold, size: 10, color: cor ?? COR.preto, indent: 2 })
     vals.forEach((v, i) => {
-      styleCell(ws.getCell(row, 2 + i), { value: v, bg, bold, align: "right", numFmt: typeof v === "number" ? numFmt : undefined, size: 10, color })
+      sc(ws.getCell(row, 2 + i), { value: v, bg, bold, align: "right", numFmt: typeof v === "number" ? fmt : undefined, size: 10, color: cor })
     })
     row++
   }
-
-  const totalRow = (label: string, vals: number[], bg: string, numFmt = BRL_PAR) => {
+  const tr = (label: string, vals: number[], bg: string, fmt = BRLP) => {
     ws.getRow(row).height = 18
-    styleCell(ws.getCell(row, 1), { value: label, bg, bold: true, size: 10, color: COR.branco, indent: 1, borderTop: "medium" })
+    sc(ws.getCell(row, 1), { value: label, bg, bold: true, size: 10, color: COR.branco, indent: 1, bt: "medium" })
     vals.forEach((v, i) => {
-      styleCell(ws.getCell(row, 2 + i), { value: v, bg, bold: true, align: "right", numFmt, size: 10, color: COR.branco, borderTop: "medium" })
+      sc(ws.getCell(row, 2 + i), { value: v, bg, bold: true, align: "right", numFmt: fmt, size: 10, color: COR.branco, bt: "medium" })
     })
     row++
   }
+  const sec = (lbl: string) => { secao(ws, row++, NCOLS, "  " + lbl) }
+  const hdr = (hs: string[]) => { headers(ws, row++, hs) }
+  const vz  = () => { vazio(ws, row++) }
 
-  const secRow = (label: string) => {
-    cabecalhoSecao(ws, row++, NCOLS, "  " + label)
-  }
+  sec("REGIME ATUAL (BASELINE)")
+  hdr(["Tributo", ...anos.map(() => "Valor (R$)")])
+  nr("PIS/COFINS",  resultados.map((r) => r.pisCofinsAtual), COR.cinzaFundo)
+  nr("ICMS",        resultados.map((r) => r.icmsAtual),      COR.branco)
+  nr("IPI",         resultados.map((r) => r.ipiAtual),       COR.cinzaFundo)
+  tr("TOTAL CARGA ATUAL (R$)", resultados.map((r) => r.cargaAtualTotal), COR.azulTitulo)
+  nr("% Receita Bruta",  resultados.map((r) => r.cargaAtualPct),   COR.azulHeader, true, PCT)
+  vz()
 
-  const vazRow = () => { linhaVazia(ws, row++) }
-  const hdrRow = (hdrs: string[]) => { cabecalhoColunas(ws, row++, hdrs) }
+  sec("REFORMA TRIBUTÁRIA (IBS/CBS)")
+  hdr(["Tributo", ...anos.map(() => "Valor (R$)")])
+  nr("CBS — federal",                resultados.map((r) => r.cbs),              COR.cinzaFundo)
+  nr("IBS — UF estadual",            resultados.map((r) => r.ibsUF),            COR.branco)
+  nr("IBS — Municipal",              resultados.map((r) => r.ibsMUN),           COR.cinzaFundo)
+  nr("ICMS Residual",                resultados.map((r) => r.icmsReforma),      COR.branco)
+  nr("IPI Residual",                 resultados.map((r) => r.ipiReforma),       COR.cinzaFundo)
+  nr("(-) Crédito IBS/CBS Entradas", resultados.map((r) => -r.creditoCompras),  COR.verde, false, BRLP, "FF375623")
+  tr("TOTAL CARGA REFORMA (R$)", resultados.map((r) => r.cargaReformaTotal), COR.azulSecao)
+  nr("% Receita Bruta",  resultados.map((r) => r.cargaReformaPct),   COR.azulHeader, true, PCT)
+  vz()
 
-  // ── REGIME ATUAL ──
-  secRow("REGIME ATUAL (BASELINE)")
-  hdrRow(["Tributo", ...anos.map(() => "Valor (R$)")])
-  numRow("PIS/COFINS",    resultados.map((r) => r.pisCofinsAtual), COR.cinzaFundo)
-  numRow("ICMS",          resultados.map((r) => r.icmsAtual),      COR.branco)
-  numRow("IPI",           resultados.map((r) => r.ipiAtual),       COR.cinzaFundo)
-  totalRow("TOTAL CARGA ATUAL (R$)", resultados.map((r) => r.cargaAtualTotal), COR.azulTitulo)
-  numRow("% Receita Bruta",      resultados.map((r) => r.cargaAtualPct),   COR.azulHeader, true, PCT)
-  vazRow()
-
-  // ── REFORMA ──
-  secRow("REFORMA TRIBUTÁRIA (IBS/CBS)")
-  hdrRow(["Tributo", ...anos.map(() => "Valor (R$)")])
-  numRow("CBS — federal",                   resultados.map((r) => r.cbs),            COR.cinzaFundo)
-  numRow("IBS — UF estadual",               resultados.map((r) => r.ibsUF),          COR.branco)
-  numRow("IBS — Municipal",                 resultados.map((r) => r.ibsMUN),         COR.cinzaFundo)
-  numRow("ICMS Residual",                   resultados.map((r) => r.icmsReforma),    COR.branco)
-  numRow("IPI Residual",                    resultados.map((r) => r.ipiReforma),     COR.cinzaFundo)
-  numRow("(-) Crédito IBS/CBS Entradas",    resultados.map((r) => -r.creditoCompras), COR.verde, false, BRL_PAR, "FF375623")
-  totalRow("TOTAL CARGA REFORMA (R$)", resultados.map((r) => r.cargaReformaTotal), COR.azulSecao)
-  numRow("% Receita Bruta",      resultados.map((r) => r.cargaReformaPct),   COR.azulHeader, true, PCT)
-  vazRow()
-
-  // ── FCBF ──
   if (temFCBF) {
-    secRow("FUNDO DE COMBATE À POBREZA (FCBF)")
-    hdrRow(["Item", ...anos.map(() => "Valor (R$)")])
-    numRow("(-) Economia FCBF",           resultados.map((r) => -r.fcbfEconomia),         COR.verde, false, BRL_PAR, "FF375623")
-    numRow("Carga Líquida com FCBF (R$)", resultados.map((r) => r.cargaLiquidaComFcbf),   COR.cinzaFundo)
-    numRow("% Receita Bruta c/ FCBF",     resultados.map((r) => r.cargaLiquidaPct),       COR.branco, false, PCT)
-    vazRow()
+    sec("FUNDO DE COMBATE À POBREZA (FCBF)")
+    hdr(["Item", ...anos.map(() => "Valor (R$)")])
+    nr("(-) Economia FCBF",           resultados.map((r) => -r.fcbfEconomia),        COR.verde, false, BRLP, "FF375623")
+    nr("Carga Líquida com FCBF (R$)", resultados.map((r) => r.cargaLiquidaComFcbf),  COR.cinzaFundo)
+    nr("% Receita Bruta c/ FCBF",     resultados.map((r) => r.cargaLiquidaPct),      COR.branco, false, PCT)
+    vz()
   }
 
-  // ── VARIAÇÃO ──
-  secRow("VARIAÇÃO ANUAL (DELTA REFORMA vs. ATUAL)")
-  hdrRow(["Indicador", ...anos.map(() => "Valor")])
-  numRow("Delta Anual (R$)",    resultados.map((r) => r.delta),    COR.branco, false, BRL_PAR)
-  numRow("Delta Anual (%)",     resultados.map((r) => r.deltaPct), COR.cinzaFundo, false, PCT_PAR)
-
-  // Delta acumulado progressivo
+  sec("VARIAÇÃO ANUAL (DELTA REFORMA vs. ATUAL)")
+  hdr(["Indicador", ...anos.map(() => "Valor")])
+  nr("Delta Anual (R$)", resultados.map((r) => r.delta),    COR.branco, false, BRLP)
+  nr("Delta Anual (%)",  resultados.map((r) => r.deltaPct), COR.cinzaFundo, false, PCTP)
   let acum = 0
-  const acumVals = resultados.map((r) => { acum += r.delta; return acum })
-  numRow("Delta Acumulado (R$)", acumVals, COR.amarelo, true, BRL_PAR)
-  vazRow()
+  nr("Delta Acumulado (R$)", resultados.map((r) => { acum += r.delta; return acum }), COR.amarelo, true, BRLP)
+  vz()
 
-  // ── IMPACTO ──
-  secRow("IMPACTO DA CARGA TRIBUTÁRIA (Reforma / Atual − 1)")
-  hdrRow(["Indicador", ...anos.map(() => "Variação %")])
-  numRow("Impacto % (Reforma vs. Atual)",
+  sec("IMPACTO DA CARGA TRIBUTÁRIA (Reforma / Atual − 1)")
+  hdr(["Indicador", ...anos.map(() => "Variação %")])
+  nr("Impacto % (Reforma vs. Atual)",
     resultados.map((r) => r.cargaAtualTotal > 0 ? r.cargaReformaTotal / r.cargaAtualTotal - 1 : null),
-    COR.branco, false, PCT_PAR,
-  )
-  vazRow()
+    COR.branco, false, PCTP)
+  vz()
 
-  // ── NOTA ──
   const totalDelta = resultados.reduce((s, r) => s + r.delta, 0)
   ws.mergeCells(row, 1, row, NCOLS)
-  const nota = ws.getCell(row, 1)
-  styleCell(nota, {
+  sc(ws.getCell(row, 1), {
     value: totalDelta < 0
-      ? `★  RESULTADO: ECONOMIA TOTAL de R$ ${Math.abs(totalDelta).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no período 2026–2033`
-      : `★  RESULTADO: CUSTO ADICIONAL de R$ ${totalDelta.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no período 2026–2033`,
+      ? `★  ECONOMIA TOTAL de R$ ${Math.abs(totalDelta).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no período 2026–2033`
+      : `★  CUSTO ADICIONAL de R$ ${totalDelta.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no período 2026–2033`,
     bg: totalDelta < 0 ? COR.verde : COR.vermelho,
-    bold: true,
-    size: 11,
+    bold: true, size: 11,
     color: totalDelta < 0 ? "FF375623" : "FF9C0006",
     align: "center",
   })
-  ws.getRow(row).height = 22
-  row++
-
-  vazRow()
+  ws.getRow(row).height = 22; row++
+  vz()
   ws.mergeCells(row, 1, row, NCOLS)
-  styleCell(ws.getCell(row, 1), {
+  sc(ws.getCell(row, 1), {
     value: "* Créditos IBS/CBS calculados sobre o valor total das entradas (VL_OPR). Análise conforme EC 132/2023 e LC 214/2025.",
-    bg: COR.amarelo, italic: true, size: 9, color: COR.cinzaTexto, align: "left", indent: 1,
+    bg: COR.amarelo, italic: true, size: 9, color: COR.cinzaTexto, indent: 1,
   })
   ws.getRow(row).height = 14
+}
+
+// Detecta se FCBF foi usado (fcbfEconomia > 0)
+function temFCBFFromResultado(r: ResultadoAno): boolean {
+  return r.fcbfEconomia > 0
 }
 
 // ── Export principal ──────────────────────────────────────────────────────────
@@ -428,23 +677,27 @@ export async function exportarSimulacaoExcel(
   temFCBF: boolean,
   nomeEmpresa = "Empresa",
   regime = "Regime Regular",
+  dadosXml?: DadosReaisXml | null,
+  dadosEfd?: DadosEfd | null,
 ): Promise<void> {
   const wb = new ExcelJS.Workbook()
   wb.creator = "Tax Hub — Reforma Tributária"
   wb.created = new Date()
 
-  // Aba resumo primeiro (aparece à esquerda)
   criarAbaResumo(wb, resultados, temFCBF, nomeEmpresa, regime)
 
-  // Uma aba por ano
   for (const r of resultados) {
-    criarAbaAno(wb, r, temFCBF, nomeEmpresa, regime)
+    if (dadosXml?.itens?.length) {
+      criarAbaAnoXml(wb, r, nomeEmpresa, regime, dadosXml)
+    } else if (dadosEfd?.c190Saidas?.length) {
+      criarAbaAnoEfd(wb, r, nomeEmpresa, regime, dadosEfd)
+    } else {
+      criarAbaAnoResumo(wb, r, temFCBF, nomeEmpresa, regime)
+    }
   }
 
   const buffer = await wb.xlsx.writeBuffer()
-  const blob = new Blob([buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  })
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
