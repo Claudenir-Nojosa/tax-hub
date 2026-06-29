@@ -117,11 +117,10 @@ export function calcularSimulacao(input: InputSimulacao): ResultadoAno[] {
     // --- Carga ATUAL (baseline sem reforma) ---
     const pisCofinsAtual = input.simplesNacional ? 0 : input.faturamento * pisCofinsRate
     const icmsAtual = input.faturamento * input.aliquotaICMS
-    const ipiAtual = (input.temIPI && p.ipiAtivo)
+    // Baseline = mundo sem reforma → IPI permanece em todos os anos enquanto empresa tiver IPI
+    const ipiAtual = input.temIPI
       ? input.faturamento * input.percentualIPISaidas * input.aliquotaIPI
-      : (input.temIPI && ano === 2026) // 2026 IPI ainda vigente
-        ? input.faturamento * input.percentualIPISaidas * input.aliquotaIPI
-        : 0
+      : 0
     const cargaAtualTotal = pisCofinsAtual + icmsAtual + ipiAtual
 
     // --- Carga REFORMA ---
@@ -241,7 +240,7 @@ export function calcularSimulacaoXml(input: InputSimulacaoXml): ResultadoAno[] {
     // Carga atual (valores reais do XML)
     const pisCofinsAtual  = input.simplesNacional ? 0 : pisCofinsAtualReal
     const icmsAtual       = icmsAtualReal
-    const ipiAtual        = (p.ipiAtivo || ano === 2026) ? ipiAtualReal : 0
+    const ipiAtual        = ipiAtualReal  // baseline: IPI existe em todos os anos sem a reforma
     const cargaAtualTotal = pisCofinsAtual + icmsAtual + ipiAtual
 
     // Carga reforma — base real (vProd - ICMS - PIS - COFINS)
