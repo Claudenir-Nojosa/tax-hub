@@ -22,11 +22,12 @@ interface Props {
   loading: boolean
   usouXml?: boolean
   nomeEmpresa?: string
+  regime?: string
   onBack: () => void
   onNext: () => void
 }
 
-export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, nomeEmpresa, onBack, onNext }: Props) {
+export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, nomeEmpresa, regime, onBack, onNext }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -181,7 +182,7 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => exportarSimulacaoExcel(resultados, temFCBF, nomeEmpresa)}
+            onClick={() => exportarSimulacaoExcel(resultados, temFCBF, nomeEmpresa, regime)}
             className="gap-2"
           >
             <FileSpreadsheet className="h-4 w-4" />

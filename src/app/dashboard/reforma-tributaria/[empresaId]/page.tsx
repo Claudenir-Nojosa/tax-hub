@@ -292,6 +292,7 @@ function EmpresaWizardInner() {
             loading={loadingSimulacao}
             usouXml={usouXml}
             nomeEmpresa={empresa.razaoSocial}
+            regime={empresa.regime}
             onBack={() => setStep(1)}
             onNext={() => setStep(3)}
           />
