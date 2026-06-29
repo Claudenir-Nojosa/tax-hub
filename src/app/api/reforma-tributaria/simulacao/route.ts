@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
       fcbfPercentual:       empresa.fcbfPercentual ?? 0,
       fcbfBaseCalculoMensal: empresa.fcbfBaseCalculo ?? 0,
       premissas: premissasMap,
+      bcICMSEntradas: bcICMSEntradas ?? undefined,
     }
     resultados = calcularSimulacaoXml(xmlInput)
   } else if (shouldUseEfdSaidas) {
@@ -99,6 +100,7 @@ export async function POST(req: NextRequest) {
       fcbfPercentual:       empresa.fcbfPercentual ?? 0,
       fcbfBaseCalculoMensal: empresa.fcbfBaseCalculo ?? 0,
       premissas: premissasMap,
+      bcICMSEntradas: bcICMSEntradas ?? undefined,
     }
     resultados = calcularSimulacaoXml(efdXmlInput)
   } else {

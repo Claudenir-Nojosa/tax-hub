@@ -213,6 +213,7 @@ export type InputSimulacaoXml = {
   fcbfPercentual: number
   fcbfBaseCalculoMensal: number
   premissas?: Record<number, PremissaAno>
+  bcICMSEntradas?: number  // base real de crédito ICMS entradas (do EFD ou XML entradas)
 }
 
 export function calcularSimulacaoXml(input: InputSimulacaoXml): ResultadoAno[] {
@@ -266,9 +267,14 @@ export function calcularSimulacaoXml(input: InputSimulacaoXml): ResultadoAno[] {
     // A partir de 2027: PIS/COFINS extintos, substituídos pelo CBS
     const ibsCbsNaCarga   = p.periodoTeste ? 0 : ibsCbsTotal
     const pisCofinsCarga  = p.periodoTeste ? pisCofinsAtual : 0
-    const creditoCompras  = 0
 
-    const cargaReformaTotal = ibsCbsNaCarga + pisCofinsCarga + icmsReforma + ipiReforma
+    // Crédito IBS/CBS nas compras: usa base real do EFD/XML entradas se disponível,
+    // senão estima como aliquotaICMSCompras × baseIbsCbs (proporcional às saídas)
+    const baseCreditoEntradas = input.bcICMSEntradas
+      ?? (input.aliquotaICMSCompras > 0 ? baseIbsCbs * input.aliquotaICMSCompras / (dadosXml.aliquotaICMSEfetiva || input.aliquotaICMSCompras) : 0)
+    const creditoCompras = p.periodoTeste ? 0 : baseCreditoEntradas * (p.cbs + p.ibsUF + p.ibsMUN)
+
+    const cargaReformaTotal = ibsCbsNaCarga + pisCofinsCarga + icmsReforma + ipiReforma - creditoCompras
 
     const delta    = cargaReformaTotal - cargaAtualTotal
     const deltaPct = faturamento > 0 ? delta / faturamento : 0
@@ -310,7 +316,7 @@ export function calcularSimulacaoXml(input: InputSimulacaoXml): ResultadoAno[] {
       icmsReducaoFator: p.icmsReducao,
       ibsTotal: ibsUF + ibsMUN,
       ibsCbsPct: faturamento > 0 ? (cbs + ibsUF + ibsMUN) / faturamento : 0,
-      usouEfd: false,
+      usouEfd: input.bcICMSEntradas !== undefined,
     }
   })
 }

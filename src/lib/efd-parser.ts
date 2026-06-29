@@ -113,9 +113,10 @@ export function parseEfdTxt(texto: string): DadosEfd {
     }
 
     if (tipo === "C100") {
-      // Campos (posição 1-based no registro = índice array f[]):
-      // f[2]=IND_OPER  f[10]=DT_DOC  f[11]=DT_E_S  f[12]=VL_DOC  f[15]=VL_MERC
-      // f[20]=VL_BC_ICMS  f[21]=VL_ICMS  f[24]=VL_IPI  f[25]=VL_PIS  f[26]=VL_COFINS
+      // Layout EFD ICMS/IPI com IND_PAGTO em f[13] (versão atual):
+      // f[2]=IND_OPER  f[10]=DT_DOC  f[11]=DT_E_S  f[12]=VL_DOC  f[16]=VL_MERC
+      // f[21]=VL_BC_ICMS  f[22]=VL_ICMS  f[23]=VL_BC_ICMS_ST  f[24]=VL_ICMS_ST
+      // f[25]=VL_IPI  f[26]=VL_PIS  f[27]=VL_COFINS
       const indOper = f[2]?.trim()
       if (indOper !== "0" && indOper !== "1") continue
       const dtDoc = f[10]?.trim()
@@ -125,12 +126,12 @@ export function parseEfdTxt(texto: string): DadosEfd {
         tipoOperacao: indOper === "0" ? "entrada" : "saida",
         dtDoc: ymDoc,
         vlDoc: num(f[12]),
-        vlMerc: num(f[15]),
-        vlBCICMS: num(f[20]),
-        vlICMS: num(f[21]),
-        vlIPI: num(f[24]),
-        vlPIS: num(f[25]),
-        vlCOFINS: num(f[26]),
+        vlMerc: num(f[16]),
+        vlBCICMS: num(f[21]),
+        vlICMS: num(f[22]),
+        vlIPI: num(f[25]),
+        vlPIS: num(f[26]),
+        vlCOFINS: num(f[27]),
       })
       continue
     }
