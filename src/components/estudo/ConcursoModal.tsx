@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { X, Plus, Trash2, Loader2, FileText, ChevronDown, ChevronRight } from "lucide-react"
+import { X, Plus, Trash2, Loader2, FileText, Upload, ChevronDown, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
 import type { MateriaConcurso, ConcursoData } from "@/lib/estudo-data"
 
@@ -42,7 +42,16 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
   const [parsindoPdf, setParsindoPdf] = useState(false)
 
   const [textoEdital, setTextoEdital] = useState("")
-  const [mostrarTextarea, setMostrarTextarea] = useState(false)
+  const [modoImport, setModoImport] = useState<null | "texto" | "pdf">(null)
+
+  const processarResposta = async (res: Response) => {
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? "Erro ao processar edital")
+    setMaterias(data.materias as MateriaConcurso[])
+    setModoImport(null)
+    setTextoEdital("")
+    toast.success(`${data.materias.length} matérias extraídas do edital!`)
+  }
 
   const handleProcessarTexto = async () => {
     if (!textoEdital.trim()) { toast.error("Cole o texto do edital primeiro"); return }
@@ -53,14 +62,24 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ texto: textoEdital }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? "Erro ao processar edital")
-      setMaterias(data.materias as MateriaConcurso[])
-      setTextoEdital("")
-      setMostrarTextarea(false)
-      toast.success(`${data.materias.length} matérias extraídas do edital!`)
+      await processarResposta(res)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao processar edital")
+    } finally {
+      setParsindoPdf(false)
+    }
+  }
+
+  const handleUploadPdf = async (file: File) => {
+    if (!file.name.endsWith(".pdf")) { toast.error("Apenas arquivos PDF são aceitos"); return }
+    setParsindoPdf(true)
+    try {
+      const form = new FormData()
+      form.append("file", file)
+      const res = await fetch("/api/ai/edital-pdf", { method: "POST", body: form })
+      await processarResposta(res)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao processar PDF")
     } finally {
       setParsindoPdf(false)
     }
@@ -134,38 +153,69 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
             </div>
           </div>
 
-          {/* Importar via texto colado */}
+          {/* Importar via IA */}
           <div className="rounded-lg border border-dashed border-gray-600 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-blue-400 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-gray-200">Importar Conteúdo Programático via IA</p>
-                  <p className="text-xs text-gray-400">Cole o texto do edital e a IA extrai as matérias automaticamente</p>
-                </div>
+            <div className="flex items-center gap-2 mb-1">
+              <FileText className="h-5 w-5 text-blue-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-gray-200">Importar Conteúdo Programático via IA</p>
+                <p className="text-xs text-gray-400">Envie o PDF do edital ou cole o texto — a IA extrai as matérias automaticamente</p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setMostrarTextarea(v => !v)}>
-                {mostrarTextarea ? "Fechar" : "Colar texto"}
-              </Button>
             </div>
-            {mostrarTextarea && (
-              <div className="space-y-2">
-                <textarea
-                  value={textoEdital}
-                  onChange={e => setTextoEdital(e.target.value)}
-                  placeholder="Cole aqui o conteúdo programático do edital..."
-                  rows={8}
-                  className="w-full text-xs bg-gray-700 border border-gray-600 text-gray-100 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
-                />
-                <Button
-                  onClick={handleProcessarTexto}
-                  disabled={parsindoPdf || !textoEdital.trim()}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                  size="sm"
-                >
-                  {parsindoPdf ? <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Processando com IA...</> : "Extrair matérias com IA"}
-                </Button>
+
+            {parsindoPdf ? (
+              <div className="flex items-center justify-center gap-2 py-4 text-blue-400">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Processando com IA...</span>
               </div>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  {/* Upload PDF */}
+                  <label className="flex-1 cursor-pointer">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadPdf(f); e.target.value = "" }}
+                    />
+                    <div className="flex items-center justify-center gap-2 rounded-lg border border-gray-600 bg-gray-800 hover:bg-gray-700 px-3 py-2.5 transition-colors">
+                      <Upload className="h-4 w-4 text-blue-400" />
+                      <span className="text-xs text-gray-300">Enviar PDF</span>
+                    </div>
+                  </label>
+
+                  {/* Texto colado */}
+                  <button
+                    type="button"
+                    onClick={() => setModoImport(v => v === "texto" ? null : "texto")}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-gray-600 bg-gray-800 hover:bg-gray-700 px-3 py-2.5 transition-colors"
+                  >
+                    <FileText className="h-4 w-4 text-emerald-400" />
+                    <span className="text-xs text-gray-300">Colar texto</span>
+                  </button>
+                </div>
+
+                {modoImport === "texto" && (
+                  <div className="space-y-2">
+                    <textarea
+                      value={textoEdital}
+                      onChange={e => setTextoEdital(e.target.value)}
+                      placeholder="Cole aqui o conteúdo programático do edital..."
+                      rows={8}
+                      className="w-full text-xs bg-gray-700 border border-gray-600 text-gray-100 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
+                    />
+                    <Button
+                      onClick={handleProcessarTexto}
+                      disabled={!textoEdital.trim()}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                      size="sm"
+                    >
+                      Extrair matérias com IA
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

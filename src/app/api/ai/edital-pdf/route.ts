@@ -10,14 +10,7 @@ const CORES = [
   "pink","cyan","lime","orange","purple","red","green","yellow",
 ];
 
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-
-  const body = await req.json() as { texto?: string };
-  if (!body.texto?.trim()) return NextResponse.json({ error: "Texto do edital não enviado" }, { status: 400 });
-
-  const prompt = `Você é um especialista em análise de editais de concursos públicos brasileiros.
+const PROMPT_BASE = `Você é um especialista em análise de editais de concursos públicos brasileiros.
 
 Analise o texto abaixo (conteúdo programático de um edital) e extraia todas as matérias (disciplinas) com seus respectivos tópicos.
 
@@ -40,32 +33,61 @@ Regras:
 - Agrupe subtópicos numerados (ex: "1.1", "1.2") dentro da matéria correspondente
 
 TEXTO DO EDITAL:
-${body.texto}`;
+`;
+
+async function extrairMaterias(texto: string): Promise<MateriaConcurso[]> {
+  const response = await client.chat.completions.create({
+    model: "gpt-4o",
+    max_tokens: 16384,
+    response_format: { type: "json_object" },
+    messages: [{ role: "user", content: PROMPT_BASE + texto }],
+  });
+
+  const content = response.choices[0]?.message?.content ?? "{}";
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("IA não retornou JSON válido");
+
+  const parsed = JSON.parse(jsonMatch[0]) as { materias?: { id: string; nome: string; topicos: string[] }[] };
+  if (!parsed.materias || !Array.isArray(parsed.materias)) throw new Error("IA não retornou matérias válidas");
+
+  return parsed.materias.map((m, i) => ({
+    id: m.id ?? m.nome.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""),
+    nome: m.nome,
+    cor: CORES[i % CORES.length],
+    topicos: Array.isArray(m.topicos) ? m.topicos : [],
+  }));
+}
+
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   try {
-    const response = await client.chat.completions.create({
-      model: "gpt-4o",
-      max_tokens: 16384,
-      response_format: { type: "json_object" },
-      messages: [{ role: "user", content: prompt }],
-    });
+    const contentType = req.headers.get("content-type") ?? "";
 
-    const content = response.choices[0]?.message?.content ?? "{}";
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return NextResponse.json({ error: "IA não retornou JSON válido" }, { status: 422 });
+    let texto: string;
 
-    const parsed = JSON.parse(jsonMatch[0]) as { materias?: { id: string; nome: string; topicos: string[] }[] };
-    if (!parsed.materias || !Array.isArray(parsed.materias)) {
-      return NextResponse.json({ error: "IA não retornou matérias válidas" }, { status: 422 });
+    if (contentType.includes("multipart/form-data")) {
+      // Upload de PDF
+      const form = await req.formData();
+      const file = form.get("file") as File | null;
+      if (!file) return NextResponse.json({ error: "Arquivo não enviado" }, { status: 400 });
+
+      const buffer = Buffer.from(await file.arrayBuffer());
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
+      const parsed = await pdfParse(buffer);
+      texto = parsed.text;
+    } else {
+      // Texto colado
+      const body = await req.json() as { texto?: string };
+      if (!body.texto?.trim()) return NextResponse.json({ error: "Texto do edital não enviado" }, { status: 400 });
+      texto = body.texto;
     }
 
-    const materias: MateriaConcurso[] = parsed.materias.map((m, i) => ({
-      id: m.id ?? m.nome.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""),
-      nome: m.nome,
-      cor: CORES[i % CORES.length],
-      topicos: Array.isArray(m.topicos) ? m.topicos : [],
-    }));
+    if (!texto?.trim()) return NextResponse.json({ error: "Não foi possível extrair texto do edital" }, { status: 400 });
 
+    const materias = await extrairMaterias(texto);
     return NextResponse.json({ materias });
   } catch (err) {
     console.error("[edital-pdf] erro:", err);
