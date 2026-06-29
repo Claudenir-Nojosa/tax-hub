@@ -73,12 +73,10 @@ export async function POST(req: NextRequest) {
       const file = form.get("file") as File | null;
       if (!file) return NextResponse.json({ error: "Arquivo não enviado" }, { status: 400 });
 
-      const buffer = Buffer.from(await file.arrayBuffer());
-      // Importa o lib interno para evitar o bug do pdf-parse no Vercel (leitura de test files)
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pdfParse = require("pdf-parse/lib/pdf-parse.js") as (buf: Buffer) => Promise<{ text: string }>;
-      const parsed = await pdfParse(buffer);
-      texto = parsed.text;
+      const uint8 = new Uint8Array(await file.arrayBuffer());
+      const { extractText } = await import("unpdf");
+      const { text } = await extractText(uint8, { mergePages: true });
+      texto = text;
     } else {
       // Texto colado
       const body = await req.json() as { texto?: string };
