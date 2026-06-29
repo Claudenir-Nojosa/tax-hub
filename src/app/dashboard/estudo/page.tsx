@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
   DEFAULT_ESTUDO_STATE,
@@ -78,27 +79,31 @@ function loadFromLocalStorage(concursoId: string | null): EstudoState | null {
 }
 
 export default function EstudoPage() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [state, setState] = useState<EstudoState>(DEFAULT_ESTUDO_STATE);
   const [loaded, setLoaded] = useState(false);
   const [concursoAtivo, setConcursoAtivo] = useState<(ConcursoData & { id: string }) | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Migra e carrega concurso principal
+  // Migra e carrega concurso (por ID da URL ou principal)
   useEffect(() => {
+    const concursoIdParam = searchParams.get("concursoId");
     (async () => {
       try {
         await fetch("/api/estudo/migrar", { method: "POST" });
         const res = await fetch("/api/concurso");
         if (res.ok) {
           const lista = await res.json() as (ConcursoData & { id: string })[];
-          const principal = lista.find(c => c.isPrincipal) ?? lista[0] ?? null;
-          if (principal) {
-            setConcursoAtivo(principal);
-            const progressoRes = await fetch(`/api/concurso/${principal.id}/progresso`);
+          // Se veio ?concursoId=xxx, usa esse; senão usa o principal
+          const alvo = concursoIdParam
+            ? (lista.find(c => c.id === concursoIdParam) ?? lista.find(c => c.isPrincipal) ?? lista[0])
+            : (lista.find(c => c.isPrincipal) ?? lista[0]);
+          if (alvo) {
+            setConcursoAtivo(alvo);
+            const progressoRes = await fetch(`/api/concurso/${alvo.id}/progresso`);
             if (progressoRes.ok) {
               const dados = await progressoRes.json();
-              // Se tem progresso, usa; se não tem (concurso novo), começa do zero
               setState(dados ? mergeWithDefaults(dados as Partial<EstudoState>) : DEFAULT_ESTUDO_STATE);
             } else {
               setState(DEFAULT_ESTUDO_STATE);
@@ -110,11 +115,10 @@ export default function EstudoPage() {
       } catch {
         // silent
       }
-      // Fallback só se não conseguiu carregar nenhum concurso
       setState(loadFromLocalStorage(null) ?? DEFAULT_ESTUDO_STATE);
       setLoaded(true);
     })();
-  }, []);
+  }, [searchParams]);
 
   // Persiste: localStorage imediato + banco com debounce de 2s
   useEffect(() => {

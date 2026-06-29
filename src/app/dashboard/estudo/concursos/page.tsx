@@ -69,9 +69,8 @@ export default function ConcursosPage() {
     carregar()
   }
 
-  const handleEstudar = async (concurso: Concurso) => {
-    if (!concurso.isPrincipal) await handleDefinirPrincipal(concurso.id)
-    router.push("/dashboard/estudo")
+  const handleEstudar = (concurso: Concurso) => {
+    router.push(`/dashboard/estudo?concursoId=${concurso.id}`)
   }
 
   const formatData = (iso?: string) => {
