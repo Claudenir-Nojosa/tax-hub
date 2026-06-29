@@ -119,7 +119,7 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
               <span className="text-xs text-gray-500">({data.nomeFantasia})</span>
             )}
             <Badge variant={isSimples ? "default" : "outline"} className="ml-auto text-xs">
-              {isSimples ? "Simples Nacional" : "Regime Regular"}
+              {REGIMES.find((r) => r.value === data.regime)?.label ?? (isSimples ? "Simples Nacional" : "Regime Regular")}
             </Badge>
           </div>
           {data.cnaePrincipal && (
