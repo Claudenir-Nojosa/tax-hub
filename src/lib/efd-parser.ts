@@ -169,17 +169,21 @@ export function parseEfdTxt(texto: string): DadosEfd {
   }
 
   // Agrega C190 entradas (crédito IBS/CBS)
-  const bcICMSEntradas = c190Entradas.reduce((s, r) => s + r.vlBCICMS, 0)
-  const icmsCreditoEntradas = c190Entradas.reduce((s, r) => s + r.vlICMS, 0)
+  // Usa VL_OPR (valor total das operações) como base de crédito — sob a reforma, o crédito
+  // IBS/CBS incide sobre o valor total das compras, não só sobre a base ICMS
   const totalEntradasVlOpr = c190Entradas.reduce((s, r) => s + r.vlOpr, 0)
   const totalSaidasVlOpr = c190Saidas.reduce((s, r) => s + r.vlOpr, 0)
-  const aliquotaMediaEntradas = bcICMSEntradas > 0 ? icmsCreditoEntradas / bcICMSEntradas : 0
+  const bcICMSEntradas = totalEntradasVlOpr  // base real de crédito IBS/CBS nas entradas
+  const icmsCreditoEntradas = c190Entradas.reduce((s, r) => s + r.vlICMS, 0)
+  const vlBCICMSEntradas = c190Entradas.reduce((s, r) => s + r.vlBCICMS, 0)
+  const aliquotaMediaEntradas = vlBCICMSEntradas > 0 ? icmsCreditoEntradas / vlBCICMSEntradas : 0
 
   // Agrega C100 por tipo
   const c100Saidas = c100Resumo.filter((r) => r.tipoOperacao === "saida")
   const c100Entradas = c100Resumo.filter((r) => r.tipoOperacao === "entrada")
 
-  const totalVProdSaidas = c100Saidas.reduce((s, r) => s + r.vlDoc, 0)
+  // Usa VL_MERC como base de receita (igual ao vProd do XML) — exclui IPI que será extinto
+  const totalVProdSaidas = c100Saidas.reduce((s, r) => s + r.vlMerc, 0)
   const totalVICMSSaidas = c100Saidas.reduce((s, r) => s + r.vlICMS, 0)
   const totalVPISSaidas = c100Saidas.reduce((s, r) => s + r.vlPIS, 0)
   const totalVCOFINSSaidas = c100Saidas.reduce((s, r) => s + r.vlCOFINS, 0)
