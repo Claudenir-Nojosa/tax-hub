@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { X, Plus, Trash2, Loader2, FileText, Upload, ChevronDown, ChevronRight } from "lucide-react"
+import { X, Plus, Trash2, Loader2, FileText, Upload, ChevronDown, ChevronRight, CornerDownRight } from "lucide-react"
 import { toast } from "sonner"
 import type { MateriaConcurso, ConcursoData } from "@/lib/estudo-data"
 
@@ -38,6 +38,26 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
   const [expandida, setExpandida] = useState<string | null>(null)
   const [novaMateria, setNovaMateria] = useState("")
   const [novosTopicos, setNovosTopicos] = useState<Record<string, string>>({})
+  // subtopicoPara: "materiaId:topicoIdx" → texto do novo subtópico
+  const [subtopicoPara, setSubtopicoPara] = useState<string | null>(null)
+  const [novoSubtopico, setNovoSubtopico] = useState("")
+
+  const isSubtopico = (t: string) => t.startsWith("  ")
+
+  const adicionarSubtopico = (materiaId: string, topicoIdx: number) => {
+    if (!novoSubtopico.trim()) return
+    setMaterias(prev => prev.map(m => {
+      if (m.id !== materiaId) return m
+      const topicos = [...m.topicos]
+      // insere logo após o tópico pai e seus subtópicos existentes
+      let insercao = topicoIdx + 1
+      while (insercao < topicos.length && isSubtopico(topicos[insercao])) insercao++
+      topicos.splice(insercao, 0, "  " + novoSubtopico.trim())
+      return { ...m, topicos }
+    }))
+    setNovoSubtopico("")
+    setSubtopicoPara(null)
+  }
   const [saving, setSaving] = useState(false)
   const [parsindoPdf, setParsindoPdf] = useState(false)
 
@@ -251,12 +271,42 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
                         />
                         <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => adicionarTopico(m.id)}><Plus className="h-3 w-3" /></Button>
                       </div>
-                      {m.topicos.map((t, i) => (
-                        <div key={i} className="flex items-center gap-2 text-xs text-gray-300 pl-1">
-                          <span className="flex-1 truncate">{t}</span>
-                          <button onClick={() => removerTopico(m.id, i)} className="text-gray-600 hover:text-red-400"><X className="h-3 w-3" /></button>
-                        </div>
-                      ))}
+                      {m.topicos.map((t, i) => {
+                        const eSub = isSubtopico(t)
+                        const chave = `${m.id}:${i}`
+                        return (
+                          <div key={i}>
+                            <div className={`flex items-center gap-1.5 text-xs text-gray-300 group ${eSub ? "pl-5" : "pl-1"}`}>
+                              {eSub && <CornerDownRight className="h-3 w-3 text-gray-500 shrink-0" />}
+                              <span className="flex-1 truncate">{eSub ? t.trimStart() : t}</span>
+                              {!eSub && (
+                                <button
+                                  type="button"
+                                  title="Adicionar subtópico"
+                                  onClick={() => { setSubtopicoPara(subtopicoPara === chave ? null : chave); setNovoSubtopico("") }}
+                                  className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-blue-400 transition-opacity"
+                                >
+                                  <CornerDownRight className="h-3 w-3" />
+                                </button>
+                              )}
+                              <button onClick={() => removerTopico(m.id, i)} className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-opacity"><X className="h-3 w-3" /></button>
+                            </div>
+                            {subtopicoPara === chave && (
+                              <div className="flex gap-1 pl-5 mt-1">
+                                <Input
+                                  autoFocus
+                                  value={novoSubtopico}
+                                  onChange={e => setNovoSubtopico(e.target.value)}
+                                  placeholder="Nome do subtópico"
+                                  className="bg-gray-700 border-gray-600 text-xs h-6"
+                                  onKeyDown={e => { if (e.key === "Enter") adicionarSubtopico(m.id, i); if (e.key === "Escape") setSubtopicoPara(null) }}
+                                />
+                                <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => adicionarSubtopico(m.id, i)}><Plus className="h-2.5 w-2.5" /></Button>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
