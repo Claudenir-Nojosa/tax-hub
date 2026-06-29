@@ -32,3 +32,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   })
   return NextResponse.json({ ok: true })
 }
+
+// DELETE — apaga progresso (reseta para zero)
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth()
+  if (!session?.user?.id) return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+  const { id } = await params
+
+  const concurso = await db.concurso.findFirst({ where: { id, userId: session.user.id } })
+  if (!concurso) return NextResponse.json({ error: "Não encontrado" }, { status: 404 })
+
+  await db.concursoProgresso.deleteMany({ where: { concursoId: id } })
+  return NextResponse.json({ ok: true })
+}

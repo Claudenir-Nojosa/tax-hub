@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, BookOpen, Trash2, Pencil, Star, Loader2, CalendarDays } from "lucide-react"
+import { Plus, BookOpen, Trash2, Pencil, Star, Loader2, CalendarDays, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 import dynamic from "next/dynamic"
 import type { ConcursoData } from "@/lib/estudo-data"
@@ -20,6 +20,7 @@ export default function ConcursosPage() {
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Concurso | null>(null)
   const [definindoPrincipal, setDefinindoPrincipal] = useState<string | null>(null)
+  const [resetando, setResetando] = useState<string | null>(null)
 
   const carregar = async () => {
     try {
@@ -60,6 +61,19 @@ export default function ConcursosPage() {
       carregar()
     } catch { toast.error("Erro") }
     finally { setDefinindoPrincipal(null) }
+  }
+
+  const handleResetarProgresso = async (id: string, nome: string) => {
+    if (!confirm(`Resetar TODO o progresso de "${nome}"? XP, cartas, calendário e caderno de erros serão apagados. Esta ação não pode ser desfeita.`)) return
+    setResetando(id)
+    try {
+      // Apaga do banco
+      await fetch(`/api/concurso/${id}/progresso`, { method: "DELETE" })
+      // Apaga do localStorage também
+      localStorage.removeItem(`taxhub_estudo_c_${id}`)
+      toast.success("Progresso resetado com sucesso!")
+    } catch { toast.error("Erro ao resetar progresso") }
+    finally { setResetando(null) }
   }
 
   const handleExcluir = async (id: string) => {
@@ -128,8 +142,11 @@ export default function ConcursosPage() {
                   {c.orgao && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{c.orgao}</p>}
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <button onClick={() => { setEditando(c); setModalAberto(true) }} className="text-gray-400 hover:text-blue-500 p-1"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => handleExcluir(c.id)} className="text-gray-400 hover:text-red-500 p-1"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => { setEditando(c); setModalAberto(true) }} className="text-gray-400 hover:text-blue-500 p-1" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleResetarProgresso(c.id, c.nome)} disabled={resetando === c.id} className="text-gray-400 hover:text-amber-500 p-1" title="Resetar progresso">
+                    {resetando === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                  </button>
+                  <button onClick={() => handleExcluir(c.id)} className="text-gray-400 hover:text-red-500 p-1" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
 
