@@ -8,6 +8,7 @@ import {
   type InputSimulacao,
   type InputSimulacaoXml,
 } from "@/lib/reforma-engine"
+import type { EfdSaidasInput } from "@/lib/efd-parser"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -16,10 +17,13 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { empresaId, premissasOverride, usarXml } = body as {
+  const { empresaId, premissasOverride, usarXml, usarEfdSaidas, efdSaidasInput, bcICMSEntradas } = body as {
     empresaId: string
     premissasOverride?: Record<number, typeof PREMISSAS_PADRAO[number]>
     usarXml?: boolean
+    usarEfdSaidas?: boolean
+    efdSaidasInput?: EfdSaidasInput
+    bcICMSEntradas?: number
   }
 
   const empresa = await db.empresaReforma.findFirst({
@@ -31,51 +35,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 })
   }
 
-  const input: InputSimulacao = {
-    faturamento: empresa.faturamento,
-    regime: empresa.regime as InputSimulacao["regime"],
-    simplesNacional: empresa.simplesNacional,
-    aliquotaICMS: empresa.aliquotaICMS,
-    aliquotaICMSCompras: empresa.aliquotaICMSCompras,
-    temIPI: empresa.temIPI,
-    aliquotaIPI: empresa.aliquotaIPI ?? 0,
-    percentualIPISaidas: empresa.percentualIPISaidas ?? 0,
-    temFCBF: empresa.temFCBF,
-    fcbfPercentual: empresa.fcbfPercentual ?? 0,
-    fcbfBaseCalculoMensal: empresa.fcbfBaseCalculo ?? 0,
-    premissas: premissasOverride
-      ? Object.fromEntries(
-          Object.entries(premissasOverride).map(([k, v]) => [Number(k), v])
-        )
-      : undefined,
-  }
-
   const premissasUsadas = premissasOverride
-    ? Object.fromEntries(
-        Object.entries(premissasOverride).map(([k, v]) => [Number(k), v])
-      )
+    ? Object.fromEntries(Object.entries(premissasOverride).map(([k, v]) => [Number(k), v]))
     : PREMISSAS_PADRAO
 
-  // Se usarXml=true e há dados de XML importados, usa a engine XML
+  const premissasMap = premissasOverride
+    ? Object.fromEntries(Object.entries(premissasOverride).map(([k, v]) => [Number(k), v]))
+    : undefined
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const empresaComXml = empresa as typeof empresa & { dadosXml?: any }
-  const dadosXml = empresaComXml.dadosXml
-  const shouldUseXml = usarXml && dadosXml
+  const dadosXmlDB = empresaComXml.dadosXml
+  const shouldUseXml = usarXml && dadosXmlDB
+  const shouldUseEfdSaidas = usarEfdSaidas && efdSaidasInput
 
   let resultados
+  let fonteUsada: "xml" | "efd" | "manual" = "manual"
+
   if (shouldUseXml) {
+    fonteUsada = "xml"
     const xmlInput: InputSimulacaoXml = {
       dadosXml: {
-        totalBaseIbsCbs:     dadosXml.totalBaseIbsCbs,
-        totalVICMS:          dadosXml.totalVICMS,
-        totalVPIS:           dadosXml.totalVPIS,
-        totalVCOFINS:        dadosXml.totalVCOFINS,
-        totalVIPI:           dadosXml.totalVIPI,
-        totalVProd:          dadosXml.totalVProd,
-        aliquotaICMSEfetiva: dadosXml.aliquotaICMSEfetiva,
-        aliquotaIPIEfetiva:  dadosXml.aliquotaIPIEfetiva,
-        percentualIPISaidas: dadosXml.percentualIPISaidas,
-        mesesImportados:     dadosXml.mesesImportados,
+        totalBaseIbsCbs:     dadosXmlDB.totalBaseIbsCbs,
+        totalVICMS:          dadosXmlDB.totalVICMS,
+        totalVPIS:           dadosXmlDB.totalVPIS,
+        totalVCOFINS:        dadosXmlDB.totalVCOFINS,
+        totalVIPI:           dadosXmlDB.totalVIPI,
+        totalVProd:          dadosXmlDB.totalVProd,
+        aliquotaICMSEfetiva: dadosXmlDB.aliquotaICMSEfetiva,
+        aliquotaIPIEfetiva:  dadosXmlDB.aliquotaIPIEfetiva,
+        percentualIPISaidas: dadosXmlDB.percentualIPISaidas,
+        mesesImportados:     dadosXmlDB.mesesImportados,
       },
       regime:               empresa.regime as InputSimulacaoXml["regime"],
       simplesNacional:      empresa.simplesNacional,
@@ -83,24 +73,67 @@ export async function POST(req: NextRequest) {
       temFCBF:              empresa.temFCBF,
       fcbfPercentual:       empresa.fcbfPercentual ?? 0,
       fcbfBaseCalculoMensal: empresa.fcbfBaseCalculo ?? 0,
-      premissas: premissasOverride
-        ? Object.fromEntries(Object.entries(premissasOverride).map(([k, v]) => [Number(k), v]))
-        : undefined,
+      premissas: premissasMap,
     }
     resultados = calcularSimulacaoXml(xmlInput)
+  } else if (shouldUseEfdSaidas) {
+    // EFD saídas: reutiliza calcularSimulacaoXml com dados do C100 enviados pelo cliente
+    fonteUsada = "efd"
+    const efdXmlInput: InputSimulacaoXml = {
+      dadosXml: {
+        totalBaseIbsCbs:     efdSaidasInput.totalBaseIbsCbs,
+        totalVICMS:          efdSaidasInput.totalVICMS,
+        totalVPIS:           efdSaidasInput.totalVPIS,
+        totalVCOFINS:        efdSaidasInput.totalVCOFINS,
+        totalVIPI:           efdSaidasInput.totalVIPI,
+        totalVProd:          efdSaidasInput.totalVProd,
+        aliquotaICMSEfetiva: efdSaidasInput.aliquotaICMSEfetiva,
+        aliquotaIPIEfetiva:  efdSaidasInput.aliquotaIPIEfetiva,
+        percentualIPISaidas: efdSaidasInput.percentualIPISaidas,
+        mesesImportados:     efdSaidasInput.mesesImportados,
+      },
+      regime:               empresa.regime as InputSimulacaoXml["regime"],
+      simplesNacional:      empresa.simplesNacional,
+      aliquotaICMSCompras:  empresa.aliquotaICMSCompras,
+      temFCBF:              empresa.temFCBF,
+      fcbfPercentual:       empresa.fcbfPercentual ?? 0,
+      fcbfBaseCalculoMensal: empresa.fcbfBaseCalculo ?? 0,
+      premissas: premissasMap,
+    }
+    resultados = calcularSimulacaoXml(efdXmlInput)
   } else {
+    const input: InputSimulacao = {
+      faturamento: empresa.faturamento,
+      regime: empresa.regime as InputSimulacao["regime"],
+      simplesNacional: empresa.simplesNacional,
+      aliquotaICMS: empresa.aliquotaICMS,
+      aliquotaICMSCompras: empresa.aliquotaICMSCompras,
+      temIPI: empresa.temIPI,
+      aliquotaIPI: empresa.aliquotaIPI ?? 0,
+      percentualIPISaidas: empresa.percentualIPISaidas ?? 0,
+      temFCBF: empresa.temFCBF,
+      fcbfPercentual: empresa.fcbfPercentual ?? 0,
+      fcbfBaseCalculoMensal: empresa.fcbfBaseCalculo ?? 0,
+      bcICMSEntradas: bcICMSEntradas ?? undefined,
+      premissas: premissasMap,
+    }
     resultados = calcularSimulacao(input)
   }
 
-  // Persiste simulação
   const simulacao = await db.simulacaoReforma.create({
     data: {
       empresaId,
       premissas: premissasUsadas as object,
       resultados: resultados as unknown as object,
-      usouXml: shouldUseXml ? true : false,
+      usouXml: fonteUsada === "xml",
     },
   })
 
-  return NextResponse.json({ simulacaoId: simulacao.id, resultados, premissas: premissasUsadas, usouXml: shouldUseXml ? true : false })
+  return NextResponse.json({
+    simulacaoId: simulacao.id,
+    resultados,
+    premissas: premissasUsadas,
+    usouXml: fonteUsada === "xml",
+    fonteUsada,
+  })
 }

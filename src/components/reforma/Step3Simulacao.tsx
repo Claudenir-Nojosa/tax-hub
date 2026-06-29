@@ -105,6 +105,14 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
                 <th className="text-right py-2 px-3 font-medium">IBS</th>
                 <th className="text-center py-2 px-3 font-medium text-gray-400">ICMS %</th>
                 <th className="text-right py-2 px-3 font-medium">ICMS</th>
+                <th className="text-right py-2 px-3 font-medium">
+                  <div className="flex items-center justify-end gap-1">
+                    Crédito IBS/CBS
+                    {resultados[0]?.usouEfd && (
+                      <span className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-1 py-0.5 rounded font-medium">EFD</span>
+                    )}
+                  </div>
+                </th>
                 <th className="text-right py-2 px-3 font-medium">Carga Reforma</th>
                 {temFCBF && <th className="text-right py-2 px-3 font-medium">FCBF</th>}
                 {temFCBF && <th className="text-right py-2 px-3 font-medium">Carga Líq.</th>}
@@ -131,6 +139,9 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
                     {(r.icmsReducaoFator * 100).toFixed(0)}%
                   </td>
                   <td className="py-2 px-3 text-right">{fmt(r.icmsReforma)}</td>
+                  <td className="py-2 px-3 text-right text-green-600 font-medium">
+                    {r.creditoCompras > 0 ? `-${fmt(r.creditoCompras)}` : "—"}
+                  </td>
                   <td className="py-2 px-3 text-right font-medium">
                     {fmt(r.cargaReformaTotal)}
                     <div className="text-gray-400">{formatarPorcentagem(r.cargaReformaPct)}</div>

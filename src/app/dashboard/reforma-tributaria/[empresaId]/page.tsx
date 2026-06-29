@@ -5,11 +5,17 @@ import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { Scale, ChevronRight } from "lucide-react"
 import Step1Empresa, { type EmpresaData } from "@/components/reforma/Step1Empresa"
-import Step2Premissas, { type PremissasData, defaultPremissas } from "@/components/reforma/Step2Premissas"
+import Step2Premissas, {
+  type PremissasData,
+  type FonteSaidas,
+  type FonteEntradas,
+  defaultPremissas,
+} from "@/components/reforma/Step2Premissas"
 import Step3Simulacao from "@/components/reforma/Step3Simulacao"
 import Step4Analise from "@/components/reforma/Step4Analise"
 import type { ResultadoAno } from "@/lib/reforma-engine"
 import type { DadosReaisXml } from "@/lib/nfe-parser"
+import type { DadosEfd } from "@/lib/efd-parser"
 
 const STEPS = ["Empresa", "Premissas", "Simulação", "Análise"]
 
@@ -50,7 +56,15 @@ function EmpresaWizardInner() {
   const [savedEmpresaId, setSavedEmpresaId] = useState<string | null>(empresaId)
   const [loadingSimulacao, setLoadingSimulacao] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [dadosXml, setDadosXml] = useState<DadosReaisXml | null>(null)
+
+  // Fontes
+  const [fonteSaidas, setFonteSaidas] = useState<FonteSaidas>("manual")
+  const [fonteEntradas, setFonteEntradas] = useState<FonteEntradas>("nenhuma")
+
+  // Dados
+  const [dadosXml, setDadosXml] = useState<DadosReaisXml | null>(null)       // saídas XML (salvo no DB)
+  const [dadosXmlEntradas, setDadosXmlEntradas] = useState<DadosReaisXml | null>(null) // entradas XML (client-side)
+  const [dadosEfd, setDadosEfd] = useState<DadosEfd | null>(null)             // EFD TXT (client-side)
   const [usouXml, setUsouXml] = useState(false)
 
   // Carrega empresa existente
@@ -70,10 +84,6 @@ function EmpresaWizardInner() {
           cnaePrincipal: data.cnaePrincipal ?? "",
           faturamento: data.faturamento,
         })
-        setPremissas(
-          defaultPremissas(data.aliquotaICMS)
-        )
-        // Carrega premissas extras
         setPremissas({
           aliquotaICMS: data.aliquotaICMS,
           aliquotaICMSCompras: data.aliquotaICMSCompras,
@@ -85,7 +95,6 @@ function EmpresaWizardInner() {
           fcbfBaseCalculo: data.fcbfBaseCalculo ?? 0,
           premissasAnuais: defaultPremissas().premissasAnuais,
         })
-        // Se tem simulação, carrega resultados
         if (data.simulacoes?.length > 0) {
           setResultados(data.simulacoes[0].resultados as ResultadoAno[])
           setUsouXml(data.simulacoes[0].usouXml ?? false)
@@ -94,7 +103,7 @@ function EmpresaWizardInner() {
       })
       .catch(() => { toast.error("Erro ao carregar empresa"); setLoadingEmpresa(false) })
 
-    // Carrega dados XML se existirem
+    // Carrega XML de saídas do DB
     fetch(`/api/reforma-tributaria/xml?empresaId=${empresaId}`)
       .then((r) => r.json())
       .then((data) => {
@@ -117,6 +126,7 @@ function EmpresaWizardInner() {
             fatorAnualizacao: 12 / data.mesesImportados,
             itens: data.itens ?? [],
           })
+          setFonteSaidas("xml")
         }
       })
       .catch(() => {/* sem dados XML é ok */})
@@ -158,19 +168,25 @@ function EmpresaWizardInner() {
     setLoadingSimulacao(true)
     setStep(2)
     try {
-      // Salva empresa primeiro para garantir ID real
       const id = await salvarEmpresa()
       if (!id) throw new Error("Falha ao salvar empresa")
       setSavedEmpresaId(id)
 
-      // Se há dados XML no estado (pode ter sido importado antes do ID existir),
-      // salva agora com o ID real da empresa
-      if (dadosXml) {
+      // Salva XML de saídas no DB se fonte = xml e dados disponíveis
+      if (fonteSaidas === "xml" && dadosXml) {
         await fetch("/api/reforma-tributaria/xml", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ empresaId: id, dadosXml }),
         })
+      }
+
+      // Determina bcICMSEntradas conforme fonte das entradas
+      let bcICMSEntradas: number | undefined
+      if (fonteEntradas === "efd" && dadosEfd) {
+        bcICMSEntradas = dadosEfd.bcICMSEntradas
+      } else if (fonteEntradas === "xml" && dadosXmlEntradas) {
+        bcICMSEntradas = dadosXmlEntradas.totalBaseIbsCbs
       }
 
       const res = await fetch("/api/reforma-tributaria/simulacao", {
@@ -179,7 +195,10 @@ function EmpresaWizardInner() {
         body: JSON.stringify({
           empresaId: id,
           premissasOverride: premissas.premissasAnuais,
-          usarXml: dadosXml !== null,
+          usarXml: fonteSaidas === "xml",
+          usarEfdSaidas: fonteSaidas === "efd",
+          efdSaidasInput: fonteSaidas === "efd" && dadosEfd ? dadosEfd.saidasParaSimulacao : undefined,
+          bcICMSEntradas,
         }),
       })
       const data = await res.json()
@@ -208,7 +227,6 @@ function EmpresaWizardInner() {
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
-      {/* Header */}
       <div className="flex items-center gap-2 mb-6">
         <Scale className="h-5 w-5 text-blue-500" />
         <h1 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -216,43 +234,37 @@ function EmpresaWizardInner() {
         </h1>
       </div>
 
-      {/* Steps indicator */}
       <div className="flex items-center gap-1 mb-8 overflow-x-auto">
         {STEPS.map((label, i) => {
           const canNavigate = i < step || (editMode && savedEmpresaId !== null)
           return (
-          <div key={label} className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => canNavigate && setStep(i)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                i === step
-                  ? "bg-blue-600 text-white"
-                  : canNavigate
-                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 cursor-pointer hover:bg-blue-200"
-                  : "bg-gray-100 text-gray-400 dark:bg-gray-800 cursor-default"
-              }`}
-            >
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                i === step ? "bg-white/20" : i < step ? "bg-blue-200" : "bg-gray-200 dark:bg-gray-700"
-              }`}>
-                {i + 1}
-              </span>
-              {label}
-            </button>
-            {i < STEPS.length - 1 && <ChevronRight className="h-3 w-3 text-gray-300" />}
-          </div>
+            <div key={label} className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => canNavigate && setStep(i)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  i === step
+                    ? "bg-blue-600 text-white"
+                    : canNavigate
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 cursor-pointer hover:bg-blue-200"
+                    : "bg-gray-100 text-gray-400 dark:bg-gray-800 cursor-default"
+                }`}
+              >
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                  i === step ? "bg-white/20" : i < step ? "bg-blue-200" : "bg-gray-200 dark:bg-gray-700"
+                }`}>
+                  {i + 1}
+                </span>
+                {label}
+              </button>
+              {i < STEPS.length - 1 && <ChevronRight className="h-3 w-3 text-gray-300" />}
+            </div>
           )
         })}
       </div>
 
-      {/* Step content */}
       <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-6">
         {step === 0 && (
-          <Step1Empresa
-            data={empresa}
-            onChange={setEmpresa}
-            onNext={() => setStep(1)}
-          />
+          <Step1Empresa data={empresa} onChange={setEmpresa} onNext={() => setStep(1)} />
         )}
         {step === 1 && (
           <Step2Premissas
@@ -261,8 +273,16 @@ function EmpresaWizardInner() {
             onBack={() => setStep(0)}
             onNext={rodarSimulacao}
             empresaId={savedEmpresaId || "nova"}
+            fonteSaidas={fonteSaidas}
+            onFonteSaidas={setFonteSaidas}
             dadosXml={dadosXml}
             onDadosXml={setDadosXml}
+            fonteEntradas={fonteEntradas}
+            onFonteEntradas={setFonteEntradas}
+            dadosXmlEntradas={dadosXmlEntradas}
+            onDadosXmlEntradas={setDadosXmlEntradas}
+            dadosEfd={dadosEfd}
+            onDadosEfd={setDadosEfd}
           />
         )}
         {step === 2 && (

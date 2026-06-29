@@ -51,6 +51,7 @@ export type InputSimulacao = {
   fcbfPercentual: number        // ex: 0.02 (2%)
   fcbfBaseCalculoMensal: number // base de cálculo mensal do FCBF (R$)
   premissas?: Record<number, PremissaAno> // override das premissas padrão
+  bcICMSEntradas?: number       // base real de crédito ICMS entradas (do EFD); substitui estimativa
 }
 
 export type ResultadoAno = {
@@ -92,6 +93,7 @@ export type ResultadoAno = {
   icmsReducaoFator: number
   ibsTotal: number
   ibsCbsPct: number
+  usouEfd: boolean
 }
 
 function calcularCargaSimples(faturamento: number, regime: RegimeTributario): number {
@@ -134,8 +136,8 @@ export function calcularSimulacao(input: InputSimulacao): ResultadoAno[] {
       ? input.faturamento * input.percentualIPISaidas * input.aliquotaIPI
       : 0
 
-    const creditoCompras = input.faturamento * input.aliquotaICMSCompras
-      * (p.cbs + p.ibsUF + p.ibsMUN)
+    const baseCredito = input.bcICMSEntradas ?? (input.faturamento * input.aliquotaICMSCompras)
+    const creditoCompras = baseCredito * (p.cbs + p.ibsUF + p.ibsMUN)
 
     // Em período de teste (2026): IBS/CBS são compensados por crédito PIS/COFINS — efeito líquido zero
     const ibsCbsNaCarga = p.periodoTeste ? 0 : ibsCbsTotal
@@ -186,6 +188,7 @@ export function calcularSimulacao(input: InputSimulacao): ResultadoAno[] {
       icmsReducaoFator: p.icmsReducao,
       ibsTotal: ibsUF + ibsMUN,
       ibsCbsPct: (cbs + ibsUF + ibsMUN) / input.faturamento,
+      usouEfd: input.bcICMSEntradas !== undefined,
     }
   })
 }
@@ -307,6 +310,7 @@ export function calcularSimulacaoXml(input: InputSimulacaoXml): ResultadoAno[] {
       icmsReducaoFator: p.icmsReducao,
       ibsTotal: ibsUF + ibsMUN,
       ibsCbsPct: faturamento > 0 ? (cbs + ibsUF + ibsMUN) / faturamento : 0,
+      usouEfd: false,
     }
   })
 }
