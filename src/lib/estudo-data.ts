@@ -237,6 +237,18 @@ export function calcularXP(
   return xp;
 }
 
+// Adiciona variação aleatória ao intervalo (igual ao Anki) para evitar que
+// cartas revisadas no mesmo dia voltem todas juntas.
+function fuzzIntervalo(intervalo: number): number {
+  if (intervalo <= 1) return intervalo;
+  if (intervalo <= 7) {
+    const delta = Math.floor(Math.random() * 3) - 1; // -1, 0 ou +1
+    return Math.max(2, intervalo + delta);
+  }
+  const delta = Math.round((Math.random() * 0.1 - 0.05) * intervalo); // ±5%
+  return Math.max(2, intervalo + delta);
+}
+
 export function calcularProximaRevisao(carta: Carta, qualidade: 0 | 1 | 2 | 3 | 4 | 5): Carta {
   let { intervalo, facilidade, repeticoes, acertos, erros } = carta;
   if (qualidade < 3) {
@@ -251,8 +263,9 @@ export function calcularProximaRevisao(carta: Carta, qualidade: 0 | 1 | 2 | 3 | 
     acertos += 1;
   }
   facilidade = Math.max(1.3, facilidade + (0.1 - (5 - qualidade) * (0.08 + (5 - qualidade) * 0.02)));
+  const intervaloFuzzed = fuzzIntervalo(intervalo);
   const next = new Date();
-  next.setDate(next.getDate() + intervalo);
+  next.setDate(next.getDate() + intervaloFuzzed);
   return {
     ...carta,
     intervalo,

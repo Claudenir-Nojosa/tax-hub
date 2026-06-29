@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { X, Plus, Trash2, Loader2, FileText, Upload, ChevronDown, ChevronRight, CornerDownRight } from "lucide-react"
+import { X, Plus, Trash2, Loader2, FileText, Upload, ChevronDown, ChevronRight, CornerDownRight, Pencil, Check } from "lucide-react"
 import { toast } from "sonner"
 import type { MateriaConcurso, ConcursoData } from "@/lib/estudo-data"
 
@@ -41,6 +41,9 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
   // subtopicoPara: "materiaId:topicoIdx" → texto do novo subtópico
   const [subtopicoPara, setSubtopicoPara] = useState<string | null>(null)
   const [novoSubtopico, setNovoSubtopico] = useState("")
+  // editando: "materiaId:topicoIdx" para tópico/subtópico
+  const [editandoTopico, setEditandoTopico] = useState<string | null>(null)
+  const [editandoValor, setEditandoValor] = useState("")
 
   const isSubtopico = (t: string) => t.startsWith("  ")
 
@@ -129,6 +132,27 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
     setMaterias(prev => prev.map(m =>
       m.id === materiaId ? { ...m, topicos: m.topicos.filter((_, i) => i !== idx) } : m
     ))
+  }
+
+  const iniciarEdicaoTopico = (materiaId: string, idx: number, valorAtual: string) => {
+    setEditandoTopico(`${materiaId}:${idx}`)
+    setEditandoValor(valorAtual)
+    setSubtopicoPara(null)
+  }
+
+  const confirmarEdicaoTopico = (materiaId: string, idx: number) => {
+    const novoValor = editandoValor.trim()
+    if (novoValor) {
+      setMaterias(prev => prev.map(m => {
+        if (m.id !== materiaId) return m
+        const topicos = [...m.topicos]
+        const eSub = isSubtopico(topicos[idx])
+        topicos[idx] = eSub ? "  " + novoValor : novoValor
+        return { ...m, topicos }
+      }))
+    }
+    setEditandoTopico(null)
+    setEditandoValor("")
   }
 
   const handleSalvar = async () => {
@@ -274,22 +298,47 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
                       {m.topicos.map((t, i) => {
                         const eSub = isSubtopico(t)
                         const chave = `${m.id}:${i}`
+                        const editando = editandoTopico === chave
                         return (
                           <div key={i}>
                             <div className={`flex items-center gap-1.5 text-xs text-gray-300 group ${eSub ? "pl-5" : "pl-1"}`}>
                               {eSub && <CornerDownRight className="h-3 w-3 text-gray-500 shrink-0" />}
-                              <span className="flex-1 truncate">{eSub ? t.trimStart() : t}</span>
-                              {!eSub && (
-                                <button
-                                  type="button"
-                                  title="Adicionar subtópico"
-                                  onClick={() => { setSubtopicoPara(subtopicoPara === chave ? null : chave); setNovoSubtopico("") }}
-                                  className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-blue-400 transition-opacity"
-                                >
-                                  <CornerDownRight className="h-3 w-3" />
-                                </button>
+                              {editando ? (
+                                <>
+                                  <Input
+                                    autoFocus
+                                    value={editandoValor}
+                                    onChange={e => setEditandoValor(e.target.value)}
+                                    className="bg-gray-700 border-gray-600 text-xs h-6 flex-1"
+                                    onKeyDown={e => { if (e.key === "Enter") confirmarEdicaoTopico(m.id, i); if (e.key === "Escape") setEditandoTopico(null) }}
+                                  />
+                                  <button onClick={() => confirmarEdicaoTopico(m.id, i)} className="text-emerald-400 hover:text-emerald-300 shrink-0"><Check className="h-3 w-3" /></button>
+                                  <button onClick={() => setEditandoTopico(null)} className="text-gray-500 hover:text-gray-300 shrink-0"><X className="h-3 w-3" /></button>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="flex-1 truncate">{eSub ? t.trimStart() : t}</span>
+                                  <button
+                                    type="button"
+                                    title="Editar"
+                                    onClick={() => iniciarEdicaoTopico(m.id, i, eSub ? t.trimStart() : t)}
+                                    className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-amber-400 transition-opacity"
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </button>
+                                  {!eSub && (
+                                    <button
+                                      type="button"
+                                      title="Adicionar subtópico"
+                                      onClick={() => { setSubtopicoPara(subtopicoPara === chave ? null : chave); setNovoSubtopico("") }}
+                                      className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-blue-400 transition-opacity"
+                                    >
+                                      <CornerDownRight className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                  <button onClick={() => removerTopico(m.id, i)} className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-opacity"><X className="h-3 w-3" /></button>
+                                </>
                               )}
-                              <button onClick={() => removerTopico(m.id, i)} className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-opacity"><X className="h-3 w-3" /></button>
                             </div>
                             {subtopicoPara === chave && (
                               <div className="flex gap-1 pl-5 mt-1">
