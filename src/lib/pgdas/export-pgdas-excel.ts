@@ -7,8 +7,24 @@ export interface DeclaracaoPgdasRegistro {
   dados: DadosPgdas
 }
 
-const BRL = "#,##0.00"
+// Formato contábil BR: símbolo "R$" alinhado à esquerda, número à direita, "-" para zero.
+const BRL = '_-"R$"* #,##0.00_-;-"R$"* #,##0.00_-;_-"R$"* "-"??_-;_-@_-'
+const PCT = "0.00%"
 const MESES_ABREV = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"]
+
+const COR = {
+  rosa: "FFE4287C",
+  azulClaro: "FFB4C6E7",
+  branco: "FFFFFFFF",
+}
+
+const LOGO_URL = "/icons/taxhub_logo_principal_claro_transparente.png"
+
+// Remove só os caracteres inválidos em nome de arquivo no Windows/macOS — mantém acentos,
+// espaços e hífen pra ficar legível (ex.: "Diagnóstico Tributário - EMS Comercio.xlsx").
+function sanitizarNomeArquivo(nome: string): string {
+  return nome.replace(/[\\/:*?"<>|]/g, "").trim()
+}
 
 function formatarCompetencia(competencia: string): string {
   const [ano, mes] = competencia.split("-")
@@ -25,12 +41,16 @@ function sc(
     bold?: boolean
     align?: "left" | "center" | "right"
     numFmt?: string
+    bg?: string
+    color?: string
+    size?: number
   }
 ) {
   if (opts.value !== undefined) cell.value = opts.value
-  cell.font = { name: "Calibri", bold: opts.bold, size: 10 }
+  cell.font = { name: "Calibri", bold: opts.bold, size: opts.size ?? 10, color: { argb: opts.color ?? "FF000000" } }
   cell.alignment = { horizontal: opts.align ?? "left", vertical: "middle" }
   if (opts.numFmt) cell.numFmt = opts.numFmt
+  if (opts.bg) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.bg } }
 }
 
 // Agrupa declarações por mês, mesclando Declaração + Extrato quando ambos existem para o
@@ -71,11 +91,40 @@ interface LinhaSpec {
   label: string
   bold?: boolean
   valores?: (comp: string, dados: DadosPgdas | undefined) => number
+  destaque?: "rosa" | "azul"
+  numFmt?: string
 }
 
 function receitaAtividade(descricao: string) {
   return (_comp: string, dados: DadosPgdas | undefined) =>
     dados?.atividades.find((a) => a.descricao === descricao)?.receitaBrutaInformada ?? 0
+}
+
+function cargaTributaria(_comp: string, dados: DadosPgdas | undefined): number {
+  if (!dados || dados.rpa.total === 0) return 0
+  return dados.debitoGeral.declaradoExigivelSuspenso.total / dados.rpa.total
+}
+
+// Converte pra base64 puro (sem depender do Buffer do Node, que não existe no browser) —
+// ExcelJS aceita `base64` como alternativa a `buffer` pra anexar imagens.
+function arrayBufferParaBase64(buffer: ArrayBuffer): string {
+  let binario = ""
+  const bytes = new Uint8Array(buffer)
+  const tamanhoBloco = 0x8000
+  for (let i = 0; i < bytes.length; i += tamanhoBloco) {
+    binario += String.fromCharCode(...bytes.subarray(i, i + tamanhoBloco))
+  }
+  return btoa(binario)
+}
+
+async function carregarLogoBase64(): Promise<string | null> {
+  try {
+    const res = await fetch(LOGO_URL)
+    if (!res.ok) return null
+    return arrayBufferParaBase64(await res.arrayBuffer())
+  } catch {
+    return null
+  }
 }
 
 export async function exportarPgdasExcel(declaracoes: DeclaracaoPgdasRegistro[], nomeCliente: string): Promise<void> {
@@ -84,12 +133,26 @@ export async function exportarPgdasExcel(declaracoes: DeclaracaoPgdasRegistro[],
   const wb = new ExcelJS.Workbook()
   wb.creator = "Tax Hub — Recuperação de Crédito"
   wb.created = new Date()
-  const ws = wb.addWorksheet("Simples Nacional")
+  const ws = wb.addWorksheet("Simples Nacional", {
+    views: [{ showGridLines: false, state: "frozen", xSplit: 1, ySplit: 5 }],
+  })
 
   ws.columns = [{ width: 90 }, ...competencias.map(() => ({ width: 15.5 }))]
 
-  // Cabeçalho: coluna A + 1 coluna por mês
-  const headerRow = ws.getRow(1)
+  // Linha 1: logo (imagem sobreposta) — linha alta pra caber o logo inteiro
+  ws.getRow(1).height = 60
+  const logoBase64 = await carregarLogoBase64()
+  if (logoBase64) {
+    const imageId = wb.addImage({ base64: `data:image/png;base64,${logoBase64}`, extension: "png" })
+    ws.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 140, height: 74 } })
+  }
+
+  // Linha 3: título "Simples Nacional - <nome curto do cliente>"
+  const nomeCurto = nomeCliente.trim().split(/\s+/)[0] || nomeCliente
+  sc(ws.getCell(3, 1), { value: `Simples Nacional - ${nomeCurto}`, bold: true, size: 12 })
+
+  // Linha 5: cabeçalho (coluna A + 1 coluna por mês)
+  const headerRow = ws.getRow(5)
   sc(headerRow.getCell(1), { value: "1. RESUMO SIMPLES NACIONAL", bold: true })
   competencias.forEach((comp, i) => {
     sc(headerRow.getCell(i + 2), { value: formatarCompetencia(comp), bold: true, align: "right" })
@@ -121,6 +184,7 @@ export async function exportarPgdasExcel(declaracoes: DeclaracaoPgdasRegistro[],
     {
       label: "                $  Vlr Débito Declarado PGDAS",
       valores: (_c, d) => d?.debitoGeral.declaradoExigivelSuspenso.total ?? 0,
+      destaque: "rosa",
     },
     { label: "" },
     { label: "     3. VALOR TOTAL POR TRIBUTO", bold: true },
@@ -163,19 +227,44 @@ export async function exportarPgdasExcel(declaracoes: DeclaracaoPgdasRegistro[],
     // deliberada (não implementar automaticamente); revisitar quando houver um parser para
     // esse 3º tipo de PDF.
     { label: "                $  Valor eCAC - Pgtos DARF(DAS)", valores: () => 0 },
+    { label: "" },
+    {
+      label: "Carga Tributária",
+      bold: true,
+      align: "right",
+      valores: cargaTributaria,
+      destaque: "azul",
+      numFmt: PCT,
+    } as LinhaSpec & { align: "right" },
   ]
 
+  const ROW_HEADER = 5
   linhas.forEach((linha, idx) => {
-    const row = ws.getRow(idx + 2) // +2 porque a linha 1 é o cabeçalho
-    sc(row.getCell(1), { value: linha.label, bold: linha.bold })
+    const row = ws.getRow(idx + ROW_HEADER + 1)
+    const bg = linha.destaque === "rosa" ? COR.rosa : linha.destaque === "azul" ? COR.azulClaro : undefined
+    const cor = linha.destaque === "rosa" ? COR.branco : undefined
+    const alinhaLabel = (linha as { align?: "left" | "center" | "right" }).align
+
+    sc(row.getCell(1), { value: linha.label, bold: linha.bold, bg, color: cor, align: alinhaLabel })
     if (linha.valores) {
       competencias.forEach((comp, i) => {
-        sc(row.getCell(i + 2), { value: linha.valores!(comp, porCompetencia[comp]), numFmt: BRL, align: "right" })
+        sc(row.getCell(i + 2), {
+          value: linha.valores!(comp, porCompetencia[comp]),
+          numFmt: linha.numFmt ?? BRL,
+          align: "right",
+          bg,
+          color: cor,
+          bold: linha.destaque === "azul",
+        })
       })
+    } else if (bg) {
+      // linha em branco com destaque (ex.: espaçador dentro de um bloco colorido) — preenche
+      // até a última coluna de mês pra manter a faixa de cor contínua
+      competencias.forEach((_comp, i) => sc(row.getCell(i + 2), { bg }))
     }
-    // Linhas de detalhe e em branco ficam recolhíveis; só os cabeçalhos de seção (bold) ficam
-    // sempre visíveis, reproduzindo o agrupamento colapsável visto no exemplo original.
-    row.outlineLevel = linha.bold ? 0 : 1
+    // Linhas de detalhe e em branco ficam recolhíveis; só os cabeçalhos de seção (bold sem
+    // destaque) ficam sempre visíveis, reproduzindo o agrupamento colapsável do exemplo original.
+    row.outlineLevel = linha.bold && !linha.destaque ? 0 : 1
   })
 
   const buffer = await wb.xlsx.writeBuffer()
@@ -183,7 +272,7 @@ export async function exportarPgdasExcel(declaracoes: DeclaracaoPgdasRegistro[],
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = `simples_nacional_${nomeCliente.replace(/[^a-zA-Z0-9]/g, "_")}.xlsx`
+  a.download = `${sanitizarNomeArquivo(`Diagnóstico Tributário - ${nomeCliente}`)}.xlsx`
   a.click()
   URL.revokeObjectURL(url)
 }
