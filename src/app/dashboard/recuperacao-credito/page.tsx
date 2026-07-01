@@ -29,6 +29,8 @@ import {
   Plus,
   Download,
   Trash2,
+  Pencil,
+  Check,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -144,6 +146,10 @@ export default function RecuperacaoCreditoPage() {
   const [modoNovoProjeto, setModoNovoProjeto] = useState(false);
   const [novoNomeProjeto, setNovoNomeProjeto] = useState("");
   const [criandoProjeto, setCriandoProjeto] = useState(false);
+  const [modoRenomearProjeto, setModoRenomearProjeto] = useState(false);
+  const [nomeRenomeado, setNomeRenomeado] = useState("");
+  const [renomeandoProjeto, setRenomeandoProjeto] = useState(false);
+  const [excluindoProjeto, setExcluindoProjeto] = useState(false);
 
   const [declaracoesPgdas, setDeclaracoesPgdas] = useState<DeclaracaoRow[]>([]);
   const [carregandoDeclaracoes, setCarregandoDeclaracoes] = useState(false);
@@ -247,6 +253,48 @@ export default function RecuperacaoCreditoPage() {
       toast.error(e instanceof Error ? e.message : "Erro ao criar projeto");
     } finally {
       setCriandoProjeto(false);
+    }
+  };
+
+  const handleRenomearProjeto = async () => {
+    if (!projetoSelecionadoId || !clienteSelecionadoId) return;
+    if (!nomeRenomeado.trim()) {
+      toast.error("Dê um nome ao projeto");
+      return;
+    }
+    setRenomeandoProjeto(true);
+    try {
+      const res = await fetch(`/api/recuperacao-credito/projetos/${projetoSelecionadoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome: nomeRenomeado.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erro ao renomear projeto");
+      toast.success("Projeto renomeado!");
+      setModoRenomearProjeto(false);
+      await carregarProjetos(clienteSelecionadoId);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao renomear projeto");
+    } finally {
+      setRenomeandoProjeto(false);
+    }
+  };
+
+  const handleExcluirProjeto = async () => {
+    if (!projetoSelecionado || !clienteSelecionadoId) return;
+    if (!confirm(`Excluir o projeto "${projetoSelecionado.nome}" e todas as declarações importadas nele?`)) return;
+    setExcluindoProjeto(true);
+    try {
+      const res = await fetch(`/api/recuperacao-credito/projetos/${projetoSelecionado.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Erro ao excluir projeto");
+      toast.success("Projeto excluído");
+      setProjetoSelecionadoId(null);
+      await carregarProjetos(clienteSelecionadoId);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao excluir projeto");
+    } finally {
+      setExcluindoProjeto(false);
     }
   };
 
@@ -493,6 +541,25 @@ export default function RecuperacaoCreditoPage() {
                     </Button>
                   </div>
                 </div>
+              ) : modoRenomearProjeto ? (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Input
+                    autoFocus
+                    placeholder="Novo nome do projeto"
+                    value={nomeRenomeado}
+                    onChange={(e) => setNomeRenomeado(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleRenomearProjeto()}
+                    className="flex-1"
+                  />
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={handleRenomearProjeto} disabled={renomeandoProjeto}>
+                      {renomeandoProjeto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setModoRenomearProjeto(false)}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
               ) : (
                 <div className="flex gap-2">
                   <Select value={projetoSelecionadoId ?? undefined} onValueChange={setProjetoSelecionadoId}>
@@ -507,6 +574,27 @@ export default function RecuperacaoCreditoPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {projetoSelecionado && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => { setNomeRenomeado(projetoSelecionado.nome); setModoRenomearProjeto(true); }}
+                        title="Renomear projeto"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleExcluirProjeto}
+                        disabled={excluindoProjeto}
+                        title="Excluir projeto"
+                      >
+                        {excluindoProjeto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      </Button>
+                    </>
+                  )}
                   <Button variant="outline" size="icon" onClick={() => setModoNovoProjeto(true)} title="Novo projeto">
                     <Plus className="h-4 w-4" />
                   </Button>
