@@ -12,7 +12,7 @@ const CORES = [
 
 const PROMPT_BASE = `Você é um especialista em análise de editais de concursos públicos brasileiros.
 
-Analise o texto abaixo (conteúdo programático de um edital) e extraia todas as matérias (disciplinas) com seus respectivos tópicos e subtópicos.
+Analise o texto abaixo (conteúdo programático de um edital) e extraia todas as matérias (disciplinas) com seus tópicos e subtópicos.
 
 Retorne APENAS um JSON válido, sem texto adicional, no formato:
 {
@@ -20,23 +20,34 @@ Retorne APENAS um JSON válido, sem texto adicional, no formato:
     {
       "id": "nome_sem_espacos_sem_acentos",
       "nome": "Nome Exato da Matéria",
-      "topicos": ["Tópico Principal", "  Subtópico do tópico acima", "  Outro subtópico", "Próximo Tópico Principal"]
+      "topicos": [
+        {
+          "nome": "Tópico Principal",
+          "subtopicos": ["Subtópico A", "Subtópico B"]
+        },
+        {
+          "nome": "Tópico Sem Subtópicos",
+          "subtopicos": []
+        }
+      ]
     }
   ]
 }
 
 Regras:
 - id: minúsculas, sem acentos, espaços → underscore, apenas a-z 0-9 _
-- nome: exatamente como aparece no edital (com acentos)
-- topicos: lista ordenada onde TÓPICOS PRINCIPAIS não têm espaço no início, e SUBTÓPICOS começam com exatamente dois espaços ("  ")
-- Tópico principal = item numerado (ex: "1.", "2.", "Demanda e Oferta") ou título de seção
-- Subtópico = item dentro de um tópico principal (ex: "restrição orçamentária" dentro de "Teoria do Consumidor")
-- Capitalize a primeira letra de cada palavra nos nomes (ex: "Restrição Orçamentária", "Papel do Governo")
-- Sem numeração nos textos, apenas o nome
+- nome da matéria: exatamente como aparece no edital (com acentos)
+- Tópico principal = item numerado (ex: "1. Conceitos Básicos") ou título de seção
+- Subtópico = item listado dentro de um tópico principal (ex: "restrição orçamentária" dentro de "Teoria do Consumidor")
+- Capitalize a primeira letra de cada palavra (ex: "Restrição Orçamentária", "Papel do Governo")
+- Sem numeração nos nomes, apenas o texto
 - Ignore cabeçalhos, datas, regras do concurso — foque só no conteúdo programático
 
 TEXTO DO EDITAL:
 `;
+
+type TopicoAninhado = { nome: string; subtopicos: string[] }
+type MateriaRaw = { id: string; nome: string; topicos: TopicoAninhado[] }
 
 async function extrairMaterias(texto: string): Promise<MateriaConcurso[]> {
   const response = await client.chat.completions.create({
@@ -50,15 +61,29 @@ async function extrairMaterias(texto: string): Promise<MateriaConcurso[]> {
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error("IA não retornou JSON válido");
 
-  const parsed = JSON.parse(jsonMatch[0]) as { materias?: { id: string; nome: string; topicos: string[] }[] };
+  const parsed = JSON.parse(jsonMatch[0]) as { materias?: MateriaRaw[] };
   if (!parsed.materias || !Array.isArray(parsed.materias)) throw new Error("IA não retornou matérias válidas");
 
-  return parsed.materias.map((m, i) => ({
-    id: m.id ?? m.nome.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""),
-    nome: m.nome,
-    cor: CORES[i % CORES.length],
-    topicos: Array.isArray(m.topicos) ? m.topicos : [],
-  }));
+  return parsed.materias.map((m, i) => {
+    // Flatten: tópico principal sem espaço, subtópicos com "  " (dois espaços)
+    const topicos: string[] = [];
+    for (const t of (m.topicos ?? [])) {
+      if (typeof t === "string") {
+        topicos.push(t);
+      } else {
+        topicos.push(t.nome);
+        for (const sub of (t.subtopicos ?? [])) {
+          topicos.push("  " + sub);
+        }
+      }
+    }
+    return {
+      id: m.id ?? m.nome.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""),
+      nome: m.nome,
+      cor: CORES[i % CORES.length],
+      topicos,
+    };
+  });
 }
 
 export async function POST(req: NextRequest) {
