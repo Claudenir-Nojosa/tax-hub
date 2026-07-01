@@ -134,7 +134,7 @@ function montarAbaContribuicao(
   const headerRow = ws.getRow(5)
   sc(headerRow.getCell(2), { value: `1. RESUMO ${nomeTributo}`, bold: true })
   competencias.forEach((comp, i) => {
-    sc(headerRow.getCell(i + 3), { value: formatarCompetencia(comp), bold: true, align: "right" })
+    sc(headerRow.getCell(i + 3), { value: formatarCompetencia(comp), bold: true, align: "center" })
   })
 
   const linhas: LinhaSpec[] = [
@@ -234,8 +234,6 @@ export async function montarAbasPisCofins(
   const nomeCurto = nomeCliente.trim().split(/\s+/)[0] || nomeCliente
   const logoBase64 = await carregarLogoBase64()
 
-  const cnpj = declaracoes[0]?.dados.cnpj ?? ""
-
   for (const [nomeAba, tituloTributo, extraiRegistros, extraiApuracao] of [
     [
       "PIS",
@@ -261,7 +259,6 @@ export async function montarAbasPisCofins(
       ws.addImage(imageId, { tl: { col: 1, row: 0 }, ext: { width: 140, height: 74 } })
     }
     sc(ws.getCell(3, 2), { value: `${tituloTributo} - ${nomeCurto}`, bold: true, size: 12 })
-    if (cnpj) sc(ws.getCell(4, 2), { value: `CNPJ: ${cnpj}`, size: 9 })
 
     montarAbaContribuicao(ws, tituloTributo, declaracoes, competencias, extraiRegistros, extraiApuracao)
   }

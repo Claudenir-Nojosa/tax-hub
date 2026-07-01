@@ -159,7 +159,7 @@ export async function montarAbaIcms(
   const headerRow = ws.getRow(5)
   sc(headerRow.getCell(2), { value: "1. RESUMO ICMS", bold: true })
   competencias.forEach((comp, i) => {
-    sc(headerRow.getCell(i + 3), { value: formatarCompetencia(comp), bold: true, align: "right" })
+    sc(headerRow.getCell(i + 3), { value: formatarCompetencia(comp), bold: true, align: "center" })
   })
 
   const totalOperacionalSaida = (dados: DadosEfdIcmsIpi | undefined) =>

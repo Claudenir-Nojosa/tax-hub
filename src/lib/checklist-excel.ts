@@ -249,10 +249,15 @@ export async function montarAbaChecklist(wb: ExcelJS.Workbook, nomeCliente: stri
   const corIcone = (s: Situacao | undefined) => (s === "estrela" ? COR.estrela : "FF000000")
 
   for (const categoria of CATEGORIAS) {
+    // Estiliza TODAS as células do range antes de mesclar — mesclar faz as células
+    // compartilharem o mesmo objeto de estilo internamente no ExcelJS, então estilizar de novo
+    // depois (ex.: só a cor de fundo) sobrescreve negrito/alinhamento da célula mestre.
     const bandRow = ws.getRow(linha)
-    sc(bandRow.getCell(2), { value: categoria.nome, bold: true, align: "center", color: COR.navy, bg: COR.navyClaro, border: true })
+    for (let c = 2; c <= 8; c++) {
+      sc(bandRow.getCell(c), { bold: true, align: "center", color: COR.navy, bg: COR.navyClaro, border: true })
+    }
+    bandRow.getCell(2).value = categoria.nome
     ws.mergeCells(linha, 2, linha, 8)
-    for (let c = 3; c <= 8; c++) sc(bandRow.getCell(c), { bg: COR.navyClaro, border: true })
     linha++
 
     categoria.itens.forEach((item, idx) => {
