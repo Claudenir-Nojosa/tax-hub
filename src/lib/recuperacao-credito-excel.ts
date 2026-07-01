@@ -1,27 +1,33 @@
 import ExcelJS from "exceljs"
 import { montarAbaIcms, type DeclaracaoEfdRegistro } from "./efd-icms-excel"
 import { montarAbasPisCofins, type DeclaracaoEfdContribuicoesRegistro } from "./efd-contribuicoes-excel"
+import { montarAbaComprovantePagamento } from "./comprovante-pagamento-excel"
+import type { DadosComprovantePagamento } from "./comprovante-pagamento-parser"
 import { montarAbaChecklist } from "./checklist-excel"
 
 function sanitizarNomeArquivo(nome: string): string {
   return nome.replace(/[\\/:*?"<>|]/g, "").trim()
 }
 
-// Monta um único Excel com uma aba por tipo de declaração fiscal presente no projeto (ICMS/IPI
-// e/ou PIS/COFINS) — é o que a UI de Recuperação de Crédito chama quando o usuário clica em
-// "Baixar Excel" na seção de declarações fiscais, pra nunca gerar dois arquivos separados
-// quando o mesmo projeto tem os dois tipos importados.
+// Monta um único Excel com uma aba por tipo de declaração fiscal presente no projeto (ICMS/IPI,
+// PIS/COFINS e/ou Comprovante de Pagamentos) — é o que a UI de Recuperação de Crédito chama
+// quando o usuário clica em "Baixar Excel" na seção de declarações fiscais, pra nunca gerar
+// vários arquivos separados quando o mesmo projeto tem mais de um tipo importado. PGDAS (Simples
+// Nacional) fica de fora de propósito — tem seu próprio botão/exportador, ver
+// src/lib/pgdas/export-pgdas-excel.ts.
 export async function exportarDeclaracaoFiscalExcel(
   nomeCliente: string,
   dados: {
     icms?: DeclaracaoEfdRegistro[]
     pisCofins?: DeclaracaoEfdContribuicoesRegistro[]
+    comprovantes?: DadosComprovantePagamento[]
   }
 ): Promise<void> {
   const temIcms = (dados.icms?.length ?? 0) > 0
   const temPisCofins = (dados.pisCofins?.length ?? 0) > 0
+  const temComprovantes = (dados.comprovantes?.length ?? 0) > 0
 
-  if (!temIcms && !temPisCofins) return
+  if (!temIcms && !temPisCofins && !temComprovantes) return
 
   const wb = new ExcelJS.Workbook()
   wb.creator = "Tax Hub — Recuperação de Crédito"
@@ -29,11 +35,13 @@ export async function exportarDeclaracaoFiscalExcel(
 
   if (temIcms) await montarAbaIcms(wb, dados.icms!, nomeCliente)
   if (temPisCofins) await montarAbasPisCofins(wb, dados.pisCofins!, nomeCliente)
+  if (temComprovantes) await montarAbaComprovantePagamento(wb, dados.comprovantes!, nomeCliente)
   await montarAbaChecklist(wb, nomeCliente)
 
   const contextos: string[] = []
   if (temIcms) contextos.push("ICMS e IPI")
   if (temPisCofins) contextos.push("PIS e COFINS")
+  if (temComprovantes) contextos.push("Comprovante de Pagamentos")
   const contexto = contextos.join(", ")
 
   const buffer = await wb.xlsx.writeBuffer()

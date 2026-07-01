@@ -202,6 +202,7 @@ model ProjetoRecuperacaoCredito {
   declaracoes               DeclaracaoPgdas[]
   declaracoesEfd            DeclaracaoEfdIcmsIpi[]
   declaracoesEfdContrib     DeclaracaoEfdContribuicoes[]
+  comprovantesPagamento     DeclaracaoComprovantePagamento[]
 }
 
 model DeclaracaoPgdas {
@@ -237,6 +238,28 @@ model DeclaracaoEfdIcmsIpi {
 
   @@unique([projetoId, competencia])
   @@index([projetoId, competencia])
+}
+
+// Diferente de DeclaracaoPgdas/EfdIcmsIpi/EfdContribuicoes (1 arquivo = 1 competência), um único
+// PDF de Comprovante de Arrecadação pode conter dezenas de DARFs de períodos diferentes — então a
+// unidade persistida aqui é o DARF individual, deduplicado pelo Número do Documento (chave
+// natural do próprio DARF, estável mesmo que o mesmo PDF seja reenviado ou que o DARF apareça em
+// PDFs diferentes exportados em datas distintas).
+model DeclaracaoComprovantePagamento {
+  id              String                    @id @default(cuid())
+  projetoId       String
+  projeto         ProjetoRecuperacaoCredito @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  numeroDocumento String   // chave natural do DARF — usada pra deduplicar reimportação
+  cnpj            String   // CNPJ lido do PDF (auditoria/validação contra o cliente)
+  arquivoNome     String
+  dados           Json     // payload tipado — ver DadosComprovantePagamento em src/lib/comprovante-pagamento-parser.ts
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projetoId, numeroDocumento])
+  @@index([projetoId])
 }
 
 model DeclaracaoEfdContribuicoes {

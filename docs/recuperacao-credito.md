@@ -13,7 +13,7 @@ extensão/conteúdo:
 
 | Tipo de arquivo | Rota | O que faz |
 |---|---|---|
-| `.pdf` (Declaração/Extrato PGDAS) | Simples Nacional | Extrai e persiste por projeto |
+| `.pdf` (Declaração/Extrato PGDAS ou Comprovante de Arrecadação de DARF) | Simples Nacional ou Comprovante de Pagamentos | Um único endpoint (`/api/recuperacao-credito/pdf/upload`) detecta o sub-tipo pelo conteúdo e extrai/persiste no model certo |
 | `.txt` (EFD ICMS/IPI ou EFD Contribuições, começa com `\|0000\|`) | ICMS/IPI ou PIS/COFINS | Um único endpoint (`/api/recuperacao-credito/efd/upload`) detecta o sub-tipo pelo conteúdo (`detectarTipoEfd`) e extrai/persiste no model certo |
 | `.xlsx` / `.xls` / `.csv` | Análise genérica por IA | Stub — ainda não implementado (`/api/recuperacao-credito/route.ts`) |
 
@@ -25,9 +25,10 @@ PDFs e `.txt` exigem **Cliente + Projeto** selecionados (ver seção 2); os arqu
 ```
 ClienteRecuperacaoCredito (CNPJ + Razão Social, por usuário)
   └── ProjetoRecuperacaoCredito (nome livre, ex.: "Reverificação 2026")
-        ├── DeclaracaoPgdas[]              (1 registro por mês × tipo: DECLARACAO | EXTRATO)
-        ├── DeclaracaoEfdIcmsIpi[]         (1 registro por mês)
-        └── DeclaracaoEfdContribuicoes[]   (1 registro por mês — PIS/COFINS)
+        ├── DeclaracaoPgdas[]                    (1 registro por mês × tipo: DECLARACAO | EXTRATO)
+        ├── DeclaracaoEfdIcmsIpi[]               (1 registro por mês)
+        ├── DeclaracaoEfdContribuicoes[]         (1 registro por mês — PIS/COFINS)
+        └── DeclaracaoComprovantePagamento[]     (1 registro por DARF — ver seção 6, chave diferente)
 ```
 
 **Por que "Projeto" existe**: um cliente pode ter mais de um diagnóstico/reverificação em
@@ -49,7 +50,9 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
 - **Parser**: `src/lib/pgdas/` — **regex determinístico, sem IA**. O PDF é gerado pelo próprio
   Programa Gerador do PGDAS-D (governo), formato fixo — IA seria mais lenta, tem custo e risco
   de alucinar um valor financeiro à toa. Extração via `unpdf` (`extractText`) roda **no
-  servidor** (`src/app/api/recuperacao-credito/pgdas/upload/route.ts`).
+  servidor**, dentro do endpoint unificado de upload de PDF (ver seção 6,
+  `src/app/api/recuperacao-credito/pdf/upload/route.ts`), que detecta se cada PDF é PGDAS ou
+  Comprovante de Arrecadação antes de decidir qual parser chamar.
 - **Dois tipos de documento por mês**: "Declaração" (valor devido) e "Extrato" (valor
   efetivamente pago — DAS gerado, juros, multa). Ao mesclar os dois (`agregarDeclaracoes` em
   `export-pgdas-excel.ts`), o Extrato prevalece nos campos em comum por ser o documento mais
@@ -124,7 +127,7 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   implementados**. O arquivo de amostra disponível não tinha nenhum crédito no período (registros
   ausentes no arquivo), então não foi possível validar o layout de campos com dados reais. Antes
   de implementar, validar campo a campo contra um EFD Contribuições real com créditos não-zeros,
-  do mesmo jeito que o `M200`/`M210` foi validado (ver seção 9, regra 1).
+  do mesmo jeito que o `M200`/`M210` foi validado (ver seção 10, regra 1).
 - **Excel — uma aba "PIS" e uma aba "COFINS" no mesmo arquivo**: diferente do PGDAS e do ICMS/IPI
   (que cada um gera seu próprio arquivo), o PIS e a COFINS **sempre saem juntos, num único
   arquivo com duas abas** (`montarAbasPisCofins()` em `src/lib/efd-contribuicoes-excel.ts`, que
@@ -142,7 +145,63 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   de cada módulo (`exportarEfdIcmsExcel`, `exportarEfdContribuicoesExcel`) é uma casca fina em
   volta dessa mesma função, pra quando só um tipo de EFD foi importado.
 
-## 6. Aba "Checklist" (presente em TODO Excel do módulo)
+## 6. Comprovante de Pagamentos (Comprovante de Arrecadação de DARF)
+
+- **Parser**: `src/lib/comprovante-pagamento-parser.ts` — texto extraído via `unpdf`, parsing
+  **determinístico por regex, sem IA** (mesmo raciocínio dos outros: formato fixo, emitido pelo
+  site da Receita Federal). Validado campo a campo contra um PDF real de 51 páginas/50 DARFs e
+  cruzado com uma planilha de referência do usuário que já continha esses mesmos 50 DARFs
+  (nenhuma divergência de valor fora do gap documentado abaixo).
+- **Diferença estrutural em relação a PGDAS/EFD — não é "1 arquivo = 1 competência"**: um único
+  PDF de Comprovante de Arrecadação contém **dezenas de DARFs**, de competências e anos
+  diferentes (o arquivo de validação tinha DARFs de 2022 a 2025 num só PDF). Por isso:
+  - `parseComprovantePagamento` devolve um **array de DARFs** por arquivo, não um único registro.
+  - A chave de deduplicação em `DeclaracaoComprovantePagamento` é `[projetoId, numeroDocumento]`
+    (o Número do Documento do próprio DARF, uma chave natural e estável), **não**
+    `[projetoId, competencia]` como nos outros models — reenviar o mesmo PDF (ou um PDF novo que
+    contenha um DARF já importado) atualiza aquele DARF em vez de duplicá-lo.
+- **Layout por DARF** (cada página do PDF começa com o rótulo "Data de Vencimento"): cabeçalho
+  (CNPJ, Razão Social, Período de Apuração, Data de Vencimento, Número do Documento), 1+ linhas de
+  código de receita (código de 4 dígitos, descrição, valores de Principal/Multa/Juros/Total nessa
+  ordem exata — **não** é a ordem sugerida pela concatenação dos rótulos no texto extraído, foi
+  confirmada cruzando contra a planilha de referência) e um rodapé (Data de Arrecadação, Banco,
+  Valor Restituído).
+- **DARF cujo bloco de códigos não cabe numa página**: as páginas seguintes repetem o mesmo
+  cabeçalho (mesmo Número do Documento) e continuam a lista de códigos; o parser agrupa por
+  Número do Documento ao longo de todas as páginas do PDF antes de persistir — testado e validado
+  com um DARF real de 2 páginas.
+- **Tributo por código**: `CODIGO_TRIBUTO` em `comprovante-pagamento-parser.ts` é um mapa fixo e
+  pequeno (`2089→IRPJ`, `2372→CSLL`, `8109→PIS`, `2172→COFINS`), validado como **completo e exato**
+  contra a planilha de referência do usuário — todo código fora desses 4 (multas, TJLP de
+  parcelamento, INSS/CP, etc.) fica sem rótulo de tributo, replicando fielmente o que a
+  referência mostrava.
+- **GAP CONHECIDO — "Descrição Principal" não é a nomenclatura oficial completa da RFB**: o Excel
+  usa aqui a descrição impressa junto ao próprio código no PDF (menos abreviada/formatada que a
+  official), não uma tabela externa de Códigos de Receita da RFB — o exemplo de referência do
+  usuário mostrava descrições diferentes (mais abreviadas) para os mesmos códigos, que não vêm do
+  PDF; parecem ter sido preenchidas manualmente pela equipe a partir de uma tabela própria. Não
+  reproduzido aqui pra não inventar dado que não está na fonte.
+- **GAP CONHECIDO — referência (sufixo "-NN" do Código) só aparece quando o PDF a imprime**:
+  algumas linhas de código (ex.: `2203`, "Multa Omissão/Incorreção/Falta/Atraso na Entrega...")
+  não trazem uma referência de 2 dígitos impressa no PDF; nesses casos o Código exportado fica só
+  o de 4 dígitos, sem o sufixo. A planilha de referência do usuário tinha esse código específico
+  já enriquecido como `2203-03` **e duplicado em 2 linhas** com o mesmo valor — parece
+  categorização manual da equipe (2 motivos legais pro mesmo valor cobrado), não algo extraível do
+  PDF. O parser gera só 1 linha por ocorrência real no PDF, por ser mais fiel à fonte-única
+  disponível.
+- **Excel**: uma aba só, **"Comprovante de Pagamentos"**, uma linha por combinação (DARF, código
+  de receita) — mesma granularidade da planilha de referência do usuário (`Relatório de
+  Pagamentos.xlsx`). Estrutura de **Excel Table** (`ws.addTable`, `TableStyleMedium2`,
+  `filterButton`), com uma linha de `SUBTOTAL` acima do cabeçalho para as 4 colunas monetárias
+  finais — mesmo padrão já usado no export de Equiparação Hospitalar
+  (`src/lib/equiparacao-hospitalar-excel.ts`), não o padrão de linhas/outline dos outros módulos
+  deste doc (não faz sentido pra uma tabela "1 linha = 1 fato", sem hierarquia de seções).
+- **Endpoint de upload compartilhado com PGDAS**: `src/app/api/recuperacao-credito/pdf/upload/route.ts`
+  extrai o texto do PDF uma vez, detecta com `detectarComprovantePagamento()` (âncora: "consta nos
+  sistemas da Receita Federal registro de arrecadação de DARF") se é Comprovante ou PGDAS, e
+  despacha pro parser/model certo — mesmo padrão do endpoint unificado de EFD (seção 5).
+
+## 7. Aba "Checklist" (presente em TODO Excel do módulo)
 
 - **O quê**: `src/lib/checklist-excel.ts`, `montarAbaChecklist(wb, nomeCliente)` — adiciona uma
   aba **"Checklist"** em todo Excel gerado pela Recuperação de Crédito: Simples Nacional
@@ -178,14 +237,16 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   contingências. Isso exige, para cada tópico, uma regra própria de "o que checar nos dados
   importados" — não implementar isso "de graça" numa mudança não relacionada; ao construir essa
   análise automática no futuro, seguir a mesma disciplina de validação contra dados reais antes
-  de confiar no resultado (seção 9, regra 1), já que aqui o risco não é um valor financeiro errado
+  de confiar no resultado (seção 10, regra 1), já que aqui o risco não é um valor financeiro errado
   mas uma oportunidade real deixada de fora (falso ☠️) ou uma marcada à toa (falso 🌟).
 
-## 7. Padrão visual do Excel (obrigatório em qualquer novo export deste módulo)
+## 8. Padrão visual do Excel (obrigatório em qualquer novo export deste módulo)
 
 Todo Excel gerado por este módulo segue o **mesmo "brand"**, estabelecido primeiro no export do
 Simples Nacional (`src/lib/pgdas/export-pgdas-excel.ts`) e replicado no de ICMS/IPI
-(`src/lib/efd-icms-excel.ts`) e no de PIS/COFINS (`src/lib/efd-contribuicoes-excel.ts`):
+(`src/lib/efd-icms-excel.ts`) e no de PIS/COFINS (`src/lib/efd-contribuicoes-excel.ts`). A aba de
+Comprovante de Pagamentos (seção 6) e a de Checklist (seção 7) são as duas exceções conscientes —
+usam sua própria paleta/estrutura de tabela, ver seções respectivas:
 
 - **Logo**: TaxHub, versão `taxhub_logo_principal_claro_transparente.png` (texto escuro — a
   versão "escuro" tem o "TAX" quase invisível em fundo branco). Carregado via `fetch` +
@@ -221,7 +282,7 @@ Simples Nacional (`src/lib/pgdas/export-pgdas-excel.ts`) e replicado no de ICMS/
   `src/lib/excel-style-utils.ts` compartilhado é a extração natural, mas não fazer isso "de
   graça" numa mudança não relacionada.
 
-## 8. Regra geral: IA vs. determinístico
+## 9. Regra geral: IA vs. determinístico
 
 - **Formato fixo/oficial do governo** (PGDAS, EFD ICMS/IPI) → **parser determinístico
   (regex/split)**, nunca IA. Motivo: previsível, grátis, instantâneo, zero risco de alucinação
@@ -234,7 +295,7 @@ Antes de escolher a abordagem para um novo tipo de arquivo/análise, perguntar: 
 ditado por um layout oficial fixo, ou é redação livre de terceiros?" — a resposta define IA vs.
 determinístico.
 
-## 9. Checklist para adicionar um novo tipo de declaração ao módulo
+## 10. Checklist para adicionar um novo tipo de declaração ao módulo
 
 1. Confirmar o formato de origem (fixo → parser; livre → IA) e o(s) registro(s)/campo(s) exatos
    validando contra um arquivo real do usuário — nunca supor o layout de um campo sem
@@ -251,8 +312,8 @@ determinístico.
    por-arquivo não derruba o lote) e `.../xxx/route.ts` (GET por `projetoId`, DELETE por `id`).
    Se o upload compartilha endpoint com um tipo irmão (caso do EFD), o dispatch por tipo detectado
    fica dentro do mesmo `POST`, nunca em rotas separadas por extensão.
-5. Exportador Excel em `src/lib/xxx-excel.ts` seguindo a seção 7 deste documento à risca (e
-   incluir a chamada a `montarAbaChecklist` — seção 6 — no wrapper standalone, se ainda não
+5. Exportador Excel em `src/lib/xxx-excel.ts` seguindo a seção 8 deste documento à risca (e
+   incluir a chamada a `montarAbaChecklist` — seção 7 — no wrapper standalone, se ainda não
    estiver coberto pelo orquestrador). Separar
    a montagem da(s) aba(s) (`montarAbaXxx(wb, ...)`, sem download) do wrapper "standalone" que
    cria o workbook e baixa (`exportarXxxExcel(...)`) — isso permite compor com outros tipos de

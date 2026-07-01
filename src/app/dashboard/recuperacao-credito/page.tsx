@@ -16,6 +16,7 @@ import type { DeclaracaoEfdRegistro } from "@/lib/efd-icms-excel";
 import type { DadosEfdIcmsIpi } from "@/lib/efd-icms-parser";
 import type { DeclaracaoEfdContribuicoesRegistro } from "@/lib/efd-contribuicoes-excel";
 import type { DadosEfdContribuicoes } from "@/lib/efd-contribuicoes-parser";
+import type { DadosComprovantePagamento } from "@/lib/comprovante-pagamento-parser";
 import { exportarDeclaracaoFiscalExcel } from "@/lib/recuperacao-credito-excel";
 import {
   FileSearch,
@@ -92,6 +93,12 @@ interface DeclaracaoEfdContribuicoesRow {
   id: string;
   competencia: string;
   dados: DadosEfdContribuicoes;
+}
+
+interface DeclaracaoComprovanteRow {
+  id: string;
+  numeroDocumento: string;
+  dados: DadosComprovantePagamento;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -181,6 +188,9 @@ export default function RecuperacaoCreditoPage() {
   const [declaracoesEfdContrib, setDeclaracoesEfdContrib] = useState<DeclaracaoEfdContribuicoesRow[]>([]);
   const [carregandoDeclaracoesEfdContrib, setCarregandoDeclaracoesEfdContrib] = useState(false);
 
+  const [declaracoesComprovante, setDeclaracoesComprovante] = useState<DeclaracaoComprovanteRow[]>([]);
+  const [carregandoDeclaracoesComprovante, setCarregandoDeclaracoesComprovante] = useState(false);
+
   const clienteSelecionado = clientes.find((c) => c.id === clienteSelecionadoId) ?? null;
   const projetoSelecionado = projetos.find((p) => p.id === projetoSelecionadoId) ?? null;
 
@@ -262,6 +272,23 @@ export default function RecuperacaoCreditoPage() {
     if (projetoSelecionadoId) carregarDeclaracoesEfdContrib(projetoSelecionadoId);
     else setDeclaracoesEfdContrib([]);
   }, [projetoSelecionadoId, carregarDeclaracoesEfdContrib]);
+
+  const carregarDeclaracoesComprovante = useCallback(async (projetoId: string) => {
+    setCarregandoDeclaracoesComprovante(true);
+    try {
+      const res = await fetch(`/api/recuperacao-credito/comprovante-pagamento?projetoId=${projetoId}`);
+      setDeclaracoesComprovante(await res.json());
+    } catch {
+      toast.error("Erro ao carregar comprovantes de pagamento");
+    } finally {
+      setCarregandoDeclaracoesComprovante(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (projetoSelecionadoId) carregarDeclaracoesComprovante(projetoSelecionadoId);
+    else setDeclaracoesComprovante([]);
+  }, [projetoSelecionadoId, carregarDeclaracoesComprovante]);
 
   const handleCriarCliente = async () => {
     if (!novoCnpj.trim() || !novaRazaoSocial.trim()) {
@@ -389,25 +416,35 @@ export default function RecuperacaoCreditoPage() {
     [adicionarArquivos]
   );
 
-  const processarPdfsPgdas = async (pdfs: ArquivoCarregado[]) => {
+  // Um único endpoint recebe qualquer PDF e detecta sozinho se é Declaração/Extrato do Simples
+  // Nacional ou Comprovante de Arrecadação de DARF pelo conteúdo — por isso recarrega as duas
+  // listas depois.
+  const processarPdfs = async (pdfs: ArquivoCarregado[]) => {
     if (!projetoSelecionadoId) return;
     const form = new FormData();
     form.append("projetoId", projetoSelecionadoId);
     pdfs.forEach((a) => form.append("files", a.file, a.name));
 
-    const res = await fetch("/api/recuperacao-credito/pgdas/upload", { method: "POST", body: form });
+    const res = await fetch("/api/recuperacao-credito/pdf/upload", { method: "POST", body: form });
     const data = await res.json();
     if (!res.ok) {
-      toast.error(data.error ?? "Erro ao processar PDFs do Simples Nacional");
+      toast.error(data.error ?? "Erro ao processar PDFs");
       return;
     }
-    if (data.salvos?.length > 0) {
-      toast.success(`${data.salvos.length} documento(s) do Simples Nacional importado(s)!`);
+    const salvosPgdas = (data.salvos ?? []).filter((s: { tipo: string }) => s.tipo === "PGDAS").length;
+    const salvosComprovante = (data.salvos ?? []).filter((s: { tipo: string }) => s.tipo === "COMPROVANTE");
+    if (salvosPgdas > 0) toast.success(`${salvosPgdas} documento(s) do Simples Nacional importado(s)!`);
+    if (salvosComprovante.length > 0) {
+      const totalDarfs = salvosComprovante.reduce(
+        (s: number, item: { detalhe: string }) => s + (parseInt(item.detalhe, 10) || 0),
+        0
+      );
+      toast.success(`${totalDarfs} DARF(s) importado(s) do Comprovante de Arrecadação!`);
     }
     for (const erro of data.erros ?? []) {
       toast.error(`${erro.arquivo}: ${erro.motivo}`);
     }
-    await carregarDeclaracoes(projetoSelecionadoId);
+    await Promise.all([carregarDeclaracoes(projetoSelecionadoId), carregarDeclaracoesComprovante(projetoSelecionadoId)]);
   };
 
   // Um único endpoint recebe qualquer EFD (.txt) e detecta sozinho se é ICMS/IPI ou
@@ -456,14 +493,14 @@ export default function RecuperacaoCreditoPage() {
     const outros = arquivos.filter((a) => !isPdf(a.name) && !isEfd(a.name));
 
     if ((pdfs.length > 0 || efds.length > 0) && (!clienteSelecionadoId || !projetoSelecionadoId)) {
-      toast.error("Selecione (ou crie) um cliente e um projeto para importar PDFs do Simples Nacional ou EFDs de ICMS/IPI.");
+      toast.error("Selecione (ou crie) um cliente e um projeto para importar PDFs ou EFDs.");
       return;
     }
 
     setAnalisando(true);
     setResultado(null);
     try {
-      if (pdfs.length > 0) await processarPdfsPgdas(pdfs);
+      if (pdfs.length > 0) await processarPdfs(pdfs);
       if (efds.length > 0) await processarEfds(efds);
       if (outros.length > 0) await processarArquivosAnalise(outros);
       if (outros.length > 0 && !resultado) toast.success("Análise concluída!");
@@ -522,18 +559,31 @@ export default function RecuperacaoCreditoPage() {
     }
   };
 
-  // Um botão só: monta um Excel com a(s) aba(s) do que existir no projeto (ICMS/IPI e/ou
-  // PIS/COFINS) — nunca dois arquivos separados quando os dois tipos foram importados juntos.
+  const handleExcluirDeclaracaoComprovante = async (id: string) => {
+    if (!projetoSelecionadoId) return;
+    try {
+      await fetch(`/api/recuperacao-credito/comprovante-pagamento?id=${id}`, { method: "DELETE" });
+      toast.success("Removido");
+      await carregarDeclaracoesComprovante(projetoSelecionadoId);
+    } catch {
+      toast.error("Erro ao remover");
+    }
+  };
+
+  // Um botão só: monta um Excel com a(s) aba(s) do que existir no projeto (ICMS/IPI, PIS/COFINS
+  // e/ou Comprovante de Pagamentos) — nunca vários arquivos separados quando mais de um tipo foi
+  // importado junto.
   const handleBaixarExcelFiscal = async () => {
     if (!clienteSelecionado) return;
-    if (declaracoesEfd.length === 0 && declaracoesEfdContrib.length === 0) return;
+    if (declaracoesEfd.length === 0 && declaracoesEfdContrib.length === 0 && declaracoesComprovante.length === 0) return;
 
     const icms: DeclaracaoEfdRegistro[] = declaracoesEfd.map((d) => ({ competencia: d.competencia, dados: d.dados }));
     const pisCofins: DeclaracaoEfdContribuicoesRegistro[] = declaracoesEfdContrib.map((d) => ({
       competencia: d.competencia,
       dados: d.dados,
     }));
-    await exportarDeclaracaoFiscalExcel(clienteSelecionado.razaoSocial, { icms, pisCofins });
+    const comprovantes: DadosComprovantePagamento[] = declaracoesComprovante.map((d) => d.dados);
+    await exportarDeclaracaoFiscalExcel(clienteSelecionado.razaoSocial, { icms, pisCofins, comprovantes });
   };
 
   const mesesAgrupados = Array.from(new Set(declaracoesPgdas.map((d) => d.competencia)))
@@ -549,6 +599,9 @@ export default function RecuperacaoCreditoPage() {
 
   const mesesEfdOrdenados = [...declaracoesEfd].sort((a, b) => a.competencia.localeCompare(b.competencia));
   const mesesEfdContribOrdenados = [...declaracoesEfdContrib].sort((a, b) => a.competencia.localeCompare(b.competencia));
+  const comprovantesOrdenados = [...declaracoesComprovante].sort((a, b) =>
+    a.dados.dataVencimento.split("/").reverse().join("").localeCompare(b.dados.dataVencimento.split("/").reverse().join(""))
+  );
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -945,15 +998,61 @@ export default function RecuperacaoCreditoPage() {
             </div>
           )}
 
-          {/* Um botão só: se ICMS/IPI e PIS/COFINS foram importados no mesmo projeto, sai 1 Excel com as 3 abas */}
-          {projetoSelecionado && (mesesEfdOrdenados.length > 0 || mesesEfdContribOrdenados.length > 0) && (
-            <div className="flex justify-end pt-2">
-              <Button variant="outline" size="sm" onClick={handleBaixarExcelFiscal}>
-                <Download className="h-4 w-4 mr-2" />
-                Baixar Excel
-              </Button>
+          {/* DARFs (Comprovante de Arrecadação) já importados para o projeto selecionado */}
+          {projetoSelecionado && (carregandoDeclaracoesComprovante || comprovantesOrdenados.length > 0) && (
+            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
+                Comprovante de Pagamentos importado — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
+              </p>
+              {carregandoDeclaracoesComprovante ? (
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Número Documento</TableHead>
+                      <TableHead>Vencimento</TableHead>
+                      <TableHead className="text-right">Valor Total</TableHead>
+                      <TableHead className="w-10" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {comprovantesOrdenados.map((d) => (
+                      <TableRow key={d.id}>
+                        <TableCell className="font-medium">{d.dados.numeroDocumento}</TableCell>
+                        <TableCell>{d.dados.dataVencimento}</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(d.dados.codigos.reduce((s, c) => s + c.total, 0))}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => handleExcluirDeclaracaoComprovante(d.id)}
+                              title="Remover"
+                              className="text-gray-400 hover:text-red-500"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </div>
           )}
+
+          {/* Um botão só: se ICMS/IPI, PIS/COFINS e/ou Comprovante de Pagamentos foram importados no mesmo projeto, sai 1 Excel com todas as abas */}
+          {projetoSelecionado &&
+            (mesesEfdOrdenados.length > 0 || mesesEfdContribOrdenados.length > 0 || comprovantesOrdenados.length > 0) && (
+              <div className="flex justify-end pt-2">
+                <Button variant="outline" size="sm" onClick={handleBaixarExcelFiscal}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Baixar Excel
+                </Button>
+              </div>
+            )}
         </CardContent>
       </Card>
 
@@ -963,9 +1062,9 @@ export default function RecuperacaoCreditoPage() {
           <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
           <p className="text-sm text-blue-700 dark:text-blue-300">
             <span className="font-semibold">Como funciona:</span> carregue os arquivos Excel com dados fiscais e
-            contábeis da empresa (DRE, notas fiscais, etc.), os PDFs de Declaração/Extrato do Simples Nacional ou os
-            .txt de EFD ICMS/IPI e EFD Contribuições (PIS/COFINS) — o sistema reconhece o tipo de cada arquivo
-            automaticamente e processa cada um do jeito certo.
+            contábeis da empresa (DRE, notas fiscais, etc.), os PDFs de Declaração/Extrato do Simples Nacional ou de
+            Comprovante de Arrecadação de DARF, ou os .txt de EFD ICMS/IPI e EFD Contribuições (PIS/COFINS) — o
+            sistema reconhece o tipo de cada arquivo automaticamente e processa cada um do jeito certo.
           </p>
         </div>
       )}
