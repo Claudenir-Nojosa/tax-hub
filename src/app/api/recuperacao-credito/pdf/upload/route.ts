@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "../../../../../../auth"
 import db from "@/lib/db"
 import { parsePgdasPdf } from "@/lib/pgdas/parser"
-import { detectarComprovantePagamento, processarArquivosComprovantePagamento } from "@/lib/comprovante-pagamento-parser"
+import { detectarComprovantePagamento, parseComprovantesDeTexto } from "@/lib/comprovante-pagamento-parser"
 
 function somenteDigitos(v: string) {
   return v.replace(/\D/g, "")
@@ -54,37 +54,60 @@ export async function POST(req: NextRequest) {
       const textoBruto = Array.isArray(text) ? text.join(" ") : text
 
       if (detectarComprovantePagamento(textoBruto)) {
-        const darfs = await processarArquivosComprovantePagamento([file])
+        // reusa o texto já extraído acima (extrair o PDF de novo dobraria o tempo do arquivo)
+        const darfs = parseComprovantesDeTexto(textoBruto, file.name)
         if (darfs.length === 0) {
           erros.push({ arquivo: file.name, motivo: "Não foi possível extrair nenhum DARF do comprovante" })
           continue
         }
 
-        let salvosNoArquivo = 0
-        for (const darf of darfs) {
+        const validos = darfs.filter((darf) => {
           if (somenteDigitos(darf.cnpj) !== somenteDigitos(cliente.cnpj)) {
             erros.push({
               arquivo: file.name,
               motivo: `CNPJ do DARF ${darf.numeroDocumento} (${darf.cnpj}) não corresponde ao cliente selecionado (${cliente.cnpj})`,
             })
-            continue
+            return false
           }
+          return true
+        })
 
-          await db.declaracaoComprovantePagamento.upsert({
-            where: { projetoId_numeroDocumento: { projetoId: projeto.id, numeroDocumento: darf.numeroDocumento } },
-            create: {
+        // Grava em lote (1 findMany + 1 createMany + updates só dos repetidos) em vez de 1 upsert
+        // por DARF — com ~50 DARFs por PDF e banco remoto, upserts sequenciais eram o gargalo do
+        // upload inteiro.
+        const numeros = validos.map((d) => d.numeroDocumento)
+        const existentes = await db.declaracaoComprovantePagamento.findMany({
+          where: { projetoId: projeto.id, numeroDocumento: { in: numeros } },
+          select: { numeroDocumento: true },
+        })
+        const setExistentes = new Set(existentes.map((e) => e.numeroDocumento))
+
+        const novos = validos.filter((d) => !setExistentes.has(d.numeroDocumento))
+        const repetidos = validos.filter((d) => setExistentes.has(d.numeroDocumento))
+
+        if (novos.length > 0) {
+          await db.declaracaoComprovantePagamento.createMany({
+            data: novos.map((darf) => ({
               projetoId: projeto.id,
               numeroDocumento: darf.numeroDocumento,
               cnpj: darf.cnpj,
               arquivoNome: file.name,
               dados: darf as unknown as object,
-            },
-            update: { cnpj: darf.cnpj, arquivoNome: file.name, dados: darf as unknown as object },
+            })),
           })
-          salvosNoArquivo++
+        }
+        if (repetidos.length > 0) {
+          await db.$transaction(
+            repetidos.map((darf) =>
+              db.declaracaoComprovantePagamento.update({
+                where: { projetoId_numeroDocumento: { projetoId: projeto.id, numeroDocumento: darf.numeroDocumento } },
+                data: { cnpj: darf.cnpj, arquivoNome: file.name, dados: darf as unknown as object },
+              })
+            )
+          )
         }
 
-        salvos.push({ arquivoNome: file.name, tipo: "COMPROVANTE", detalhe: `${salvosNoArquivo} DARF(s)` })
+        salvos.push({ arquivoNome: file.name, tipo: "COMPROVANTE", detalhe: `${validos.length} DARF(s)` })
       } else {
         const resultado = await parsePgdasPdf(uint8, file.name)
         if (!resultado.ok) {

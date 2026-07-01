@@ -16,7 +16,7 @@ import type { DeclaracaoEfdRegistro } from "@/lib/efd-icms-excel";
 import type { DadosEfdIcmsIpi } from "@/lib/efd-icms-parser";
 import type { DeclaracaoEfdContribuicoesRegistro } from "@/lib/efd-contribuicoes-excel";
 import type { DadosEfdContribuicoes } from "@/lib/efd-contribuicoes-parser";
-import type { DadosComprovantePagamento } from "@/lib/comprovante-pagamento-parser";
+import { labelTributo, type DadosComprovantePagamento } from "@/lib/comprovante-pagamento-parser";
 import { exportarDeclaracaoFiscalExcel } from "@/lib/recuperacao-credito-excel";
 import {
   FileSearch,
@@ -620,11 +620,16 @@ export default function RecuperacaoCreditoPage() {
     }
   };
 
-  const handleExcluirDeclaracaoComprovante = async (id: string) => {
+  // A UI mostra os comprovantes consolidados por ano (sem linha por DARF), então a exclusão
+  // também é em bloco: remove todos os DARFs importados do projeto de uma vez.
+  const handleExcluirComprovantes = async () => {
     if (!projetoSelecionadoId) return;
+    if (!confirm(`Remover todos os ${declaracoesComprovante.length} DARF(s) importados deste projeto?`)) return;
     try {
-      await fetch(`/api/recuperacao-credito/comprovante-pagamento?id=${id}`, { method: "DELETE" });
-      toast.success("Removido");
+      await fetch(`/api/recuperacao-credito/comprovante-pagamento?projetoId=${projetoSelecionadoId}`, {
+        method: "DELETE",
+      });
+      toast.success("Comprovantes removidos");
       await carregarDeclaracoesComprovante(projetoSelecionadoId);
     } catch {
       toast.error("Erro ao remover");
@@ -660,9 +665,29 @@ export default function RecuperacaoCreditoPage() {
 
   const mesesEfdOrdenados = [...declaracoesEfd].sort((a, b) => a.competencia.localeCompare(b.competencia));
   const mesesEfdContribOrdenados = [...declaracoesEfdContrib].sort((a, b) => a.competencia.localeCompare(b.competencia));
-  const comprovantesOrdenados = [...declaracoesComprovante].sort((a, b) =>
-    a.dados.dataVencimento.split("/").reverse().join("").localeCompare(b.dados.dataVencimento.split("/").reverse().join(""))
-  );
+  // Consolidação por ano (do Período de Apuração) dos valores pagos de PIS/COFINS/IRPJ/CSLL —
+  // é o que a UI mostra em vez de listar cada DARF (o detalhamento por DARF continua no Excel).
+  // Códigos de receita fora desses 4 tributos (INSS, multas, TJLP etc.) ficam de fora da tabela.
+  const TRIBUTOS_CONSOLIDADOS = ["PIS", "COFINS", "IRPJ", "CSLL"] as const;
+  const comprovantesPorAno = (() => {
+    const porAno = new Map<string, Record<(typeof TRIBUTOS_CONSOLIDADOS)[number], number>>();
+    for (const d of declaracoesComprovante) {
+      const ano = d.dados.periodoApuracao.slice(6); // "DD/MM/AAAA" -> "AAAA"
+      if (!ano) continue;
+      let linha = porAno.get(ano);
+      if (!linha) {
+        linha = { PIS: 0, COFINS: 0, IRPJ: 0, CSLL: 0 };
+        porAno.set(ano, linha);
+      }
+      for (const codigo of d.dados.codigos) {
+        const tributo = labelTributo(codigo.codigo) as (typeof TRIBUTOS_CONSOLIDADOS)[number] | null;
+        if (tributo && tributo in linha) linha[tributo] += codigo.total;
+      }
+    }
+    return [...porAno.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([ano, valores]) => ({ ano, ...valores, total: valores.PIS + valores.COFINS + valores.IRPJ + valores.CSLL }));
+  })();
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -1059,54 +1084,65 @@ export default function RecuperacaoCreditoPage() {
             </div>
           )}
 
-          {/* DARFs (Comprovante de Arrecadação) já importados para o projeto selecionado */}
-          {projetoSelecionado && (carregandoDeclaracoesComprovante || comprovantesOrdenados.length > 0) && (
+          {/* Comprovantes de pagamento (DARF): resumo consolidado por ano de PIS/COFINS/IRPJ/CSLL
+              pagos — o detalhamento por DARF fica no Excel, não aqui */}
+          {projetoSelecionado && (carregandoDeclaracoesComprovante || declaracoesComprovante.length > 0) && (
             <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
-                Comprovante de Pagamentos importado — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
-              </p>
+              <div className="flex items-center justify-between px-1">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                  Pagamentos (DARF) por ano — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
+                </p>
+                {declaracoesComprovante.length > 0 && (
+                  <button
+                    onClick={handleExcluirComprovantes}
+                    title={`Remover todos os ${declaracoesComprovante.length} DARF(s) importados`}
+                    className="text-gray-400 hover:text-red-500"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
               {carregandoDeclaracoesComprovante ? (
                 <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Número Documento</TableHead>
-                      <TableHead>Vencimento</TableHead>
-                      <TableHead className="text-right">Valor Total</TableHead>
-                      <TableHead className="w-10" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {comprovantesOrdenados.map((d) => (
-                      <TableRow key={d.id}>
-                        <TableCell className="font-medium">{d.dados.numeroDocumento}</TableCell>
-                        <TableCell>{d.dados.dataVencimento}</TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(d.dados.codigos.reduce((s, c) => s + c.total, 0))}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end">
-                            <button
-                              onClick={() => handleExcluirDeclaracaoComprovante(d.id)}
-                              title="Remover"
-                              className="text-gray-400 hover:text-red-500"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </TableCell>
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Ano</TableHead>
+                        <TableHead className="text-right">PIS</TableHead>
+                        <TableHead className="text-right">COFINS</TableHead>
+                        <TableHead className="text-right">IRPJ</TableHead>
+                        <TableHead className="text-right">CSLL</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {comprovantesPorAno.map((linha) => (
+                        <TableRow key={linha.ano}>
+                          <TableCell className="font-medium">{linha.ano}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(linha.PIS)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(linha.COFINS)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(linha.IRPJ)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(linha.CSLL)}</TableCell>
+                          <TableCell className="text-right font-medium">{formatCurrency(linha.total)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <p className="text-xs text-gray-400 px-1">
+                    {declaracoesComprovante.length} DARF(s) importado(s) · valores por ano do período de apuração,
+                    somando apenas PIS, COFINS, IRPJ e CSLL — o detalhamento completo (incluindo INSS, multas etc.)
+                    sai no Excel.
+                  </p>
+                </>
               )}
             </div>
           )}
 
           {/* Um botão só: se ICMS/IPI, PIS/COFINS e/ou Comprovante de Pagamentos foram importados no mesmo projeto, sai 1 Excel com todas as abas */}
           {projetoSelecionado &&
-            (mesesEfdOrdenados.length > 0 || mesesEfdContribOrdenados.length > 0 || comprovantesOrdenados.length > 0) && (
+            (mesesEfdOrdenados.length > 0 || mesesEfdContribOrdenados.length > 0 || declaracoesComprovante.length > 0) && (
               <div className="flex justify-end pt-2">
                 <Button variant="outline" size="sm" onClick={handleBaixarExcelFiscal}>
                   <Download className="h-4 w-4 mr-2" />

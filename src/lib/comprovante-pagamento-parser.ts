@@ -82,7 +82,10 @@ const HEADER_RE =
 const BANCO_RE =
   /Banco Data de Arrecadação Agência Estabelecimento Valor Reservado\/Restituído Referência (\d{2}\/\d{2}\/\d{4})(.*?)([\d.,]+|-)\s*(?:Data de Vencimento|$)/
 
-function parseUmComprovante(textoBruto: string, arquivoNome: string): DadosComprovantePagamento[] {
+// Exportada além do wrapper de File[] porque a rota de upload já extraiu o texto do PDF uma vez
+// pra detectar o tipo (PGDAS vs Comprovante) — reusar o texto evita extrair o mesmo PDF duas
+// vezes, que era o gargalo de tempo do upload.
+export function parseComprovantesDeTexto(textoBruto: string, arquivoNome: string): DadosComprovantePagamento[] {
   const texto = textoBruto.replace(/\s+/g, " ").trim()
 
   // cada página do PDF começa com "Data de Vencimento" (rótulo impresso antes do bloco de
@@ -191,7 +194,7 @@ export async function processarArquivosComprovantePagamento(files: File[]): Prom
     const uint8 = new Uint8Array(await file.arrayBuffer())
     const { text } = await extractText(uint8, { mergePages: true })
     const textoBruto = Array.isArray(text) ? text.join(" ") : text
-    resultados.push(...parseUmComprovante(textoBruto, file.name))
+    resultados.push(...parseComprovantesDeTexto(textoBruto, file.name))
   }
   return resultados
 }
