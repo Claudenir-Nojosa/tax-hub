@@ -199,8 +199,9 @@ model ProjetoRecuperacaoCredito {
   createdAt   DateTime                  @default(now())
   updatedAt   DateTime                  @updatedAt
 
-  declaracoes    DeclaracaoPgdas[]
-  declaracoesEfd DeclaracaoEfdIcmsIpi[]
+  declaracoes               DeclaracaoPgdas[]
+  declaracoesEfd            DeclaracaoEfdIcmsIpi[]
+  declaracoesEfdContrib     DeclaracaoEfdContribuicoes[]
 }
 
 model DeclaracaoPgdas {
@@ -230,6 +231,23 @@ model DeclaracaoEfdIcmsIpi {
   cnpj           String   // CNPJ lido do EFD (auditoria/validação contra o cliente)
   arquivoNome    String
   dados          Json     // payload tipado — ver DadosEfdIcmsIpi em src/lib/efd-icms-parser.ts
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([projetoId, competencia])
+  @@index([projetoId, competencia])
+}
+
+model DeclaracaoEfdContribuicoes {
+  id             String                    @id @default(cuid())
+  projetoId      String
+  projeto        ProjetoRecuperacaoCredito @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  competencia    String   // "YYYY-MM", chave de ordenação/coluna do Excel
+  cnpj           String   // CNPJ lido do EFD (auditoria/validação contra o cliente)
+  arquivoNome    String
+  dados          Json     // payload tipado — ver DadosEfdContribuicoes em src/lib/efd-contribuicoes-parser.ts
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

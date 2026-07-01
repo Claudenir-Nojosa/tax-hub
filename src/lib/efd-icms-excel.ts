@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs"
 import type { DadosEfdIcmsIpi, RegistroAgregado } from "./efd-icms-parser"
 import { isSaida, labelCfop, labelCst } from "./efd-icms-parser"
+import { montarAbaChecklist } from "./checklist-excel"
 
 // Mesma convenção visual usada em src/lib/pgdas/export-pgdas-excel.ts (duplicado de propósito
 // pra não arriscar regressão nos exports já em produção).
@@ -123,7 +124,10 @@ function linhasPorDimensao(
   }))
 }
 
-export async function exportarEfdIcmsExcel(
+// Monta a aba "ICMS e IPI" dentro de um workbook já existente (permite combinar com outras
+// abas — ex.: PIS/COFINS do mesmo projeto — num único arquivo baixado). Não faz download.
+export async function montarAbaIcms(
+  wb: ExcelJS.Workbook,
   declaracoes: DeclaracaoEfdRegistro[],
   nomeCliente: string
 ): Promise<void> {
@@ -136,9 +140,6 @@ export async function exportarEfdIcmsExcel(
   const aliqsSaida = dimensoesUnicas(porCompetencia, (r) => isSaida(r.cfop), (r) => r.aliquota) as number[]
   const aliqsEntrada = dimensoesUnicas(porCompetencia, (r) => !isSaida(r.cfop), (r) => r.aliquota) as number[]
 
-  const wb = new ExcelJS.Workbook()
-  wb.creator = "Tax Hub — Recuperação de Crédito"
-  wb.created = new Date()
   const ws = wb.addWorksheet("ICMS e IPI", {
     views: [{ showGridLines: false, state: "frozen", xSplit: 2, ySplit: 5 }],
   })
@@ -322,6 +323,20 @@ export async function exportarEfdIcmsExcel(
     }
     row.outlineLevel = linha.bold && !linha.destaque ? 0 : 1
   })
+}
+
+// Uso standalone (só ICMS/IPI, sem combinar com outras abas) — cria o workbook, monta a aba e
+// já baixa. Pra combinar com PIS/COFINS num arquivo só, usar `exportarDeclaracaoFiscalExcel`
+// em src/lib/recuperacao-credito-excel.ts.
+export async function exportarEfdIcmsExcel(
+  declaracoes: DeclaracaoEfdRegistro[],
+  nomeCliente: string
+): Promise<void> {
+  const wb = new ExcelJS.Workbook()
+  wb.creator = "Tax Hub — Recuperação de Crédito"
+  wb.created = new Date()
+  await montarAbaIcms(wb, declaracoes, nomeCliente)
+  await montarAbaChecklist(wb, nomeCliente)
 
   const buffer = await wb.xlsx.writeBuffer()
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })

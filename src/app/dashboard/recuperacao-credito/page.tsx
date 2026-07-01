@@ -12,8 +12,11 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { exportarPgdasExcel, type DeclaracaoPgdasRegistro } from "@/lib/pgdas/export-pgdas-excel";
 import type { DadosPgdas, TipoDocumentoPgdas } from "@/lib/pgdas/types";
-import { exportarEfdIcmsExcel, type DeclaracaoEfdRegistro } from "@/lib/efd-icms-excel";
+import type { DeclaracaoEfdRegistro } from "@/lib/efd-icms-excel";
 import type { DadosEfdIcmsIpi } from "@/lib/efd-icms-parser";
+import type { DeclaracaoEfdContribuicoesRegistro } from "@/lib/efd-contribuicoes-excel";
+import type { DadosEfdContribuicoes } from "@/lib/efd-contribuicoes-parser";
+import { exportarDeclaracaoFiscalExcel } from "@/lib/recuperacao-credito-excel";
 import {
   FileSearch,
   Upload,
@@ -83,6 +86,12 @@ interface DeclaracaoEfdRow {
   id: string;
   competencia: string;
   dados: DadosEfdIcmsIpi;
+}
+
+interface DeclaracaoEfdContribuicoesRow {
+  id: string;
+  competencia: string;
+  dados: DadosEfdContribuicoes;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -169,6 +178,9 @@ export default function RecuperacaoCreditoPage() {
   const [declaracoesEfd, setDeclaracoesEfd] = useState<DeclaracaoEfdRow[]>([]);
   const [carregandoDeclaracoesEfd, setCarregandoDeclaracoesEfd] = useState(false);
 
+  const [declaracoesEfdContrib, setDeclaracoesEfdContrib] = useState<DeclaracaoEfdContribuicoesRow[]>([]);
+  const [carregandoDeclaracoesEfdContrib, setCarregandoDeclaracoesEfdContrib] = useState(false);
+
   const clienteSelecionado = clientes.find((c) => c.id === clienteSelecionadoId) ?? null;
   const projetoSelecionado = projetos.find((p) => p.id === projetoSelecionadoId) ?? null;
 
@@ -233,6 +245,23 @@ export default function RecuperacaoCreditoPage() {
     if (projetoSelecionadoId) carregarDeclaracoesEfd(projetoSelecionadoId);
     else setDeclaracoesEfd([]);
   }, [projetoSelecionadoId, carregarDeclaracoesEfd]);
+
+  const carregarDeclaracoesEfdContrib = useCallback(async (projetoId: string) => {
+    setCarregandoDeclaracoesEfdContrib(true);
+    try {
+      const res = await fetch(`/api/recuperacao-credito/efd-contribuicoes?projetoId=${projetoId}`);
+      setDeclaracoesEfdContrib(await res.json());
+    } catch {
+      toast.error("Erro ao carregar declarações de PIS/COFINS");
+    } finally {
+      setCarregandoDeclaracoesEfdContrib(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (projetoSelecionadoId) carregarDeclaracoesEfdContrib(projetoSelecionadoId);
+    else setDeclaracoesEfdContrib([]);
+  }, [projetoSelecionadoId, carregarDeclaracoesEfdContrib]);
 
   const handleCriarCliente = async () => {
     if (!novoCnpj.trim() || !novaRazaoSocial.trim()) {
@@ -381,7 +410,9 @@ export default function RecuperacaoCreditoPage() {
     await carregarDeclaracoes(projetoSelecionadoId);
   };
 
-  const processarEfdsIcmsIpi = async (efds: ArquivoCarregado[]) => {
+  // Um único endpoint recebe qualquer EFD (.txt) e detecta sozinho se é ICMS/IPI ou
+  // Contribuições (PIS/COFINS) pelo conteúdo — por isso recarrega as duas listas depois.
+  const processarEfds = async (efds: ArquivoCarregado[]) => {
     if (!projetoSelecionadoId) return;
     const form = new FormData();
     form.append("projetoId", projetoSelecionadoId);
@@ -390,16 +421,17 @@ export default function RecuperacaoCreditoPage() {
     const res = await fetch("/api/recuperacao-credito/efd/upload", { method: "POST", body: form });
     const data = await res.json();
     if (!res.ok) {
-      toast.error(data.error ?? "Erro ao processar EFDs de ICMS/IPI");
+      toast.error(data.error ?? "Erro ao processar EFDs");
       return;
     }
-    if (data.salvos?.length > 0) {
-      toast.success(`${data.salvos.length} EFD(s) de ICMS/IPI importado(s)!`);
-    }
+    const salvosIcms = (data.salvos ?? []).filter((s: { tipo: string }) => s.tipo === "ICMS_IPI").length;
+    const salvosContrib = (data.salvos ?? []).filter((s: { tipo: string }) => s.tipo === "CONTRIBUICOES").length;
+    if (salvosIcms > 0) toast.success(`${salvosIcms} EFD(s) de ICMS/IPI importado(s)!`);
+    if (salvosContrib > 0) toast.success(`${salvosContrib} EFD(s) de Contribuições (PIS/COFINS) importado(s)!`);
     for (const erro of data.erros ?? []) {
       toast.error(`${erro.arquivo}: ${erro.motivo}`);
     }
-    await carregarDeclaracoesEfd(projetoSelecionadoId);
+    await Promise.all([carregarDeclaracoesEfd(projetoSelecionadoId), carregarDeclaracoesEfdContrib(projetoSelecionadoId)]);
   };
 
   const processarArquivosAnalise = async (outros: ArquivoCarregado[]) => {
@@ -432,7 +464,7 @@ export default function RecuperacaoCreditoPage() {
     setResultado(null);
     try {
       if (pdfs.length > 0) await processarPdfsPgdas(pdfs);
-      if (efds.length > 0) await processarEfdsIcmsIpi(efds);
+      if (efds.length > 0) await processarEfds(efds);
       if (outros.length > 0) await processarArquivosAnalise(outros);
       if (outros.length > 0 && !resultado) toast.success("Análise concluída!");
     } catch (err) {
@@ -479,13 +511,29 @@ export default function RecuperacaoCreditoPage() {
     }
   };
 
-  const handleBaixarExcelEfd = async () => {
-    if (!clienteSelecionado || declaracoesEfd.length === 0) return;
-    const registros: DeclaracaoEfdRegistro[] = declaracoesEfd.map((d) => ({
+  const handleExcluirDeclaracaoEfdContrib = async (id: string) => {
+    if (!projetoSelecionadoId) return;
+    try {
+      await fetch(`/api/recuperacao-credito/efd-contribuicoes?id=${id}`, { method: "DELETE" });
+      toast.success("Removido");
+      await carregarDeclaracoesEfdContrib(projetoSelecionadoId);
+    } catch {
+      toast.error("Erro ao remover");
+    }
+  };
+
+  // Um botão só: monta um Excel com a(s) aba(s) do que existir no projeto (ICMS/IPI e/ou
+  // PIS/COFINS) — nunca dois arquivos separados quando os dois tipos foram importados juntos.
+  const handleBaixarExcelFiscal = async () => {
+    if (!clienteSelecionado) return;
+    if (declaracoesEfd.length === 0 && declaracoesEfdContrib.length === 0) return;
+
+    const icms: DeclaracaoEfdRegistro[] = declaracoesEfd.map((d) => ({ competencia: d.competencia, dados: d.dados }));
+    const pisCofins: DeclaracaoEfdContribuicoesRegistro[] = declaracoesEfdContrib.map((d) => ({
       competencia: d.competencia,
       dados: d.dados,
     }));
-    await exportarEfdIcmsExcel(registros, clienteSelecionado.razaoSocial);
+    await exportarDeclaracaoFiscalExcel(clienteSelecionado.razaoSocial, { icms, pisCofins });
   };
 
   const mesesAgrupados = Array.from(new Set(declaracoesPgdas.map((d) => d.competencia)))
@@ -500,6 +548,7 @@ export default function RecuperacaoCreditoPage() {
     });
 
   const mesesEfdOrdenados = [...declaracoesEfd].sort((a, b) => a.competencia.localeCompare(b.competencia));
+  const mesesEfdContribOrdenados = [...declaracoesEfdContrib].sort((a, b) => a.competencia.localeCompare(b.competencia));
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -821,43 +870,88 @@ export default function RecuperacaoCreditoPage() {
               {carregandoDeclaracoesEfd ? (
                 <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
               ) : (
-                <>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Competência</TableHead>
-                        <TableHead className="text-right">ICMS a Recolher</TableHead>
-                        <TableHead className="w-10" />
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Competência</TableHead>
+                      <TableHead className="text-right">ICMS a Recolher</TableHead>
+                      <TableHead className="w-10" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {mesesEfdOrdenados.map((d) => (
+                      <TableRow key={d.id}>
+                        <TableCell className="font-medium">{formatarCompetencia(d.competencia)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(d.dados.apuracaoIcms.icmsARecolher)}</TableCell>
+                        <TableCell>
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => handleExcluirDeclaracaoEfd(d.id)}
+                              title="Remover"
+                              className="text-gray-400 hover:text-red-500"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {mesesEfdOrdenados.map((d) => (
-                        <TableRow key={d.id}>
-                          <TableCell className="font-medium">{formatarCompetencia(d.competencia)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(d.dados.apuracaoIcms.icmsARecolher)}</TableCell>
-                          <TableCell>
-                            <div className="flex justify-end">
-                              <button
-                                onClick={() => handleExcluirDeclaracaoEfd(d.id)}
-                                title="Remover"
-                                className="text-gray-400 hover:text-red-500"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  <div className="flex justify-end">
-                    <Button variant="outline" size="sm" onClick={handleBaixarExcelEfd}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Baixar Excel
-                    </Button>
-                  </div>
-                </>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
+            </div>
+          )}
+
+          {/* Meses de PIS/COFINS (EFD Contribuições) já importados para o projeto selecionado */}
+          {projetoSelecionado && (carregandoDeclaracoesEfdContrib || mesesEfdContribOrdenados.length > 0) && (
+            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
+                PIS/COFINS importado — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
+              </p>
+              {carregandoDeclaracoesEfdContrib ? (
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Competência</TableHead>
+                      <TableHead className="text-right">PIS a Recolher</TableHead>
+                      <TableHead className="text-right">COFINS a Recolher</TableHead>
+                      <TableHead className="w-10" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {mesesEfdContribOrdenados.map((d) => (
+                      <TableRow key={d.id}>
+                        <TableCell className="font-medium">{formatarCompetencia(d.competencia)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(d.dados.apuracaoPis.valorARecolher)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(d.dados.apuracaoCofins.valorARecolher)}</TableCell>
+                        <TableCell>
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => handleExcluirDeclaracaoEfdContrib(d.id)}
+                              title="Remover"
+                              className="text-gray-400 hover:text-red-500"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          )}
+
+          {/* Um botão só: se ICMS/IPI e PIS/COFINS foram importados no mesmo projeto, sai 1 Excel com as 3 abas */}
+          {projetoSelecionado && (mesesEfdOrdenados.length > 0 || mesesEfdContribOrdenados.length > 0) && (
+            <div className="flex justify-end pt-2">
+              <Button variant="outline" size="sm" onClick={handleBaixarExcelFiscal}>
+                <Download className="h-4 w-4 mr-2" />
+                Baixar Excel
+              </Button>
             </div>
           )}
         </CardContent>
@@ -870,8 +964,8 @@ export default function RecuperacaoCreditoPage() {
           <p className="text-sm text-blue-700 dark:text-blue-300">
             <span className="font-semibold">Como funciona:</span> carregue os arquivos Excel com dados fiscais e
             contábeis da empresa (DRE, notas fiscais, etc.), os PDFs de Declaração/Extrato do Simples Nacional ou os
-            .txt de EFD ICMS/IPI — o sistema reconhece o tipo de cada arquivo automaticamente e processa cada um do
-            jeito certo.
+            .txt de EFD ICMS/IPI e EFD Contribuições (PIS/COFINS) — o sistema reconhece o tipo de cada arquivo
+            automaticamente e processa cada um do jeito certo.
           </p>
         </div>
       )}

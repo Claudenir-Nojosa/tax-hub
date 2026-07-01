@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs"
 import type { DadosPgdas, TipoDocumentoPgdas } from "./types"
+import { montarAbaChecklist } from "../checklist-excel"
 
 export interface DeclaracaoPgdasRegistro {
   competencia: string // "YYYY-MM"
@@ -265,6 +266,8 @@ export async function exportarPgdasExcel(declaracoes: DeclaracaoPgdasRegistro[],
     // destaque) ficam sempre visíveis, reproduzindo o agrupamento colapsável do exemplo original.
     row.outlineLevel = linha.bold && !linha.destaque ? 0 : 1
   })
+
+  await montarAbaChecklist(wb, nomeCliente)
 
   const buffer = await wb.xlsx.writeBuffer()
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
