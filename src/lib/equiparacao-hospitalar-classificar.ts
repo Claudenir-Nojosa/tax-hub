@@ -4,8 +4,12 @@ export type ClassificacaoOportunidade = "Sim" | "Não" | "Meio" | "Dúvida"
 
 export type NotaClassificada = NotaFiscalServico & { oportunidade: ClassificacaoOportunidade }
 
-const TAMANHO_LOTE = 40
-const LOTES_EM_PARALELO = 4 // acelera a classificação de importações grandes (milhares de notas)
+// A conta OpenAI usada tem um limite baixo de tokens/minuto pro gpt-4o (30.000 TPM observado em
+// teste) — lotes maiores reduzem quantas vezes o prompt-base (~1.100 tokens) é repetido, e um
+// paralelismo mais conservador evita estourar o limite (a API já faz retry com backoff, mas é
+// melhor evitar o 429 na maioria das vezes do que depender só do retry).
+const TAMANHO_LOTE = 60
+const LOTES_EM_PARALELO = 2
 
 async function classificarLote(
   itens: { id: number; descricao: string }[]
