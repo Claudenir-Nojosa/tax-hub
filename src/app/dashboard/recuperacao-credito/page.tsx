@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import PgdasImportSection from "@/components/recuperacao-credito/PgdasImportSection";
 import {
   FileSearch,
   Upload,
@@ -432,6 +433,10 @@ export default function RecuperacaoCreditoPage() {
           </p>
         </div>
       )}
+
+      <Separator className="my-8" />
+
+      <PgdasImportSection />
     </div>
   );
 }

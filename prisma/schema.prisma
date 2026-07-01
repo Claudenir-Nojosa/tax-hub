@@ -33,6 +33,7 @@ model User {
   username        String?   @unique
 
   empresasReforma  EmpresaReforma[]
+  clientesRecuperacaoCredito ClienteRecuperacaoCredito[]
 }
 
 
@@ -174,4 +175,36 @@ model DadosXmlReforma {
   mesesImportados     Int
   itens               Json
   createdAt           DateTime       @default(now())
+}
+
+model ClienteRecuperacaoCredito {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cnpj         String
+  razaoSocial  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  declaracoes  DeclaracaoPgdas[]
+
+  @@unique([userId, cnpj])
+}
+
+model DeclaracaoPgdas {
+  id             String                    @id @default(cuid())
+  clienteId      String
+  cliente        ClienteRecuperacaoCredito @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  competencia    String   // "YYYY-MM", chave de ordenação/coluna do Excel
+  tipoDocumento  String   // "DECLARACAO" | "EXTRATO"
+  cnpj           String   // CNPJ lido do PDF (auditoria/validação contra o cliente)
+  arquivoNome    String
+  dados          Json     // payload tipado — ver DadosPgdas em src/lib/pgdas/types.ts
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([clienteId, competencia, tipoDocumento])
+  @@index([clienteId, competencia])
 }
