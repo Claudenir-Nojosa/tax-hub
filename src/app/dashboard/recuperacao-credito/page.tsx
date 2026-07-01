@@ -12,6 +12,8 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { exportarPgdasExcel, type DeclaracaoPgdasRegistro } from "@/lib/pgdas/export-pgdas-excel";
 import type { DadosPgdas, TipoDocumentoPgdas } from "@/lib/pgdas/types";
+import { exportarEfdIcmsExcel, type DeclaracaoEfdRegistro } from "@/lib/efd-icms-excel";
+import type { DadosEfdIcmsIpi } from "@/lib/efd-icms-parser";
 import {
   FileSearch,
   Upload,
@@ -77,6 +79,12 @@ interface DeclaracaoRow {
   dados: DadosPgdas;
 }
 
+interface DeclaracaoEfdRow {
+  id: string;
+  competencia: string;
+  dados: DadosEfdIcmsIpi;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatBytes(bytes: number): string {
@@ -122,6 +130,10 @@ function isPdf(nome: string) {
   return /\.pdf$/i.test(nome);
 }
 
+function isEfd(nome: string) {
+  return /\.txt$/i.test(nome);
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function RecuperacaoCreditoPage() {
@@ -153,6 +165,9 @@ export default function RecuperacaoCreditoPage() {
 
   const [declaracoesPgdas, setDeclaracoesPgdas] = useState<DeclaracaoRow[]>([]);
   const [carregandoDeclaracoes, setCarregandoDeclaracoes] = useState(false);
+
+  const [declaracoesEfd, setDeclaracoesEfd] = useState<DeclaracaoEfdRow[]>([]);
+  const [carregandoDeclaracoesEfd, setCarregandoDeclaracoesEfd] = useState(false);
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteSelecionadoId) ?? null;
   const projetoSelecionado = projetos.find((p) => p.id === projetoSelecionadoId) ?? null;
@@ -201,6 +216,23 @@ export default function RecuperacaoCreditoPage() {
     if (projetoSelecionadoId) carregarDeclaracoes(projetoSelecionadoId);
     else setDeclaracoesPgdas([]);
   }, [projetoSelecionadoId, carregarDeclaracoes]);
+
+  const carregarDeclaracoesEfd = useCallback(async (projetoId: string) => {
+    setCarregandoDeclaracoesEfd(true);
+    try {
+      const res = await fetch(`/api/recuperacao-credito/efd?projetoId=${projetoId}`);
+      setDeclaracoesEfd(await res.json());
+    } catch {
+      toast.error("Erro ao carregar declarações de ICMS/IPI");
+    } finally {
+      setCarregandoDeclaracoesEfd(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (projetoSelecionadoId) carregarDeclaracoesEfd(projetoSelecionadoId);
+    else setDeclaracoesEfd([]);
+  }, [projetoSelecionadoId, carregarDeclaracoesEfd]);
 
   const handleCriarCliente = async () => {
     if (!novoCnpj.trim() || !novaRazaoSocial.trim()) {
@@ -301,11 +333,11 @@ export default function RecuperacaoCreditoPage() {
   const adicionarArquivos = useCallback((fileList: FileList | null) => {
     if (!fileList) return;
     const aceitos = Array.from(fileList).filter((f) =>
-      /\.(xlsx|xls|csv|pdf)$/i.test(f.name)
+      /\.(xlsx|xls|csv|pdf|txt)$/i.test(f.name)
     );
     const invalidos = fileList.length - aceitos.length;
     if (invalidos > 0)
-      toast.warning(`${invalidos} arquivo(s) ignorado(s) — apenas .xlsx, .xls, .csv e .pdf são aceitos.`);
+      toast.warning(`${invalidos} arquivo(s) ignorado(s) — apenas .xlsx, .xls, .csv, .pdf e .txt são aceitos.`);
 
     const novos: ArquivoCarregado[] = aceitos.map((f) => ({
       id: Math.random().toString(36).slice(2),
@@ -349,6 +381,27 @@ export default function RecuperacaoCreditoPage() {
     await carregarDeclaracoes(projetoSelecionadoId);
   };
 
+  const processarEfdsIcmsIpi = async (efds: ArquivoCarregado[]) => {
+    if (!projetoSelecionadoId) return;
+    const form = new FormData();
+    form.append("projetoId", projetoSelecionadoId);
+    efds.forEach((a) => form.append("files", a.file, a.name));
+
+    const res = await fetch("/api/recuperacao-credito/efd/upload", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) {
+      toast.error(data.error ?? "Erro ao processar EFDs de ICMS/IPI");
+      return;
+    }
+    if (data.salvos?.length > 0) {
+      toast.success(`${data.salvos.length} EFD(s) de ICMS/IPI importado(s)!`);
+    }
+    for (const erro of data.erros ?? []) {
+      toast.error(`${erro.arquivo}: ${erro.motivo}`);
+    }
+    await carregarDeclaracoesEfd(projetoSelecionadoId);
+  };
+
   const processarArquivosAnalise = async (outros: ArquivoCarregado[]) => {
     const formData = new FormData();
     outros.forEach((a) => formData.append("files", a.file, a.name));
@@ -367,10 +420,11 @@ export default function RecuperacaoCreditoPage() {
     }
 
     const pdfs = arquivos.filter((a) => isPdf(a.name));
-    const outros = arquivos.filter((a) => !isPdf(a.name));
+    const efds = arquivos.filter((a) => isEfd(a.name));
+    const outros = arquivos.filter((a) => !isPdf(a.name) && !isEfd(a.name));
 
-    if (pdfs.length > 0 && (!clienteSelecionadoId || !projetoSelecionadoId)) {
-      toast.error("Selecione (ou crie) um cliente e um projeto para importar os PDFs do Simples Nacional.");
+    if ((pdfs.length > 0 || efds.length > 0) && (!clienteSelecionadoId || !projetoSelecionadoId)) {
+      toast.error("Selecione (ou crie) um cliente e um projeto para importar PDFs do Simples Nacional ou EFDs de ICMS/IPI.");
       return;
     }
 
@@ -378,6 +432,7 @@ export default function RecuperacaoCreditoPage() {
     setResultado(null);
     try {
       if (pdfs.length > 0) await processarPdfsPgdas(pdfs);
+      if (efds.length > 0) await processarEfdsIcmsIpi(efds);
       if (outros.length > 0) await processarArquivosAnalise(outros);
       if (outros.length > 0 && !resultado) toast.success("Análise concluída!");
     } catch (err) {
@@ -413,6 +468,26 @@ export default function RecuperacaoCreditoPage() {
     await exportarPgdasExcel(registros, clienteSelecionado.razaoSocial);
   };
 
+  const handleExcluirDeclaracaoEfd = async (id: string) => {
+    if (!projetoSelecionadoId) return;
+    try {
+      await fetch(`/api/recuperacao-credito/efd?id=${id}`, { method: "DELETE" });
+      toast.success("Removido");
+      await carregarDeclaracoesEfd(projetoSelecionadoId);
+    } catch {
+      toast.error("Erro ao remover");
+    }
+  };
+
+  const handleBaixarExcelEfd = async () => {
+    if (!clienteSelecionado || declaracoesEfd.length === 0) return;
+    const registros: DeclaracaoEfdRegistro[] = declaracoesEfd.map((d) => ({
+      competencia: d.competencia,
+      dados: d.dados,
+    }));
+    await exportarEfdIcmsExcel(registros, clienteSelecionado.razaoSocial);
+  };
+
   const mesesAgrupados = Array.from(new Set(declaracoesPgdas.map((d) => d.competencia)))
     .sort()
     .map((competencia) => {
@@ -423,6 +498,8 @@ export default function RecuperacaoCreditoPage() {
         receita: doMes[0]?.dados.rpa.total ?? 0,
       };
     });
+
+  const mesesEfdOrdenados = [...declaracoesEfd].sort((a, b) => a.competencia.localeCompare(b.competencia));
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -457,8 +534,8 @@ export default function RecuperacaoCreditoPage() {
             <div>
               <CardTitle className="text-base">Arquivos para Análise</CardTitle>
               <CardDescription className="text-xs mt-0.5">
-                Aceita .xlsx, .xls, .csv e PDFs de Declaração/Extrato do Simples Nacional — você pode carregar
-                múltiplos arquivos de uma vez
+                Aceita .xlsx, .xls, .csv, PDFs de Declaração/Extrato do Simples Nacional e .txt de EFD ICMS/IPI —
+                você pode carregar múltiplos arquivos de uma vez
               </CardDescription>
             </div>
             {arquivos.length > 0 && (
@@ -472,7 +549,7 @@ export default function RecuperacaoCreditoPage() {
           {/* Cliente — necessário só para os PDFs do Simples Nacional */}
           <div className="space-y-1.5">
             <Label className="text-xs text-gray-500 dark:text-gray-400">
-              Cliente <span className="font-normal text-gray-400">(cliente + projeto são necessários para importar PDFs do Simples Nacional)</span>
+              Cliente <span className="font-normal text-gray-400">(cliente + projeto são necessários para importar PDFs do Simples Nacional ou EFDs de ICMS/IPI)</span>
             </Label>
             {modoNovoCliente ? (
               <div className="flex flex-col sm:flex-row gap-2">
@@ -626,13 +703,13 @@ export default function RecuperacaoCreditoPage() {
               Clique ou arraste os arquivos aqui
             </p>
             <p className="text-xs text-gray-400 mt-1 text-center">
-              .xlsx · .xls · .csv · .pdf — sem limite de quantidade
+              .xlsx · .xls · .csv · .pdf · .txt — sem limite de quantidade
             </p>
             <input
               ref={inputRef}
               type="file"
               multiple
-              accept=".xlsx,.xls,.csv,.pdf"
+              accept=".xlsx,.xls,.csv,.pdf,.txt"
               className="hidden"
               onChange={(e) => adicionarArquivos(e.target.files)}
             />
@@ -650,7 +727,7 @@ export default function RecuperacaoCreditoPage() {
                   className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50"
                 >
                   <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
-                    {isPdf(a.name) ? (
+                    {isPdf(a.name) || isEfd(a.name) ? (
                       <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                     ) : (
                       <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
@@ -734,6 +811,55 @@ export default function RecuperacaoCreditoPage() {
               )}
             </div>
           )}
+
+          {/* Meses de ICMS/IPI já importados para o projeto selecionado */}
+          {projetoSelecionado && (carregandoDeclaracoesEfd || mesesEfdOrdenados.length > 0) && (
+            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
+                ICMS/IPI importado — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
+              </p>
+              {carregandoDeclaracoesEfd ? (
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+              ) : (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Competência</TableHead>
+                        <TableHead className="text-right">ICMS a Recolher</TableHead>
+                        <TableHead className="w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {mesesEfdOrdenados.map((d) => (
+                        <TableRow key={d.id}>
+                          <TableCell className="font-medium">{formatarCompetencia(d.competencia)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(d.dados.apuracaoIcms.icmsARecolher)}</TableCell>
+                          <TableCell>
+                            <div className="flex justify-end">
+                              <button
+                                onClick={() => handleExcluirDeclaracaoEfd(d.id)}
+                                title="Remover"
+                                className="text-gray-400 hover:text-red-500"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <div className="flex justify-end">
+                    <Button variant="outline" size="sm" onClick={handleBaixarExcelEfd}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Baixar Excel
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -743,8 +869,9 @@ export default function RecuperacaoCreditoPage() {
           <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
           <p className="text-sm text-blue-700 dark:text-blue-300">
             <span className="font-semibold">Como funciona:</span> carregue os arquivos Excel com dados fiscais e
-            contábeis da empresa (SPED, EFD, DRE, notas fiscais, etc.) ou os PDFs de Declaração/Extrato do Simples
-            Nacional — o sistema reconhece o tipo de cada arquivo automaticamente e processa cada um do jeito certo.
+            contábeis da empresa (DRE, notas fiscais, etc.), os PDFs de Declaração/Extrato do Simples Nacional ou os
+            .txt de EFD ICMS/IPI — o sistema reconhece o tipo de cada arquivo automaticamente e processa cada um do
+            jeito certo.
           </p>
         </div>
       )}
