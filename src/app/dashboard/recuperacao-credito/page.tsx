@@ -62,6 +62,12 @@ interface Cliente {
   razaoSocial: string;
 }
 
+interface Projeto {
+  id: string;
+  clienteId: string;
+  nome: string;
+}
+
 interface DeclaracaoRow {
   id: string;
   competencia: string;
@@ -123,7 +129,9 @@ export default function RecuperacaoCreditoPage() {
   const [resultado, setResultado] = useState<ResultadoAnalise | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Cliente (necessário para os PDFs de Declaração/Extrato do Simples Nacional)
+  // Cliente e Projeto (necessários para os PDFs de Declaração/Extrato do Simples Nacional —
+  // cada projeto tem seu próprio conjunto de meses importados, pra não colidir/sobrescrever
+  // quando o mesmo cliente tem mais de um diagnóstico/reverificação em andamento)
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string | null>(null);
   const [modoNovoCliente, setModoNovoCliente] = useState(false);
@@ -131,10 +139,17 @@ export default function RecuperacaoCreditoPage() {
   const [novaRazaoSocial, setNovaRazaoSocial] = useState("");
   const [criandoCliente, setCriandoCliente] = useState(false);
 
+  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [projetoSelecionadoId, setProjetoSelecionadoId] = useState<string | null>(null);
+  const [modoNovoProjeto, setModoNovoProjeto] = useState(false);
+  const [novoNomeProjeto, setNovoNomeProjeto] = useState("");
+  const [criandoProjeto, setCriandoProjeto] = useState(false);
+
   const [declaracoesPgdas, setDeclaracoesPgdas] = useState<DeclaracaoRow[]>([]);
   const [carregandoDeclaracoes, setCarregandoDeclaracoes] = useState(false);
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteSelecionadoId) ?? null;
+  const projetoSelecionado = projetos.find((p) => p.id === projetoSelecionadoId) ?? null;
 
   const carregarClientes = useCallback(async () => {
     try {
@@ -149,10 +164,25 @@ export default function RecuperacaoCreditoPage() {
     carregarClientes();
   }, [carregarClientes]);
 
-  const carregarDeclaracoes = useCallback(async (clienteId: string) => {
+  const carregarProjetos = useCallback(async (clienteId: string) => {
+    try {
+      const res = await fetch(`/api/recuperacao-credito/projetos?clienteId=${clienteId}`);
+      setProjetos(await res.json());
+    } catch {
+      toast.error("Erro ao carregar projetos");
+    }
+  }, []);
+
+  useEffect(() => {
+    setProjetoSelecionadoId(null);
+    if (clienteSelecionadoId) carregarProjetos(clienteSelecionadoId);
+    else setProjetos([]);
+  }, [clienteSelecionadoId, carregarProjetos]);
+
+  const carregarDeclaracoes = useCallback(async (projetoId: string) => {
     setCarregandoDeclaracoes(true);
     try {
-      const res = await fetch(`/api/recuperacao-credito/pgdas?clienteId=${clienteId}`);
+      const res = await fetch(`/api/recuperacao-credito/pgdas?projetoId=${projetoId}`);
       setDeclaracoesPgdas(await res.json());
     } catch {
       toast.error("Erro ao carregar declarações do Simples Nacional");
@@ -162,9 +192,9 @@ export default function RecuperacaoCreditoPage() {
   }, []);
 
   useEffect(() => {
-    if (clienteSelecionadoId) carregarDeclaracoes(clienteSelecionadoId);
+    if (projetoSelecionadoId) carregarDeclaracoes(projetoSelecionadoId);
     else setDeclaracoesPgdas([]);
-  }, [clienteSelecionadoId, carregarDeclaracoes]);
+  }, [projetoSelecionadoId, carregarDeclaracoes]);
 
   const handleCriarCliente = async () => {
     if (!novoCnpj.trim() || !novaRazaoSocial.trim()) {
@@ -190,6 +220,33 @@ export default function RecuperacaoCreditoPage() {
       toast.error(e instanceof Error ? e.message : "Erro ao criar cliente");
     } finally {
       setCriandoCliente(false);
+    }
+  };
+
+  const handleCriarProjeto = async () => {
+    if (!clienteSelecionadoId) return;
+    if (!novoNomeProjeto.trim()) {
+      toast.error("Dê um nome ao projeto");
+      return;
+    }
+    setCriandoProjeto(true);
+    try {
+      const res = await fetch("/api/recuperacao-credito/projetos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clienteId: clienteSelecionadoId, nome: novoNomeProjeto.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erro ao criar projeto");
+      toast.success("Projeto criado!");
+      setNovoNomeProjeto("");
+      setModoNovoProjeto(false);
+      await carregarProjetos(clienteSelecionadoId);
+      setProjetoSelecionadoId(data.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao criar projeto");
+    } finally {
+      setCriandoProjeto(false);
     }
   };
 
@@ -224,9 +281,9 @@ export default function RecuperacaoCreditoPage() {
   );
 
   const processarPdfsPgdas = async (pdfs: ArquivoCarregado[]) => {
-    if (!clienteSelecionadoId) return;
+    if (!projetoSelecionadoId) return;
     const form = new FormData();
-    form.append("clienteId", clienteSelecionadoId);
+    form.append("projetoId", projetoSelecionadoId);
     pdfs.forEach((a) => form.append("files", a.file, a.name));
 
     const res = await fetch("/api/recuperacao-credito/pgdas/upload", { method: "POST", body: form });
@@ -241,7 +298,7 @@ export default function RecuperacaoCreditoPage() {
     for (const erro of data.erros ?? []) {
       toast.error(`${erro.arquivo}: ${erro.motivo}`);
     }
-    await carregarDeclaracoes(clienteSelecionadoId);
+    await carregarDeclaracoes(projetoSelecionadoId);
   };
 
   const processarArquivosAnalise = async (outros: ArquivoCarregado[]) => {
@@ -264,8 +321,8 @@ export default function RecuperacaoCreditoPage() {
     const pdfs = arquivos.filter((a) => isPdf(a.name));
     const outros = arquivos.filter((a) => !isPdf(a.name));
 
-    if (pdfs.length > 0 && !clienteSelecionadoId) {
-      toast.error("Selecione (ou crie) um cliente para importar os PDFs do Simples Nacional.");
+    if (pdfs.length > 0 && (!clienteSelecionadoId || !projetoSelecionadoId)) {
+      toast.error("Selecione (ou crie) um cliente e um projeto para importar os PDFs do Simples Nacional.");
       return;
     }
 
@@ -288,11 +345,11 @@ export default function RecuperacaoCreditoPage() {
   };
 
   const handleExcluirDeclaracao = async (id: string) => {
-    if (!clienteSelecionadoId) return;
+    if (!projetoSelecionadoId) return;
     try {
       await fetch(`/api/recuperacao-credito/pgdas?id=${id}`, { method: "DELETE" });
       toast.success("Removido");
-      await carregarDeclaracoes(clienteSelecionadoId);
+      await carregarDeclaracoes(projetoSelecionadoId);
     } catch {
       toast.error("Erro ao remover");
     }
@@ -367,7 +424,7 @@ export default function RecuperacaoCreditoPage() {
           {/* Cliente — necessário só para os PDFs do Simples Nacional */}
           <div className="space-y-1.5">
             <Label className="text-xs text-gray-500 dark:text-gray-400">
-              Cliente <span className="font-normal text-gray-400">(necessário para importar PDFs do Simples Nacional)</span>
+              Cliente <span className="font-normal text-gray-400">(cliente + projeto são necessários para importar PDFs do Simples Nacional)</span>
             </Label>
             {modoNovoCliente ? (
               <div className="flex flex-col sm:flex-row gap-2">
@@ -412,6 +469,51 @@ export default function RecuperacaoCreditoPage() {
               </div>
             )}
           </div>
+
+          {/* Projeto — escopo dos meses importados; um cliente pode ter vários projetos */}
+          {clienteSelecionado && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-gray-500 dark:text-gray-400">
+                Projeto <span className="font-normal text-gray-400">({clienteSelecionado.razaoSocial})</span>
+              </Label>
+              {modoNovoProjeto ? (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Input
+                    placeholder="Nome do projeto (ex.: Reverificação 2026)"
+                    value={novoNomeProjeto}
+                    onChange={(e) => setNovoNomeProjeto(e.target.value)}
+                    className="flex-1"
+                  />
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={handleCriarProjeto} disabled={criandoProjeto}>
+                      {criandoProjeto ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setModoNovoProjeto(false)}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Select value={projetoSelecionadoId ?? undefined} onValueChange={setProjetoSelecionadoId}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Selecione um projeto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projetos.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="icon" onClick={() => setModoNovoProjeto(true)} title="Novo projeto">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Drop zone */}
           <div
@@ -484,11 +586,11 @@ export default function RecuperacaoCreditoPage() {
             </div>
           )}
 
-          {/* Meses do Simples Nacional já importados para o cliente selecionado */}
-          {clienteSelecionado && (carregandoDeclaracoes || mesesAgrupados.length > 0) && (
+          {/* Meses do Simples Nacional já importados para o projeto selecionado */}
+          {projetoSelecionado && (carregandoDeclaracoes || mesesAgrupados.length > 0) && (
             <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
-                Simples Nacional importado — {clienteSelecionado.razaoSocial}
+                Simples Nacional importado — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
               </p>
               {carregandoDeclaracoes ? (
                 <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>

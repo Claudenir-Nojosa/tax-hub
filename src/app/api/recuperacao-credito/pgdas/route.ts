@@ -2,27 +2,27 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "../../../../../auth"
 import db from "@/lib/db"
 
-// GET ?clienteId= — lista declarações PGDAS do cliente, ordenadas por competência
+// GET ?projetoId= — lista declarações PGDAS do projeto, ordenadas por competência
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
   }
 
-  const clienteId = req.nextUrl.searchParams.get("clienteId")
-  if (!clienteId) {
-    return NextResponse.json({ error: "clienteId é obrigatório" }, { status: 400 })
+  const projetoId = req.nextUrl.searchParams.get("projetoId")
+  if (!projetoId) {
+    return NextResponse.json({ error: "projetoId é obrigatório" }, { status: 400 })
   }
 
-  const cliente = await db.clienteRecuperacaoCredito.findFirst({
-    where: { id: clienteId, userId: session.user.id },
+  const projeto = await db.projetoRecuperacaoCredito.findFirst({
+    where: { id: projetoId, cliente: { userId: session.user.id } },
   })
-  if (!cliente) {
-    return NextResponse.json({ error: "Cliente não encontrado" }, { status: 404 })
+  if (!projeto) {
+    return NextResponse.json({ error: "Projeto não encontrado" }, { status: 404 })
   }
 
   const declaracoes = await db.declaracaoPgdas.findMany({
-    where: { clienteId },
+    where: { projetoId },
     orderBy: { competencia: "asc" },
   })
 
@@ -43,9 +43,9 @@ export async function DELETE(req: NextRequest) {
 
   const declaracao = await db.declaracaoPgdas.findFirst({
     where: { id },
-    include: { cliente: true },
+    include: { projeto: { include: { cliente: true } } },
   })
-  if (!declaracao || declaracao.cliente.userId !== session.user.id) {
+  if (!declaracao || declaracao.projeto.cliente.userId !== session.user.id) {
     return NextResponse.json({ error: "Não encontrado" }, { status: 404 })
   }
 

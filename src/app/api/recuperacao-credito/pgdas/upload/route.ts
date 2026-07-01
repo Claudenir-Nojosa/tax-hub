@@ -16,22 +16,24 @@ export async function POST(req: NextRequest) {
   }
 
   const formData = await req.formData()
-  const clienteId = formData.get("clienteId") as string | null
+  const projetoId = formData.get("projetoId") as string | null
   const files = formData.getAll("files") as File[]
 
-  if (!clienteId) {
-    return NextResponse.json({ error: "clienteId é obrigatório" }, { status: 400 })
+  if (!projetoId) {
+    return NextResponse.json({ error: "projetoId é obrigatório" }, { status: 400 })
   }
   if (files.length === 0) {
     return NextResponse.json({ error: "Nenhum arquivo enviado" }, { status: 400 })
   }
 
-  const cliente = await db.clienteRecuperacaoCredito.findFirst({
-    where: { id: clienteId, userId: session.user.id },
+  const projeto = await db.projetoRecuperacaoCredito.findFirst({
+    where: { id: projetoId, cliente: { userId: session.user.id } },
+    include: { cliente: true },
   })
-  if (!cliente) {
-    return NextResponse.json({ error: "Cliente não encontrado" }, { status: 404 })
+  if (!projeto) {
+    return NextResponse.json({ error: "Projeto não encontrado" }, { status: 404 })
   }
+  const cliente = projeto.cliente
 
   const salvos: { competencia: string; tipoDocumento: string; arquivoNome: string }[] = []
   const erros: { arquivo: string; motivo: string }[] = []
@@ -62,14 +64,14 @@ export async function POST(req: NextRequest) {
 
       await db.declaracaoPgdas.upsert({
         where: {
-          clienteId_competencia_tipoDocumento: {
-            clienteId: cliente.id,
+          projetoId_competencia_tipoDocumento: {
+            projetoId: projeto.id,
             competencia: dados.competencia,
             tipoDocumento: dados.tipoDocumento,
           },
         },
         create: {
-          clienteId: cliente.id,
+          projetoId: projeto.id,
           competencia: dados.competencia,
           tipoDocumento: dados.tipoDocumento,
           cnpj: dados.cnpj,

@@ -13,9 +13,8 @@ const PCT = "0.00%"
 const MESES_ABREV = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"]
 
 const COR = {
-  rosa: "FFE4287C",
+  cinzaClaro: "FFBFBFBF",
   azulClaro: "FFB4C6E7",
-  branco: "FFFFFFFF",
 }
 
 const LOGO_URL = "/icons/taxhub_logo_principal_claro_transparente.png"
@@ -91,7 +90,7 @@ interface LinhaSpec {
   label: string
   bold?: boolean
   valores?: (comp: string, dados: DadosPgdas | undefined) => number
-  destaque?: "rosa" | "azul"
+  destaque?: "cinza" | "azul"
   numFmt?: string
 }
 
@@ -134,28 +133,29 @@ export async function exportarPgdasExcel(declaracoes: DeclaracaoPgdasRegistro[],
   wb.creator = "Tax Hub — Recuperação de Crédito"
   wb.created = new Date()
   const ws = wb.addWorksheet("Simples Nacional", {
-    views: [{ showGridLines: false, state: "frozen", xSplit: 1, ySplit: 5 }],
+    views: [{ showGridLines: false, state: "frozen", xSplit: 2, ySplit: 5 }],
   })
 
-  ws.columns = [{ width: 90 }, ...competencias.map(() => ({ width: 15.5 }))]
+  // Coluna A: margem estreita e vazia, só pra respiro visual. O conteúdo (rótulos) começa na B.
+  ws.columns = [{ width: 3 }, { width: 80 }, ...competencias.map(() => ({ width: 15.5 }))]
 
-  // Linha 1: logo (imagem sobreposta) — linha alta pra caber o logo inteiro
+  // Linha 1: logo (imagem sobreposta, ancorada na coluna B) — linha alta pra caber o logo inteiro
   ws.getRow(1).height = 60
   const logoBase64 = await carregarLogoBase64()
   if (logoBase64) {
     const imageId = wb.addImage({ base64: `data:image/png;base64,${logoBase64}`, extension: "png" })
-    ws.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 140, height: 74 } })
+    ws.addImage(imageId, { tl: { col: 1, row: 0 }, ext: { width: 140, height: 74 } })
   }
 
   // Linha 3: título "Simples Nacional - <nome curto do cliente>"
   const nomeCurto = nomeCliente.trim().split(/\s+/)[0] || nomeCliente
-  sc(ws.getCell(3, 1), { value: `Simples Nacional - ${nomeCurto}`, bold: true, size: 12 })
+  sc(ws.getCell(3, 2), { value: `Simples Nacional - ${nomeCurto}`, bold: true, size: 12 })
 
-  // Linha 5: cabeçalho (coluna A + 1 coluna por mês)
+  // Linha 5: cabeçalho (coluna B + 1 coluna por mês)
   const headerRow = ws.getRow(5)
-  sc(headerRow.getCell(1), { value: "1. RESUMO SIMPLES NACIONAL", bold: true })
+  sc(headerRow.getCell(2), { value: "1. RESUMO SIMPLES NACIONAL", bold: true })
   competencias.forEach((comp, i) => {
-    sc(headerRow.getCell(i + 2), { value: formatarCompetencia(comp), bold: true, align: "right" })
+    sc(headerRow.getCell(i + 3), { value: formatarCompetencia(comp), bold: true, align: "right" })
   })
 
   const linhas: LinhaSpec[] = [
@@ -183,8 +183,9 @@ export async function exportarPgdasExcel(declaracoes: DeclaracaoPgdasRegistro[],
     { label: "" },
     {
       label: "                $  Vlr Débito Declarado PGDAS",
+      bold: true,
       valores: (_c, d) => d?.debitoGeral.declaradoExigivelSuspenso.total ?? 0,
-      destaque: "rosa",
+      destaque: "cinza",
     },
     { label: "" },
     { label: "     3. VALOR TOTAL POR TRIBUTO", bold: true },
@@ -241,26 +242,24 @@ export async function exportarPgdasExcel(declaracoes: DeclaracaoPgdasRegistro[],
   const ROW_HEADER = 5
   linhas.forEach((linha, idx) => {
     const row = ws.getRow(idx + ROW_HEADER + 1)
-    const bg = linha.destaque === "rosa" ? COR.rosa : linha.destaque === "azul" ? COR.azulClaro : undefined
-    const cor = linha.destaque === "rosa" ? COR.branco : undefined
+    const bg = linha.destaque === "cinza" ? COR.cinzaClaro : linha.destaque === "azul" ? COR.azulClaro : undefined
     const alinhaLabel = (linha as { align?: "left" | "center" | "right" }).align
 
-    sc(row.getCell(1), { value: linha.label, bold: linha.bold, bg, color: cor, align: alinhaLabel })
+    sc(row.getCell(2), { value: linha.label, bold: linha.bold, bg, align: alinhaLabel })
     if (linha.valores) {
       competencias.forEach((comp, i) => {
-        sc(row.getCell(i + 2), {
+        sc(row.getCell(i + 3), {
           value: linha.valores!(comp, porCompetencia[comp]),
           numFmt: linha.numFmt ?? BRL,
           align: "right",
           bg,
-          color: cor,
-          bold: linha.destaque === "azul",
+          bold: linha.bold || linha.destaque === "azul",
         })
       })
     } else if (bg) {
       // linha em branco com destaque (ex.: espaçador dentro de um bloco colorido) — preenche
       // até a última coluna de mês pra manter a faixa de cor contínua
-      competencias.forEach((_comp, i) => sc(row.getCell(i + 2), { bg }))
+      competencias.forEach((_comp, i) => sc(row.getCell(i + 3), { bg }))
     }
     // Linhas de detalhe e em branco ficam recolhíveis; só os cabeçalhos de seção (bold sem
     // destaque) ficam sempre visíveis, reproduzindo o agrupamento colapsável do exemplo original.

@@ -186,15 +186,26 @@ model ClienteRecuperacaoCredito {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  declaracoes  DeclaracaoPgdas[]
+  projetos     ProjetoRecuperacaoCredito[]
 
   @@unique([userId, cnpj])
 }
 
+model ProjetoRecuperacaoCredito {
+  id          String                    @id @default(cuid())
+  clienteId   String
+  cliente     ClienteRecuperacaoCredito @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  nome        String
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+
+  declaracoes DeclaracaoPgdas[]
+}
+
 model DeclaracaoPgdas {
   id             String                    @id @default(cuid())
-  clienteId      String
-  cliente        ClienteRecuperacaoCredito @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  projetoId      String
+  projeto        ProjetoRecuperacaoCredito @relation(fields: [projetoId], references: [id], onDelete: Cascade)
 
   competencia    String   // "YYYY-MM", chave de ordenação/coluna do Excel
   tipoDocumento  String   // "DECLARACAO" | "EXTRATO"
@@ -205,6 +216,6 @@ model DeclaracaoPgdas {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@unique([clienteId, competencia, tipoDocumento])
-  @@index([clienteId, competencia])
+  @@unique([projetoId, competencia, tipoDocumento])
+  @@index([projetoId, competencia])
 }
