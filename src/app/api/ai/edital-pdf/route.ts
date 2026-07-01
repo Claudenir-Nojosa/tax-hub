@@ -12,7 +12,7 @@ const CORES = [
 
 const PROMPT_BASE = `Você é um especialista em análise de editais de concursos públicos brasileiros.
 
-Analise o texto abaixo (conteúdo programático de um edital) e extraia todas as matérias (disciplinas) com seus respectivos tópicos.
+Analise o texto abaixo (conteúdo programático de um edital) e extraia todas as matérias (disciplinas) com seus respectivos tópicos e subtópicos.
 
 Retorne APENAS um JSON válido, sem texto adicional, no formato:
 {
@@ -20,7 +20,7 @@ Retorne APENAS um JSON válido, sem texto adicional, no formato:
     {
       "id": "nome_sem_espacos_sem_acentos",
       "nome": "Nome Exato da Matéria",
-      "topicos": ["Tópico 1", "Tópico 2", "..."]
+      "topicos": ["Tópico Principal", "  Subtópico do tópico acima", "  Outro subtópico", "Próximo Tópico Principal"]
     }
   ]
 }
@@ -28,9 +28,12 @@ Retorne APENAS um JSON válido, sem texto adicional, no formato:
 Regras:
 - id: minúsculas, sem acentos, espaços → underscore, apenas a-z 0-9 _
 - nome: exatamente como aparece no edital (com acentos)
-- topicos: cada item/subtema individualmente, sem numeração
+- topicos: lista ordenada onde TÓPICOS PRINCIPAIS não têm espaço no início, e SUBTÓPICOS começam com exatamente dois espaços ("  ")
+- Tópico principal = item numerado (ex: "1.", "2.", "Demanda e Oferta") ou título de seção
+- Subtópico = item dentro de um tópico principal (ex: "restrição orçamentária" dentro de "Teoria do Consumidor")
+- Capitalize a primeira letra de cada palavra nos nomes (ex: "Restrição Orçamentária", "Papel do Governo")
+- Sem numeração nos textos, apenas o nome
 - Ignore cabeçalhos, datas, regras do concurso — foque só no conteúdo programático
-- Agrupe subtópicos numerados (ex: "1.1", "1.2") dentro da matéria correspondente
 
 TEXTO DO EDITAL:
 `;
