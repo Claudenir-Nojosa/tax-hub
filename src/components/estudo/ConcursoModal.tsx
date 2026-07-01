@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -44,12 +45,33 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
   // editando: "materiaId:topicoIdx" para tópico/subtópico
   const [editandoTopico, setEditandoTopico] = useState<string | null>(null)
   const [editandoValor, setEditandoValor] = useState("")
-  const [corPickerAberto, setCorPickerAberto] = useState<string | null>(null)
+  const [corPicker, setCorPicker] = useState<{ materiaId: string; top: number; left: number } | null>(null)
+  const corPickerRef = useRef<HTMLDivElement>(null)
+
+  const abrirCorPicker = (materiaId: string, el: HTMLElement) => {
+    if (corPicker?.materiaId === materiaId) { setCorPicker(null); return }
+    const rect = el.getBoundingClientRect()
+    setCorPicker({ materiaId, top: rect.bottom + 6, left: rect.left })
+  }
 
   const alterarCorMateria = (materiaId: string, cor: string) => {
     setMaterias(prev => prev.map(m => m.id === materiaId ? { ...m, cor } : m))
-    setCorPickerAberto(null)
+    setCorPicker(null)
   }
+
+  useEffect(() => {
+    if (!corPicker) return
+    const fecharClique = (e: MouseEvent) => {
+      if (corPickerRef.current && !corPickerRef.current.contains(e.target as Node)) setCorPicker(null)
+    }
+    const fecharScroll = () => setCorPicker(null)
+    document.addEventListener("mousedown", fecharClique)
+    window.addEventListener("scroll", fecharScroll, true)
+    return () => {
+      document.removeEventListener("mousedown", fecharClique)
+      window.removeEventListener("scroll", fecharScroll, true)
+    }
+  }, [corPicker])
 
   const isSubtopico = (t: string) => t.startsWith("  ")
 
@@ -299,30 +321,12 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
               {materias.map(m => (
                 <div key={m.id} className="rounded-lg border border-gray-700 bg-gray-800/50">
                   <div className="flex items-center gap-2 px-3 py-2 cursor-pointer" onClick={() => setExpandida(expandida === m.id ? null : m.id)}>
-                    <div className="relative shrink-0">
-                      <button
-                        type="button"
-                        title="Alterar cor"
-                        onClick={e => { e.stopPropagation(); setCorPickerAberto(corPickerAberto === m.id ? null : m.id) }}
-                        className={`w-2.5 h-2.5 rounded-full ring-2 ring-offset-2 ring-offset-gray-800/50 ring-transparent hover:ring-gray-500 transition-all ${COR_CLASSES[m.cor] ?? "bg-gray-500"}`}
-                      />
-                      {corPickerAberto === m.id && (
-                        <div
-                          className="absolute z-10 top-5 left-0 grid grid-cols-8 gap-1.5 p-2 rounded-lg border border-gray-600 bg-gray-900 shadow-xl"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          {CORES_DISPONIVEIS.map(cor => (
-                            <button
-                              key={cor}
-                              type="button"
-                              title={cor}
-                              onClick={() => alterarCorMateria(m.id, cor)}
-                              className={`w-4 h-4 rounded-full ${COR_CLASSES[cor]} ${m.cor === cor ? "ring-2 ring-white" : "hover:scale-110"} transition-transform`}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      title="Alterar cor"
+                      onClick={e => { e.stopPropagation(); abrirCorPicker(m.id, e.currentTarget) }}
+                      className={`w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-offset-2 ring-offset-gray-800/50 ring-transparent hover:ring-gray-500 transition-all ${COR_CLASSES[m.cor] ?? "bg-gray-500"}`}
+                    />
                     <span className="text-sm text-gray-200 flex-1">{m.nome}</span>
                     <Badge variant="outline" className="text-xs">{m.topicos.length} tópicos</Badge>
                     {expandida === m.id ? <ChevronDown className="h-3 w-3 text-gray-400" /> : <ChevronRight className="h-3 w-3 text-gray-400" />}
@@ -418,6 +422,30 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
           </Button>
         </div>
       </div>
+
+      {corPicker && createPortal(
+        <div
+          ref={corPickerRef}
+          style={{ top: corPicker.top, left: corPicker.left }}
+          className="fixed z-[60] grid grid-cols-4 gap-2 p-3 rounded-lg border border-gray-600 bg-gray-900 shadow-2xl"
+          onClick={e => e.stopPropagation()}
+        >
+          {CORES_DISPONIVEIS.map(cor => (
+            <button
+              key={cor}
+              type="button"
+              title={cor}
+              onClick={() => alterarCorMateria(corPicker.materiaId, cor)}
+              className={`w-6 h-6 rounded-full ${COR_CLASSES[cor]} transition-transform hover:scale-110 ${
+                materias.find(m => m.id === corPicker.materiaId)?.cor === cor
+                  ? "ring-2 ring-white ring-offset-2 ring-offset-gray-900"
+                  : ""
+              }`}
+            />
+          ))}
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
