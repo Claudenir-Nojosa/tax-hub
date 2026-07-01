@@ -14,7 +14,7 @@ const PROMPT_BASE = `Você é um especialista tributário analisando descriçõe
 BASE LEGAL: Solução de Consulta Disit/SRRF04 nº 4027/2016 (vinculada às Soluções de Consulta Cosit nº 7, 47, 86 e 162/2014 e nº 36/2016) — para apuração do IRPJ e da CSLL no lucro presumido, aplica-se o coeficiente reduzido de 8% (IRPJ) e 12% (CSLL), em vez do coeficiente cheio de serviços, sobre a receita de prestação de atendimento de apoio ao diagnóstico e terapia (ultrassonografia, eletrocardiograma, ecocardiograma, teste ergométrico, holter, MAPA, doppler, exame de carótidas, tomografia, ressonância magnética e afins), desde que o prestador seja organizado como sociedade empresária e atenda a Resolução RDC Anvisa nº 50/2002.
 
 PROCEDIMENTOS que SEMPRE se enquadram na equiparação (independentemente de estarem citados nominalmente ou de forma similar):
-Defeitos cardíacos congênitos, cirurgia venosa, colocação do balão intra-aórtico, aneurisma do VE, cirurgia multivalvar, transplante de coração, implante de marcapasso e desfibriladores, terapia de conversão elétrica, terapia de cardioestimulação transesofágica, e qualquer outra cirurgia/procedimento cirúrgico ou anestesia.
+Defeitos cardíacos congênitos, cirurgia venosa, colocação do balão intra-aórtico, aneurisma do VE, cirurgia multivalvar, transplante de coração, implante de marcapasso e desfibriladores, terapia de conversão elétrica, terapia de cardioestimulação transesofágica, serviços/sessões de fisioterapia, e qualquer outra cirurgia/procedimento cirúrgico ou anestesia.
 
 EXAMES que SEMPRE se enquadram na equiparação:
 Ecocardiograma, ecodoppler vertebral e arterial, ECG/eletrocardiograma, avaliação de marcapasso, teste ergométrico, MAPA 24h, holter 24h, looper de eventos, US doppler de carótidas, tomografia, ressonância magnética, e afins.
@@ -35,6 +35,7 @@ EXEMPLOS (siga este padrão):
 - "CONSULTA COM CARDIOLOGISTA EXAMES CARDIOLÓGICOS (ECG, ECOCARDIOGRAMA)." → Meio
 - "IMPLANTE DE MARCAPASSO NO PACIENTE X." → Sim (procedimento da lista, sem consulta)
 - "SERVIÇOS MÉDICOS PRESTADOS NA DATA X DR. Y." → Não (nenhum item da lista)
+- "SERVIÇOS MEDICOS PRESTADOS NA DATA 02/03/2023 DR. JOCERLANO VALOR BRUTO: 250,00 DESCONTO: 57,00 VALOR LIQUIDO: 193,00" → Não (só diz "serviços médicos prestados" + valores, não menciona exame nem procedimento nenhum)
 - "CONSULTA ELETIVA." → Não (consulta sozinha, nenhum item da lista junto)
 
 Analise cada item da lista abaixo (identificado pelo campo "id") e retorne APENAS um JSON no formato:
