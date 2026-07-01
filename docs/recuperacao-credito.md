@@ -170,6 +170,12 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   cabeçalho (mesmo Número do Documento) e continuam a lista de códigos; o parser agrupa por
   Número do Documento ao longo de todas as páginas do PDF antes de persistir — testado e validado
   com um DARF real de 2 páginas.
+- **Dois layouts históricos do comprovante**: comprovantes recentes identificam o pagamento por um
+  "Número do Documento" de **17 dígitos**; comprovantes antigos (validado com DARFs de 2021 do
+  mesmo cliente) usam um "Número do Pagamento" de **10 dígitos**, e o rodapé bancário vem sem o
+  código do banco e com só um número após o nome (em vez de agência + estabelecimento). O parser
+  aceita os dois (`\d{8,17}` no header; remoção de 1–2 números finais no banco) — validado com a
+  soma dos 50 DARFs antigos batendo exatamente com as linhas "Totais" impressas no próprio PDF.
 - **Tributo por código**: `CODIGO_TRIBUTO` em `comprovante-pagamento-parser.ts` é um mapa fixo e
   pequeno (`2089→IRPJ`, `2372→CSLL`, `8109→PIS`, `2172→COFINS`), validado como **completo e exato**
   contra a planilha de referência do usuário — todo código fora desses 4 (multas, TJLP de

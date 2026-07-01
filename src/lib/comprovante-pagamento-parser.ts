@@ -76,8 +76,11 @@ const CODIGO_SEM_REFERENCIA_RE = new RegExp(`^(.*?)\\s+(${NUM})\\s+(${NUM})\\s+(
 // descrição nunca começa com dígito, isso evita confundir com números de valores monetários)
 const CODIGO_START_RE = /(\d{4})\s+(?=[A-ZÀ-Úa-zà-ú])/g
 
+// O número que identifica o pagamento tem 17 dígitos nos comprovantes recentes ("Número do
+// Documento"), mas comprovantes antigos (validado com DARFs de 2021 do mesmo cliente) usam um
+// "Número do Pagamento" de 10 dígitos — por isso o range \d{8,17} em vez de comprimento fixo.
 const HEADER_RE =
-  /^([\d./-]{18})\s+(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{17})\s+CNPJ Período Apuração/
+  /^([\d./-]{18})\s+(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{8,17})\s+CNPJ Período Apuração/
 
 const BANCO_RE =
   /Banco Data de Arrecadação Agência Estabelecimento Valor Reservado\/Restituído Referência (\d{2}\/\d{2}\/\d{4})(.*?)([\d.,]+|-)\s*(?:Data de Vencimento|$)/
@@ -178,9 +181,11 @@ export function parseComprovantesDeTexto(textoBruto: string, arquivoNome: string
       darf.dataArrecadacao = bancoMatch[1]
       const meio = bancoMatch[2].trim()
       darf.valorRestituido = parseNumeroBR(bancoMatch[3])
+      // remove agência+estabelecimento do final — comprovantes recentes têm os dois números;
+      // os antigos (2021) só imprimem um, daí o {1,2}
       darf.banco = /Documento pago via PIX/.test(meio)
         ? "Documento pago via PIX"
-        : meio.replace(/\s+\d+\s+\d+\s*$/, "").trim()
+        : meio.replace(/(?:\s+\d+){1,2}\s*$/, "").trim()
     }
   }
 
