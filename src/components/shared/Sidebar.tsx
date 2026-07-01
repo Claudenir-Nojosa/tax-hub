@@ -7,7 +7,7 @@ import {
   Home,
   Menu,
   X,
-  FlipHorizontal2,
+  Sparkles,
   BookOpen,
   Target,
   FileSearch,
@@ -155,7 +155,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
         <ul className="space-y-1">
         {[
   { href: "/dashboard", label: "Início", icon: Home },
-  { href: "/dashboard/de-para", label: "De-Para", icon: FlipHorizontal2 },
+  { href: "/dashboard/automacoes", label: "Automações", icon: Sparkles },
   { href: "/dashboard/legislacoes", label: "Legislações", icon: BookOpen },
   { href: "/dashboard/planejador-tributario", label: "Planejador", icon: Target },
   { href: "/dashboard/recuperacao-credito", label: "Recuperação", icon: FileSearch },
