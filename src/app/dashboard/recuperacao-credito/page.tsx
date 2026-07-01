@@ -150,6 +150,44 @@ function isEfd(nome: string) {
   return /\.txt$/i.test(nome);
 }
 
+// Lê a resposta como JSON com segurança — hosts serverless (Vercel) devolvem corpo não-JSON
+// ("Request Entity Too Large" em texto puro, sem CORS/JSON) quando o payload de upload excede o
+// limite da plataforma (~4.5MB), e `res.json()` direto quebra com "Unexpected token" nesse caso,
+// mascarando a causa real do erro.
+async function parseRespostaJson(res: Response): Promise<Record<string, unknown>> {
+  const texto = await res.text();
+  try {
+    return JSON.parse(texto);
+  } catch {
+    throw new Error(
+      res.status === 413 || /request entity too large/i.test(texto)
+        ? "Os arquivos enviados são grandes demais para uma única importação — tente enviar menos arquivos de uma vez."
+        : `Erro inesperado do servidor (${res.status}).`
+    );
+  }
+}
+
+// Limite de payload por requisição de upload, com margem de segurança abaixo do limite de ~4.5MB
+// de request body de funções serverless (Vercel) — nunca manda um lote maior que isso de uma vez.
+const TAMANHO_MAX_LOTE_BYTES = 3.5 * 1024 * 1024;
+
+function dividirEmLotes(arquivos: ArquivoCarregado[]): ArquivoCarregado[][] {
+  const lotes: ArquivoCarregado[][] = [];
+  let loteAtual: ArquivoCarregado[] = [];
+  let tamanhoAtual = 0;
+  for (const a of arquivos) {
+    if (loteAtual.length > 0 && tamanhoAtual + a.size > TAMANHO_MAX_LOTE_BYTES) {
+      lotes.push(loteAtual);
+      loteAtual = [];
+      tamanhoAtual = 0;
+    }
+    loteAtual.push(a);
+    tamanhoAtual += a.size;
+  }
+  if (loteAtual.length > 0) lotes.push(loteAtual);
+  return lotes;
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function RecuperacaoCreditoPage() {
@@ -418,54 +456,77 @@ export default function RecuperacaoCreditoPage() {
 
   // Um único endpoint recebe qualquer PDF e detecta sozinho se é Declaração/Extrato do Simples
   // Nacional ou Comprovante de Arrecadação de DARF pelo conteúdo — por isso recarrega as duas
-  // listas depois.
+  // listas depois. Envia em lotes (ver dividirEmLotes) pra não estourar o limite de payload de
+  // upload da plataforma quando o usuário solta vários PDFs de uma vez.
   const processarPdfs = async (pdfs: ArquivoCarregado[]) => {
     if (!projetoSelecionadoId) return;
-    const form = new FormData();
-    form.append("projetoId", projetoSelecionadoId);
-    pdfs.forEach((a) => form.append("files", a.file, a.name));
+    const salvos: { tipo: string; detalhe: string }[] = [];
+    const erros: { arquivo: string; motivo: string }[] = [];
 
-    const res = await fetch("/api/recuperacao-credito/pdf/upload", { method: "POST", body: form });
-    const data = await res.json();
-    if (!res.ok) {
-      toast.error(data.error ?? "Erro ao processar PDFs");
-      return;
+    for (const lote of dividirEmLotes(pdfs)) {
+      const form = new FormData();
+      form.append("projetoId", projetoSelecionadoId);
+      lote.forEach((a) => form.append("files", a.file, a.name));
+
+      try {
+        const res = await fetch("/api/recuperacao-credito/pdf/upload", { method: "POST", body: form });
+        const data = await parseRespostaJson(res);
+        if (!res.ok) {
+          erros.push({ arquivo: lote.map((a) => a.name).join(", "), motivo: (data.error as string) ?? "Erro ao processar PDFs" });
+          continue;
+        }
+        salvos.push(...((data.salvos as { tipo: string; detalhe: string }[]) ?? []));
+        erros.push(...((data.erros as { arquivo: string; motivo: string }[]) ?? []));
+      } catch (e) {
+        erros.push({ arquivo: lote.map((a) => a.name).join(", "), motivo: e instanceof Error ? e.message : "Erro ao processar PDFs" });
+      }
     }
-    const salvosPgdas = (data.salvos ?? []).filter((s: { tipo: string }) => s.tipo === "PGDAS").length;
-    const salvosComprovante = (data.salvos ?? []).filter((s: { tipo: string }) => s.tipo === "COMPROVANTE");
+
+    const salvosPgdas = salvos.filter((s) => s.tipo === "PGDAS").length;
+    const salvosComprovante = salvos.filter((s) => s.tipo === "COMPROVANTE");
     if (salvosPgdas > 0) toast.success(`${salvosPgdas} documento(s) do Simples Nacional importado(s)!`);
     if (salvosComprovante.length > 0) {
-      const totalDarfs = salvosComprovante.reduce(
-        (s: number, item: { detalhe: string }) => s + (parseInt(item.detalhe, 10) || 0),
-        0
-      );
+      const totalDarfs = salvosComprovante.reduce((s, item) => s + (parseInt(item.detalhe, 10) || 0), 0);
       toast.success(`${totalDarfs} DARF(s) importado(s) do Comprovante de Arrecadação!`);
     }
-    for (const erro of data.erros ?? []) {
+    for (const erro of erros) {
       toast.error(`${erro.arquivo}: ${erro.motivo}`);
     }
     await Promise.all([carregarDeclaracoes(projetoSelecionadoId), carregarDeclaracoesComprovante(projetoSelecionadoId)]);
   };
 
   // Um único endpoint recebe qualquer EFD (.txt) e detecta sozinho se é ICMS/IPI ou
-  // Contribuições (PIS/COFINS) pelo conteúdo — por isso recarrega as duas listas depois.
+  // Contribuições (PIS/COFINS) pelo conteúdo — por isso recarrega as duas listas depois. Também
+  // enviado em lotes, mesmo motivo do processarPdfs.
   const processarEfds = async (efds: ArquivoCarregado[]) => {
     if (!projetoSelecionadoId) return;
-    const form = new FormData();
-    form.append("projetoId", projetoSelecionadoId);
-    efds.forEach((a) => form.append("files", a.file, a.name));
+    const salvos: { tipo: string }[] = [];
+    const erros: { arquivo: string; motivo: string }[] = [];
 
-    const res = await fetch("/api/recuperacao-credito/efd/upload", { method: "POST", body: form });
-    const data = await res.json();
-    if (!res.ok) {
-      toast.error(data.error ?? "Erro ao processar EFDs");
-      return;
+    for (const lote of dividirEmLotes(efds)) {
+      const form = new FormData();
+      form.append("projetoId", projetoSelecionadoId);
+      lote.forEach((a) => form.append("files", a.file, a.name));
+
+      try {
+        const res = await fetch("/api/recuperacao-credito/efd/upload", { method: "POST", body: form });
+        const data = await parseRespostaJson(res);
+        if (!res.ok) {
+          erros.push({ arquivo: lote.map((a) => a.name).join(", "), motivo: (data.error as string) ?? "Erro ao processar EFDs" });
+          continue;
+        }
+        salvos.push(...((data.salvos as { tipo: string }[]) ?? []));
+        erros.push(...((data.erros as { arquivo: string; motivo: string }[]) ?? []));
+      } catch (e) {
+        erros.push({ arquivo: lote.map((a) => a.name).join(", "), motivo: e instanceof Error ? e.message : "Erro ao processar EFDs" });
+      }
     }
-    const salvosIcms = (data.salvos ?? []).filter((s: { tipo: string }) => s.tipo === "ICMS_IPI").length;
-    const salvosContrib = (data.salvos ?? []).filter((s: { tipo: string }) => s.tipo === "CONTRIBUICOES").length;
+
+    const salvosIcms = salvos.filter((s) => s.tipo === "ICMS_IPI").length;
+    const salvosContrib = salvos.filter((s) => s.tipo === "CONTRIBUICOES").length;
     if (salvosIcms > 0) toast.success(`${salvosIcms} EFD(s) de ICMS/IPI importado(s)!`);
     if (salvosContrib > 0) toast.success(`${salvosContrib} EFD(s) de Contribuições (PIS/COFINS) importado(s)!`);
-    for (const erro of data.erros ?? []) {
+    for (const erro of erros) {
       toast.error(`${erro.arquivo}: ${erro.motivo}`);
     }
     await Promise.all([carregarDeclaracoesEfd(projetoSelecionadoId), carregarDeclaracoesEfdContrib(projetoSelecionadoId)]);
@@ -476,10 +537,10 @@ export default function RecuperacaoCreditoPage() {
     outros.forEach((a) => formData.append("files", a.file, a.name));
 
     const res = await fetch("/api/recuperacao-credito", { method: "POST", body: formData });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Erro na análise");
+    const data = await parseRespostaJson(res);
+    if (!res.ok) throw new Error((data.error as string) || "Erro na análise");
 
-    setResultado(data);
+    setResultado(data as unknown as ResultadoAnalise);
   };
 
   const handleAnalisar = async () => {
