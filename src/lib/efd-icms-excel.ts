@@ -143,6 +143,7 @@ export async function montarAbaIcms(
   const ws = wb.addWorksheet("ICMS e IPI", {
     views: [{ showGridLines: false, state: "frozen", xSplit: 2, ySplit: 5 }],
   })
+  ws.properties.tabColor = { argb: "FF0070C0" }
 
   ws.columns = [{ width: 3 }, { width: 80 }, ...competencias.map(() => ({ width: 15.5 }))]
 
