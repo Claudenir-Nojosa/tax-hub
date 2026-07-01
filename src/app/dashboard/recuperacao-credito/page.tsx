@@ -689,6 +689,18 @@ export default function RecuperacaoCreditoPage() {
       .map(([ano, valores]) => ({ ano, ...valores, total: valores.PIS + valores.COFINS + valores.IRPJ + valores.CSLL }));
   })();
 
+  // Linha de rodapé da tabela consolidada: total de cada coluna (tributo) somando todos os anos
+  const comprovantesTotalGeral = comprovantesPorAno.reduce(
+    (acc, linha) => ({
+      PIS: acc.PIS + linha.PIS,
+      COFINS: acc.COFINS + linha.COFINS,
+      IRPJ: acc.IRPJ + linha.IRPJ,
+      CSLL: acc.CSLL + linha.CSLL,
+      total: acc.total + linha.total,
+    }),
+    { PIS: 0, COFINS: 0, IRPJ: 0, CSLL: 0, total: 0 }
+  );
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-8 pb-16">
@@ -1128,6 +1140,14 @@ export default function RecuperacaoCreditoPage() {
                           <TableCell className="text-right font-medium">{formatCurrency(linha.total)}</TableCell>
                         </TableRow>
                       ))}
+                      <TableRow className="border-t-2 border-gray-200 dark:border-gray-700">
+                        <TableCell className="font-semibold">Total</TableCell>
+                        <TableCell className="text-right font-semibold">{formatCurrency(comprovantesTotalGeral.PIS)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatCurrency(comprovantesTotalGeral.COFINS)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatCurrency(comprovantesTotalGeral.IRPJ)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatCurrency(comprovantesTotalGeral.CSLL)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatCurrency(comprovantesTotalGeral.total)}</TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                   <p className="text-xs text-gray-400 px-1">
