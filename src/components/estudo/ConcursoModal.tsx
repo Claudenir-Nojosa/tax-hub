@@ -70,10 +70,25 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
   const processarResposta = async (res: Response) => {
     const data = await res.json()
     if (!res.ok) throw new Error(data.error ?? "Erro ao processar edital")
-    setMaterias(data.materias as MateriaConcurso[])
+    const novas = data.materias as MateriaConcurso[]
+    setMaterias(prev => {
+      const resultado = [...prev]
+      for (const nova of novas) {
+        const idx = resultado.findIndex(m => m.nome.toLowerCase() === nova.nome.toLowerCase())
+        if (idx >= 0) {
+          // matéria já existe: adiciona apenas tópicos que ainda não existem
+          const topicosExistentes = new Set(resultado[idx].topicos.map(t => t.trim().toLowerCase()))
+          const topicosNovos = nova.topicos.filter(t => !topicosExistentes.has(t.trim().toLowerCase()))
+          resultado[idx] = { ...resultado[idx], topicos: [...resultado[idx].topicos, ...topicosNovos] }
+        } else {
+          resultado.push(nova)
+        }
+      }
+      return resultado
+    })
     setModoImport(null)
     setTextoEdital("")
-    toast.success(`${data.materias.length} matérias extraídas do edital!`)
+    toast.success(`${novas.length} matérias mescladas com sucesso!`)
   }
 
   const handleProcessarTexto = async () => {
