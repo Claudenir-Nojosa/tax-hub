@@ -242,7 +242,7 @@ export async function montarAbasEcf(
   }[] = [
     {
       nome: "IRPJ",
-      tabColor: "FFED7D31",
+      tabColor: "FF1F3864",
       extraiBase: (p) => p.p200,
       extraiCalculo: (p) => p.p300,
       // Códigos validados como estáveis nas versões de layout 0008-0011 (ver ecf-parser.ts)
@@ -258,7 +258,7 @@ export async function montarAbasEcf(
     },
     {
       nome: "CSLL",
-      tabColor: "FF7030A0",
+      tabColor: "FF1F3864",
       extraiBase: (p) => p.p400,
       extraiCalculo: (p) => p.p500,
       linhas: [

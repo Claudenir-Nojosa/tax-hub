@@ -279,7 +279,7 @@ export async function montarAbasPisCofins(
     const ws = wb.addWorksheet(nomeAba, {
       views: [{ showGridLines: false, state: "frozen", xSplit: 2, ySplit: 5 }],
     })
-    ws.properties.tabColor = { argb: nomeAba === "PIS" ? "FF00B0F0" : "FF002060" }
+    ws.properties.tabColor = { argb: "FF1F3864" }
     ws.columns = [{ width: 3 }, { width: 80 }, ...competencias.map(() => ({ width: 15.5 }))]
 
     ws.getRow(1).height = 60

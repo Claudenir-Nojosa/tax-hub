@@ -214,7 +214,7 @@ export async function montarAbaChecklist(wb: ExcelJS.Workbook, nomeCliente: stri
   const ws = wb.addWorksheet("Checklist", {
     views: [{ showGridLines: false, state: "frozen", ySplit: 5 }],
   })
-  ws.properties.tabColor = { argb: "FFBF8F00" }
+  ws.properties.tabColor = { argb: "FFD9D9D9" }
 
   ws.columns = [
     { width: 3 },

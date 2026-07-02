@@ -87,7 +87,7 @@ export async function montarAbaComprovantePagamento(
   const ws = wb.addWorksheet("Comprovante de Pagamentos", {
     views: [{ showGridLines: false }],
   })
-  ws.properties.tabColor = { argb: "FF548235" }
+  ws.properties.tabColor = { argb: "FF1F3864" }
 
   ws.columns = [
     { width: 3 }, // A margem
