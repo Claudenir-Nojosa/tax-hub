@@ -264,41 +264,48 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
 
 ## 8. DCTF e DCTFWeb (débitos declarados)
 
-Dois tipos independentes, cada um com sua aba (mesmo par de abas da planilha de referência do
-usuário, "DCTF e DCTFWeb.xlsx"). Ambos são **listagens dos débitos declarados** — a referência
-não traz coluna de valor, então as abas também não trazem (o valor de cada débito existe nos
-arquivos e é guardado no JSON, mas não é exibido, pra ficar igual à referência).
+Dois tipos independentes, cada um com sua aba (mesmo par de abas e colunas da planilha de
+referência do usuário, "DCTF e DCTFWeb.xlsx"). Ambos listam os **débitos declarados** com seus
+**valores** (Vlr Débito Apurado etc.) — uma linha por débito/código de receita.
 
 - **DCTFWeb** — `src/lib/dctfweb-parser.ts`. PDF "Relatório da Declaração Completa - DCTFWeb"
   (texto via `unpdf`, regex). 1 PDF = 1 período de apuração (mês); dentro, N débitos (um por
   código de receita). Entra pelo endpoint unificado de PDF (`detectarDctfWeb`). Cabeçalho:
   contribuinte, CNPJ, PA, número do recibo, data/hora, identificação da apuração
   (eSocial/MIT/Reinf — uppercased pra bater com a referência). Cada débito: código de receita,
-  descrição, período de apuração do débito ("01/2025" ou "1º Trimestre/2025" p/ IRPJ/CSLL) e o
-  tributo (só p/ 8109/2172/2089/2372, via `labelTributo` do módulo de Comprovante). Model
-  `DeclaracaoDctfWeb`, `@@unique([projetoId, competencia])` (competência "YYYY-MM").
+  descrição, período de apuração do débito ("01/2025" ou "1º Trimestre/2025" p/ IRPJ/CSLL), o
+  tributo (só p/ 8109/2172/2089/2372, via `labelTributo` do módulo de Comprovante) e os valores
+  **Vlr Débito Apurado** e **Vlr Saldo Pagar** (lidos direto do PDF). Model `DeclaracaoDctfWeb`,
+  `@@unique([projetoId, competencia])` (competência "YYYY-MM").
 - **DCTF** — `src/lib/dctf-parser.ts`. Arquivo `.dec` do PGD DCTF Mensal, **largura fixa** (não
   é pipe-delimited). Entra pelo mesmo endpoint dos EFDs (aceita `.txt` e `.dec`; `detectarDctf`
   = começa com `DCTFM`). Layout validado contra 1 arquivo real: `R01` traz CNPJ (pos 3-16) +
   competência AAAAMM (pos 17-22); cada `R11` (detalhe do débito) traz a sequência
-  `<CNPJ estab.(14)><código(4)><vencimento(8)>` — usada como âncora robusta (pega-se a **última**
-  ocorrência do padrão na linha, porque o CNPJ da matriz também aparece no início). Código →
-  Grupo/tributo por um mapa dos 4 códigos do Lucro Presumido (8109/2172 Mensal, 2089/2372
-  Trimestral). Retificadora vem do nome do arquivo (ORIGI/RETIF). Encoding **latin1**. Model
-  `DeclaracaoDctf`, `@@unique([projetoId, competencia])`.
+  `<CNPJ estab.(14)><código(4)><vencimento(8)>` + espaços + `<principal(14)><multa(14)>` (valores
+  em centavos, ÷100) — âncora robusta (só o CNPJ do estabelecimento é seguido de espaços+valor;
+  o da matriz, no início, é seguido da competência). A variação do código ("-02") vem do campo
+  `<código(4)><variação(2)>M` do mesmo registro. Valores validados contra a referência: PIS
+  472,63, COFINS 2.181,35. Código → Grupo/tributo/descrição-DARF por um mapa dos 4 códigos do
+  Lucro Presumido (8109/2172 Mensal, 2089/2372 Trimestral). Retificadora vem do nome do arquivo
+  (ORIGI/RETIF). Encoding **latin1**. Model `DeclaracaoDctf`, `@@unique([projetoId, competencia])`.
 - **Excel**: `src/lib/dctf-excel.ts`, `montarAbasDctf(wb, { dctfWeb, dctf })` — abas "DCTFWeb" e
   "DCTF" no visual padrão do módulo (logo, título, cabeçalho navy, congelado, aba azul escuro),
   colunas idênticas às da referência. Uma linha por débito; PA como data (primeiro dia do mês).
+- **Valores extraídos**: DCTFWeb → Vlr Débito Apurado e Vlr Saldo Pagar (do PDF). DCTF → Vlr
+  Débito Apurado, Vlr Principal (= débito apurado; são o mesmo campo estrutural do débito) e Vlr
+  Multa Pgto Com DARF (do R11). As demais colunas de valor da DCTF (Pagamento, compensações,
+  suspensão, parcelamento, deduções, saldo) e as de crédito da DCTFWeb (Salário Família/
+  Maternidade, Retenção INSS, Créditos, processo judicial) existem na aba mas **saem em branco** —
+  não foram decodificadas (informação de vinculação/pagamento, não do débito apurado; risco de
+  offset errado com 1 só amostra).
 - **GAP CONHECIDO — colunas codificadas da DCTF ficam vazias**: os campos "Dados Gerais" do
   registro `R01` (Forma de Tributação do Lucro, Regime de Apuração PIS/Cofins, Critério de
-  Variação Monetária, Balanço/Suspensão, Débitos SCP) são códigos de largura fixa que NÃO foram
-  decodificados — exigem o leiaute oficial do PGD DCTF e mais de uma amostra pra validar offsets
-  (só há 1 arquivo real). As colunas existem na aba (fidelidade à referência) mas saem em branco,
-  em vez de chutar/hardcodar "Presumido" (que quebraria pra Lucro Real). Revisitar com o leiaute
-  + amostras, seguindo a regra 1 da seção 12.
-- **GAP CONHECIDO — sem coluna de valor**: idêntico à referência (as duas abas listam O QUE foi
-  declarado, não quanto). O valor por débito está no JSON (`debitoApurado`/`saldoAPagar` na
-  DCTFWeb) caso vire requisito depois.
+  Variação Monetária, Balanço/Suspensão, Débitos SCP, Qualificação PJ) são códigos de largura
+  fixa que NÃO foram decodificados — exigem o leiaute oficial do PGD DCTF e mais de uma amostra
+  pra validar offsets (só há 1 arquivo real). As colunas existem na aba (fidelidade à referência)
+  mas saem em branco, em vez de chutar/hardcodar "Presumido" (que quebraria pra Lucro Real).
+  Revisitar com o leiaute + amostras, seguindo a regra 1 da seção 12. A descrição do DARF da DCTF
+  (`Descrição DARF`) só está confirmada p/ PIS/COFINS; IRPJ/CSLL ficam em branco até haver amostra.
 
 ## 9. Aba "Checklist" (presente em TODO Excel do módulo)
 

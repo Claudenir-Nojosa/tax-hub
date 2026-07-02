@@ -17,9 +17,14 @@
 
 export interface DebitoDctf {
   codigo: string // "8109"
+  codigoVariacao: string // "8109-02" (código de receita + variação, como no DARF)
   grupo: string // nome do grupo/tributo, ex.: "PIS/PASEP - CONTRIB. ..."
+  tributo: string | null // "PIS"/"COFINS"/"IRPJ"/"CSLL"
+  descricaoDarf: string // descrição do código do DARF (ex.: "PIS - FATURAMENTO")
   periodicidade: "Mensal" | "Trimestral"
   vencimento: string // "DD/MM/AAAA"
+  valorDebito: number // valor do débito apurado (= principal declarado)
+  valorMulta: number // multa (0 quando não há)
 }
 
 export interface DadosDctf {
@@ -30,15 +35,37 @@ export interface DadosDctf {
   debitos: DebitoDctf[]
 }
 
-// código de receita (4 dígitos) -> nome do grupo, exatamente como a referência do usuário mostra
-const CODIGO_GRUPO: Record<string, { grupo: string; periodicidade: "Mensal" | "Trimestral" }> = {
+// código de receita (4 dígitos) -> grupo/tributo/descrição DARF, como a referência do usuário
+// mostra. `descricaoDarf` só está confirmada p/ PIS/COFINS (as duas que aparecem no arquivo de
+// validação); IRPJ/CSLL ficam com a descrição do DARF em branco até haver amostra confirmando.
+const CODIGO_GRUPO: Record<
+  string,
+  { grupo: string; tributo: string; descricaoDarf: string; periodicidade: "Mensal" | "Trimestral" }
+> = {
   "8109": {
     grupo: "PIS/PASEP - CONTRIB. P/PROGRAMA DE INTEGRAÇÃO SOCIAL/FORMAÇÃO PATRIM. SERV. PÚBLICO",
+    tributo: "PIS",
+    descricaoDarf: "PIS - FATURAMENTO",
     periodicidade: "Mensal",
   },
-  "2172": { grupo: "COFINS - CONTRIBUIÇÃO P/ FINANCIAMENTO DA SEGURIDADE SOCIAL", periodicidade: "Mensal" },
-  "2089": { grupo: "IRPJ - IMPOSTO SOBRE A RENDA DAS PESSOAS JURÍDICAS", periodicidade: "Trimestral" },
-  "2372": { grupo: "CSLL - CONTRIBUIÇÃO SOCIAL S/ LUCRO LIQUIDO", periodicidade: "Trimestral" },
+  "2172": {
+    grupo: "COFINS - CONTRIBUIÇÃO P/ FINANCIAMENTO DA SEGURIDADE SOCIAL",
+    tributo: "COFINS",
+    descricaoDarf: "COFINS - CONTRIB.FINANCIAMENTO SEGURIDADE SOCIAL",
+    periodicidade: "Mensal",
+  },
+  "2089": {
+    grupo: "IRPJ - IMPOSTO SOBRE A RENDA DAS PESSOAS JURÍDICAS",
+    tributo: "IRPJ",
+    descricaoDarf: "",
+    periodicidade: "Trimestral",
+  },
+  "2372": {
+    grupo: "CSLL - CONTRIBUIÇÃO SOCIAL S/ LUCRO LIQUIDO",
+    tributo: "CSLL",
+    descricaoDarf: "",
+    periodicidade: "Trimestral",
+  },
 }
 
 export function detectarDctf(conteudo: string): boolean {
@@ -62,27 +89,32 @@ function parseUmDctf(conteudo: string, arquivoNome: string): DadosDctf | null {
   }
 
   if (cnpj) {
-    // R11 — detalhe: o CNPJ aparece 2x na linha (matriz no início + estabelecimento no meio,
-    // logo antes de <código(4)><vencimento DDMMAAAA(8)>). Pegamos a ÚLTIMA ocorrência do padrão,
-    // que é a do estabelecimento — a primeira casaria com a competência (ex.: "2021"+"01...").
-    const anchor = new RegExp(`${cnpj}(\\d{4})(\\d{8})`, "g")
+    // R11 — detalhe. Âncora do estabelecimento: <CNPJ estab.><código(4)><vencimento(8)> +
+    // espaços + <principal(14)><multa(14)>, valores em centavos. Só essa ocorrência tem espaços
+    // seguidos de valor (a do CNPJ da matriz, no início, é seguida da competência, não casa). A
+    // variação do código ("-02") vem do campo <código(4)><variação(2)>M do mesmo registro.
     for (const linha of linhas) {
       if (!linha.startsWith("R11")) continue
-      let ultimo: RegExpExecArray | null = null
-      let m2: RegExpExecArray | null
-      anchor.lastIndex = 0
-      while ((m2 = anchor.exec(linha))) ultimo = m2
-      if (!ultimo) continue
-      const codigo = ultimo[1]
-      const venc = ultimo[2]
+      const m = linha.match(new RegExp(`${cnpj}(\\d{4})(\\d{8})\\s+(\\d{14})(\\d{14})`))
+      if (!m) continue
+      const codigo = m[1]
       if (vistos.has(codigo)) continue // 1 R11 por código já basta (evita duplicar por vinculações)
       vistos.add(codigo)
+      const venc = m[2]
+      const valorDebito = parseInt(m[3], 10) / 100
+      const valorMulta = parseInt(m[4], 10) / 100
+      const variacao = linha.match(/(\d{4})(\d{2})M/)?.[2] ?? ""
       const info = CODIGO_GRUPO[codigo]
       debitos.push({
         codigo,
+        codigoVariacao: variacao ? `${codigo}-${variacao}` : codigo,
         grupo: info?.grupo ?? `Código ${codigo}`,
+        tributo: info?.tributo ?? null,
+        descricaoDarf: info?.descricaoDarf ?? "",
         periodicidade: info?.periodicidade ?? "Mensal",
         vencimento: `${venc.slice(0, 2)}/${venc.slice(2, 4)}/${venc.slice(4, 8)}`,
+        valorDebito,
+        valorMulta,
       })
     }
   }

@@ -1300,7 +1300,8 @@ export default function RecuperacaoCreditoPage() {
                       <TableRow>
                         <TableHead>Período Apuração</TableHead>
                         <TableHead>Nº Recibo</TableHead>
-                        <TableHead className="text-right">Débitos Declarados</TableHead>
+                        <TableHead className="text-right">Débitos</TableHead>
+                        <TableHead className="text-right">Total Apurado</TableHead>
                         <TableHead className="w-10" />
                       </TableRow>
                     </TableHeader>
@@ -1310,6 +1311,9 @@ export default function RecuperacaoCreditoPage() {
                           <TableCell className="font-medium">{d.dados.periodoApuracao}</TableCell>
                           <TableCell>{d.dados.numeroRecibo}</TableCell>
                           <TableCell className="text-right">{d.dados.debitos.length}</TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(d.dados.debitos.reduce((s, db) => s + db.debitoApurado, 0))}
+                          </TableCell>
                           <TableCell>
                             <div className="flex justify-end">
                               <button onClick={() => handleExcluirDctfWeb(d.id)} title="Remover" className="text-gray-400 hover:text-red-500">
@@ -1341,6 +1345,7 @@ export default function RecuperacaoCreditoPage() {
                       <TableRow>
                         <TableHead>Competência</TableHead>
                         <TableHead>Tributos Declarados</TableHead>
+                        <TableHead className="text-right">Total Débito</TableHead>
                         <TableHead className="w-10" />
                       </TableRow>
                     </TableHeader>
@@ -1348,7 +1353,10 @@ export default function RecuperacaoCreditoPage() {
                       {dctfOrdenadas.map((d) => (
                         <TableRow key={d.id}>
                           <TableCell className="font-medium">{formatarCompetencia(d.competencia)}</TableCell>
-                          <TableCell>{d.dados.debitos.map((db) => db.grupo.split(" -")[0]).join(", ")}</TableCell>
+                          <TableCell>{d.dados.debitos.map((db) => db.tributo ?? db.grupo.split(" -")[0]).join(", ")}</TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(d.dados.debitos.reduce((s, db) => s + db.valorDebito, 0))}
+                          </TableCell>
                           <TableCell>
                             <div className="flex justify-end">
                               <button onClick={() => handleExcluirDctf(d.id)} title="Remover" className="text-gray-400 hover:text-red-500">
