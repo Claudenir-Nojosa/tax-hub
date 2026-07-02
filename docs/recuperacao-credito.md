@@ -114,11 +114,27 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   mesmo nome de registro, `NOME`/`CNPJ`/`UF` estão em `campos[8]/[9]/[10]` no EFD Contribuições
   (contra outros índices no EFD ICMS/IPI) — os dois parsers têm sua própria leitura do `0000`,
   não compartilhar essa lógica entre eles sem revalidar campo a campo.
-- **Registros usados**: `0000` (cabeçalho), `C175` (receita com incidência de PIS/COFINS,
-  **agregada separadamente para PIS e para COFINS** por combinação única de CFOP + CST + Alíquota
-  — cada contribuição tem seu próprio CST e sua própria alíquota na mesma linha `C175`), `M210`/
-  `M200` (apuração do PIS: receita bruta, base de cálculo, valor apurado, valor a recolher) e o
-  espelho `M610`/`M600` para a COFINS.
+- **Registros usados**: `0000` (cabeçalho), `C175` (mercadorias — receita com incidência de
+  PIS/COFINS, **agregada separadamente para PIS e para COFINS** por combinação única de CFOP +
+  CST + Alíquota — cada contribuição tem seu próprio CST e sua própria alíquota na mesma linha
+  `C175`), `A170` (serviços/NFS-e — mesmo tratamento, mas **sem CFOP**: agrega com CFOP vazio,
+  que o Excel rotula como "A100/A170 - Nota Fiscal de Serviço (sem CFOP)"), `M210`/`M200`
+  (apuração do PIS) e o espelho `M610`/`M600` para a COFINS.
+- **Regimes cumulativo E não cumulativo, ao mesmo tempo**: o `M200`/`M600` traz os dois regimes
+  no mesmo registro (campos 2-8 = não cumulativo; campos 9-12 = cumulativo; campo 13 = total a
+  recolher). O parser lê os dois e o Excel mostra o débito total + o detalhe por regime
+  ("DÉBITO POR REGIME DE APURAÇÃO"), além das deduções (`( - ) Créditos Descontados` — campos
+  3+4 — e `( - ) Outras Deduções e Retenções` — campos 6+7+10+11, ex.: retido na fonte/F600).
+  Validado contra arquivos reais dos dois regimes: não cumulativo (Grasel/Azzo, Lucro Real com
+  créditos descontados) e cumulativo (Core/Medfisio, Lucro Presumido de serviços com retenções).
+  Registros gravados no banco antes desses campos existirem não os têm no JSON — o Excel usa
+  fallback (`valorContribuicaoApurada` antigo vira o valor não cumulativo, cumulativo vira 0).
+- **Gap conhecido — detalhe de receitas via `C170` não implementado**: alguns EFDs de mercadoria
+  (ex.: Azzo Distribuidora) detalham receitas por item no `C170` (filho do `C100`), sem `C175` —
+  nesses arquivos a apuração (M) sai completa e correta, mas as seções "por CFOP/CST/alíquota"
+  ficam vazias. Implementar exige decidir como separar saídas de entradas (o `C170` mistura
+  compras com crédito e vendas, via CST) e validar contra um exemplo de referência do usuário —
+  não fazer por suposição (seção 10, regra 1).
 - **CST-PIS/COFINS**: tabela própria (`CST_PIS_COFINS_LABELS` em `efd-contribuicoes-parser.ts`,
   códigos `01` a `99`), **não** é a mesma tabela de CST/CSOSN do ICMS — não reaproveitar
   `labelCst()` do módulo de ICMS/IPI aqui, usar `labelCstPisCofins()`.

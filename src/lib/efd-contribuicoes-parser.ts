@@ -1,8 +1,9 @@
 // Parser de EFD Contribuições (PIS/COFINS), formato texto pipe-delimited — roda no servidor,
 // mesmo padrão do parser de EFD ICMS/IPI (src/lib/efd-icms-parser.ts). Cada arquivo = 1
-// competência. Extrai o cabeçalho (0000), os documentos C100/C175 (receita com incidência,
-// agregada por CFOP+CST+alíquota, separadamente para PIS e para COFINS) e a apuração de cada
-// contribuição (M200/M210 para PIS, M600/M610 para COFINS).
+// competência. Extrai o cabeçalho (0000), os documentos C100/C175 (mercadorias, agregados por
+// CFOP+CST+alíquota) e A100/A170 (serviços, sem CFOP — agregados por CST+alíquota),
+// separadamente para PIS e para COFINS, e a apuração de cada contribuição (M200/M210 para PIS,
+// M600/M610 para COFINS), cobrindo os regimes NÃO cumulativo e CUMULATIVO ao mesmo tempo.
 //
 // GAP CONHECIDO: os créditos (registros M100/M105 para PIS, M500/M505 para COFINS, com os ~18
 // códigos de natureza de crédito) NÃO estão implementados nesta versão — o arquivo de amostra
@@ -24,8 +25,14 @@ export interface RegistroAgregadoPisCofins extends TotaisOperacaoPisCofins {
 export interface ApuracaoContribuicao {
   receitaBruta: number
   baseCalculoApurada: number
-  valorContribuicaoApurada: number // débito, antes de deduzir créditos
+  valorContribuicaoApurada: number // débito total (não cumulativo + cumulativo), antes de deduzir créditos/retenções
   valorARecolher: number
+  // Detalhe por regime + deduções (opcionais: registros gravados antes desses campos existirem
+  // não os têm no JSON persistido — o Excel trata undefined como "usar fallback/zero").
+  valorContribuicaoNaoCumulativa?: number // VL_TOT_CONT_NC_PER
+  valorContribuicaoCumulativa?: number // VL_TOT_CONT_CUM_PER (regime cumulativo — ex.: Lucro Presumido)
+  creditosDescontados?: number // VL_TOT_CRED_DESC + VL_TOT_CRED_DESC_ANT (só regime não cumulativo)
+  retencoesOutrasDeducoes?: number // VL_RET_NC + VL_OUT_DED_NC + VL_RET_CUM + VL_OUT_DED_CUM (ex.: F600 retido na fonte)
 }
 
 export interface DadosEfdContribuicoes {
@@ -91,6 +98,19 @@ function novoRegistro(cfop: string, cst: string, aliquota: number): RegistroAgre
   return { cfop, cst, aliquota, valorOperacional: 0, baseCalculo: 0, valor: 0 }
 }
 
+// Lê a consolidação M200 (PIS) / M600 (COFINS) — mesmo layout de campos para as duas.
+function lerApuracaoM(apuracao: ApuracaoContribuicao, campos: string[]) {
+  const naoCumulativa = parseNumeroEfd(campos[2]) // VL_TOT_CONT_NC_PER
+  const cumulativa = parseNumeroEfd(campos[9]) // VL_TOT_CONT_CUM_PER
+  apuracao.valorContribuicaoNaoCumulativa = naoCumulativa
+  apuracao.valorContribuicaoCumulativa = cumulativa
+  apuracao.valorContribuicaoApurada = naoCumulativa + cumulativa
+  apuracao.creditosDescontados = parseNumeroEfd(campos[3]) + parseNumeroEfd(campos[4]) // VL_TOT_CRED_DESC + _ANT
+  apuracao.retencoesOutrasDeducoes =
+    parseNumeroEfd(campos[6]) + parseNumeroEfd(campos[7]) + parseNumeroEfd(campos[10]) + parseNumeroEfd(campos[11]) // VL_RET_NC + VL_OUT_DED_NC + VL_RET_CUM + VL_OUT_DED_CUM
+  apuracao.valorARecolher = parseNumeroEfd(campos[13]) // VL_TOT_CONT_REC
+}
+
 function parseUmaEfd(conteudo: string, arquivoNome: string): DadosEfdContribuicoes | null {
   const linhas = conteudo.split(/\r?\n/)
 
@@ -139,6 +159,31 @@ function parseUmaEfd(conteudo: string, arquivoNome: string): DadosEfdContribuico
       regCofins.baseCalculo += parseNumeroEfd(campos[12])
       regCofins.valor += parseNumeroEfd(campos[16])
       cofinsMap.set(chaveCofins, regCofins)
+    } else if (registro === "A170") {
+      // Bloco A — serviços (NFS-e), comum no regime cumulativo (ex.: Lucro Presumido de clínicas).
+      // |A170|NUM_ITEM|COD_ITEM|DESCR_COMPL|VL_ITEM|VL_DESC|NAT_BC_CRED|IND_ORIG_CRED|CST_PIS|
+      //  VL_BC_PIS|ALIQ_PIS|VL_PIS|CST_COFINS|VL_BC_COFINS|ALIQ_COFINS|VL_COFINS|COD_CTA|COD_CCUS|
+      // Serviço não tem CFOP — agrega com cfop vazio ("" vira o rótulo "A100/A170 - Nota Fiscal
+      // de Serviço" no Excel). Índices validados contra arquivo real (VL_BC × ALIQ = VL exato).
+      const cfop = ""
+
+      const cstPis = (campos[9] ?? "").trim()
+      const aliqPis = parseNumeroEfd(campos[11])
+      const chavePis = `${cfop}|${cstPis}|${aliqPis}`
+      const regPis = pisMap.get(chavePis) ?? novoRegistro(cfop, cstPis, aliqPis)
+      regPis.valorOperacional += parseNumeroEfd(campos[5])
+      regPis.baseCalculo += parseNumeroEfd(campos[10])
+      regPis.valor += parseNumeroEfd(campos[12])
+      pisMap.set(chavePis, regPis)
+
+      const cstCofinsA = (campos[13] ?? "").trim()
+      const aliqCofinsA = parseNumeroEfd(campos[15])
+      const chaveCofinsA = `${cfop}|${cstCofinsA}|${aliqCofinsA}`
+      const regCofinsA = cofinsMap.get(chaveCofinsA) ?? novoRegistro(cfop, cstCofinsA, aliqCofinsA)
+      regCofinsA.valorOperacional += parseNumeroEfd(campos[5])
+      regCofinsA.baseCalculo += parseNumeroEfd(campos[14])
+      regCofinsA.valor += parseNumeroEfd(campos[16])
+      cofinsMap.set(chaveCofinsA, regCofinsA)
     } else if (registro === "M210") {
       // |M210|COD_CONT|VL_REC_BRT|VL_BC_CONT|VL_AJUS_ACRES_BC|VL_AJUS_REDUC_BC|VL_BC_CONT_AJUS|
       //  ALIQ_PIS|QUANT_BC_PIS|ALIQ_PIS_QUANT|VL_CONT_APUR|...
@@ -147,14 +192,17 @@ function parseUmaEfd(conteudo: string, arquivoNome: string): DadosEfdContribuico
     } else if (registro === "M200") {
       // |M200|VL_TOT_CONT_NC_PER|VL_TOT_CRED_DESC|VL_TOT_CRED_DESC_ANT|VL_TOT_CONT_NC_DEV|VL_RET_NC|
       //  VL_OUT_DED_NC|VL_CONT_NC_REC|VL_TOT_CONT_CUM_PER|VL_RET_CUM|VL_OUT_DED_CUM|VL_CONT_CUM_REC|VL_TOT_CONT_REC|
-      apuracaoPis.valorContribuicaoApurada = parseNumeroEfd(campos[2])
-      apuracaoPis.valorARecolher = parseNumeroEfd(campos[13])
+      // Regimes NÃO cumulativo (campos 2-8) e cumulativo (campos 9-12) coexistem no mesmo
+      // registro — uma empresa pode ter os dois ao mesmo tempo. Validado contra arquivos reais
+      // dos dois regimes: NC (Grasel) e cumulativo (Core/Medfisio, onde campos[2]=0 e
+      // campos[9]=contribuição; a recolher = contribuição - retenções, campos[13]).
+      lerApuracaoM(apuracaoPis, campos)
     } else if (registro === "M610") {
       apuracaoCofins.receitaBruta += parseNumeroEfd(campos[3])
       apuracaoCofins.baseCalculoApurada += parseNumeroEfd(campos[7])
     } else if (registro === "M600") {
-      apuracaoCofins.valorContribuicaoApurada = parseNumeroEfd(campos[2])
-      apuracaoCofins.valorARecolher = parseNumeroEfd(campos[13])
+      // mesmo layout do M200, para a COFINS
+      lerApuracaoM(apuracaoCofins, campos)
     }
   }
 

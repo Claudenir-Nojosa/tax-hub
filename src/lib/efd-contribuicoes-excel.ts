@@ -93,6 +93,12 @@ interface LinhaSpec {
   align?: "left" | "center" | "right"
 }
 
+// Registros do bloco A (serviços) não têm CFOP — o parser agrega com cfop vazio, e aqui isso
+// vira um rótulo próprio em vez de um "CFOP " em branco.
+function labelCfopOuServico(cfop: string): string {
+  return cfop ? labelCfop(cfop) : "A100/A170 - Nota Fiscal de Serviço (sem CFOP)"
+}
+
 function somaRegistros(
   registros: RegistroAgregadoPisCofins[],
   filtro: (r: RegistroAgregadoPisCofins) => boolean,
@@ -137,11 +143,20 @@ function montarAbaContribuicao(
     sc(headerRow.getCell(i + 3), { value: formatarCompetencia(comp), bold: true, align: "center" })
   })
 
+  // Detalhe por regime: registros gravados antes desses campos existirem só têm
+  // valorContribuicaoApurada (que na época era lido só do campo não cumulativo) — por isso o
+  // fallback do NC é o valor antigo, e o cumulativo cai pra 0.
+  const naoCumulativa = (d: DadosEfdContribuicoes | undefined) => {
+    const a = extraiApuracao(d)
+    return a?.valorContribuicaoNaoCumulativa ?? a?.valorContribuicaoApurada ?? 0
+  }
+  const cumulativa = (d: DadosEfdContribuicoes | undefined) => extraiApuracao(d)?.valorContribuicaoCumulativa ?? 0
+
   const linhas: LinhaSpec[] = [
     { label: "                     Valor Total das Receitas", valores: (d) => extraiApuracao(d)?.receitaBruta ?? 0 },
     { label: "" },
     { label: "     22. VALOR OPERACIONAL POR CFOP", bold: true },
-    ...linhasPorDimensao(cfops, (v) => labelCfop(v as string), extraiRegistros, (r, v) => r.cfop === v, "valorOperacional"),
+    ...linhasPorDimensao(cfops, (v) => labelCfopOuServico(v as string), extraiRegistros, (r, v) => r.cfop === v, "valorOperacional"),
     { label: "" },
     { label: "" },
     { label: "     VALOR OPERACIONAL POR CST", bold: true },
@@ -150,18 +165,22 @@ function montarAbaContribuicao(
     { label: "     Valor da Base da Contribuição Apurada", valores: (d) => extraiApuracao(d)?.baseCalculoApurada ?? 0 },
     { label: "" },
     { label: "     BASE DE CÁLCULO POR CFOP", bold: true },
-    ...linhasPorDimensao(cfops, (v) => labelCfop(v as string), extraiRegistros, (r, v) => r.cfop === v, "baseCalculo"),
+    ...linhasPorDimensao(cfops, (v) => labelCfopOuServico(v as string), extraiRegistros, (r, v) => r.cfop === v, "baseCalculo"),
     { label: "" },
     { label: "" },
     { label: "     BASE DE CÁLCULO POR CST", bold: true },
     ...linhasPorDimensao(csts, (v) => labelCstPisCofins(v as string), extraiRegistros, (r, v) => r.cst === v, "baseCalculo"),
     { label: "" },
     {
-      label: `     ( = ) Débito da Contribuição - Não Cumulativo   ➤  Débito`,
+      label: `     ( = ) Débito da Contribuição   ➤  Débito`,
       bold: true,
       destaque: "cinza",
-      valores: (d) => extraiApuracao(d)?.valorContribuicaoApurada ?? 0,
+      valores: (d) => naoCumulativa(d) + cumulativa(d),
     },
+    { label: "" },
+    { label: "     DÉBITO POR REGIME DE APURAÇÃO", bold: true },
+    { label: "          Débito da Contribuição - Não Cumulativo", valores: naoCumulativa },
+    { label: "          Débito da Contribuição - Cumulativo", valores: cumulativa },
     { label: "" },
     { label: "     VALOR DA CONTRIBUIÇÃO POR ALÍQUOTA", bold: true },
     ...linhasPorDimensao(
@@ -174,7 +193,16 @@ function montarAbaContribuicao(
     { label: "" },
     { label: "" },
     { label: "     TOTAL DOS DÉBITOS POR CFOP", bold: true },
-    ...linhasPorDimensao(cfops, (v) => labelCfop(v as string), extraiRegistros, (r, v) => r.cfop === v, "valor"),
+    ...linhasPorDimensao(cfops, (v) => labelCfopOuServico(v as string), extraiRegistros, (r, v) => r.cfop === v, "valor"),
+    { label: "" },
+    {
+      label: "     ( - ) Créditos Descontados   ➤  Crédito",
+      valores: (d) => extraiApuracao(d)?.creditosDescontados ?? 0,
+    },
+    {
+      label: "     ( - ) Outras Deduções e Retenções (ex.: retido na fonte - F600)   ➤  Crédito",
+      valores: (d) => extraiApuracao(d)?.retencoesOutrasDeducoes ?? 0,
+    },
     { label: "" },
     {
       label: `                $  Valor da Contribuição do ${nomeTributo} a Recolher`,
