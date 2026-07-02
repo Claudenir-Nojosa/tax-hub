@@ -204,6 +204,8 @@ model ProjetoRecuperacaoCredito {
   declaracoesEfdContrib     DeclaracaoEfdContribuicoes[]
   comprovantesPagamento     DeclaracaoComprovantePagamento[]
   declaracoesEcf            DeclaracaoEcf[]
+  declaracoesDctfWeb        DeclaracaoDctfWeb[]
+  declaracoesDctf           DeclaracaoDctf[]
 }
 
 model DeclaracaoPgdas {
@@ -261,6 +263,44 @@ model DeclaracaoComprovantePagamento {
 
   @@unique([projetoId, numeroDocumento])
   @@index([projetoId])
+}
+
+// DCTFWeb — declaração completa (PDF). 1 arquivo = 1 período de apuração (mês); os débitos
+// declarados (códigos de receita) ficam no JSON. competência = "YYYY-MM".
+model DeclaracaoDctfWeb {
+  id             String                    @id @default(cuid())
+  projetoId      String
+  projeto        ProjetoRecuperacaoCredito @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  competencia    String   // "YYYY-MM" (período de apuração da declaração)
+  cnpj           String
+  arquivoNome    String
+  dados          Json     // payload tipado — ver DadosDctfWeb em src/lib/dctfweb-parser.ts
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([projetoId, competencia])
+  @@index([projetoId, competencia])
+}
+
+// DCTF (arquivo .dec do PGD DCTF Mensal). 1 arquivo = 1 competência (mês); os débitos declarados
+// (grupos/tributos) ficam no JSON. competência = "YYYY-MM".
+model DeclaracaoDctf {
+  id             String                    @id @default(cuid())
+  projetoId      String
+  projeto        ProjetoRecuperacaoCredito @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  competencia    String   // "YYYY-MM"
+  cnpj           String
+  arquivoNome    String
+  dados          Json     // payload tipado — ver DadosDctf em src/lib/dctf-parser.ts
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([projetoId, competencia])
+  @@index([projetoId, competencia])
 }
 
 // ECF (Escrituração Contábil Fiscal) — IRPJ/CSLL. Um arquivo = um ano-calendário inteiro (com

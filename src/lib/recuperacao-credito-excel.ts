@@ -4,6 +4,7 @@ import { montarAbasPisCofins, type DeclaracaoEfdContribuicoesRegistro } from "./
 import { montarAbaComprovantePagamento } from "./comprovante-pagamento-excel"
 import type { DadosComprovantePagamento } from "./comprovante-pagamento-parser"
 import { montarAbasEcf, type DeclaracaoEcfRegistro } from "./ecf-excel"
+import { montarAbasDctf, type DeclaracaoDctfWebRegistro, type DeclaracaoDctfRegistro } from "./dctf-excel"
 import { montarAbaChecklist } from "./checklist-excel"
 
 function sanitizarNomeArquivo(nome: string): string {
@@ -23,14 +24,18 @@ export async function exportarDeclaracaoFiscalExcel(
     pisCofins?: DeclaracaoEfdContribuicoesRegistro[]
     comprovantes?: DadosComprovantePagamento[]
     ecf?: DeclaracaoEcfRegistro[]
+    dctfWeb?: DeclaracaoDctfWebRegistro[]
+    dctf?: DeclaracaoDctfRegistro[]
   }
 ): Promise<void> {
   const temIcms = (dados.icms?.length ?? 0) > 0
   const temPisCofins = (dados.pisCofins?.length ?? 0) > 0
   const temComprovantes = (dados.comprovantes?.length ?? 0) > 0
   const temEcf = (dados.ecf?.length ?? 0) > 0
+  const temDctfWeb = (dados.dctfWeb?.length ?? 0) > 0
+  const temDctf = (dados.dctf?.length ?? 0) > 0
 
-  if (!temIcms && !temPisCofins && !temComprovantes && !temEcf) return
+  if (!temIcms && !temPisCofins && !temComprovantes && !temEcf && !temDctfWeb && !temDctf) return
 
   const wb = new ExcelJS.Workbook()
   wb.creator = "Tax Hub — Recuperação de Crédito"
@@ -39,6 +44,7 @@ export async function exportarDeclaracaoFiscalExcel(
   if (temIcms) await montarAbaIcms(wb, dados.icms!, nomeCliente)
   if (temPisCofins) await montarAbasPisCofins(wb, dados.pisCofins!, nomeCliente)
   if (temEcf) await montarAbasEcf(wb, dados.ecf!, nomeCliente)
+  if (temDctfWeb || temDctf) await montarAbasDctf(wb, { dctfWeb: dados.dctfWeb, dctf: dados.dctf })
   if (temComprovantes) await montarAbaComprovantePagamento(wb, dados.comprovantes!, nomeCliente)
   await montarAbaChecklist(wb, nomeCliente)
 
@@ -46,6 +52,7 @@ export async function exportarDeclaracaoFiscalExcel(
   if (temIcms) contextos.push("ICMS e IPI")
   if (temPisCofins) contextos.push("PIS e COFINS")
   if (temEcf) contextos.push("IRPJ e CSLL")
+  if (temDctfWeb || temDctf) contextos.push("DCTF e DCTFWeb")
   if (temComprovantes) contextos.push("Comprovante de Pagamentos")
   const contexto = contextos.join(", ")
 

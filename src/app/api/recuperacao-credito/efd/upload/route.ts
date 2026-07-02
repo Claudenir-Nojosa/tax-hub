@@ -4,15 +4,16 @@ import db from "@/lib/db"
 import { processarArquivosEfd } from "@/lib/efd-icms-parser"
 import { detectarTipoEfd, processarArquivosEfdContribuicoes } from "@/lib/efd-contribuicoes-parser"
 import { processarArquivosEcf, temBlocoPresumido } from "@/lib/ecf-parser"
+import { detectarDctf, processarArquivosDctf } from "@/lib/dctf-parser"
 
 function somenteDigitos(v: string) {
   return v.replace(/\D/g, "")
 }
 
-// POST — upload de 1+ arquivos SPED em texto (.txt). Detecta automaticamente se cada arquivo é
-// um EFD ICMS/IPI, um EFD Contribuições (PIS/COFINS) ou uma ECF (IRPJ/CSLL) pelo conteúdo
-// (registros/marcadores exclusivos de cada leiaute — ver detectarTipoEfd) e grava no model
-// certo. EFDs: 1 arquivo = 1 competência (mês); ECF: 1 arquivo = 1 ano-calendário.
+// POST — upload de 1+ arquivos fiscais em texto (.txt EFD/ECF ou .dec DCTF). Detecta
+// automaticamente se cada arquivo é um EFD ICMS/IPI, EFD Contribuições (PIS/COFINS), ECF
+// (IRPJ/CSLL) ou DCTF (.dec) pelo conteúdo e grava no model certo. EFDs/DCTF: 1 arquivo = 1
+// competência (mês); ECF: 1 arquivo = 1 ano-calendário.
 // Falhas são por-arquivo: um arquivo ruim não impede os outros de serem salvos.
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -40,21 +41,51 @@ export async function POST(req: NextRequest) {
   }
   const cliente = projeto.cliente
 
-  const salvos: { competencia: string; arquivoNome: string; tipo: "ICMS_IPI" | "CONTRIBUICOES" | "ECF" }[] = []
+  const salvos: { competencia: string; arquivoNome: string; tipo: "ICMS_IPI" | "CONTRIBUICOES" | "ECF" | "DCTF" }[] = []
   const erros: { arquivo: string; motivo: string }[] = []
 
   for (const file of files) {
-    if (!file.name.toLowerCase().endsWith(".txt")) {
-      erros.push({ arquivo: file.name, motivo: "Apenas arquivos .txt (EFD/ECF) são aceitos" })
+    const nomeLower = file.name.toLowerCase()
+    if (!nomeLower.endsWith(".txt") && !nomeLower.endsWith(".dec")) {
+      erros.push({ arquivo: file.name, motivo: "Apenas arquivos .txt (EFD/ECF) ou .dec (DCTF) são aceitos" })
       continue
     }
 
     try {
       const conteudo = await file.text()
+
+      if (detectarDctf(conteudo)) {
+        const [dados] = await processarArquivosDctf([file])
+        if (!dados) {
+          erros.push({ arquivo: file.name, motivo: "Não foi possível ler os débitos da DCTF (.dec)" })
+          continue
+        }
+        if (somenteDigitos(dados.cnpj) !== somenteDigitos(cliente.cnpj)) {
+          erros.push({
+            arquivo: file.name,
+            motivo: `CNPJ da DCTF (${dados.cnpj}) não corresponde ao cliente selecionado (${cliente.cnpj})`,
+          })
+          continue
+        }
+        await db.declaracaoDctf.upsert({
+          where: { projetoId_competencia: { projetoId: projeto.id, competencia: dados.competencia } },
+          create: {
+            projetoId: projeto.id,
+            competencia: dados.competencia,
+            cnpj: dados.cnpj,
+            arquivoNome: file.name,
+            dados: dados as unknown as object,
+          },
+          update: { cnpj: dados.cnpj, arquivoNome: file.name, dados: dados as unknown as object },
+        })
+        salvos.push({ competencia: dados.competencia, arquivoNome: file.name, tipo: "DCTF" })
+        continue
+      }
+
       const tipo = detectarTipoEfd(conteudo)
 
       if (!tipo) {
-        erros.push({ arquivo: file.name, motivo: "Não foi possível identificar o tipo do arquivo (EFD ICMS/IPI, EFD Contribuições ou ECF)" })
+        erros.push({ arquivo: file.name, motivo: "Não foi possível identificar o tipo do arquivo (EFD ICMS/IPI, EFD Contribuições, ECF ou DCTF)" })
         continue
       }
 

@@ -19,6 +19,9 @@ import type { DadosEfdContribuicoes } from "@/lib/efd-contribuicoes-parser";
 import { labelTributo, type DadosComprovantePagamento } from "@/lib/comprovante-pagamento-parser";
 import { valorLinhaEcf, type DadosEcf } from "@/lib/ecf-parser";
 import type { DeclaracaoEcfRegistro } from "@/lib/ecf-excel";
+import type { DadosDctfWeb } from "@/lib/dctfweb-parser";
+import type { DadosDctf } from "@/lib/dctf-parser";
+import type { DeclaracaoDctfWebRegistro, DeclaracaoDctfRegistro } from "@/lib/dctf-excel";
 import { exportarDeclaracaoFiscalExcel } from "@/lib/recuperacao-credito-excel";
 import {
   FileSearch,
@@ -109,6 +112,18 @@ interface DeclaracaoEcfRow {
   dados: DadosEcf;
 }
 
+interface DeclaracaoDctfWebRow {
+  id: string;
+  competencia: string; // "YYYY-MM"
+  dados: DadosDctfWeb;
+}
+
+interface DeclaracaoDctfRow {
+  id: string;
+  competencia: string; // "YYYY-MM"
+  dados: DadosDctf;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatBytes(bytes: number): string {
@@ -155,7 +170,8 @@ function isPdf(nome: string) {
 }
 
 function isEfd(nome: string) {
-  return /\.txt$/i.test(nome);
+  // .txt = EFD ICMS/IPI, EFD Contribuições, ECF · .dec = DCTF Mensal — todos vão pro mesmo endpoint
+  return /\.(txt|dec)$/i.test(nome);
 }
 
 // Lê a resposta como JSON com segurança — hosts serverless (Vercel) devolvem corpo não-JSON
@@ -239,6 +255,10 @@ export default function RecuperacaoCreditoPage() {
 
   const [declaracoesEcf, setDeclaracoesEcf] = useState<DeclaracaoEcfRow[]>([]);
   const [carregandoDeclaracoesEcf, setCarregandoDeclaracoesEcf] = useState(false);
+
+  const [declaracoesDctfWeb, setDeclaracoesDctfWeb] = useState<DeclaracaoDctfWebRow[]>([]);
+  const [declaracoesDctf, setDeclaracoesDctf] = useState<DeclaracaoDctfRow[]>([]);
+  const [carregandoDctf, setCarregandoDctf] = useState(false);
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteSelecionadoId) ?? null;
   const projetoSelecionado = projetos.find((p) => p.id === projetoSelecionadoId) ?? null;
@@ -357,6 +377,31 @@ export default function RecuperacaoCreditoPage() {
     else setDeclaracoesEcf([]);
   }, [projetoSelecionadoId, carregarDeclaracoesEcf]);
 
+  // DCTFWeb (PDF) e DCTF (.dec) — carregados juntos (aparecem na mesma seção da UI)
+  const carregarDctfTudo = useCallback(async (projetoId: string) => {
+    setCarregandoDctf(true);
+    try {
+      const [web, dctf] = await Promise.all([
+        fetch(`/api/recuperacao-credito/dctfweb?projetoId=${projetoId}`).then((r) => r.json()),
+        fetch(`/api/recuperacao-credito/dctf?projetoId=${projetoId}`).then((r) => r.json()),
+      ]);
+      setDeclaracoesDctfWeb(web);
+      setDeclaracoesDctf(dctf);
+    } catch {
+      toast.error("Erro ao carregar DCTF/DCTFWeb");
+    } finally {
+      setCarregandoDctf(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (projetoSelecionadoId) carregarDctfTudo(projetoSelecionadoId);
+    else {
+      setDeclaracoesDctfWeb([]);
+      setDeclaracoesDctf([]);
+    }
+  }, [projetoSelecionadoId, carregarDctfTudo]);
+
   const handleCriarCliente = async () => {
     if (!novoCnpj.trim() || !novaRazaoSocial.trim()) {
       toast.error("Preencha CNPJ e Razão Social");
@@ -456,11 +501,11 @@ export default function RecuperacaoCreditoPage() {
   const adicionarArquivos = useCallback((fileList: FileList | null) => {
     if (!fileList) return;
     const aceitos = Array.from(fileList).filter((f) =>
-      /\.(xlsx|xls|csv|pdf|txt)$/i.test(f.name)
+      /\.(xlsx|xls|csv|pdf|txt|dec)$/i.test(f.name)
     );
     const invalidos = fileList.length - aceitos.length;
     if (invalidos > 0)
-      toast.warning(`${invalidos} arquivo(s) ignorado(s) — apenas .xlsx, .xls, .csv, .pdf e .txt são aceitos.`);
+      toast.warning(`${invalidos} arquivo(s) ignorado(s) — apenas .xlsx, .xls, .csv, .pdf, .txt e .dec são aceitos.`);
 
     const novos: ArquivoCarregado[] = aceitos.map((f) => ({
       id: Math.random().toString(36).slice(2),
@@ -513,15 +558,21 @@ export default function RecuperacaoCreditoPage() {
 
     const salvosPgdas = salvos.filter((s) => s.tipo === "PGDAS").length;
     const salvosComprovante = salvos.filter((s) => s.tipo === "COMPROVANTE");
+    const salvosDctfWeb = salvos.filter((s) => s.tipo === "DCTFWEB").length;
     if (salvosPgdas > 0) toast.success(`${salvosPgdas} documento(s) do Simples Nacional importado(s)!`);
     if (salvosComprovante.length > 0) {
       const totalDarfs = salvosComprovante.reduce((s, item) => s + (parseInt(item.detalhe, 10) || 0), 0);
       toast.success(`${totalDarfs} DARF(s) importado(s) do Comprovante de Arrecadação!`);
     }
+    if (salvosDctfWeb > 0) toast.success(`${salvosDctfWeb} DCTFWeb importada(s)!`);
     for (const erro of erros) {
       toast.error(`${erro.arquivo}: ${erro.motivo}`);
     }
-    await Promise.all([carregarDeclaracoes(projetoSelecionadoId), carregarDeclaracoesComprovante(projetoSelecionadoId)]);
+    await Promise.all([
+      carregarDeclaracoes(projetoSelecionadoId),
+      carregarDeclaracoesComprovante(projetoSelecionadoId),
+      carregarDctfTudo(projetoSelecionadoId),
+    ]);
   };
 
   // Um único endpoint recebe qualquer EFD (.txt) e detecta sozinho se é ICMS/IPI ou
@@ -554,9 +605,11 @@ export default function RecuperacaoCreditoPage() {
     const salvosIcms = salvos.filter((s) => s.tipo === "ICMS_IPI").length;
     const salvosContrib = salvos.filter((s) => s.tipo === "CONTRIBUICOES").length;
     const salvosEcf = salvos.filter((s) => s.tipo === "ECF").length;
+    const salvosDctf = salvos.filter((s) => s.tipo === "DCTF").length;
     if (salvosIcms > 0) toast.success(`${salvosIcms} EFD(s) de ICMS/IPI importado(s)!`);
     if (salvosContrib > 0) toast.success(`${salvosContrib} EFD(s) de Contribuições (PIS/COFINS) importado(s)!`);
     if (salvosEcf > 0) toast.success(`${salvosEcf} ECF(s) de IRPJ/CSLL importada(s)!`);
+    if (salvosDctf > 0) toast.success(`${salvosDctf} DCTF importada(s)!`);
     for (const erro of erros) {
       toast.error(`${erro.arquivo}: ${erro.motivo}`);
     }
@@ -564,6 +617,7 @@ export default function RecuperacaoCreditoPage() {
       carregarDeclaracoesEfd(projetoSelecionadoId),
       carregarDeclaracoesEfdContrib(projetoSelecionadoId),
       carregarDeclaracoesEcf(projetoSelecionadoId),
+      carregarDctfTudo(projetoSelecionadoId),
     ]);
   };
 
@@ -666,6 +720,28 @@ export default function RecuperacaoCreditoPage() {
     }
   };
 
+  const handleExcluirDctfWeb = async (id: string) => {
+    if (!projetoSelecionadoId) return;
+    try {
+      await fetch(`/api/recuperacao-credito/dctfweb?id=${id}`, { method: "DELETE" });
+      toast.success("Removido");
+      await carregarDctfTudo(projetoSelecionadoId);
+    } catch {
+      toast.error("Erro ao remover");
+    }
+  };
+
+  const handleExcluirDctf = async (id: string) => {
+    if (!projetoSelecionadoId) return;
+    try {
+      await fetch(`/api/recuperacao-credito/dctf?id=${id}`, { method: "DELETE" });
+      toast.success("Removido");
+      await carregarDctfTudo(projetoSelecionadoId);
+    } catch {
+      toast.error("Erro ao remover");
+    }
+  };
+
   // A UI mostra os comprovantes consolidados por ano (sem linha por DARF), então a exclusão
   // também é em bloco: remove todos os DARFs importados do projeto de uma vez.
   const handleExcluirComprovantes = async () => {
@@ -691,7 +767,9 @@ export default function RecuperacaoCreditoPage() {
       declaracoesEfd.length === 0 &&
       declaracoesEfdContrib.length === 0 &&
       declaracoesComprovante.length === 0 &&
-      declaracoesEcf.length === 0
+      declaracoesEcf.length === 0 &&
+      declaracoesDctfWeb.length === 0 &&
+      declaracoesDctf.length === 0
     )
       return;
 
@@ -702,7 +780,9 @@ export default function RecuperacaoCreditoPage() {
     }));
     const comprovantes: DadosComprovantePagamento[] = declaracoesComprovante.map((d) => d.dados);
     const ecf: DeclaracaoEcfRegistro[] = declaracoesEcf.map((d) => ({ competencia: d.competencia, dados: d.dados }));
-    await exportarDeclaracaoFiscalExcel(clienteSelecionado.razaoSocial, { icms, pisCofins, comprovantes, ecf });
+    const dctfWeb: DeclaracaoDctfWebRegistro[] = declaracoesDctfWeb.map((d) => ({ competencia: d.competencia, dados: d.dados }));
+    const dctf: DeclaracaoDctfRegistro[] = declaracoesDctf.map((d) => ({ competencia: d.competencia, dados: d.dados }));
+    await exportarDeclaracaoFiscalExcel(clienteSelecionado.razaoSocial, { icms, pisCofins, comprovantes, ecf, dctfWeb, dctf });
   };
 
   const mesesAgrupados = Array.from(new Set(declaracoesPgdas.map((d) => d.competencia)))
@@ -728,6 +808,9 @@ export default function RecuperacaoCreditoPage() {
       irpjAPagar: d.dados.periodos.reduce((s, p) => s + valorLinhaEcf(p.p300, "15"), 0),
       csllAPagar: d.dados.periodos.reduce((s, p) => s + valorLinhaEcf(p.p500, "13"), 0),
     }));
+
+  const dctfWebOrdenadas = [...declaracoesDctfWeb].sort((a, b) => a.competencia.localeCompare(b.competencia));
+  const dctfOrdenadas = [...declaracoesDctf].sort((a, b) => a.competencia.localeCompare(b.competencia));
   // Consolidação por ano (do Período de Apuração) dos valores pagos de PIS/COFINS/IRPJ/CSLL —
   // é o que a UI mostra em vez de listar cada DARF (o detalhamento por DARF continua no Excel).
   // Códigos de receita fora desses 4 tributos (INSS, multas, TJLP etc.) ficam de fora da tabela.
@@ -972,7 +1055,7 @@ export default function RecuperacaoCreditoPage() {
               ref={inputRef}
               type="file"
               multiple
-              accept=".xlsx,.xls,.csv,.pdf,.txt"
+              accept=".xlsx,.xls,.csv,.pdf,.txt,.dec"
               className="hidden"
               onChange={(e) => adicionarArquivos(e.target.files)}
             />
@@ -1202,6 +1285,86 @@ export default function RecuperacaoCreditoPage() {
             </div>
           )}
 
+          {/* DCTFWeb (PDF) importadas — lista de débitos declarados fica no Excel */}
+          {projetoSelecionado && (carregandoDctf || dctfWebOrdenadas.length > 0) && (
+            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
+                DCTFWeb importada — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
+              </p>
+              {carregandoDctf ? (
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+              ) : (
+                dctfWebOrdenadas.length > 0 && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Período Apuração</TableHead>
+                        <TableHead>Nº Recibo</TableHead>
+                        <TableHead className="text-right">Débitos Declarados</TableHead>
+                        <TableHead className="w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dctfWebOrdenadas.map((d) => (
+                        <TableRow key={d.id}>
+                          <TableCell className="font-medium">{d.dados.periodoApuracao}</TableCell>
+                          <TableCell>{d.dados.numeroRecibo}</TableCell>
+                          <TableCell className="text-right">{d.dados.debitos.length}</TableCell>
+                          <TableCell>
+                            <div className="flex justify-end">
+                              <button onClick={() => handleExcluirDctfWeb(d.id)} title="Remover" className="text-gray-400 hover:text-red-500">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )
+              )}
+            </div>
+          )}
+
+          {/* DCTF (.dec) importadas — lista de débitos declarados fica no Excel */}
+          {projetoSelecionado && (carregandoDctf || dctfOrdenadas.length > 0) && (
+            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
+                DCTF importada — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
+              </p>
+              {carregandoDctf ? (
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+              ) : (
+                dctfOrdenadas.length > 0 && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Competência</TableHead>
+                        <TableHead>Tributos Declarados</TableHead>
+                        <TableHead className="w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dctfOrdenadas.map((d) => (
+                        <TableRow key={d.id}>
+                          <TableCell className="font-medium">{formatarCompetencia(d.competencia)}</TableCell>
+                          <TableCell>{d.dados.debitos.map((db) => db.grupo.split(" -")[0]).join(", ")}</TableCell>
+                          <TableCell>
+                            <div className="flex justify-end">
+                              <button onClick={() => handleExcluirDctf(d.id)} title="Remover" className="text-gray-400 hover:text-red-500">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )
+              )}
+            </div>
+          )}
+
           {/* Comprovantes de pagamento (DARF): resumo consolidado por ano de PIS/COFINS/IRPJ/CSLL
               pagos — o detalhamento por DARF fica no Excel, não aqui */}
           {projetoSelecionado && (carregandoDeclaracoesComprovante || declaracoesComprovante.length > 0) && (
@@ -1271,6 +1434,8 @@ export default function RecuperacaoCreditoPage() {
             (mesesEfdOrdenados.length > 0 ||
               mesesEfdContribOrdenados.length > 0 ||
               anosEcfOrdenados.length > 0 ||
+              dctfWebOrdenadas.length > 0 ||
+              dctfOrdenadas.length > 0 ||
               declaracoesComprovante.length > 0) && (
               <div className="flex justify-end pt-2">
                 <Button variant="outline" size="sm" onClick={handleBaixarExcelFiscal}>
@@ -1288,10 +1453,10 @@ export default function RecuperacaoCreditoPage() {
           <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
           <p className="text-sm text-blue-700 dark:text-blue-300">
             <span className="font-semibold">Como funciona:</span> carregue os arquivos Excel com dados fiscais e
-            contábeis da empresa (DRE, notas fiscais, etc.), os PDFs de Declaração/Extrato do Simples Nacional ou de
-            Comprovante de Arrecadação de DARF, ou os .txt de EFD ICMS/IPI, EFD Contribuições (PIS/COFINS) e ECF
-            (IRPJ/CSLL) — o sistema reconhece o tipo de cada arquivo automaticamente e processa cada um do jeito
-            certo.
+            contábeis da empresa (DRE, notas fiscais, etc.), os PDFs de Declaração/Extrato do Simples Nacional,
+            Comprovante de Arrecadação de DARF ou DCTFWeb, os .txt de EFD ICMS/IPI, EFD Contribuições (PIS/COFINS)
+            e ECF (IRPJ/CSLL), ou os .dec de DCTF — o sistema reconhece o tipo de cada arquivo automaticamente e
+            processa cada um do jeito certo.
           </p>
         </div>
       )}

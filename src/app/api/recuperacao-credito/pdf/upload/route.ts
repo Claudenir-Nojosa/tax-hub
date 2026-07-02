@@ -3,6 +3,7 @@ import { auth } from "../../../../../../auth"
 import db from "@/lib/db"
 import { parsePgdasPdf } from "@/lib/pgdas/parser"
 import { detectarComprovantePagamento, parseComprovantesDeTexto } from "@/lib/comprovante-pagamento-parser"
+import { detectarDctfWeb, parseDctfWebDeTexto } from "@/lib/dctfweb-parser"
 
 function somenteDigitos(v: string) {
   return v.replace(/\D/g, "")
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
   }
   const cliente = projeto.cliente
 
-  const salvos: { arquivoNome: string; tipo: "PGDAS" | "COMPROVANTE"; detalhe: string }[] = []
+  const salvos: { arquivoNome: string; tipo: "PGDAS" | "COMPROVANTE" | "DCTFWEB"; detalhe: string }[] = []
   const erros: { arquivo: string; motivo: string }[] = []
 
   for (const file of files) {
@@ -53,7 +54,34 @@ export async function POST(req: NextRequest) {
       const { text } = await extractText(uint8, { mergePages: true })
       const textoBruto = Array.isArray(text) ? text.join(" ") : text
 
-      if (detectarComprovantePagamento(textoBruto)) {
+      if (detectarDctfWeb(textoBruto)) {
+        const dados = parseDctfWebDeTexto(textoBruto, file.name)
+        if (!dados) {
+          erros.push({ arquivo: file.name, motivo: "Não foi possível ler o cabeçalho/débitos da DCTFWeb" })
+          continue
+        }
+        if (somenteDigitos(dados.cnpj) !== somenteDigitos(cliente.cnpj)) {
+          erros.push({
+            arquivo: file.name,
+            motivo: `CNPJ da DCTFWeb (${dados.cnpj}) não corresponde ao cliente selecionado (${cliente.cnpj})`,
+          })
+          continue
+        }
+
+        await db.declaracaoDctfWeb.upsert({
+          where: { projetoId_competencia: { projetoId: projeto.id, competencia: dados.competencia } },
+          create: {
+            projetoId: projeto.id,
+            competencia: dados.competencia,
+            cnpj: dados.cnpj,
+            arquivoNome: file.name,
+            dados: dados as unknown as object,
+          },
+          update: { cnpj: dados.cnpj, arquivoNome: file.name, dados: dados as unknown as object },
+        })
+
+        salvos.push({ arquivoNome: file.name, tipo: "DCTFWEB", detalhe: dados.periodoApuracao })
+      } else if (detectarComprovantePagamento(textoBruto)) {
         // reusa o texto já extraído acima (extrair o PDF de novo dobraria o tempo do arquivo)
         const darfs = parseComprovantesDeTexto(textoBruto, file.name)
         if (darfs.length === 0) {
