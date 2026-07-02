@@ -237,13 +237,14 @@ export async function processarArquivosEfdContribuicoes(
   return resultados
 }
 
-// Distingue um EFD ICMS/IPI de um EFD Contribuições — ambos são texto pipe-delimited começando
-// com "|0000|", então a detecção usa registros exclusivos de cada leiaute: EFD Contribuições
+// Distingue os tipos de arquivo SPED em texto pipe-delimited que chegam pela mesma zona de
+// upload (.txt): ECF começa com "|0000|LECF|" (marcador do próprio layout); EFD Contribuições
 // sempre tem blocos M (apuração de PIS/COFINS); EFD ICMS/IPI sempre tem bloco E (apuração de
 // ICMS/IPI).
-export type TipoEfd = "ICMS_IPI" | "CONTRIBUICOES" | null
+export type TipoEfd = "ICMS_IPI" | "CONTRIBUICOES" | "ECF" | null
 
 export function detectarTipoEfd(conteudo: string): TipoEfd {
+  if (conteudo.startsWith("|0000|LECF|")) return "ECF"
   if (/\|M200\|/.test(conteudo) || /\|M600\|/.test(conteudo)) return "CONTRIBUICOES"
   if (/\|E100\|/.test(conteudo) || /\|E110\|/.test(conteudo)) return "ICMS_IPI"
   return null

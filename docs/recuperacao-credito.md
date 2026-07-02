@@ -14,7 +14,7 @@ extensão/conteúdo:
 | Tipo de arquivo | Rota | O que faz |
 |---|---|---|
 | `.pdf` (Declaração/Extrato PGDAS ou Comprovante de Arrecadação de DARF) | Simples Nacional ou Comprovante de Pagamentos | Um único endpoint (`/api/recuperacao-credito/pdf/upload`) detecta o sub-tipo pelo conteúdo e extrai/persiste no model certo |
-| `.txt` (EFD ICMS/IPI ou EFD Contribuições, começa com `\|0000\|`) | ICMS/IPI ou PIS/COFINS | Um único endpoint (`/api/recuperacao-credito/efd/upload`) detecta o sub-tipo pelo conteúdo (`detectarTipoEfd`) e extrai/persiste no model certo |
+| `.txt` (EFD ICMS/IPI, EFD Contribuições ou ECF, começa com `\|0000\|`) | ICMS/IPI, PIS/COFINS ou IRPJ/CSLL | Um único endpoint (`/api/recuperacao-credito/efd/upload`) detecta o sub-tipo pelo conteúdo (`detectarTipoEfd`) e extrai/persiste no model certo |
 | `.xlsx` / `.xls` / `.csv` | Análise genérica por IA | Stub — ainda não implementado (`/api/recuperacao-credito/route.ts`) |
 
 PDFs e `.txt` exigem **Cliente + Projeto** selecionados (ver seção 2); os arquivos genéricos
@@ -28,6 +28,7 @@ ClienteRecuperacaoCredito (CNPJ + Razão Social, por usuário)
         ├── DeclaracaoPgdas[]                    (1 registro por mês × tipo: DECLARACAO | EXTRATO)
         ├── DeclaracaoEfdIcmsIpi[]               (1 registro por mês)
         ├── DeclaracaoEfdContribuicoes[]         (1 registro por mês — PIS/COFINS)
+        ├── DeclaracaoEcf[]                      (1 registro por ANO-calendário — IRPJ/CSLL, trimestres no JSON)
         └── DeclaracaoComprovantePagamento[]     (1 registro por DARF — ver seção 6, chave diferente)
 ```
 
@@ -134,7 +135,7 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   nesses arquivos a apuração (M) sai completa e correta, mas as seções "por CFOP/CST/alíquota"
   ficam vazias. Implementar exige decidir como separar saídas de entradas (o `C170` mistura
   compras com crédito e vendas, via CST) e validar contra um exemplo de referência do usuário —
-  não fazer por suposição (seção 10, regra 1).
+  não fazer por suposição (seção 11, regra 1).
 - **CST-PIS/COFINS**: tabela própria (`CST_PIS_COFINS_LABELS` em `efd-contribuicoes-parser.ts`,
   códigos `01` a `99`), **não** é a mesma tabela de CST/CSOSN do ICMS — não reaproveitar
   `labelCst()` do módulo de ICMS/IPI aqui, usar `labelCstPisCofins()`.
@@ -143,7 +144,7 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   implementados**. O arquivo de amostra disponível não tinha nenhum crédito no período (registros
   ausentes no arquivo), então não foi possível validar o layout de campos com dados reais. Antes
   de implementar, validar campo a campo contra um EFD Contribuições real com créditos não-zeros,
-  do mesmo jeito que o `M200`/`M210` foi validado (ver seção 10, regra 1).
+  do mesmo jeito que o `M200`/`M210` foi validado (ver seção 11, regra 1).
 - **Excel — uma aba "PIS" e uma aba "COFINS" no mesmo arquivo**: diferente do PGDAS e do ICMS/IPI
   (que cada um gera seu próprio arquivo), o PIS e a COFINS **sempre saem juntos, num único
   arquivo com duas abas** (`montarAbasPisCofins()` em `src/lib/efd-contribuicoes-excel.ts`, que
@@ -223,7 +224,43 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   sistemas da Receita Federal registro de arrecadação de DARF") se é Comprovante ou PGDAS, e
   despacha pro parser/model certo — mesmo padrão do endpoint unificado de EFD (seção 5).
 
-## 7. Aba "Checklist" (presente em TODO Excel do módulo)
+## 7. IRPJ/CSLL (ECF — Lucro Presumido)
+
+- **Parser**: `src/lib/ecf-parser.ts` — SPED pipe-delimited, determinístico como os demais. Entra
+  pela mesma zona de upload dos EFDs (`.txt`, mesmo endpoint unificado) — detecção pelo marcador
+  `\|0000\|LECF\|` no início do arquivo (`detectarTipoEfd` devolve `"ECF"`).
+- **Granularidade diferente dos EFDs**: 1 arquivo ECF = **1 ano-calendário inteiro**; os períodos
+  de apuração (trimestres `T01`..`T04` no regime trimestral) vêm do registro `P030` e ficam
+  dentro do JSON do mesmo registro (`DeclaracaoEcf`, `@@unique([projetoId, competencia])` com
+  competência = ano "2021"). Cada registro do bloco P pertence ao `P030` imediatamente anterior
+  no arquivo.
+- **Registros usados**: `0000` (cabeçalho — atenção: CNPJ em `campos[4]`, DT_INI em `campos[10]`,
+  índices diferentes dos EFDs), `0010` (forma de tributação/apuração), `P030` (períodos), `P200`
+  (base de cálculo do IRPJ), `P300` (cálculo do IRPJ), `P400` (base da CSLL), `P500` (cálculo da
+  CSLL). Os registros P são "tabelas dinâmicas": cada linha é `\|REG\|CODIGO\|DESCRICAO\|VALOR\|`;
+  o parser guarda TODAS as linhas por período e o exportador escolhe por código.
+- **Códigos estáveis entre versões de layout**: os códigos das linhas principais (`P300` cód. 3 =
+  alíquota 15%, 4 = adicional, 15 = IRPJ a pagar; `P500` cód. 2 = CSLL apurada, 13 = CSLL a
+  pagar; receitas por percentual identificadas pela descrição "Receita Bruta Sujeita ao
+  Percentual...") foram validados como estáveis entre as versões 0008 (2021) e 0011 (2024) contra
+  4 arquivos reais — versões novas só ADICIONAM sub-códigos (ex.: 11.20/Perse). Deduções são as
+  linhas cuja descrição começa com `(-)`.
+- **Encoding**: SPED é latin1 — o parser decodifica com `TextDecoder("latin1")` (as descrições
+  aparecem no Excel nas linhas de dedução; decodificar como UTF-8 corromperia os acentos).
+- **Excel — abas "IRPJ" e "CSLL"** (sempre juntas, mesmo padrão do PIS/COFINS), colunas
+  **trimestrais** ("1T/2021", "2T/2021"...) ao longo de todos os anos importados. Estrutura de
+  linhas espelha o exemplo de referência do usuário (DIRETOS.xlsx): receitas por percentual de
+  presunção, resultado ajustado, base, imposto (15% + adicional / CSLL apurada), deduções
+  detalhadas por código, "$ ... A PAGAR" (cinza), DCTF (espelho do a pagar — mesma suposição do
+  exemplo), e-CAC (sempre 0, mesma decisão do PGDAS) e Carga Tributária (azul, a pagar ÷ receita
+  bruta total do período).
+- **GAP CONHECIDO — Lucro Real (bloco N) não implementado**: ECF de Lucro Real apura IRPJ/CSLL
+  pelo bloco N (N500/N620/N660 etc.), layout completamente diferente do bloco P. Arquivos sem
+  bloco P preenchido são rejeitados no upload com mensagem explicando isso. Implementar quando o
+  usuário mandar o exemplo real + Excel de referência de Lucro Real (validação primeiro — seção
+  11, regra 1).
+
+## 8. Aba "Checklist" (presente em TODO Excel do módulo)
 
 - **O quê**: `src/lib/checklist-excel.ts`, `montarAbaChecklist(wb, nomeCliente)` — adiciona uma
   aba **"Checklist"** em todo Excel gerado pela Recuperação de Crédito: Simples Nacional
@@ -259,15 +296,15 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   contingências. Isso exige, para cada tópico, uma regra própria de "o que checar nos dados
   importados" — não implementar isso "de graça" numa mudança não relacionada; ao construir essa
   análise automática no futuro, seguir a mesma disciplina de validação contra dados reais antes
-  de confiar no resultado (seção 10, regra 1), já que aqui o risco não é um valor financeiro errado
+  de confiar no resultado (seção 11, regra 1), já que aqui o risco não é um valor financeiro errado
   mas uma oportunidade real deixada de fora (falso ☠️) ou uma marcada à toa (falso 🌟).
 
-## 8. Padrão visual do Excel (obrigatório em qualquer novo export deste módulo)
+## 9. Padrão visual do Excel (obrigatório em qualquer novo export deste módulo)
 
 Todo Excel gerado por este módulo segue o **mesmo "brand"**, estabelecido primeiro no export do
 Simples Nacional (`src/lib/pgdas/export-pgdas-excel.ts`) e replicado no de ICMS/IPI
 (`src/lib/efd-icms-excel.ts`) e no de PIS/COFINS (`src/lib/efd-contribuicoes-excel.ts`). A aba de
-Comprovante de Pagamentos (seção 6) e a de Checklist (seção 7) são as duas exceções conscientes —
+Comprovante de Pagamentos (seção 6) e a de Checklist (seção 8) são as duas exceções conscientes —
 usam sua própria paleta/estrutura de tabela, ver seções respectivas:
 
 - **Logo**: TaxHub, versão `taxhub_logo_principal_claro_transparente.png` (texto escuro — a
@@ -304,7 +341,7 @@ usam sua própria paleta/estrutura de tabela, ver seções respectivas:
   `src/lib/excel-style-utils.ts` compartilhado é a extração natural, mas não fazer isso "de
   graça" numa mudança não relacionada.
 
-## 9. Regra geral: IA vs. determinístico
+## 10. Regra geral: IA vs. determinístico
 
 - **Formato fixo/oficial do governo** (PGDAS, EFD ICMS/IPI) → **parser determinístico
   (regex/split)**, nunca IA. Motivo: previsível, grátis, instantâneo, zero risco de alucinação
@@ -317,7 +354,7 @@ Antes de escolher a abordagem para um novo tipo de arquivo/análise, perguntar: 
 ditado por um layout oficial fixo, ou é redação livre de terceiros?" — a resposta define IA vs.
 determinístico.
 
-## 10. Checklist para adicionar um novo tipo de declaração ao módulo
+## 11. Checklist para adicionar um novo tipo de declaração ao módulo
 
 1. Confirmar o formato de origem (fixo → parser; livre → IA) e o(s) registro(s)/campo(s) exatos
    validando contra um arquivo real do usuário — nunca supor o layout de um campo sem
@@ -334,8 +371,8 @@ determinístico.
    por-arquivo não derruba o lote) e `.../xxx/route.ts` (GET por `projetoId`, DELETE por `id`).
    Se o upload compartilha endpoint com um tipo irmão (caso do EFD), o dispatch por tipo detectado
    fica dentro do mesmo `POST`, nunca em rotas separadas por extensão.
-5. Exportador Excel em `src/lib/xxx-excel.ts` seguindo a seção 8 deste documento à risca (e
-   incluir a chamada a `montarAbaChecklist` — seção 7 — no wrapper standalone, se ainda não
+5. Exportador Excel em `src/lib/xxx-excel.ts` seguindo a seção 9 deste documento à risca (e
+   incluir a chamada a `montarAbaChecklist` — seção 8 — no wrapper standalone, se ainda não
    estiver coberto pelo orquestrador). Separar
    a montagem da(s) aba(s) (`montarAbaXxx(wb, ...)`, sem download) do wrapper "standalone" que
    cria o workbook e baixa (`exportarXxxExcel(...)`) — isso permite compor com outros tipos de

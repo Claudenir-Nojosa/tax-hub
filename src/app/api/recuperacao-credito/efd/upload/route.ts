@@ -3,14 +3,16 @@ import { auth } from "../../../../../../auth"
 import db from "@/lib/db"
 import { processarArquivosEfd } from "@/lib/efd-icms-parser"
 import { detectarTipoEfd, processarArquivosEfdContribuicoes } from "@/lib/efd-contribuicoes-parser"
+import { processarArquivosEcf, temBlocoPresumido } from "@/lib/ecf-parser"
 
 function somenteDigitos(v: string) {
   return v.replace(/\D/g, "")
 }
 
-// POST — upload de 1+ arquivos EFD (.txt), um arquivo = uma competência (mês). Detecta
-// automaticamente se cada arquivo é um EFD ICMS/IPI ou um EFD Contribuições (PIS/COFINS) pelo
-// conteúdo (registros exclusivos de cada leiaute — ver detectarTipoEfd) e grava no model certo.
+// POST — upload de 1+ arquivos SPED em texto (.txt). Detecta automaticamente se cada arquivo é
+// um EFD ICMS/IPI, um EFD Contribuições (PIS/COFINS) ou uma ECF (IRPJ/CSLL) pelo conteúdo
+// (registros/marcadores exclusivos de cada leiaute — ver detectarTipoEfd) e grava no model
+// certo. EFDs: 1 arquivo = 1 competência (mês); ECF: 1 arquivo = 1 ano-calendário.
 // Falhas são por-arquivo: um arquivo ruim não impede os outros de serem salvos.
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -38,12 +40,12 @@ export async function POST(req: NextRequest) {
   }
   const cliente = projeto.cliente
 
-  const salvos: { competencia: string; arquivoNome: string; tipo: "ICMS_IPI" | "CONTRIBUICOES" }[] = []
+  const salvos: { competencia: string; arquivoNome: string; tipo: "ICMS_IPI" | "CONTRIBUICOES" | "ECF" }[] = []
   const erros: { arquivo: string; motivo: string }[] = []
 
   for (const file of files) {
     if (!file.name.toLowerCase().endsWith(".txt")) {
-      erros.push({ arquivo: file.name, motivo: "Apenas arquivos .txt (EFD) são aceitos" })
+      erros.push({ arquivo: file.name, motivo: "Apenas arquivos .txt (EFD/ECF) são aceitos" })
       continue
     }
 
@@ -52,11 +54,46 @@ export async function POST(req: NextRequest) {
       const tipo = detectarTipoEfd(conteudo)
 
       if (!tipo) {
-        erros.push({ arquivo: file.name, motivo: "Não foi possível identificar o tipo de EFD (ICMS/IPI ou Contribuições)" })
+        erros.push({ arquivo: file.name, motivo: "Não foi possível identificar o tipo do arquivo (EFD ICMS/IPI, EFD Contribuições ou ECF)" })
         continue
       }
 
-      if (tipo === "ICMS_IPI") {
+      if (tipo === "ECF") {
+        const [dados] = await processarArquivosEcf([file])
+        if (!dados) {
+          erros.push({ arquivo: file.name, motivo: "Não foi possível ler o registro 0000 (cabeçalho) da ECF" })
+          continue
+        }
+        if (somenteDigitos(dados.cnpj) !== somenteDigitos(cliente.cnpj)) {
+          erros.push({
+            arquivo: file.name,
+            motivo: `CNPJ da ECF (${dados.cnpj}) não corresponde ao cliente selecionado (${cliente.cnpj})`,
+          })
+          continue
+        }
+        if (!temBlocoPresumido(dados)) {
+          erros.push({
+            arquivo: file.name,
+            motivo:
+              "ECF sem apuração de Lucro Presumido (bloco P) — a apuração via bloco N (Lucro Real) ainda não é suportada",
+          })
+          continue
+        }
+
+        await db.declaracaoEcf.upsert({
+          where: { projetoId_competencia: { projetoId: projeto.id, competencia: dados.anoCalendario } },
+          create: {
+            projetoId: projeto.id,
+            competencia: dados.anoCalendario,
+            cnpj: dados.cnpj,
+            arquivoNome: file.name,
+            dados: dados as unknown as object,
+          },
+          update: { cnpj: dados.cnpj, arquivoNome: file.name, dados: dados as unknown as object },
+        })
+
+        salvos.push({ competencia: dados.anoCalendario, arquivoNome: file.name, tipo: "ECF" })
+      } else if (tipo === "ICMS_IPI") {
         const [dados] = await processarArquivosEfd([file])
         if (!dados) {
           erros.push({ arquivo: file.name, motivo: "Não foi possível ler o registro 0000 (cabeçalho) do EFD" })

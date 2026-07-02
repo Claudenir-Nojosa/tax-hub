@@ -3,6 +3,7 @@ import { montarAbaIcms, type DeclaracaoEfdRegistro } from "./efd-icms-excel"
 import { montarAbasPisCofins, type DeclaracaoEfdContribuicoesRegistro } from "./efd-contribuicoes-excel"
 import { montarAbaComprovantePagamento } from "./comprovante-pagamento-excel"
 import type { DadosComprovantePagamento } from "./comprovante-pagamento-parser"
+import { montarAbasEcf, type DeclaracaoEcfRegistro } from "./ecf-excel"
 import { montarAbaChecklist } from "./checklist-excel"
 
 function sanitizarNomeArquivo(nome: string): string {
@@ -21,13 +22,15 @@ export async function exportarDeclaracaoFiscalExcel(
     icms?: DeclaracaoEfdRegistro[]
     pisCofins?: DeclaracaoEfdContribuicoesRegistro[]
     comprovantes?: DadosComprovantePagamento[]
+    ecf?: DeclaracaoEcfRegistro[]
   }
 ): Promise<void> {
   const temIcms = (dados.icms?.length ?? 0) > 0
   const temPisCofins = (dados.pisCofins?.length ?? 0) > 0
   const temComprovantes = (dados.comprovantes?.length ?? 0) > 0
+  const temEcf = (dados.ecf?.length ?? 0) > 0
 
-  if (!temIcms && !temPisCofins && !temComprovantes) return
+  if (!temIcms && !temPisCofins && !temComprovantes && !temEcf) return
 
   const wb = new ExcelJS.Workbook()
   wb.creator = "Tax Hub — Recuperação de Crédito"
@@ -35,12 +38,14 @@ export async function exportarDeclaracaoFiscalExcel(
 
   if (temIcms) await montarAbaIcms(wb, dados.icms!, nomeCliente)
   if (temPisCofins) await montarAbasPisCofins(wb, dados.pisCofins!, nomeCliente)
+  if (temEcf) await montarAbasEcf(wb, dados.ecf!, nomeCliente)
   if (temComprovantes) await montarAbaComprovantePagamento(wb, dados.comprovantes!, nomeCliente)
   await montarAbaChecklist(wb, nomeCliente)
 
   const contextos: string[] = []
   if (temIcms) contextos.push("ICMS e IPI")
   if (temPisCofins) contextos.push("PIS e COFINS")
+  if (temEcf) contextos.push("IRPJ e CSLL")
   if (temComprovantes) contextos.push("Comprovante de Pagamentos")
   const contexto = contextos.join(", ")
 

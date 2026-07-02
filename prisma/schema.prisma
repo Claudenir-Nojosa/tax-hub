@@ -203,6 +203,7 @@ model ProjetoRecuperacaoCredito {
   declaracoesEfd            DeclaracaoEfdIcmsIpi[]
   declaracoesEfdContrib     DeclaracaoEfdContribuicoes[]
   comprovantesPagamento     DeclaracaoComprovantePagamento[]
+  declaracoesEcf            DeclaracaoEcf[]
 }
 
 model DeclaracaoPgdas {
@@ -260,6 +261,25 @@ model DeclaracaoComprovantePagamento {
 
   @@unique([projetoId, numeroDocumento])
   @@index([projetoId])
+}
+
+// ECF (Escrituração Contábil Fiscal) — IRPJ/CSLL. Um arquivo = um ano-calendário inteiro (com
+// os períodos trimestrais dentro do JSON), então a "competência" aqui é só o ano ("2021").
+model DeclaracaoEcf {
+  id             String                    @id @default(cuid())
+  projetoId      String
+  projeto        ProjetoRecuperacaoCredito @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  competencia    String   // "YYYY" (ano-calendário)
+  cnpj           String   // CNPJ lido do ECF (auditoria/validação contra o cliente)
+  arquivoNome    String
+  dados          Json     // payload tipado — ver DadosEcf em src/lib/ecf-parser.ts
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([projetoId, competencia])
+  @@index([projetoId, competencia])
 }
 
 model DeclaracaoEfdContribuicoes {
