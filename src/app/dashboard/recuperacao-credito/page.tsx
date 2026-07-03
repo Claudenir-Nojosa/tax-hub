@@ -24,6 +24,8 @@ import type { DadosDctf } from "@/lib/dctf-parser";
 import type { DeclaracaoDctfWebRegistro, DeclaracaoDctfRegistro } from "@/lib/dctf-excel";
 import type { DadosFontesPagadoras } from "@/lib/fontes-pagadoras-parser";
 import type { DeclaracaoFontesPagadorasRegistro } from "@/lib/fontes-pagadoras-excel";
+import type { DadosEcd } from "@/lib/ecd-parser";
+import type { DeclaracaoEcdRegistro } from "@/lib/ecd-excel";
 import { exportarDeclaracaoFiscalExcel } from "@/lib/recuperacao-credito-excel";
 import {
   FileSearch,
@@ -130,6 +132,12 @@ interface DeclaracaoFontesRow {
   id: string;
   competencia: string; // ano "YYYY"
   dados: DadosFontesPagadoras;
+}
+
+interface DeclaracaoEcdRow {
+  id: string;
+  competencia: string; // ano "YYYY"
+  dados: DadosEcd;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -270,6 +278,9 @@ export default function RecuperacaoCreditoPage() {
 
   const [declaracoesFontes, setDeclaracoesFontes] = useState<DeclaracaoFontesRow[]>([]);
   const [carregandoFontes, setCarregandoFontes] = useState(false);
+
+  const [declaracoesEcd, setDeclaracoesEcd] = useState<DeclaracaoEcdRow[]>([]);
+  const [carregandoEcd, setCarregandoEcd] = useState(false);
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteSelecionadoId) ?? null;
   const projetoSelecionado = projetos.find((p) => p.id === projetoSelecionadoId) ?? null;
@@ -429,6 +440,23 @@ export default function RecuperacaoCreditoPage() {
     if (projetoSelecionadoId) carregarFontes(projetoSelecionadoId);
     else setDeclaracoesFontes([]);
   }, [projetoSelecionadoId, carregarFontes]);
+
+  const carregarEcd = useCallback(async (projetoId: string) => {
+    setCarregandoEcd(true);
+    try {
+      const res = await fetch(`/api/recuperacao-credito/ecd?projetoId=${projetoId}`);
+      setDeclaracoesEcd(await res.json());
+    } catch {
+      toast.error("Erro ao carregar ECD (Balanço Patrimonial)");
+    } finally {
+      setCarregandoEcd(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (projetoSelecionadoId) carregarEcd(projetoSelecionadoId);
+    else setDeclaracoesEcd([]);
+  }, [projetoSelecionadoId, carregarEcd]);
 
   const handleCriarCliente = async () => {
     if (!novoCnpj.trim() || !novaRazaoSocial.trim()) {
@@ -637,10 +665,12 @@ export default function RecuperacaoCreditoPage() {
     const salvosContrib = salvos.filter((s) => s.tipo === "CONTRIBUICOES").length;
     const salvosEcf = salvos.filter((s) => s.tipo === "ECF").length;
     const salvosDctf = salvos.filter((s) => s.tipo === "DCTF").length;
+    const salvosEcd = salvos.filter((s) => s.tipo === "ECD").length;
     if (salvosIcms > 0) toast.success(`${salvosIcms} EFD(s) de ICMS/IPI importado(s)!`);
     if (salvosContrib > 0) toast.success(`${salvosContrib} EFD(s) de Contribuições (PIS/COFINS) importado(s)!`);
     if (salvosEcf > 0) toast.success(`${salvosEcf} ECF(s) de IRPJ/CSLL importada(s)!`);
     if (salvosDctf > 0) toast.success(`${salvosDctf} DCTF importada(s)!`);
+    if (salvosEcd > 0) toast.success(`${salvosEcd} ECD (Balanço Patrimonial) importada(s)!`);
     for (const erro of erros) {
       toast.error(`${erro.arquivo}: ${erro.motivo}`);
     }
@@ -649,6 +679,7 @@ export default function RecuperacaoCreditoPage() {
       carregarDeclaracoesEfdContrib(projetoSelecionadoId),
       carregarDeclaracoesEcf(projetoSelecionadoId),
       carregarDctfTudo(projetoSelecionadoId),
+      carregarEcd(projetoSelecionadoId),
     ]);
   };
 
@@ -784,6 +815,17 @@ export default function RecuperacaoCreditoPage() {
     }
   };
 
+  const handleExcluirEcd = async (id: string) => {
+    if (!projetoSelecionadoId) return;
+    try {
+      await fetch(`/api/recuperacao-credito/ecd?id=${id}`, { method: "DELETE" });
+      toast.success("Removido");
+      await carregarEcd(projetoSelecionadoId);
+    } catch {
+      toast.error("Erro ao remover");
+    }
+  };
+
   // A UI mostra os comprovantes consolidados por ano (sem linha por DARF), então a exclusão
   // também é em bloco: remove todos os DARFs importados do projeto de uma vez.
   const handleExcluirComprovantes = async () => {
@@ -812,7 +854,8 @@ export default function RecuperacaoCreditoPage() {
       declaracoesEcf.length === 0 &&
       declaracoesDctfWeb.length === 0 &&
       declaracoesDctf.length === 0 &&
-      declaracoesFontes.length === 0
+      declaracoesFontes.length === 0 &&
+      declaracoesEcd.length === 0
     )
       return;
 
@@ -826,7 +869,8 @@ export default function RecuperacaoCreditoPage() {
     const dctfWeb: DeclaracaoDctfWebRegistro[] = declaracoesDctfWeb.map((d) => ({ competencia: d.competencia, dados: d.dados }));
     const dctf: DeclaracaoDctfRegistro[] = declaracoesDctf.map((d) => ({ competencia: d.competencia, dados: d.dados }));
     const fontesPagadoras: DeclaracaoFontesPagadorasRegistro[] = declaracoesFontes.map((d) => ({ competencia: d.competencia, dados: d.dados }));
-    await exportarDeclaracaoFiscalExcel(clienteSelecionado.razaoSocial, { icms, pisCofins, comprovantes, ecf, dctfWeb, dctf, fontesPagadoras });
+    const ecd: DeclaracaoEcdRegistro[] = declaracoesEcd.map((d) => ({ competencia: d.competencia, dados: d.dados }));
+    await exportarDeclaracaoFiscalExcel(clienteSelecionado.razaoSocial, { icms, pisCofins, comprovantes, ecf, dctfWeb, dctf, fontesPagadoras, ecd });
   };
 
   const mesesAgrupados = Array.from(new Set(declaracoesPgdas.map((d) => d.competencia)))
@@ -863,6 +907,9 @@ export default function RecuperacaoCreditoPage() {
       qtdFontes: d.dados.fontes.length,
       totalImposto: d.dados.fontes.reduce((s, f) => s + f.codigos.reduce((a, c) => a + c.imposto, 0), 0),
     }));
+  const ecdOrdenadas = [...declaracoesEcd]
+    .sort((a, b) => a.competencia.localeCompare(b.competencia))
+    .map((d) => ({ id: d.id, ano: d.competencia, qtdContas: d.dados.contas.length }));
   // Consolidação por ano (do Período de Apuração) dos valores pagos de PIS/COFINS/IRPJ/CSLL —
   // é o que a UI mostra em vez de listar cada DARF (o detalhamento por DARF continua no Excel).
   // Códigos de receita fora desses 4 tributos (INSS, multas, TJLP etc.) ficam de fora da tabela.
@@ -1425,6 +1472,45 @@ export default function RecuperacaoCreditoPage() {
             </div>
           )}
 
+          {/* ECD (Balanço Patrimonial) importada — detalhamento das contas fica no Excel */}
+          {projetoSelecionado && (carregandoEcd || ecdOrdenadas.length > 0) && (
+            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
+                ECD (Balanço Patrimonial) importada — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
+              </p>
+              {carregandoEcd ? (
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+              ) : (
+                ecdOrdenadas.length > 0 && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Ano</TableHead>
+                        <TableHead className="text-right">Contas no Plano</TableHead>
+                        <TableHead className="w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {ecdOrdenadas.map((d) => (
+                        <TableRow key={d.id}>
+                          <TableCell className="font-medium">{d.ano}</TableCell>
+                          <TableCell className="text-right">{d.qtdContas}</TableCell>
+                          <TableCell>
+                            <div className="flex justify-end">
+                              <button onClick={() => handleExcluirEcd(d.id)} title="Remover" className="text-gray-400 hover:text-red-500">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )
+              )}
+            </div>
+          )}
+
           {/* Fontes Pagadoras (DIRF) importadas — detalhamento por fonte/código fica no Excel */}
           {projetoSelecionado && (carregandoFontes || fontesOrdenadas.length > 0) && (
             <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
@@ -1538,6 +1624,7 @@ export default function RecuperacaoCreditoPage() {
               dctfWebOrdenadas.length > 0 ||
               dctfOrdenadas.length > 0 ||
               fontesOrdenadas.length > 0 ||
+              ecdOrdenadas.length > 0 ||
               declaracoesComprovante.length > 0) && (
               <div className="flex justify-end pt-2">
                 <Button variant="outline" size="sm" onClick={handleBaixarExcelFiscal}>
@@ -1557,8 +1644,8 @@ export default function RecuperacaoCreditoPage() {
             <span className="font-semibold">Como funciona:</span> carregue os arquivos Excel com dados fiscais e
             contábeis da empresa (DRE, notas fiscais, etc.), os PDFs de Declaração/Extrato do Simples Nacional,
             Comprovante de Arrecadação de DARF, DCTFWeb ou Fontes Pagadoras (DIRF), os .txt de EFD ICMS/IPI, EFD
-            Contribuições (PIS/COFINS) e ECF (IRPJ/CSLL), ou os .dec de DCTF — o sistema reconhece o tipo de cada
-            arquivo automaticamente e processa cada um do jeito certo.
+            Contribuições (PIS/COFINS), ECF (IRPJ/CSLL) e ECD (Balanço Patrimonial), ou os .dec de DCTF — o sistema
+            reconhece o tipo de cada arquivo automaticamente e processa cada um do jeito certo.
           </p>
         </div>
       )}

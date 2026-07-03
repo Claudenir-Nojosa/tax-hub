@@ -14,7 +14,7 @@ extensão/conteúdo:
 | Tipo de arquivo | Rota | O que faz |
 |---|---|---|
 | `.pdf` (Declaração/Extrato PGDAS, Comprovante de Arrecadação de DARF, DCTFWeb ou Fontes Pagadoras/DIRF) | Simples Nacional, Comprovante de Pagamentos, DCTFWeb ou Fontes Pagadoras | Um único endpoint (`/api/recuperacao-credito/pdf/upload`) detecta o sub-tipo pelo conteúdo e extrai/persiste no model certo |
-| `.txt` (EFD ICMS/IPI, EFD Contribuições ou ECF, começa com `\|0000\|`) e `.dec` (DCTF Mensal, começa com `DCTFM`) | ICMS/IPI, PIS/COFINS, IRPJ/CSLL ou DCTF | Um único endpoint (`/api/recuperacao-credito/efd/upload`) detecta o sub-tipo pelo conteúdo (`detectarDctf` / `detectarTipoEfd`) e extrai/persiste no model certo |
+| `.txt` (EFD ICMS/IPI, EFD Contribuições, ECF ou ECD, começa com `\|0000\|`) e `.dec` (DCTF Mensal, começa com `DCTFM`) | ICMS/IPI, PIS/COFINS, IRPJ/CSLL, Balanço Patrimonial ou DCTF | Um único endpoint (`/api/recuperacao-credito/efd/upload`) detecta o sub-tipo pelo conteúdo (`detectarEcd` / `detectarDctf` / `detectarTipoEfd`) e extrai/persiste no model certo |
 | `.xlsx` / `.xls` / `.csv` | Análise genérica por IA | Stub — ainda não implementado (`/api/recuperacao-credito/route.ts`) |
 
 PDFs e `.txt` exigem **Cliente + Projeto** selecionados (ver seção 2); os arquivos genéricos
@@ -32,6 +32,7 @@ ClienteRecuperacaoCredito (CNPJ + Razão Social, por usuário)
         ├── DeclaracaoDctfWeb[]                  (1 registro por mês — débitos declarados no JSON)
         ├── DeclaracaoDctf[]                     (1 registro por mês — débitos/grupos no JSON, vem do .dec)
         ├── DeclaracaoFontesPagadoras[]          (1 registro por ANO — fontes/retenções DIRF no JSON)
+        ├── DeclaracaoEcd[]                      (1 registro por ANO — plano de contas + saldos BP no JSON)
         └── DeclaracaoComprovantePagamento[]     (1 registro por DARF — ver seção 6, chave diferente)
 ```
 
@@ -138,7 +139,7 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   nesses arquivos a apuração (M) sai completa e correta, mas as seções "por CFOP/CST/alíquota"
   ficam vazias. Implementar exige decidir como separar saídas de entradas (o `C170` mistura
   compras com crédito e vendas, via CST) e validar contra um exemplo de referência do usuário —
-  não fazer por suposição (seção 13, regra 1).
+  não fazer por suposição (seção 14, regra 1).
 - **CST-PIS/COFINS**: tabela própria (`CST_PIS_COFINS_LABELS` em `efd-contribuicoes-parser.ts`,
   códigos `01` a `99`), **não** é a mesma tabela de CST/CSOSN do ICMS — não reaproveitar
   `labelCst()` do módulo de ICMS/IPI aqui, usar `labelCstPisCofins()`.
@@ -147,7 +148,7 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   implementados**. O arquivo de amostra disponível não tinha nenhum crédito no período (registros
   ausentes no arquivo), então não foi possível validar o layout de campos com dados reais. Antes
   de implementar, validar campo a campo contra um EFD Contribuições real com créditos não-zeros,
-  do mesmo jeito que o `M200`/`M210` foi validado (ver seção 13, regra 1).
+  do mesmo jeito que o `M200`/`M210` foi validado (ver seção 14, regra 1).
 - **Excel — uma aba "PIS" e uma aba "COFINS" no mesmo arquivo**: diferente do PGDAS e do ICMS/IPI
   (que cada um gera seu próprio arquivo), o PIS e a COFINS **sempre saem juntos, num único
   arquivo com duas abas** (`montarAbasPisCofins()` em `src/lib/efd-contribuicoes-excel.ts`, que
@@ -305,7 +306,7 @@ referência do usuário, "DCTF e DCTFWeb.xlsx"). Ambos listam os **débitos decl
   fixa que NÃO foram decodificados — exigem o leiaute oficial do PGD DCTF e mais de uma amostra
   pra validar offsets (só há 1 arquivo real). As colunas existem na aba (fidelidade à referência)
   mas saem em branco, em vez de chutar/hardcodar "Presumido" (que quebraria pra Lucro Real).
-  Revisitar com o leiaute + amostras, seguindo a regra 1 da seção 13. A descrição do DARF da DCTF
+  Revisitar com o leiaute + amostras, seguindo a regra 1 da seção 14. A descrição do DARF da DCTF
   (`Descrição DARF`) só está confirmada p/ PIS/COFINS; IRPJ/CSLL ficam em branco até haver amostra.
 
 ## 9. Fontes Pagadoras (relatório DIRF do e-CAC)
@@ -331,7 +332,37 @@ referência do usuário, "DCTF e DCTFWeb.xlsx"). Ambos listam os **débitos decl
   Contingência" ficam em branco (análise automática futura, como no Checklist). Model
   `DeclaracaoFontesPagadoras`, `@@unique([projetoId, competencia])` (competência = ano "YYYY").
 
-## 10. Aba "Checklist" (presente em TODO Excel do módulo)
+## 10. ECD (Balanço Patrimonial + plano de contas)
+
+- **Parser**: `src/lib/ecd-parser.ts`. SPED Contábil (`.txt`, latin1), 1 arquivo = 1
+  ano-calendário. Entra pelo endpoint unificado de `.txt` (`detectarEcd` = começa com
+  `\|0000\|LECD\|`). Extrai o plano de contas (`I050`: código, natureza `COD_NAT`, tipo
+  `IND_CTA`, nível, superior, nome) e monta os saldos trimestrais do Balanço Patrimonial a partir
+  dos saldos periódicos (`I150`/`I155`).
+- **Método dos saldos (validado campo a campo contra a planilha "B P ECF - OK" do usuário,
+  2021-2024)**:
+  - **Mar/Jun/Set** do ano = saldo final acumulado (`I155` VL_SLD_FIN) do último período que
+    termina até o fim do trimestre.
+  - **Dez** do ano (pós-encerramento) NÃO é confiável no próprio arquivo (o `I155` mensal é
+    pré-encerramento); vem da **abertura** (VL_SLD_INI do 1º período) do arquivo do ano seguinte.
+    Por isso o Excel liga `Dez/Y = abertura do arquivo Y+1` — o Dez do último ano importado (sem
+    arquivo seguinte) fica de fora, igual à referência.
+  - **Conta sintética** = soma dos saldos assinados (devedor +, credor −) das analíticas
+    descendentes (agregação recursiva pela árvore `I050`); exibição = módulo (positivo).
+- **Excel** (`src/lib/ecd-excel.ts`, aba "Balanço Patrimonial (ECD)", estilo Excel Table): colunas
+  **Código Conta** (formatado com pontos, ex. `1.01.01`), **Conta**, **Tipo Conta**
+  (Sintética/Analítica — a "PROCV" pedida ao I050) e **Natureza** (Ativo/Passivo/Patrimônio
+  Líquido/Resultado/Outras, do `COD_NAT`), seguidas de uma coluna por trimestre (Mar/Jun/Set/Dez ×
+  ano). Só as contas do Balanço Patrimonial (natureza 01/02/03) com algum saldo ≠ 0 entram.
+- **Índice de campo a vigiar**: no `I050`, `COD_NAT` é `campos[3]` (não `[2]`, que é a DT_ALT) —
+  já mordeu uma vez. As demais colunas do `I050`: `IND_CTA`=[4], `NIVEL`=[5], `COD_CTA`=[6],
+  `COD_CTA_SUP`=[7], `CTA`=[8].
+- **GAP CONHECIDO — só o Balanço Patrimonial**: a aba lista contas de natureza Ativo/Passivo/PL. A
+  DRE (contas de Resultado, natureza 04) e as de compensação/outras não entram — a natureza é
+  lida e disponível no JSON, mas o recorte da aba é o BP (como a referência). Estender é fácil se
+  o usuário pedir a DRE.
+
+## 11. Aba "Checklist" (presente em TODO Excel do módulo)
 
 - **O quê**: `src/lib/checklist-excel.ts`, `montarAbaChecklist(wb, nomeCliente)` — adiciona uma
   aba **"Checklist"** em todo Excel gerado pela Recuperação de Crédito: Simples Nacional
@@ -367,15 +398,15 @@ referência do usuário, "DCTF e DCTFWeb.xlsx"). Ambos listam os **débitos decl
   contingências. Isso exige, para cada tópico, uma regra própria de "o que checar nos dados
   importados" — não implementar isso "de graça" numa mudança não relacionada; ao construir essa
   análise automática no futuro, seguir a mesma disciplina de validação contra dados reais antes
-  de confiar no resultado (seção 13, regra 1), já que aqui o risco não é um valor financeiro errado
+  de confiar no resultado (seção 14, regra 1), já que aqui o risco não é um valor financeiro errado
   mas uma oportunidade real deixada de fora (falso ☠️) ou uma marcada à toa (falso 🌟).
 
-## 11. Padrão visual do Excel (obrigatório em qualquer novo export deste módulo)
+## 12. Padrão visual do Excel (obrigatório em qualquer novo export deste módulo)
 
 Todo Excel gerado por este módulo segue o **mesmo "brand"**, estabelecido primeiro no export do
 Simples Nacional (`src/lib/pgdas/export-pgdas-excel.ts`) e replicado no de ICMS/IPI
 (`src/lib/efd-icms-excel.ts`) e no de PIS/COFINS (`src/lib/efd-contribuicoes-excel.ts`). A aba de
-Comprovante de Pagamentos (seção 6) e a de Checklist (seção 10) são as duas exceções conscientes —
+Comprovante de Pagamentos (seção 6) e a de Checklist (seção 11) são as duas exceções conscientes —
 usam sua própria paleta/estrutura de tabela, ver seções respectivas:
 
 - **Logo**: TaxHub, versão `taxhub_logo_principal_claro_transparente.png` (texto escuro — a
@@ -412,7 +443,7 @@ usam sua própria paleta/estrutura de tabela, ver seções respectivas:
   `src/lib/excel-style-utils.ts` compartilhado é a extração natural, mas não fazer isso "de
   graça" numa mudança não relacionada.
 
-## 12. Regra geral: IA vs. determinístico
+## 13. Regra geral: IA vs. determinístico
 
 - **Formato fixo/oficial do governo** (PGDAS, EFD ICMS/IPI) → **parser determinístico
   (regex/split)**, nunca IA. Motivo: previsível, grátis, instantâneo, zero risco de alucinação
@@ -425,7 +456,7 @@ Antes de escolher a abordagem para um novo tipo de arquivo/análise, perguntar: 
 ditado por um layout oficial fixo, ou é redação livre de terceiros?" — a resposta define IA vs.
 determinístico.
 
-## 13. Checklist para adicionar um novo tipo de declaração ao módulo
+## 14. Checklist para adicionar um novo tipo de declaração ao módulo
 
 1. Confirmar o formato de origem (fixo → parser; livre → IA) e o(s) registro(s)/campo(s) exatos
    validando contra um arquivo real do usuário — nunca supor o layout de um campo sem
@@ -442,8 +473,8 @@ determinístico.
    por-arquivo não derruba o lote) e `.../xxx/route.ts` (GET por `projetoId`, DELETE por `id`).
    Se o upload compartilha endpoint com um tipo irmão (caso do EFD), o dispatch por tipo detectado
    fica dentro do mesmo `POST`, nunca em rotas separadas por extensão.
-5. Exportador Excel em `src/lib/xxx-excel.ts` seguindo a seção 11 deste documento à risca (e
-   incluir a chamada a `montarAbaChecklist` — seção 10 — no wrapper standalone, se ainda não
+5. Exportador Excel em `src/lib/xxx-excel.ts` seguindo a seção 12 deste documento à risca (e
+   incluir a chamada a `montarAbaChecklist` — seção 11 — no wrapper standalone, se ainda não
    estiver coberto pelo orquestrador). Separar
    a montagem da(s) aba(s) (`montarAbaXxx(wb, ...)`, sem download) do wrapper "standalone" que
    cria o workbook e baixa (`exportarXxxExcel(...)`) — isso permite compor com outros tipos de

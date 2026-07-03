@@ -5,6 +5,7 @@ import { processarArquivosEfd } from "@/lib/efd-icms-parser"
 import { detectarTipoEfd, processarArquivosEfdContribuicoes } from "@/lib/efd-contribuicoes-parser"
 import { processarArquivosEcf, temBlocoPresumido } from "@/lib/ecf-parser"
 import { detectarDctf, processarArquivosDctf } from "@/lib/dctf-parser"
+import { detectarEcd, processarArquivosEcd } from "@/lib/ecd-parser"
 
 function somenteDigitos(v: string) {
   return v.replace(/\D/g, "")
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
   }
   const cliente = projeto.cliente
 
-  const salvos: { competencia: string; arquivoNome: string; tipo: "ICMS_IPI" | "CONTRIBUICOES" | "ECF" | "DCTF" }[] = []
+  const salvos: { competencia: string; arquivoNome: string; tipo: "ICMS_IPI" | "CONTRIBUICOES" | "ECF" | "DCTF" | "ECD" }[] = []
   const erros: { arquivo: string; motivo: string }[] = []
 
   for (const file of files) {
@@ -53,6 +54,34 @@ export async function POST(req: NextRequest) {
 
     try {
       const conteudo = await file.text()
+
+      if (detectarEcd(conteudo)) {
+        const [dados] = await processarArquivosEcd([file])
+        if (!dados) {
+          erros.push({ arquivo: file.name, motivo: "Não foi possível ler o plano de contas (I050) da ECD" })
+          continue
+        }
+        if (somenteDigitos(dados.cnpj) !== somenteDigitos(cliente.cnpj)) {
+          erros.push({
+            arquivo: file.name,
+            motivo: `CNPJ da ECD (${dados.cnpj}) não corresponde ao cliente selecionado (${cliente.cnpj})`,
+          })
+          continue
+        }
+        await db.declaracaoEcd.upsert({
+          where: { projetoId_competencia: { projetoId: projeto.id, competencia: dados.anoCalendario } },
+          create: {
+            projetoId: projeto.id,
+            competencia: dados.anoCalendario,
+            cnpj: dados.cnpj,
+            arquivoNome: file.name,
+            dados: dados as unknown as object,
+          },
+          update: { cnpj: dados.cnpj, arquivoNome: file.name, dados: dados as unknown as object },
+        })
+        salvos.push({ competencia: dados.anoCalendario, arquivoNome: file.name, tipo: "ECD" })
+        continue
+      }
 
       if (detectarDctf(conteudo)) {
         const [dados] = await processarArquivosDctf([file])

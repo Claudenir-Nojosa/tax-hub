@@ -207,6 +207,7 @@ model ProjetoRecuperacaoCredito {
   declaracoesDctfWeb        DeclaracaoDctfWeb[]
   declaracoesDctf           DeclaracaoDctf[]
   declaracoesFontesPagadoras DeclaracaoFontesPagadoras[]
+  declaracoesEcd            DeclaracaoEcd[]
 }
 
 model DeclaracaoPgdas {
@@ -315,6 +316,25 @@ model DeclaracaoFontesPagadoras {
   cnpj           String   // CNPJ do beneficiário (validação contra o cliente)
   arquivoNome    String
   dados          Json     // payload tipado — ver DadosFontesPagadoras em src/lib/fontes-pagadoras-parser.ts
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([projetoId, competencia])
+  @@index([projetoId, competencia])
+}
+
+// ECD (Escrituração Contábil Digital) — plano de contas + saldos do Balanço Patrimonial. 1
+// arquivo = 1 ano-calendário; as contas (com tipo/natureza e saldos trimestrais) ficam no JSON.
+model DeclaracaoEcd {
+  id             String                    @id @default(cuid())
+  projetoId      String
+  projeto        ProjetoRecuperacaoCredito @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  competencia    String   // "YYYY" (ano-calendário)
+  cnpj           String
+  arquivoNome    String
+  dados          Json     // payload tipado — ver DadosEcd em src/lib/ecd-parser.ts
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

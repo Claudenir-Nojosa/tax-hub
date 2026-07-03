@@ -6,6 +6,7 @@ import type { DadosComprovantePagamento } from "./comprovante-pagamento-parser"
 import { montarAbasEcf, type DeclaracaoEcfRegistro } from "./ecf-excel"
 import { montarAbasDctf, type DeclaracaoDctfWebRegistro, type DeclaracaoDctfRegistro } from "./dctf-excel"
 import { montarAbasFontesPagadoras, type DeclaracaoFontesPagadorasRegistro } from "./fontes-pagadoras-excel"
+import { montarAbasEcd, type DeclaracaoEcdRegistro } from "./ecd-excel"
 import { montarAbaChecklist } from "./checklist-excel"
 
 function sanitizarNomeArquivo(nome: string): string {
@@ -28,6 +29,7 @@ export async function exportarDeclaracaoFiscalExcel(
     dctfWeb?: DeclaracaoDctfWebRegistro[]
     dctf?: DeclaracaoDctfRegistro[]
     fontesPagadoras?: DeclaracaoFontesPagadorasRegistro[]
+    ecd?: DeclaracaoEcdRegistro[]
   }
 ): Promise<void> {
   const temIcms = (dados.icms?.length ?? 0) > 0
@@ -37,8 +39,9 @@ export async function exportarDeclaracaoFiscalExcel(
   const temDctfWeb = (dados.dctfWeb?.length ?? 0) > 0
   const temDctf = (dados.dctf?.length ?? 0) > 0
   const temFontes = (dados.fontesPagadoras?.length ?? 0) > 0
+  const temEcd = (dados.ecd?.length ?? 0) > 0
 
-  if (!temIcms && !temPisCofins && !temComprovantes && !temEcf && !temDctfWeb && !temDctf && !temFontes) return
+  if (!temIcms && !temPisCofins && !temComprovantes && !temEcf && !temDctfWeb && !temDctf && !temFontes && !temEcd) return
 
   const wb = new ExcelJS.Workbook()
   wb.creator = "Tax Hub — Recuperação de Crédito"
@@ -47,6 +50,7 @@ export async function exportarDeclaracaoFiscalExcel(
   if (temIcms) await montarAbaIcms(wb, dados.icms!, nomeCliente)
   if (temPisCofins) await montarAbasPisCofins(wb, dados.pisCofins!, nomeCliente)
   if (temEcf) await montarAbasEcf(wb, dados.ecf!, nomeCliente)
+  if (temEcd) await montarAbasEcd(wb, dados.ecd!)
   if (temDctfWeb || temDctf) await montarAbasDctf(wb, { dctfWeb: dados.dctfWeb, dctf: dados.dctf })
   if (temFontes) await montarAbasFontesPagadoras(wb, dados.fontesPagadoras!)
   if (temComprovantes) await montarAbaComprovantePagamento(wb, dados.comprovantes!, nomeCliente)
@@ -56,6 +60,7 @@ export async function exportarDeclaracaoFiscalExcel(
   if (temIcms) contextos.push("ICMS e IPI")
   if (temPisCofins) contextos.push("PIS e COFINS")
   if (temEcf) contextos.push("IRPJ e CSLL")
+  if (temEcd) contextos.push("Balanço Patrimonial")
   if (temDctfWeb || temDctf) contextos.push("DCTF e DCTFWeb")
   if (temFontes) contextos.push("Fontes Pagadoras")
   if (temComprovantes) contextos.push("Comprovante de Pagamentos")
