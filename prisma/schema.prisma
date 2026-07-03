@@ -206,6 +206,7 @@ model ProjetoRecuperacaoCredito {
   declaracoesEcf            DeclaracaoEcf[]
   declaracoesDctfWeb        DeclaracaoDctfWeb[]
   declaracoesDctf           DeclaracaoDctf[]
+  declaracoesFontesPagadoras DeclaracaoFontesPagadoras[]
 }
 
 model DeclaracaoPgdas {
@@ -295,6 +296,25 @@ model DeclaracaoDctf {
   cnpj           String
   arquivoNome    String
   dados          Json     // payload tipado — ver DadosDctf em src/lib/dctf-parser.ts
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([projetoId, competencia])
+  @@index([projetoId, competencia])
+}
+
+// Fontes Pagadoras (relatório DIRF do e-CAC) — rendimentos e retenções por fonte pagadora. 1
+// arquivo = 1 ano-calendário; as fontes e seus códigos de retenção ficam no JSON.
+model DeclaracaoFontesPagadoras {
+  id             String                    @id @default(cuid())
+  projetoId      String
+  projeto        ProjetoRecuperacaoCredito @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  competencia    String   // "YYYY" (ano-calendário)
+  cnpj           String   // CNPJ do beneficiário (validação contra o cliente)
+  arquivoNome    String
+  dados          Json     // payload tipado — ver DadosFontesPagadoras em src/lib/fontes-pagadoras-parser.ts
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

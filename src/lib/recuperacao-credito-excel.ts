@@ -5,6 +5,7 @@ import { montarAbaComprovantePagamento } from "./comprovante-pagamento-excel"
 import type { DadosComprovantePagamento } from "./comprovante-pagamento-parser"
 import { montarAbasEcf, type DeclaracaoEcfRegistro } from "./ecf-excel"
 import { montarAbasDctf, type DeclaracaoDctfWebRegistro, type DeclaracaoDctfRegistro } from "./dctf-excel"
+import { montarAbasFontesPagadoras, type DeclaracaoFontesPagadorasRegistro } from "./fontes-pagadoras-excel"
 import { montarAbaChecklist } from "./checklist-excel"
 
 function sanitizarNomeArquivo(nome: string): string {
@@ -26,6 +27,7 @@ export async function exportarDeclaracaoFiscalExcel(
     ecf?: DeclaracaoEcfRegistro[]
     dctfWeb?: DeclaracaoDctfWebRegistro[]
     dctf?: DeclaracaoDctfRegistro[]
+    fontesPagadoras?: DeclaracaoFontesPagadorasRegistro[]
   }
 ): Promise<void> {
   const temIcms = (dados.icms?.length ?? 0) > 0
@@ -34,8 +36,9 @@ export async function exportarDeclaracaoFiscalExcel(
   const temEcf = (dados.ecf?.length ?? 0) > 0
   const temDctfWeb = (dados.dctfWeb?.length ?? 0) > 0
   const temDctf = (dados.dctf?.length ?? 0) > 0
+  const temFontes = (dados.fontesPagadoras?.length ?? 0) > 0
 
-  if (!temIcms && !temPisCofins && !temComprovantes && !temEcf && !temDctfWeb && !temDctf) return
+  if (!temIcms && !temPisCofins && !temComprovantes && !temEcf && !temDctfWeb && !temDctf && !temFontes) return
 
   const wb = new ExcelJS.Workbook()
   wb.creator = "Tax Hub — Recuperação de Crédito"
@@ -45,6 +48,7 @@ export async function exportarDeclaracaoFiscalExcel(
   if (temPisCofins) await montarAbasPisCofins(wb, dados.pisCofins!, nomeCliente)
   if (temEcf) await montarAbasEcf(wb, dados.ecf!, nomeCliente)
   if (temDctfWeb || temDctf) await montarAbasDctf(wb, { dctfWeb: dados.dctfWeb, dctf: dados.dctf })
+  if (temFontes) await montarAbasFontesPagadoras(wb, dados.fontesPagadoras!)
   if (temComprovantes) await montarAbaComprovantePagamento(wb, dados.comprovantes!, nomeCliente)
   await montarAbaChecklist(wb, nomeCliente)
 
@@ -53,6 +57,7 @@ export async function exportarDeclaracaoFiscalExcel(
   if (temPisCofins) contextos.push("PIS e COFINS")
   if (temEcf) contextos.push("IRPJ e CSLL")
   if (temDctfWeb || temDctf) contextos.push("DCTF e DCTFWeb")
+  if (temFontes) contextos.push("Fontes Pagadoras")
   if (temComprovantes) contextos.push("Comprovante de Pagamentos")
   const contexto = contextos.join(", ")
 

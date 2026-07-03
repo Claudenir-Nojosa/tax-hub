@@ -4,6 +4,7 @@ import db from "@/lib/db"
 import { parsePgdasPdf } from "@/lib/pgdas/parser"
 import { detectarComprovantePagamento, parseComprovantesDeTexto } from "@/lib/comprovante-pagamento-parser"
 import { detectarDctfWeb, parseDctfWebDeTexto } from "@/lib/dctfweb-parser"
+import { detectarFontesPagadoras, parseFontesPagadorasDeTexto } from "@/lib/fontes-pagadoras-parser"
 
 function somenteDigitos(v: string) {
   return v.replace(/\D/g, "")
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
   }
   const cliente = projeto.cliente
 
-  const salvos: { arquivoNome: string; tipo: "PGDAS" | "COMPROVANTE" | "DCTFWEB"; detalhe: string }[] = []
+  const salvos: { arquivoNome: string; tipo: "PGDAS" | "COMPROVANTE" | "DCTFWEB" | "FONTES"; detalhe: string }[] = []
   const erros: { arquivo: string; motivo: string }[] = []
 
   for (const file of files) {
@@ -54,7 +55,32 @@ export async function POST(req: NextRequest) {
       const { text } = await extractText(uint8, { mergePages: true })
       const textoBruto = Array.isArray(text) ? text.join(" ") : text
 
-      if (detectarDctfWeb(textoBruto)) {
+      if (detectarFontesPagadoras(textoBruto)) {
+        const dados = parseFontesPagadorasDeTexto(textoBruto, file.name)
+        if (!dados) {
+          erros.push({ arquivo: file.name, motivo: "Não foi possível ler o relatório de Fontes Pagadoras" })
+          continue
+        }
+        if (somenteDigitos(dados.cnpjBeneficiario) !== somenteDigitos(cliente.cnpj)) {
+          erros.push({
+            arquivo: file.name,
+            motivo: `CNPJ do beneficiário (${dados.cnpjBeneficiario}) não corresponde ao cliente selecionado (${cliente.cnpj})`,
+          })
+          continue
+        }
+        await db.declaracaoFontesPagadoras.upsert({
+          where: { projetoId_competencia: { projetoId: projeto.id, competencia: dados.anoCalendario } },
+          create: {
+            projetoId: projeto.id,
+            competencia: dados.anoCalendario,
+            cnpj: dados.cnpjBeneficiario,
+            arquivoNome: file.name,
+            dados: dados as unknown as object,
+          },
+          update: { cnpj: dados.cnpjBeneficiario, arquivoNome: file.name, dados: dados as unknown as object },
+        })
+        salvos.push({ arquivoNome: file.name, tipo: "FONTES", detalhe: dados.anoCalendario })
+      } else if (detectarDctfWeb(textoBruto)) {
         const dados = parseDctfWebDeTexto(textoBruto, file.name)
         if (!dados) {
           erros.push({ arquivo: file.name, motivo: "Não foi possível ler o cabeçalho/débitos da DCTFWeb" })
