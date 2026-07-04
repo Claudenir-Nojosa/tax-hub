@@ -27,12 +27,10 @@ import type { DeclaracaoFontesPagadorasRegistro } from "@/lib/fontes-pagadoras-e
 import type { DadosEcd } from "@/lib/ecd-parser";
 import type { DeclaracaoEcdRegistro } from "@/lib/ecd-excel";
 import { exportarDeclaracaoFiscalExcel } from "@/lib/recuperacao-credito-excel";
+import { SecaoColapsavel, GraficoBarras, GraficoSeries, ListaArquivosColapsavel } from "@/components/recuperacao-credito/painel-importados";
 import {
   FileSearch,
   Upload,
-  FileSpreadsheet,
-  FileText,
-  X,
   Loader2,
   CheckCircle,
   AlertTriangle,
@@ -141,12 +139,6 @@ interface DeclaracaoEcdRow {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -1160,48 +1152,15 @@ export default function RecuperacaoCreditoPage() {
             />
           </div>
 
-          {/* File list */}
-          {arquivos.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
-                Arquivos carregados
-              </p>
-              {arquivos.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50"
-                >
-                  <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
-                    {isPdf(a.name) || isEfd(a.name) ? (
-                      <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    ) : (
-                      <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                      {a.name}
-                    </p>
-                    <p className="text-xs text-gray-400">{formatBytes(a.size)}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removerArquivo(a.id)}
-                    className="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 transition-colors flex-shrink-0"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* File list — resumo colapsável (contagem + tamanho, expande pra ver/remover cada um) */}
+          <ListaArquivosColapsavel arquivos={arquivos} onRemover={removerArquivo} />
 
           {/* Meses do Simples Nacional já importados para o projeto selecionado */}
           {projetoSelecionado && (carregandoDeclaracoes || mesesAgrupados.length > 0) && (
-            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
-                Simples Nacional importado — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
-              </p>
+            <SecaoColapsavel
+              titulo="Simples Nacional"
+              resumo={carregandoDeclaracoes ? "carregando…" : `${mesesAgrupados.length} ${mesesAgrupados.length === 1 ? "competência" : "competências"}`}
+            >
               {carregandoDeclaracoes ? (
                 <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
               ) : (
@@ -1254,19 +1213,32 @@ export default function RecuperacaoCreditoPage() {
                   </div>
                 </>
               )}
-            </div>
+            </SecaoColapsavel>
           )}
 
           {/* Meses de ICMS/IPI já importados para o projeto selecionado */}
           {projetoSelecionado && (carregandoDeclaracoesEfd || mesesEfdOrdenados.length > 0) && (
-            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
-                ICMS/IPI importado — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
-              </p>
+            <SecaoColapsavel
+              titulo="ICMS / IPI"
+              resumo={carregandoDeclaracoesEfd ? "carregando…" : `${mesesEfdOrdenados.length} ${mesesEfdOrdenados.length === 1 ? "competência" : "competências"}`}
+            >
               {carregandoDeclaracoesEfd ? (
                 <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
               ) : (
-                <Table>
+                <>
+                  {mesesEfdOrdenados.length > 0 && (
+                    <GraficoBarras
+                      dados={mesesEfdOrdenados.map((d) => ({
+                        mes: formatarCompetencia(d.competencia),
+                        valor: d.dados.apuracaoIcms.icmsARecolher,
+                      }))}
+                      chaveX="mes"
+                      chaveValor="valor"
+                      nome="ICMS a Recolher"
+                      cor="#60a5fa"
+                    />
+                  )}
+                  <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Competência</TableHead>
@@ -1294,20 +1266,36 @@ export default function RecuperacaoCreditoPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </>
               )}
-            </div>
+            </SecaoColapsavel>
           )}
 
           {/* Meses de PIS/COFINS (EFD Contribuições) já importados para o projeto selecionado */}
           {projetoSelecionado && (carregandoDeclaracoesEfdContrib || mesesEfdContribOrdenados.length > 0) && (
-            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
-                PIS/COFINS importado — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
-              </p>
+            <SecaoColapsavel
+              titulo="PIS / COFINS"
+              resumo={carregandoDeclaracoesEfdContrib ? "carregando…" : `${mesesEfdContribOrdenados.length} ${mesesEfdContribOrdenados.length === 1 ? "competência" : "competências"}`}
+            >
               {carregandoDeclaracoesEfdContrib ? (
                 <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
               ) : (
-                <Table>
+                <>
+                  {mesesEfdContribOrdenados.length > 0 && (
+                    <GraficoSeries
+                      dados={mesesEfdContribOrdenados.map((d) => ({
+                        mes: formatarCompetencia(d.competencia),
+                        PIS: d.dados.apuracaoPis.valorARecolher,
+                        COFINS: d.dados.apuracaoCofins.valorARecolher,
+                      }))}
+                      chaveX="mes"
+                      series={[
+                        { chave: "PIS", nome: "PIS" },
+                        { chave: "COFINS", nome: "COFINS" },
+                      ]}
+                    />
+                  )}
+                  <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Competência</TableHead>
@@ -1337,20 +1325,37 @@ export default function RecuperacaoCreditoPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </>
               )}
-            </div>
+            </SecaoColapsavel>
           )}
 
           {/* Anos de ECF (IRPJ/CSLL - Lucro Presumido) já importados para o projeto selecionado */}
           {projetoSelecionado && (carregandoDeclaracoesEcf || anosEcfOrdenados.length > 0) && (
-            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
-                ECF (IRPJ/CSLL) importada — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
-              </p>
+            <SecaoColapsavel
+              titulo="ECF (IRPJ / CSLL)"
+              resumo={carregandoDeclaracoesEcf ? "carregando…" : `${anosEcfOrdenados.length} ${anosEcfOrdenados.length === 1 ? "ano" : "anos"}`}
+            >
               {carregandoDeclaracoesEcf ? (
                 <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
               ) : (
-                <Table>
+                <>
+                  {anosEcfOrdenados.length > 0 && (
+                    <GraficoSeries
+                      dados={anosEcfOrdenados.map((d) => ({
+                        ano: String(d.ano),
+                        IRPJ: d.irpjAPagar,
+                        CSLL: d.csllAPagar,
+                      }))}
+                      chaveX="ano"
+                      series={[
+                        { chave: "IRPJ", nome: "IRPJ" },
+                        { chave: "CSLL", nome: "CSLL" },
+                      ]}
+                      empilhado={false}
+                    />
+                  )}
+                  <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Ano</TableHead>
@@ -1380,16 +1385,17 @@ export default function RecuperacaoCreditoPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </>
               )}
-            </div>
+            </SecaoColapsavel>
           )}
 
           {/* DCTFWeb (PDF) importadas — lista de débitos declarados fica no Excel */}
           {projetoSelecionado && (carregandoDctf || dctfWebOrdenadas.length > 0) && (
-            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
-                DCTFWeb importada — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
-              </p>
+            <SecaoColapsavel
+              titulo="DCTFWeb"
+              resumo={carregandoDctf ? "carregando…" : `${dctfWebOrdenadas.length} ${dctfWebOrdenadas.length === 1 ? "período" : "períodos"}`}
+            >
               {carregandoDctf ? (
                 <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
               ) : (
@@ -1426,15 +1432,15 @@ export default function RecuperacaoCreditoPage() {
                   </Table>
                 )
               )}
-            </div>
+            </SecaoColapsavel>
           )}
 
           {/* DCTF (.dec) importadas — lista de débitos declarados fica no Excel */}
           {projetoSelecionado && (carregandoDctf || dctfOrdenadas.length > 0) && (
-            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
-                DCTF importada — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
-              </p>
+            <SecaoColapsavel
+              titulo="DCTF"
+              resumo={carregandoDctf ? "carregando…" : `${dctfOrdenadas.length} ${dctfOrdenadas.length === 1 ? "competência" : "competências"}`}
+            >
               {carregandoDctf ? (
                 <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
               ) : (
@@ -1469,15 +1475,15 @@ export default function RecuperacaoCreditoPage() {
                   </Table>
                 )
               )}
-            </div>
+            </SecaoColapsavel>
           )}
 
           {/* ECD (Balanço Patrimonial) importada — detalhamento das contas fica no Excel */}
           {projetoSelecionado && (carregandoEcd || ecdOrdenadas.length > 0) && (
-            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
-                ECD (Balanço Patrimonial) importada — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
-              </p>
+            <SecaoColapsavel
+              titulo="ECD (Balanço Patrimonial)"
+              resumo={carregandoEcd ? "carregando…" : `${ecdOrdenadas.length} ${ecdOrdenadas.length === 1 ? "ano" : "anos"}`}
+            >
               {carregandoEcd ? (
                 <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
               ) : (
@@ -1508,19 +1514,27 @@ export default function RecuperacaoCreditoPage() {
                   </Table>
                 )
               )}
-            </div>
+            </SecaoColapsavel>
           )}
 
           {/* Fontes Pagadoras (DIRF) importadas — detalhamento por fonte/código fica no Excel */}
           {projetoSelecionado && (carregandoFontes || fontesOrdenadas.length > 0) && (
-            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
-                Fontes Pagadoras importadas — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
-              </p>
+            <SecaoColapsavel
+              titulo="Fontes Pagadoras (DIRF)"
+              resumo={carregandoFontes ? "carregando…" : `${fontesOrdenadas.length} ${fontesOrdenadas.length === 1 ? "ano" : "anos"}`}
+            >
               {carregandoFontes ? (
                 <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
               ) : (
                 fontesOrdenadas.length > 0 && (
+                  <>
+                  <GraficoBarras
+                    dados={fontesOrdenadas.map((d) => ({ ano: String(d.ano), valor: d.totalImposto }))}
+                    chaveX="ano"
+                    chaveValor="valor"
+                    nome="Imposto Retido"
+                    cor="#818cf8"
+                  />
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1547,20 +1561,20 @@ export default function RecuperacaoCreditoPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  </>
                 )
               )}
-            </div>
+            </SecaoColapsavel>
           )}
 
           {/* Comprovantes de pagamento (DARF): resumo consolidado por ano de PIS/COFINS/IRPJ/CSLL
               pagos — o detalhamento por DARF fica no Excel, não aqui */}
           {projetoSelecionado && (carregandoDeclaracoesComprovante || declaracoesComprovante.length > 0) && (
-            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-              <div className="flex items-center justify-between px-1">
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                  Pagamentos (DARF) por ano — {clienteSelecionado?.razaoSocial} · {projetoSelecionado.nome}
-                </p>
-                {declaracoesComprovante.length > 0 && (
+            <SecaoColapsavel
+              titulo="Pagamentos (DARF)"
+              resumo={carregandoDeclaracoesComprovante ? "carregando…" : `${declaracoesComprovante.length} DARF(s)`}
+              acaoDireita={
+                declaracoesComprovante.length > 0 ? (
                   <button
                     onClick={handleExcluirComprovantes}
                     title={`Remover todos os ${declaracoesComprovante.length} DARF(s) importados`}
@@ -1568,12 +1582,31 @@ export default function RecuperacaoCreditoPage() {
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
-                )}
-              </div>
+                ) : undefined
+              }
+            >
               {carregandoDeclaracoesComprovante ? (
                 <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
               ) : (
                 <>
+                  {comprovantesPorAno.length > 0 && (
+                    <GraficoSeries
+                      dados={comprovantesPorAno.map((linha) => ({
+                        ano: String(linha.ano),
+                        PIS: linha.PIS,
+                        COFINS: linha.COFINS,
+                        IRPJ: linha.IRPJ,
+                        CSLL: linha.CSLL,
+                      }))}
+                      chaveX="ano"
+                      series={[
+                        { chave: "PIS", nome: "PIS" },
+                        { chave: "COFINS", nome: "COFINS" },
+                        { chave: "IRPJ", nome: "IRPJ" },
+                        { chave: "CSLL", nome: "CSLL" },
+                      ]}
+                    />
+                  )}
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1613,7 +1646,7 @@ export default function RecuperacaoCreditoPage() {
                   </p>
                 </>
               )}
-            </div>
+            </SecaoColapsavel>
           )}
 
           {/* Um botão só: se ICMS/IPI, PIS/COFINS, IRPJ/CSLL e/ou Comprovante de Pagamentos foram importados no mesmo projeto, sai 1 Excel com todas as abas */}
