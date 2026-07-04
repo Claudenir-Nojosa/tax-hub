@@ -1,19 +1,25 @@
 import ExcelJS from "exceljs"
 import type { DeclaracaoEfdContribuicoesRegistro, RefsDebitoPisCofins } from "./efd-contribuicoes-excel"
+import type { DeclaracaoEcfRegistro, RefsDebitoEcf } from "./ecf-excel"
 import type { DeclaracaoDctfRegistro, DeclaracaoDctfWebRegistro } from "./dctf-excel"
 import type { DadosComprovantePagamento } from "./comprovante-pagamento-parser"
 import { labelTributo } from "./comprovante-pagamento-parser"
 import { NOME_ABA_SELIC, selicAcumuladaParaPeriodo } from "./selic-excel"
 
-// Aba "PIS e COFINS" — consolidação de créditos tributários, réplica do WP de diagnóstico do
-// usuário: uma linha por tributo × competência da EFD Contribuições, TUDO em fórmula (pedido
-// explícito), pra o analista poder mexer em "Novo Débito"/restituído/parcelado/Dcomp e ver
-// Crédito/Contingência/Atualização recalcularem.
+// Abas de consolidação de créditos tributários — réplica do WP de diagnóstico do usuário:
+//   "PIS e COFINS": uma linha por tributo × competência MENSAL da EFD Contribuições.
+//   "IRPJ e CSLL": uma linha por tributo × TRIMESTRE da ECF (Lucro Presumido); o período (col E)
+//     é o 1º dia do ÚLTIMO mês do trimestre (mar/jun/set/dez) — é assim que o débito aparece na
+//     DCTF/DCTFWeb (competência do fechamento) e no DARF (PA impresso 31/03 → PA normalizado
+//     01/03), então os mesmos SOMASES casam sem tratamento especial.
+// As duas compartilham o mesmo layout e as mesmas fórmulas (núcleo genérico
+// montarAbaConsolidacao), TUDO em fórmula (pedido explícito) pra o analista poder mexer em
+// "Novo Débito"/restituído/parcelado/Dcomp e ver Crédito/Contingência/Atualização recalcularem.
 //
 // De onde vem cada coluna:
-//   F (Apuração Débito Original) → referência direta à célula "$ Valor da Contribuição a
-//     Recolher" da aba PIS/COFINS (validado contra o WP real: COFINS 04/2021 = 224,91 =
-//     valorARecolher, NÃO o débito antes das deduções).
+//   F (Apuração Débito Original) → referência direta à célula de débito da aba de origem:
+//     PIS/COFINS = "$ Valor da Contribuição a Recolher" (validado contra o WP real: COFINS
+//     04/2021 = 224,91 = valorARecolher); IRPJ/CSLL = "$ IMPOSTO DE RENDA/CSLL A PAGAR" da ECF.
 //   I (DCTF) → SOMASES na aba DCTF (V=Vlr Débito Apurado, S=Tributo, D=PA) e/ou na DCTFWeb
 //     (O=Vlr Débito Apurado, K=Tributo, E=PA) — a partir de 2025 a apuração migra pra DCTFWeb,
 //     mas como cada competência só existe numa das duas, a soma das duas resolve sem SE por ano.
@@ -50,32 +56,39 @@ async function carregarLogoBase64(): Promise<string | null> {
   }
 }
 
-export interface DadosConsolidacaoPisCofins {
-  declaracoes: DeclaracaoEfdContribuicoesRegistro[]
-  refsDebito: RefsDebitoPisCofins
+interface FontesLookup {
   dctf?: DeclaracaoDctfRegistro[]
   dctfWeb?: DeclaracaoDctfWebRegistro[]
   comprovantes?: DadosComprovantePagamento[]
 }
 
-type Tributo = "PIS" | "COFINS"
+export interface DadosConsolidacaoPisCofins extends FontesLookup {
+  declaracoes: DeclaracaoEfdContribuicoesRegistro[]
+  refsDebito: RefsDebitoPisCofins
+}
 
-// resultados pré-calculados em JS (mesma conta das fórmulas) pro `result` de cada célula
-interface LinhaCalc {
+export interface DadosConsolidacaoIrpjCsll extends FontesLookup {
+  declaracoes: DeclaracaoEcfRegistro[]
+  refsDebito: RefsDebitoEcf
+}
+
+// linha da consolidação com os resultados pré-calculados em JS (mesma conta das fórmulas)
+interface LinhaConsolidacao {
   cnpj: string
-  tributo: Tributo
-  competencia: string
+  tributo: string
+  competencia: string // "YYYY-MM" — mês que casa com o PA das abas DCTF/DCTFWeb/Comprovante
   periodo: Date
+  refDebitoOriginal: string // ex.: "'COFINS'!F40"
   debitoOriginal: number
   dctf: number
   darf: number
 }
 
-function somaDctf(tributo: Tributo, competencia: string, dctf: DeclaracaoDctfRegistro[], dctfWeb: DeclaracaoDctfWebRegistro[]): number {
+function somaDctf(tributo: string, competencia: string, dctf: DeclaracaoDctfRegistro[], dctfWeb: DeclaracaoDctfWebRegistro[]): number {
   let soma = 0
   for (const d of dctf) {
     if (d.competencia !== competencia) continue
-    for (const deb of d.dados.debitos) if (deb.tributo === tributo) soma += deb.valorDebito
+    for (const deb of d.dados.debitos) if (deb.tributo === tributo) soma += deb.valorDebito ?? 0
   }
   for (const d of dctfWeb) {
     if (d.competencia !== competencia) continue
@@ -84,7 +97,7 @@ function somaDctf(tributo: Tributo, competencia: string, dctf: DeclaracaoDctfReg
   return soma
 }
 
-function somaDarf(tributo: Tributo, competencia: string, comprovantes: DadosComprovantePagamento[]): number {
+function somaDarf(tributo: string, competencia: string, comprovantes: DadosComprovantePagamento[]): number {
   let soma = 0
   for (const darf of comprovantes) {
     const m = darf.periodoApuracao.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
@@ -94,37 +107,25 @@ function somaDarf(tributo: Tributo, competencia: string, comprovantes: DadosComp
   return soma
 }
 
-export async function montarAbaConsolidacaoPisCofins(wb: ExcelJS.Workbook, dados: DadosConsolidacaoPisCofins): Promise<void> {
-  const temDctf = (dados.dctf?.length ?? 0) > 0
-  const temDctfWeb = (dados.dctfWeb?.length ?? 0) > 0
-  const temComprovante = (dados.comprovantes?.length ?? 0) > 0
-
-  const porCompetencia = new Map(dados.declaracoes.map((d) => [d.competencia, d.dados]))
-  const competencias = dados.refsDebito.competencias
-
-  // mesma ordem do WP de referência: bloco COFINS inteiro, depois bloco PIS
-  const linhas: LinhaCalc[] = []
-  for (const tributo of ["COFINS", "PIS"] as const) {
-    for (const comp of competencias) {
-      const decl = porCompetencia.get(comp)
-      if (!decl) continue
-      const apuracao = tributo === "PIS" ? decl.apuracaoPis : decl.apuracaoCofins
-      const m = comp.match(/^(\d{4})-(\d{2})$/)
-      if (!m) continue
-      linhas.push({
-        cnpj: decl.cnpj,
-        tributo,
-        competencia: comp,
-        periodo: new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1)),
-        debitoOriginal: apuracao?.valorARecolher ?? 0,
-        dctf: somaDctf(tributo, comp, dados.dctf ?? [], dados.dctfWeb ?? []),
-        darf: somaDarf(tributo, comp, dados.comprovantes ?? []),
-      })
-    }
+// Núcleo comum das duas consolidações: mesma tabela, mesmas colunas B..T, mesmas fórmulas.
+async function montarAbaConsolidacao(
+  wb: ExcelJS.Workbook,
+  opts: {
+    nomeAba: string
+    nomeTabela: string
+    titulo: string
+    rotuloFonte: "EFD" | "ECF" // aparece nos cabeçalhos "Dif Cred …", "Dif DCTF x …", "DARF x … Orig"
+    linhas: LinhaConsolidacao[]
+    fontes: FontesLookup
   }
+): Promise<void> {
+  const { linhas } = opts
   if (linhas.length === 0) return
+  const temDctf = (opts.fontes.dctf?.length ?? 0) > 0
+  const temDctfWeb = (opts.fontes.dctfWeb?.length ?? 0) > 0
+  const temComprovante = (opts.fontes.comprovantes?.length ?? 0) > 0
 
-  const ws = wb.addWorksheet("PIS e COFINS", { views: [{ showGridLines: false }] })
+  const ws = wb.addWorksheet(opts.nomeAba, { views: [{ showGridLines: false }] })
   ws.properties.tabColor = { argb: TAB_COLOR }
   ws.columns = [
     { width: 3 }, // A
@@ -157,18 +158,18 @@ export async function montarAbaConsolidacaoPisCofins(wb: ExcelJS.Workbook, dados
   }
 
   const titulo = ws.getCell(5, 2)
-  titulo.value = "Consolidação de Créditos Tributários - PIS e COFINS"
+  titulo.value = opts.titulo
   titulo.font = { name: "Calibri", bold: true, size: 12 }
 
   const LINHA_HEADER = 7
   const colunas = [
-    "CNPJ", "Tributo", "ANO", "Período", "Apuração Débito Original", "Novo Débito", "Dif Cred EFD", "DCTF",
-    "Dif DCTF x EFD", "Pgto DARF", "Valor já restituído", "Parcelado", "Dcomp", "DARF x EFD Orig",
+    "CNPJ", "Tributo", "ANO", "Período", "Apuração Débito Original", "Novo Débito", `Dif Cred ${opts.rotuloFonte}`, "DCTF",
+    `Dif DCTF x ${opts.rotuloFonte}`, "Pgto DARF", "Valor já restituído", "Parcelado", "Dcomp", `DARF x ${opts.rotuloFonte} Orig`,
     "DIF DCTF x DARF x Dcomp", "Crédito", "Contingência", "Atualização", "Pagamento Indev",
   ]
 
   ws.addTable({
-    name: "ConsolidacaoPisCofins",
+    name: opts.nomeTabela,
     ref: `B${LINHA_HEADER}`,
     headerRow: true,
     totalsRow: false,
@@ -189,7 +190,7 @@ export async function montarAbaConsolidacaoPisCofins(wb: ExcelJS.Workbook, dados
     row.getCell(4).value = f(`YEAR(E${r})`, l.periodo.getUTCFullYear()) // D ANO
     row.getCell(5).numFmt = "mm/yyyy" // E Período (valor já veio da tabela)
 
-    row.getCell(6).value = f(`${dados.refsDebito.celulaPorTributo[l.tributo][l.competencia]}`, l.debitoOriginal) // F
+    row.getCell(6).value = f(l.refDebitoOriginal, l.debitoOriginal) // F
     row.getCell(7).value = f(`F${r}`, l.debitoOriginal) // G Novo Débito
     row.getCell(8).value = f(`F${r}-G${r}`, 0) // H Dif Cred EFD
 
@@ -259,4 +260,80 @@ export async function montarAbaConsolidacaoPisCofins(wb: ExcelJS.Workbook, dados
   }
 
   ws.views = [{ showGridLines: false, state: "frozen", xSplit: 0, ySplit: LINHA_HEADER }]
+}
+
+export async function montarAbaConsolidacaoPisCofins(wb: ExcelJS.Workbook, dados: DadosConsolidacaoPisCofins): Promise<void> {
+  const porCompetencia = new Map(dados.declaracoes.map((d) => [d.competencia, d.dados]))
+
+  // mesma ordem do WP de referência: bloco COFINS inteiro, depois bloco PIS
+  const linhas: LinhaConsolidacao[] = []
+  for (const tributo of ["COFINS", "PIS"] as const) {
+    for (const comp of dados.refsDebito.competencias) {
+      const decl = porCompetencia.get(comp)
+      if (!decl) continue
+      const apuracao = tributo === "PIS" ? decl.apuracaoPis : decl.apuracaoCofins
+      const m = comp.match(/^(\d{4})-(\d{2})$/)
+      if (!m) continue
+      linhas.push({
+        cnpj: decl.cnpj,
+        tributo,
+        competencia: comp,
+        periodo: new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1)),
+        refDebitoOriginal: dados.refsDebito.celulaPorTributo[tributo][comp],
+        debitoOriginal: apuracao?.valorARecolher ?? 0,
+        dctf: somaDctf(tributo, comp, dados.dctf ?? [], dados.dctfWeb ?? []),
+        darf: somaDarf(tributo, comp, dados.comprovantes ?? []),
+      })
+    }
+  }
+
+  await montarAbaConsolidacao(wb, {
+    nomeAba: "PIS e COFINS",
+    nomeTabela: "ConsolidacaoPisCofins",
+    titulo: "Consolidação de Créditos Tributários - PIS e COFINS",
+    rotuloFonte: "EFD",
+    linhas,
+    fontes: dados,
+  })
+}
+
+// trimestre da ECF ("T01".."T04") → mês em que o débito fecha (competência da DCTF/DCTFWeb e mês
+// do PA impresso no DARF: 31/03 → 01/03 etc.)
+const MES_FIM_TRIMESTRE: Record<string, string> = { T01: "03", T02: "06", T03: "09", T04: "12" }
+
+export async function montarAbaConsolidacaoIrpjCsll(wb: ExcelJS.Workbook, dados: DadosConsolidacaoIrpjCsll): Promise<void> {
+  const ordenadas = [...dados.declaracoes].sort((a, b) => a.competencia.localeCompare(b.competencia))
+
+  const linhas: LinhaConsolidacao[] = []
+  for (const tributo of ["IRPJ", "CSLL"] as const) {
+    for (const decl of ordenadas) {
+      const periodos = [...decl.dados.periodos].sort((a, b) => a.periodo.localeCompare(b.periodo))
+      for (const p of periodos) {
+        const mesFim = MES_FIM_TRIMESTRE[p.periodo]
+        if (!mesFim) continue // "A00" (anual) fica de fora — sem amostra validada de PA anual
+        const ref = dados.refsDebito.celulaPorTributo[tributo][`${decl.dados.anoCalendario}-${p.periodo}`]
+        if (!ref) continue
+        const competencia = `${decl.dados.anoCalendario}-${mesFim}`
+        linhas.push({
+          cnpj: decl.dados.cnpj,
+          tributo,
+          competencia,
+          periodo: new Date(Date.UTC(Number(decl.dados.anoCalendario), Number(mesFim) - 1, 1)),
+          refDebitoOriginal: ref.celula,
+          debitoOriginal: ref.valor,
+          dctf: somaDctf(tributo, competencia, dados.dctf ?? [], dados.dctfWeb ?? []),
+          darf: somaDarf(tributo, competencia, dados.comprovantes ?? []),
+        })
+      }
+    }
+  }
+
+  await montarAbaConsolidacao(wb, {
+    nomeAba: "IRPJ e CSLL",
+    nomeTabela: "ConsolidacaoIrpjCsll",
+    titulo: "Consolidação de Créditos Tributários - IRPJ e CSLL",
+    rotuloFonte: "ECF",
+    linhas,
+    fontes: dados,
+  })
 }

@@ -66,7 +66,19 @@ export interface DeclaracaoEcfRegistro {
 // Uma coluna por período de apuração (trimestre), ao longo de todos os anos importados.
 interface ColunaEcf {
   label: string // "1T/2021"
+  chave: string // "2021-T01" — chave usada pelas refs da consolidação IRPJ/CSLL
   periodo: PeriodoEcf
+}
+
+// Endereço + valor da célula "$ ... A PAGAR" por tributo × período ("YYYY-TXX") — é o "Apuração
+// Débito Original" que a aba de consolidação "IRPJ e CSLL" referencia por fórmula (ver
+// src/lib/consolidacao-pis-cofins-excel.ts). O valor vai junto pra consolidação embutir o
+// `result` sem duplicar a regra do código a pagar (P300/15, P500/13).
+export interface RefsDebitoEcf {
+  celulaPorTributo: {
+    IRPJ: Record<string, { celula: string; valor: number }>
+    CSLL: Record<string, { celula: string; valor: number }>
+  }
 }
 
 function montarColunas(declaracoes: DeclaracaoEcfRegistro[]): ColunaEcf[] {
@@ -75,7 +87,11 @@ function montarColunas(declaracoes: DeclaracaoEcfRegistro[]): ColunaEcf[] {
   for (const d of ordenadas) {
     const periodos = [...d.dados.periodos].sort((a, b) => a.periodo.localeCompare(b.periodo))
     for (const p of periodos) {
-      colunas.push({ label: labelPeriodoEcf(p.periodo, d.dados.anoCalendario), periodo: p })
+      colunas.push({
+        label: labelPeriodoEcf(p.periodo, d.dados.anoCalendario),
+        chave: `${d.dados.anoCalendario}-${p.periodo}`,
+        periodo: p,
+      })
     }
   }
   return colunas
@@ -136,7 +152,7 @@ function montarAbaTributoEcf(
   extraiCalculo: (p: PeriodoEcf) => LinhaEcf[],
   linhasCalculoEspecificas: LinhaSpec[],
   codigoAPagar: string
-) {
+): Record<string, { celula: string; valor: number }> {
   const receitas = dimensaoNaoZerada(colunas, extraiBase, (l) => RECEITA_PERCENTUAL_RE.test(l.descricao))
   const deducoes = dimensaoNaoZerada(colunas, extraiCalculo, (l) => DEDUCAO_RE.test(l.descricao))
 
@@ -199,6 +215,7 @@ function montarAbaTributoEcf(
   ]
 
   const ROW_HEADER = 5
+  const idxLinhaAPagar = linhas.findIndex((l) => l.destaque === "cinza")
   linhas.forEach((linha, idx) => {
     const row = ws.getRow(idx + ROW_HEADER + 1)
     const bg = linha.destaque === "cinza" ? COR.cinzaClaro : linha.destaque === "azul" ? COR.azulClaro : undefined
@@ -219,6 +236,16 @@ function montarAbaTributoEcf(
     }
     row.outlineLevel = linha.bold && !linha.destaque ? 0 : 1
   })
+
+  const linhaAPagar = idxLinhaAPagar + ROW_HEADER + 1
+  const refs: Record<string, { celula: string; valor: number }> = {}
+  colunas.forEach((col, i) => {
+    refs[col.chave] = {
+      celula: `'${nomeTributo}'!${ws.getCell(linhaAPagar, i + 3).address}`,
+      valor: valorLinhaEcf(extraiCalculo(col.periodo), codigoAPagar),
+    }
+  })
+  return refs
 }
 
 // Monta as abas "IRPJ" e "CSLL" dentro de um workbook já existente (permite combinar com as
@@ -227,10 +254,11 @@ export async function montarAbasEcf(
   wb: ExcelJS.Workbook,
   declaracoes: DeclaracaoEcfRegistro[],
   nomeCliente: string
-): Promise<void> {
+): Promise<RefsDebitoEcf> {
   const colunas = montarColunas(declaracoes)
   const nomeCurto = nomeCliente.trim().split(/\s+/)[0] || nomeCliente
   const logoBase64 = await carregarLogoBase64()
+  const refs: RefsDebitoEcf = { celulaPorTributo: { IRPJ: {}, CSLL: {} } }
 
   const abas: {
     nome: "IRPJ" | "CSLL"
@@ -286,8 +314,17 @@ export async function montarAbasEcf(
     }
     sc(ws.getCell(3, 2), { value: `${aba.nome} - Lucro Presumido - ${nomeCurto}`, bold: true, size: 12 })
 
-    montarAbaTributoEcf(ws, aba.nome, colunas, aba.extraiBase, aba.extraiCalculo, aba.linhas, aba.codigoAPagar)
+    refs.celulaPorTributo[aba.nome] = montarAbaTributoEcf(
+      ws,
+      aba.nome,
+      colunas,
+      aba.extraiBase,
+      aba.extraiCalculo,
+      aba.linhas,
+      aba.codigoAPagar
+    )
   }
+  return refs
 }
 
 // Uso standalone (só IRPJ/CSLL, sem combinar com outras abas) — cria o workbook, monta as abas

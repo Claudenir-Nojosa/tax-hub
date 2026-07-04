@@ -10,7 +10,7 @@ import { montarAbasEcd, type DeclaracaoEcdRegistro } from "./ecd-excel"
 import { montarAbaChecklist } from "./checklist-excel"
 import { criarAbaMenu, preencherAbaMenu } from "./cadastro-excel"
 import type { DadosCadastroEmpresa } from "./cadastro-parser"
-import { montarAbaConsolidacaoPisCofins } from "./consolidacao-pis-cofins-excel"
+import { montarAbaConsolidacaoPisCofins, montarAbaConsolidacaoIrpjCsll } from "./consolidacao-pis-cofins-excel"
 import { montarAbaSelic } from "./selic-excel"
 
 function sanitizarNomeArquivo(nome: string): string {
@@ -61,14 +61,15 @@ export async function exportarDeclaracaoFiscalExcel(
 
   if (temIcms) await montarAbaIcms(wb, dados.icms!, nomeCliente)
   const refsDebito = temPisCofins ? await montarAbasPisCofins(wb, dados.pisCofins!, nomeCliente) : null
-  if (temEcf) await montarAbasEcf(wb, dados.ecf!, nomeCliente)
+  const refsDebitoEcf = temEcf ? await montarAbasEcf(wb, dados.ecf!, nomeCliente) : null
   if (temEcd) await montarAbasEcd(wb, dados.ecd!)
   if (temDctfWeb || temDctf) await montarAbasDctf(wb, { dctfWeb: dados.dctfWeb, dctf: dados.dctf })
   if (temFontes) await montarAbasFontesPagadoras(wb, dados.fontesPagadoras!)
   if (temComprovantes) await montarAbaComprovantePagamento(wb, dados.comprovantes!, nomeCliente)
   await montarAbaChecklist(wb, nomeCliente)
-  // Consolidação "PIS e COFINS" + tabela "Selic" ficam no FINAL do arquivo (pedido do usuário);
-  // a consolidação referencia por fórmula as abas PIS/COFINS, DCTF/DCTFWeb, Comprovante e Selic.
+  // Consolidações "PIS e COFINS" / "IRPJ e CSLL" + tabela "Selic" ficam no FINAL do arquivo
+  // (pedido do usuário); referenciam por fórmula as abas PIS/COFINS/IRPJ/CSLL, DCTF/DCTFWeb,
+  // Comprovante e Selic.
   if (temPisCofins && refsDebito) {
     await montarAbaConsolidacaoPisCofins(wb, {
       declaracoes: dados.pisCofins!,
@@ -77,8 +78,17 @@ export async function exportarDeclaracaoFiscalExcel(
       dctfWeb: dados.dctfWeb,
       comprovantes: dados.comprovantes,
     })
-    montarAbaSelic(wb)
   }
+  if (temEcf && refsDebitoEcf) {
+    await montarAbaConsolidacaoIrpjCsll(wb, {
+      declaracoes: dados.ecf!,
+      refsDebito: refsDebitoEcf,
+      dctf: dados.dctf,
+      dctfWeb: dados.dctfWeb,
+      comprovantes: dados.comprovantes,
+    })
+  }
+  if ((temPisCofins && refsDebito) || (temEcf && refsDebitoEcf)) montarAbaSelic(wb)
   if (wsMenu && cadastro) await preencherAbaMenu(wsMenu, wb, cadastro, nomeCliente)
 
   const contextos: string[] = []

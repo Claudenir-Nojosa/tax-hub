@@ -533,7 +533,7 @@ determinístico.
 - **UI**: seção colapsável "Cadastro (Menu)" (primeira seção), com resumo "CNPJ · Simples · QSA"
   conforme as partes presentes e lixeira que apaga o cadastro inteiro do projeto.
 
-## 16. Consolidação "PIS e COFINS" + tabela "Selic" (últimas abas do arquivo)
+## 16. Consolidações "PIS e COFINS" / "IRPJ e CSLL" + tabela "Selic" (últimas abas do arquivo)
 
 - **O quê**: duas abas no FINAL do Excel combinado, réplica do WP de diagnóstico do usuário
   (`pis e cofins e selic.xlsx`): **"PIS e COFINS"** (consolidação de créditos, uma linha por
@@ -574,3 +574,18 @@ determinístico.
 - **Validação e2e feita**: workbook gerado com os dados reais da CORE (65 EFDs, 48 DCTFs, 16
   DCTFWebs, 324 DARFs), SOMASES de I e K simulados em JS contra as abas geradas = 100% iguais aos
   results embutidos; F confere com a referência campo a campo.
+- **"IRPJ e CSLL"** (mesmo núcleo genérico `montarAbaConsolidacao`, rotulos "Dif Cred ECF" etc.):
+  uma linha por tributo × TRIMESTRE da ECF (bloco IRPJ inteiro, depois CSLL). F referencia a
+  célula "$ IMPOSTO DE RENDA/CSLL A PAGAR" da aba IRPJ/CSLL (retorno `RefsDebitoEcf` de
+  `montarAbasEcf`, que também traz o valor pra embutir o `result` sem duplicar a regra
+  P300/15–P500/13). **Chave do casamento trimestral (validada em dados reais)**: o período
+  (col E) é o 1º dia do ÚLTIMO mês do trimestre (mar/jun/set/dez) — é a competência em que o
+  débito aparece na DCTF/DCTFWeb (ex.: 2º tri/2025 → DCTFWeb 2025-06) e o mês do PA impresso no
+  DARF (31/03 → PA normalizado 01/03). Períodos "A00" (apuração anual) ficam de fora — sem
+  amostra validada. Validação e2e (projeto com DCTF nova): cruzamento independente ECF × DCTF
+  bateu (IRPJ 1T/2021 = 7.777,73 nas duas fontes) e os SOMASES simulados = results embutidos nas
+  32 linhas.
+- **Atenção — dados de DCTF antigos**: projetos com `.dec` importados antes do parser atual
+  gravaram débitos sem `tributo`/`valorDebito` (só grupo/código/vencimento). Pra coluna DCTF das
+  consolidações funcionar nesses projetos, reimportar os `.dec` (o upsert por competência
+  substitui).
