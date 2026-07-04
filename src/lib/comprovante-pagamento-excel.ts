@@ -53,10 +53,14 @@ async function carregarLogoBase64(): Promise<string | null> {
   }
 }
 
-function parseDataBR(data: string): Date | null {
+// PA normalizado pro 1º dia do mês: o período impresso no DARF varia o dia (01, 30, 31...), mas
+// a coluna PA existe pra casar com o SOMASES da aba de consolidação "PIS e COFINS" (critério =
+// 1º dia da competência), igual ao WP de referência do usuário. A data impressa continua
+// visível na coluna "Período Apuração" (texto).
+function primeiroDiaDoMes(data: string): Date | null {
   const m = data.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
   if (!m) return null
-  return new Date(Date.UTC(Number(m[3]), Number(m[2]) - 1, Number(m[1])))
+  return new Date(Date.UTC(Number(m[3]), Number(m[2]) - 1, 1))
 }
 
 // Uma linha por combinação (DARF, código de receita) — mesma granularidade do arquivo de
@@ -166,7 +170,7 @@ export async function montarAbaComprovantePagamento(
       darf.cnpj,
       darf.razaoSocial,
       darf.periodoApuracao,
-      parseDataBR(darf.periodoApuracao),
+      primeiroDiaDoMes(darf.periodoApuracao),
       darf.dataVencimento,
       darf.numeroDocumento,
       darf.dataArrecadacao,

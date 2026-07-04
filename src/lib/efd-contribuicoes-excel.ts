@@ -122,6 +122,14 @@ function linhasPorDimensao(
 
 // Monta uma aba (PIS ou COFINS) com a mesma estrutura — o único código diferente entre as duas
 // contribuições é qual campo de `DadosEfdContribuicoes` cada uma lê.
+// Endereços (ex.: "'PIS'!D45") da célula "$ Valor da Contribuição a Recolher" por tributo ×
+// competência — é o "Apuração Débito Original" que a aba de consolidação "PIS e COFINS"
+// referencia por fórmula (ver src/lib/consolidacao-pis-cofins-excel.ts).
+export interface RefsDebitoPisCofins {
+  competencias: string[]
+  celulaPorTributo: { PIS: Record<string, string>; COFINS: Record<string, string> }
+}
+
 function montarAbaContribuicao(
   ws: ExcelJS.Worksheet,
   nomeTributo: "PIS" | "COFINS",
@@ -129,7 +137,7 @@ function montarAbaContribuicao(
   competencias: string[],
   extraiRegistros: (d: DadosEfdContribuicoes | undefined) => RegistroAgregadoPisCofins[],
   extraiApuracao: (d: DadosEfdContribuicoes | undefined) => ApuracaoContribuicao | undefined
-) {
+): Record<string, string> {
   const porCompetencia: Record<string, DadosEfdContribuicoes> = {}
   for (const d of declaracoes) porCompetencia[d.competencia] = d.dados
 
@@ -226,6 +234,7 @@ function montarAbaContribuicao(
   ]
 
   const ROW_HEADER = 5
+  const idxLinhaARecolher = linhas.findIndex((l) => l.label.includes("a Recolher"))
   linhas.forEach((linha, idx) => {
     const row = ws.getRow(idx + ROW_HEADER + 1)
     const bg = linha.destaque === "cinza" ? COR.cinzaClaro : linha.destaque === "azul" ? COR.azulClaro : undefined
@@ -246,6 +255,13 @@ function montarAbaContribuicao(
     }
     row.outlineLevel = linha.bold && !linha.destaque ? 0 : 1
   })
+
+  const linhaARecolher = idxLinhaARecolher + ROW_HEADER + 1
+  const celulas: Record<string, string> = {}
+  competencias.forEach((comp, i) => {
+    celulas[comp] = `'${nomeTributo}'!${ws.getCell(linhaARecolher, i + 3).address}`
+  })
+  return celulas
 }
 
 // Monta as abas "PIS" e "COFINS" dentro de um workbook já existente (permite combinar com a
@@ -257,10 +273,11 @@ export async function montarAbasPisCofins(
   wb: ExcelJS.Workbook,
   declaracoes: DeclaracaoEfdContribuicoesRegistro[],
   nomeCliente: string
-): Promise<void> {
+): Promise<RefsDebitoPisCofins> {
   const competencias = Array.from(new Set(declaracoes.map((d) => d.competencia))).sort()
   const nomeCurto = nomeCliente.trim().split(/\s+/)[0] || nomeCliente
   const logoBase64 = await carregarLogoBase64()
+  const refs: RefsDebitoPisCofins = { competencias, celulaPorTributo: { PIS: {}, COFINS: {} } }
 
   for (const [nomeAba, tituloTributo, extraiRegistros, extraiApuracao] of [
     [
@@ -289,8 +306,16 @@ export async function montarAbasPisCofins(
     }
     sc(ws.getCell(3, 2), { value: `${tituloTributo} - ${nomeCurto}`, bold: true, size: 12 })
 
-    montarAbaContribuicao(ws, tituloTributo, declaracoes, competencias, extraiRegistros, extraiApuracao)
+    refs.celulaPorTributo[tituloTributo] = montarAbaContribuicao(
+      ws,
+      tituloTributo,
+      declaracoes,
+      competencias,
+      extraiRegistros,
+      extraiApuracao
+    )
   }
+  return refs
 }
 
 // Uso standalone (só PIS/COFINS, sem combinar com a aba de ICMS) — cria o workbook, monta as

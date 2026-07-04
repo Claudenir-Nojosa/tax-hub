@@ -532,3 +532,45 @@ determinístico.
   `resumoSimples` são exportadas e reusadas na UI.
 - **UI**: seção colapsável "Cadastro (Menu)" (primeira seção), com resumo "CNPJ · Simples · QSA"
   conforme as partes presentes e lixeira que apaga o cadastro inteiro do projeto.
+
+## 16. Consolidação "PIS e COFINS" + tabela "Selic" (últimas abas do arquivo)
+
+- **O quê**: duas abas no FINAL do Excel combinado, réplica do WP de diagnóstico do usuário
+  (`pis e cofins e selic.xlsx`): **"PIS e COFINS"** (consolidação de créditos, uma linha por
+  tributo × competência da EFD Contribuições — bloco COFINS inteiro e depois o PIS, como a
+  referência) e **"Selic"** (tabela de atualização mensal desde 01/1996). Só entram quando o
+  projeto tem EFD Contribuições. Ficam depois do Checklist; os links do Menu as incluem porque
+  `preencherAbaMenu` roda por último.
+- **Tudo em fórmula** (pedido explícito do usuário — o analista mexe em Novo Débito/restituído/
+  parcelado/Dcomp e o resto recalcula). Cada célula de fórmula leva `result` pré-calculado em JS
+  (visualizadores sem recálculo); ExcelJS omite `result` quando é 0 — inofensivo, o Excel
+  recalcula ao abrir.
+- **Colunas** (B..T) e origem — `src/lib/consolidacao-pis-cofins-excel.ts`:
+  - F "Apuração Débito Original" = referência direta à célula "$ Valor da Contribuição a
+    Recolher" da aba PIS/COFINS. **Validado**: é o `valorARecolher` (COFINS 04/2021 da CORE =
+    224,91 na referência), NÃO o débito antes das deduções (415,86). Os endereços vêm do retorno
+    `RefsDebitoPisCofins` de `montarAbasPisCofins` (a linha é dinâmica — depende de quantos
+    CFOPs/CSTs a aba tem).
+  - G Novo Débito ={F}; H Dif Cred EFD ={F-G}; J Dif DCTF x EFD; O DARF x EFD Orig; P DIF DCTF x
+    DARF x Dcomp ={I-K-M+L-N}; Q Crédito / R Contingência ={SE((K-L+M+N-G)<0;...)}; T ={S+Q} —
+    fórmulas idênticas às do WP.
+  - I "DCTF" = SOMASES na aba DCTF (V=Vlr Débito Apurado, S=Tributo, D=PA) **+** DCTFWeb
+    (O=débito, K=Tributo, E=PA) quando presentes — a partir de 2025 a apuração vem da DCTFWeb,
+    mas cada competência só existe numa das duas, então a soma resolve sem SE por ano.
+  - K "Pgto DARF" = SOMASES na aba Comprovante de Pagamentos (U=Vlr Principal, S=Tributo, F=PA).
+    **Pegadinha corrigida**: o PA impresso no DARF varia o dia (01/30/31...); a coluna PA da aba
+    Comprovante agora é normalizada pro 1º dia do mês pra casar com o critério (a data impressa
+    continua na coluna de texto "Período Apuração").
+  - L/M/N (Valor já restituído / Parcelado / Dcomp) = 0 fixos por enquanto (pedido do usuário),
+    editáveis à mão no arquivo.
+  - S "Atualização" ={ARRED(PROCV(FIMMÊS(E;1);Selic!$B:$F;5;0)*Q;2)} — igual ao WP.
+- **Aba Selic** (`src/lib/selic-excel.ts` + taxas em `src/lib/selic-dados.ts`): B CRIT_FIM_MES
+  ={FIMMÊS(D;0)} (chave do PROCV), C Parâmetro, D MÊS, E taxa mensal, F acumulada
+  ={SOMA(E[n+1]:E$fim)+0,01}. Linhas de 01/1996 até dezembro do último ano com taxa; meses
+  futuros ficam com E vazio (a SOMA ignora), como a referência.
+  **GAP CONHECIDO**: taxas embutidas até 2026-05 (extraídas da planilha de referência / Sicalc) —
+  meses novos exigem atualizar `selic-dados.ts`. Competência cujo mês seguinte não está na tabela
+  faria o PROCV dar #N/D.
+- **Validação e2e feita**: workbook gerado com os dados reais da CORE (65 EFDs, 48 DCTFs, 16
+  DCTFWebs, 324 DARFs), SOMASES de I e K simulados em JS contra as abas geradas = 100% iguais aos
+  results embutidos; F confere com a referência campo a campo.
