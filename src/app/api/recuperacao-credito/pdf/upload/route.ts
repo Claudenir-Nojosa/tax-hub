@@ -5,9 +5,34 @@ import { parsePgdasPdf } from "@/lib/pgdas/parser"
 import { detectarComprovantePagamento, parseComprovantesDeTexto } from "@/lib/comprovante-pagamento-parser"
 import { detectarDctfWeb, parseDctfWebDeTexto } from "@/lib/dctfweb-parser"
 import { detectarFontesPagadoras, parseFontesPagadorasDeTexto } from "@/lib/fontes-pagadoras-parser"
+import {
+  detectarConsultaCnpj,
+  detectarConsultaOptantes,
+  detectarQsa,
+  parseConsultaCnpjDeTexto,
+  parseQsaDeTexto,
+  type DadosCadastroEmpresa,
+} from "@/lib/cadastro-parser"
+import { extrairSimplesNacionalViaIA } from "@/lib/cadastro-simples-ia"
 
 function somenteDigitos(v: string) {
   return v.replace(/\D/g, "")
+}
+
+// Merge de uma chave do cadastro (consultaCnpj/qsa/simplesNacional) preservando as demais —
+// cada documento enviado atualiza só a sua parte.
+async function salvarCadastro(
+  projetoId: string,
+  cnpjCliente: string,
+  parcial: DadosCadastroEmpresa
+) {
+  const existente = await db.cadastroEmpresa.findUnique({ where: { projetoId } })
+  const dados = { ...((existente?.dados as object | null) ?? {}), ...parcial } as unknown as object
+  await db.cadastroEmpresa.upsert({
+    where: { projetoId },
+    create: { projetoId, cnpj: cnpjCliente, dados },
+    update: { dados },
+  })
 }
 
 // POST — upload de 1+ PDFs (Declaração/Extrato PGDAS ou Comprovante de Arrecadação de DARF),
@@ -40,7 +65,11 @@ export async function POST(req: NextRequest) {
   }
   const cliente = projeto.cliente
 
-  const salvos: { arquivoNome: string; tipo: "PGDAS" | "COMPROVANTE" | "DCTFWEB" | "FONTES"; detalhe: string }[] = []
+  const salvos: {
+    arquivoNome: string
+    tipo: "PGDAS" | "COMPROVANTE" | "DCTFWEB" | "FONTES" | "CADASTRO"
+    detalhe: string
+  }[] = []
   const erros: { arquivo: string; motivo: string }[] = []
 
   for (const file of files) {
@@ -162,6 +191,47 @@ export async function POST(req: NextRequest) {
         }
 
         salvos.push({ arquivoNome: file.name, tipo: "COMPROVANTE", detalhe: `${validos.length} DARF(s)` })
+      } else if (detectarConsultaCnpj(textoBruto)) {
+        const dados = parseConsultaCnpjDeTexto(textoBruto, file.name)
+        if (!dados) {
+          erros.push({ arquivo: file.name, motivo: "Não foi possível ler o Comprovante de Inscrição (Consulta CNPJ)" })
+          continue
+        }
+        if (somenteDigitos(dados.cnpj) !== somenteDigitos(cliente.cnpj)) {
+          erros.push({
+            arquivo: file.name,
+            motivo: `CNPJ da Consulta CNPJ (${dados.cnpj}) não corresponde ao cliente selecionado (${cliente.cnpj})`,
+          })
+          continue
+        }
+        await salvarCadastro(projeto.id, cliente.cnpj, { consultaCnpj: dados })
+        salvos.push({ arquivoNome: file.name, tipo: "CADASTRO", detalhe: `Consulta CNPJ (${dados.nomeEmpresarial})` })
+      } else if (detectarQsa(textoBruto)) {
+        const dados = parseQsaDeTexto(textoBruto, file.name)
+        if (!dados) {
+          erros.push({ arquivo: file.name, motivo: "Não foi possível ler o QSA (Dados Cadastrais)" })
+          continue
+        }
+        if (somenteDigitos(dados.cnpj) !== somenteDigitos(cliente.cnpj)) {
+          erros.push({
+            arquivo: file.name,
+            motivo: `CNPJ do QSA (${dados.cnpj}) não corresponde ao cliente selecionado (${cliente.cnpj})`,
+          })
+          continue
+        }
+        await salvarCadastro(projeto.id, cliente.cnpj, { qsa: dados })
+        salvos.push({ arquivoNome: file.name, tipo: "CADASTRO", detalhe: `QSA (${dados.socios.length} sócio(s))` })
+      } else if (textoBruto.trim().length < 50 || detectarConsultaOptantes(textoBruto)) {
+        // PDF sem camada de texto (escaneado) ou com marcadores da Consulta Optantes: vai pra IA.
+        // Sem validação dura de CNPJ aqui — OCR de documento escaneado pode errar um dígito, e o
+        // cliente já está fixado pelo projeto selecionado.
+        const resultado = await extrairSimplesNacionalViaIA(uint8, file.name)
+        if (!resultado.ok) {
+          erros.push({ arquivo: file.name, motivo: resultado.erro })
+          continue
+        }
+        await salvarCadastro(projeto.id, cliente.cnpj, { simplesNacional: resultado.dados })
+        salvos.push({ arquivoNome: file.name, tipo: "CADASTRO", detalhe: `Simples Nacional (${resultado.dados.situacao})` })
       } else {
         const resultado = await parsePgdasPdf(uint8, file.name)
         if (!resultado.ok) {

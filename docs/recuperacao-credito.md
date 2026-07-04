@@ -490,3 +490,45 @@ determinístico.
    reais do usuário antes de considerar pronto, com um cliente/projeto **descartável** (criar,
    testar, apagar) pra não sujar dados reais durante o teste.
 8. Atualizar este documento.
+
+## 15. Cadastro (Consulta CNPJ + QSA + Consulta Optantes) e aba "Menu"
+
+- **O quê**: três PDFs cadastrais alimentam a aba **"Menu"** — sempre a **primeira aba** do Excel
+  combinado, funcionando como capa/painel: identificação da empresa, CNAE principal e
+  secundários, situação no Simples Nacional (com "por quanto tempo" calculado) e QSA, mais uma
+  lista de **links internos** pras demais abas do arquivo.
+- **Fontes e parsing**:
+  - **Consulta CNPJ** (Comprovante de Inscrição e Situação Cadastral da RFB): PDF com camada de
+    texto → determinístico, `parseConsultaCnpjDeTexto` em `src/lib/cadastro-parser.ts`
+    (detecção: "COMPROVANTE DE INSCRIÇÃO E DE SITUAÇÃO CADASTRAL"). Extrai CNPJ/matriz-filial,
+    abertura, nome empresarial/fantasia, porte, CNAE principal + secundários, natureza jurídica,
+    município/UF e situação cadastral.
+  - **QSA** (Dados Cadastrais do portal "Minhas Dívidas e Pendências"): também texto →
+    `parseQsaDeTexto` (detecção: "Quadro de Sócios e Administradores"). Extrai responsável
+    perante o CNPJ e sócios (CPF, nome, qualificação, capital social/votante, situação do CPF).
+    O texto vem com lixo de rodapé no meio (a tabela quebra de página), por isso o regex de sócio
+    tolera qualquer coisa entre o CPF e o Nome.
+  - **Consulta Optantes** (Simples Nacional): costuma chegar **escaneada** (imagem, zero itens de
+    texto — confirmado no arquivo real) → vai pra **IA** (`src/lib/cadastro-simples-ia.ts`,
+    OpenAI `gpt-4o` com o PDF como arquivo, mesma conta das outras features de IA do app). Retorna
+    situação atual, "optante desde", períodos anteriores (início/fim) e SIMEI. O dado fica
+    marcado `extraidoPorIA: true`, e a aba Menu imprime a ressalva "lido por IA — conferir".
+    **Atenção**: o OCR pode errar dígito (na amostra real leu 15.185… em vez de 15.165…), então
+    o upload NÃO valida CNPJ da Consulta Optantes contra o cliente — o vínculo vem do projeto
+    selecionado. Consulta CNPJ e QSA validam CNPJ normalmente (são digitais).
+- **Dispatch no upload**: mesmos detectores no endpoint unificado de PDF
+  (`/api/recuperacao-credito/pdf/upload`), ANTES do fallback PGDAS. PDF sem camada de texto
+  (`texto.trim().length < 50`) ou com marcadores da Consulta Optantes → rota da IA; se a IA disser
+  que não é Consulta Optantes, o arquivo falha com erro por-arquivo normal.
+- **Persistência**: model `CadastroEmpresa` — **1 registro por projeto** (`projetoId @unique`),
+  `dados Json` tipado como `DadosCadastroEmpresa` com as chaves `consultaCnpj`/`qsa`/
+  `simplesNacional`; cada documento enviado faz **merge** só da sua chave (reenviar substitui a
+  parte, mantém o resto). GET/DELETE em `/api/recuperacao-credito/cadastro?projetoId=` (DELETE
+  remove o registro inteiro).
+- **Excel** (`src/lib/cadastro-excel.ts`): a aba Menu precisa ser a primeira, mas os links
+  internos dependem das abas montadas depois — por isso o orquestrador chama `criarAbaMenu(wb)`
+  ANTES de montar qualquer aba e `preencherAbaMenu(ws, wb, cadastro, nome)` por ÚLTIMO (depois do
+  Checklist). Links internos usam `{ text, hyperlink: "#'Nome da Aba'!A1" }`. `duracaoEntre` e
+  `resumoSimples` são exportadas e reusadas na UI.
+- **UI**: seção colapsável "Cadastro (Menu)" (primeira seção), com resumo "CNPJ · Simples · QSA"
+  conforme as partes presentes e lixeira que apaga o cadastro inteiro do projeto.

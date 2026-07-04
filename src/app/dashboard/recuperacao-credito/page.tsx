@@ -27,6 +27,8 @@ import type { DeclaracaoFontesPagadorasRegistro } from "@/lib/fontes-pagadoras-e
 import type { DadosEcd } from "@/lib/ecd-parser";
 import type { DeclaracaoEcdRegistro } from "@/lib/ecd-excel";
 import { exportarDeclaracaoFiscalExcel } from "@/lib/recuperacao-credito-excel";
+import type { DadosCadastroEmpresa } from "@/lib/cadastro-parser";
+import { resumoSimples } from "@/lib/cadastro-excel";
 import { SecaoColapsavel, GraficoBarras, GraficoSeries, ListaArquivosColapsavel } from "@/components/recuperacao-credito/painel-importados";
 import {
   FileSearch,
@@ -136,6 +138,13 @@ interface DeclaracaoEcdRow {
   id: string;
   competencia: string; // ano "YYYY"
   dados: DadosEcd;
+}
+
+interface CadastroRow {
+  id: string;
+  projetoId: string;
+  cnpj: string;
+  dados: DadosCadastroEmpresa;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -273,6 +282,9 @@ export default function RecuperacaoCreditoPage() {
 
   const [declaracoesEcd, setDeclaracoesEcd] = useState<DeclaracaoEcdRow[]>([]);
   const [carregandoEcd, setCarregandoEcd] = useState(false);
+
+  const [cadastro, setCadastro] = useState<CadastroRow | null>(null);
+  const [carregandoCadastro, setCarregandoCadastro] = useState(false);
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteSelecionadoId) ?? null;
   const projetoSelecionado = projetos.find((p) => p.id === projetoSelecionadoId) ?? null;
@@ -450,6 +462,23 @@ export default function RecuperacaoCreditoPage() {
     else setDeclaracoesEcd([]);
   }, [projetoSelecionadoId, carregarEcd]);
 
+  const carregarCadastro = useCallback(async (projetoId: string) => {
+    setCarregandoCadastro(true);
+    try {
+      const res = await fetch(`/api/recuperacao-credito/cadastro?projetoId=${projetoId}`);
+      setCadastro(await res.json());
+    } catch {
+      toast.error("Erro ao carregar dados cadastrais");
+    } finally {
+      setCarregandoCadastro(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (projetoSelecionadoId) carregarCadastro(projetoSelecionadoId);
+    else setCadastro(null);
+  }, [projetoSelecionadoId, carregarCadastro]);
+
   const handleCriarCliente = async () => {
     if (!novoCnpj.trim() || !novaRazaoSocial.trim()) {
       toast.error("Preencha CNPJ e Razão Social");
@@ -615,6 +644,8 @@ export default function RecuperacaoCreditoPage() {
     }
     if (salvosDctfWeb > 0) toast.success(`${salvosDctfWeb} DCTFWeb importada(s)!`);
     if (salvosFontes > 0) toast.success(`${salvosFontes} relatório(s) de Fontes Pagadoras importado(s)!`);
+    const salvosCadastro = salvos.filter((s) => s.tipo === "CADASTRO");
+    for (const s of salvosCadastro) toast.success(`Cadastro importado: ${s.detalhe}`);
     for (const erro of erros) {
       toast.error(`${erro.arquivo}: ${erro.motivo}`);
     }
@@ -623,6 +654,7 @@ export default function RecuperacaoCreditoPage() {
       carregarDeclaracoesComprovante(projetoSelecionadoId),
       carregarDctfTudo(projetoSelecionadoId),
       carregarFontes(projetoSelecionadoId),
+      carregarCadastro(projetoSelecionadoId),
     ]);
   };
 
@@ -837,6 +869,17 @@ export default function RecuperacaoCreditoPage() {
   // Um botão só: monta um Excel com a(s) aba(s) do que existir no projeto (ICMS/IPI, PIS/COFINS,
   // IRPJ/CSLL e/ou Comprovante de Pagamentos) — nunca vários arquivos separados quando mais de
   // um tipo foi importado junto.
+  const handleExcluirCadastro = async () => {
+    if (!projetoSelecionadoId) return;
+    try {
+      await fetch(`/api/recuperacao-credito/cadastro?projetoId=${projetoSelecionadoId}`, { method: "DELETE" });
+      toast.success("Cadastro removido");
+      await carregarCadastro(projetoSelecionadoId);
+    } catch {
+      toast.error("Erro ao remover");
+    }
+  };
+
   const handleBaixarExcelFiscal = async () => {
     if (!clienteSelecionado) return;
     if (
@@ -847,7 +890,8 @@ export default function RecuperacaoCreditoPage() {
       declaracoesDctfWeb.length === 0 &&
       declaracoesDctf.length === 0 &&
       declaracoesFontes.length === 0 &&
-      declaracoesEcd.length === 0
+      declaracoesEcd.length === 0 &&
+      !cadastro
     )
       return;
 
@@ -862,7 +906,17 @@ export default function RecuperacaoCreditoPage() {
     const dctf: DeclaracaoDctfRegistro[] = declaracoesDctf.map((d) => ({ competencia: d.competencia, dados: d.dados }));
     const fontesPagadoras: DeclaracaoFontesPagadorasRegistro[] = declaracoesFontes.map((d) => ({ competencia: d.competencia, dados: d.dados }));
     const ecd: DeclaracaoEcdRegistro[] = declaracoesEcd.map((d) => ({ competencia: d.competencia, dados: d.dados }));
-    await exportarDeclaracaoFiscalExcel(clienteSelecionado.razaoSocial, { icms, pisCofins, comprovantes, ecf, dctfWeb, dctf, fontesPagadoras, ecd });
+    await exportarDeclaracaoFiscalExcel(clienteSelecionado.razaoSocial, {
+      icms,
+      pisCofins,
+      comprovantes,
+      ecf,
+      dctfWeb,
+      dctf,
+      fontesPagadoras,
+      ecd,
+      cadastro: cadastro?.dados ?? null,
+    });
   };
 
   const mesesAgrupados = Array.from(new Set(declaracoesPgdas.map((d) => d.competencia)))
@@ -1154,6 +1208,92 @@ export default function RecuperacaoCreditoPage() {
 
           {/* File list — resumo colapsável (contagem + tamanho, expande pra ver/remover cada um) */}
           <ListaArquivosColapsavel arquivos={arquivos} onRemover={removerArquivo} />
+
+          {/* Cadastro (Consulta CNPJ + Simples Nacional + QSA) — vira a aba "Menu" do Excel */}
+          {projetoSelecionado && (carregandoCadastro || cadastro) && (
+            <SecaoColapsavel
+              titulo="Cadastro (Menu)"
+              resumo={
+                carregandoCadastro
+                  ? "carregando…"
+                  : [
+                      cadastro?.dados.consultaCnpj && "CNPJ",
+                      cadastro?.dados.simplesNacional && "Simples",
+                      cadastro?.dados.qsa && "QSA",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || undefined
+              }
+              acaoDireita={
+                cadastro ? (
+                  <button onClick={handleExcluirCadastro} title="Remover dados cadastrais" className="text-gray-400 hover:text-red-500">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                ) : undefined
+              }
+            >
+              {carregandoCadastro ? (
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+              ) : (
+                cadastro && (
+                  <div className="space-y-3 px-1 text-sm">
+                    {cadastro.dados.consultaCnpj && (
+                      <div className="space-y-1">
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          {cadastro.dados.consultaCnpj.nomeEmpresarial}
+                          <span className="font-normal text-gray-400"> · {cadastro.dados.consultaCnpj.cnpj}</span>
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {[
+                            cadastro.dados.consultaCnpj.situacaoCadastral && `Situação: ${cadastro.dados.consultaCnpj.situacaoCadastral}`,
+                            cadastro.dados.consultaCnpj.porte && `Porte: ${cadastro.dados.consultaCnpj.porte}`,
+                            cadastro.dados.consultaCnpj.dataAbertura && `Abertura: ${cadastro.dados.consultaCnpj.dataAbertura}`,
+                            cadastro.dados.consultaCnpj.municipio &&
+                              `${cadastro.dados.consultaCnpj.municipio}/${cadastro.dados.consultaCnpj.uf}`,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                        {cadastro.dados.consultaCnpj.cnaePrincipal && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            <span className="font-medium">CNAE principal:</span> {cadastro.dados.consultaCnpj.cnaePrincipal.codigo} —{" "}
+                            {cadastro.dados.consultaCnpj.cnaePrincipal.descricao}
+                          </p>
+                        )}
+                        {cadastro.dados.consultaCnpj.cnaesSecundarios.length > 0 && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            <span className="font-medium">Secundários:</span>{" "}
+                            {cadastro.dados.consultaCnpj.cnaesSecundarios.map((c) => `${c.codigo} — ${c.descricao}`).join(" · ")}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {cadastro.dados.simplesNacional && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">Simples Nacional</Badge>
+                        <span className="text-xs text-gray-600 dark:text-gray-300">{resumoSimples(cadastro.dados.simplesNacional)}</span>
+                      </div>
+                    )}
+                    {cadastro.dados.qsa && cadastro.dados.qsa.socios.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">QSA</p>
+                        {cadastro.dados.qsa.socios.map((s) => (
+                          <p key={s.cpf} className="text-xs text-gray-600 dark:text-gray-300">
+                            {s.nome} <span className="text-gray-400">· {s.qualificacao} · capital {s.capitalSocial} · CPF {s.cpf}</span>
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-400">
+                      Essas informações viram a aba <span className="font-medium">Menu</span> (primeira aba) do Excel.
+                      {cadastro.dados.simplesNacional?.extraidoPorIA &&
+                        " A Consulta Optantes foi lida por IA (documento escaneado) — confira contra o original."}
+                    </p>
+                  </div>
+                )
+              )}
+            </SecaoColapsavel>
+          )}
 
           {/* Meses do Simples Nacional já importados para o projeto selecionado */}
           {projetoSelecionado && (carregandoDeclaracoes || mesesAgrupados.length > 0) && (
@@ -1658,7 +1798,8 @@ export default function RecuperacaoCreditoPage() {
               dctfOrdenadas.length > 0 ||
               fontesOrdenadas.length > 0 ||
               ecdOrdenadas.length > 0 ||
-              declaracoesComprovante.length > 0) && (
+              declaracoesComprovante.length > 0 ||
+              cadastro !== null) && (
               <div className="flex justify-end pt-2">
                 <Button variant="outline" size="sm" onClick={handleBaixarExcelFiscal}>
                   <Download className="h-4 w-4 mr-2" />

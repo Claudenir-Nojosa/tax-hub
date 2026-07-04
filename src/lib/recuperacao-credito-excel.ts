@@ -8,6 +8,8 @@ import { montarAbasDctf, type DeclaracaoDctfWebRegistro, type DeclaracaoDctfRegi
 import { montarAbasFontesPagadoras, type DeclaracaoFontesPagadorasRegistro } from "./fontes-pagadoras-excel"
 import { montarAbasEcd, type DeclaracaoEcdRegistro } from "./ecd-excel"
 import { montarAbaChecklist } from "./checklist-excel"
+import { criarAbaMenu, preencherAbaMenu } from "./cadastro-excel"
+import type { DadosCadastroEmpresa } from "./cadastro-parser"
 
 function sanitizarNomeArquivo(nome: string): string {
   return nome.replace(/[\\/:*?"<>|]/g, "").trim()
@@ -30,6 +32,7 @@ export async function exportarDeclaracaoFiscalExcel(
     dctf?: DeclaracaoDctfRegistro[]
     fontesPagadoras?: DeclaracaoFontesPagadorasRegistro[]
     ecd?: DeclaracaoEcdRegistro[]
+    cadastro?: DadosCadastroEmpresa | null
   }
 ): Promise<void> {
   const temIcms = (dados.icms?.length ?? 0) > 0
@@ -40,12 +43,19 @@ export async function exportarDeclaracaoFiscalExcel(
   const temDctf = (dados.dctf?.length ?? 0) > 0
   const temFontes = (dados.fontesPagadoras?.length ?? 0) > 0
   const temEcd = (dados.ecd?.length ?? 0) > 0
+  const cadastro = dados.cadastro ?? null
+  const temCadastro = !!cadastro && !!(cadastro.consultaCnpj || cadastro.qsa || cadastro.simplesNacional)
 
-  if (!temIcms && !temPisCofins && !temComprovantes && !temEcf && !temDctfWeb && !temDctf && !temFontes && !temEcd) return
+  if (!temIcms && !temPisCofins && !temComprovantes && !temEcf && !temDctfWeb && !temDctf && !temFontes && !temEcd && !temCadastro)
+    return
 
   const wb = new ExcelJS.Workbook()
   wb.creator = "Tax Hub — Recuperação de Crédito"
   wb.created = new Date()
+
+  // A aba Menu precisa ser a PRIMEIRA do arquivo, mas os links internos dela dependem das abas
+  // que ainda vão ser montadas — então cria vazia agora e preenche no final.
+  const wsMenu = temCadastro ? criarAbaMenu(wb) : null
 
   if (temIcms) await montarAbaIcms(wb, dados.icms!, nomeCliente)
   if (temPisCofins) await montarAbasPisCofins(wb, dados.pisCofins!, nomeCliente)
@@ -55,6 +65,7 @@ export async function exportarDeclaracaoFiscalExcel(
   if (temFontes) await montarAbasFontesPagadoras(wb, dados.fontesPagadoras!)
   if (temComprovantes) await montarAbaComprovantePagamento(wb, dados.comprovantes!, nomeCliente)
   await montarAbaChecklist(wb, nomeCliente)
+  if (wsMenu && cadastro) await preencherAbaMenu(wsMenu, wb, cadastro, nomeCliente)
 
   const contextos: string[] = []
   if (temIcms) contextos.push("ICMS e IPI")
@@ -64,7 +75,8 @@ export async function exportarDeclaracaoFiscalExcel(
   if (temDctfWeb || temDctf) contextos.push("DCTF e DCTFWeb")
   if (temFontes) contextos.push("Fontes Pagadoras")
   if (temComprovantes) contextos.push("Comprovante de Pagamentos")
-  const contexto = contextos.join(", ")
+  // só cadastro importado → arquivo ainda precisa de um contexto no nome
+  const contexto = contextos.join(", ") || "Cadastro"
 
   const buffer = await wb.xlsx.writeBuffer()
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })

@@ -208,6 +208,21 @@ model ProjetoRecuperacaoCredito {
   declaracoesDctf           DeclaracaoDctf[]
   declaracoesFontesPagadoras DeclaracaoFontesPagadoras[]
   declaracoesEcd            DeclaracaoEcd[]
+  cadastro                  CadastroEmpresa?
+}
+
+// Dados cadastrais que alimentam a aba "Menu" do Excel: Consulta CNPJ, QSA e Consulta Optantes
+// do Simples Nacional. Um registro por projeto; dados é um DadosCadastroEmpresa
+// (src/lib/cadastro-parser.ts) — cada documento enviado preenche a sua chave via merge.
+model CadastroEmpresa {
+  id        String                    @id @default(cuid())
+  projetoId String                    @unique
+  projeto   ProjetoRecuperacaoCredito @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  cnpj      String
+  dados     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model DeclaracaoPgdas {
