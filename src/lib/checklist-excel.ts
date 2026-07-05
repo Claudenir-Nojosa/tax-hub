@@ -211,10 +211,17 @@ const EXTRAS = [
 ]
 
 // Resultado do "analisador" automático — preenchido pelo orquestrador a partir dos cruzamentos
-// das abas de consolidação (por enquanto só o de pagamentos; os demais tópicos continuam em
-// branco aguardando seus cruzamentos). Chave = texto exato do tópico na coluna "Oportunidade".
+// (pagamentos × apurado, retenções × abatido; os demais tópicos continuam em branco aguardando
+// seus cruzamentos). Chave = texto exato do tópico na coluna "Oportunidade". Lembrete da
+// legenda: na coluna de contingência, 🌟 = contingência IDENTIFICADA, ☠️ = sem contingência.
 export interface AnaliseChecklist {
-  situacoesOportunidade?: Record<string, { situacao: Situacao; observacao: string }>
+  situacoes?: Record<
+    string,
+    {
+      oportunidade?: { situacao: Situacao; observacao: string }
+      contingencia?: { situacao: Situacao; observacao: string }
+    }
+  >
 }
 
 export async function montarAbaChecklist(
@@ -264,10 +271,17 @@ export async function montarAbaChecklist(
   const categorias: ChecklistCategoria[] = CATEGORIAS.map((c) => ({
     ...c,
     itens: c.itens.map((item) => {
-      const resultado = analise?.situacoesOportunidade?.[item.oportunidade]
-      return resultado
-        ? { ...item, situacaoOportunidade: resultado.situacao, observacaoOportunidade: resultado.observacao }
-        : item
+      const resultado = analise?.situacoes?.[item.oportunidade]
+      if (!resultado) return item
+      return {
+        ...item,
+        ...(resultado.oportunidade
+          ? { situacaoOportunidade: resultado.oportunidade.situacao, observacaoOportunidade: resultado.oportunidade.observacao }
+          : {}),
+        ...(resultado.contingencia
+          ? { situacaoContingencia: resultado.contingencia.situacao, observacaoContingencia: resultado.contingencia.observacao }
+          : {}),
+      }
     }),
   }))
 

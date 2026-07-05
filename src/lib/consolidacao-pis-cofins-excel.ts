@@ -84,14 +84,19 @@ export interface LinhaConsolidacao {
   darf: number
 }
 
-// Cruzamento "recolhido a maior": crédito = DARF pago além do débito apurado (coluna Q da
-// consolidação, com restituído/parcelado/Dcomp ainda zerados) + atualização Selic (coluna S).
+// Cruzamentos do analisador sobre as linhas da consolidação (mesma conta das fórmulas Q/R/J):
+//   crédito       = DARF pago além do débito apurado (coluna Q) + atualização Selic (S);
+//   contingência  = DARF pago a MENOR que o débito apurado (coluna R, em módulo);
+//   divergências  = competências onde o apurado ≠ o declarado na DCTF/DCTFWeb (coluna J ≠ 0).
 // É o resumo que o orquestrador usa pra preencher automaticamente o item "Pagamentos realizados
 // no e-CAC x Tributos devidos" do Checklist — ver docs §11 (a visão de checklist automático).
 export interface ResumoOportunidades {
   credito: number
   atualizacao: number
   competenciasComCredito: number
+  contingencia: number
+  competenciasComContingencia: number
+  divergenciasDctf: number
 }
 
 const LIMIAR_CREDITO = 0.01
@@ -103,19 +108,40 @@ function creditoDaLinha(l: LinhaConsolidacao): number {
   return base > LIMIAR_CREDITO ? base : 0
 }
 
+// contingência (R em módulo): quanto faltou pagar em relação ao apurado
+function contingenciaDaLinha(l: LinhaConsolidacao): number {
+  const base = Math.round((l.darf - l.debitoOriginal) * 100) / 100
+  return base < -LIMIAR_CREDITO ? -base : 0
+}
+
+// divergência da coluna J (mesma tolerância de 1 centavo da fórmula)
+function temDivergenciaDctf(l: LinhaConsolidacao): boolean {
+  return Math.abs(Math.round((l.debitoOriginal - l.dctf) * 100) / 100) > 0.01
+}
+
 export function resumoOportunidades(linhas: LinhaConsolidacao[]): ResumoOportunidades {
   let credito = 0
   let atualizacao = 0
   let competenciasComCredito = 0
+  let contingencia = 0
+  let competenciasComContingencia = 0
+  let divergenciasDctf = 0
   for (const l of linhas) {
     const c = creditoDaLinha(l)
-    if (c === 0) continue
-    credito += c
-    const acumulada = selicAcumuladaParaPeriodo(l.competencia)
-    if (acumulada !== null) atualizacao += Math.round(acumulada * c * 100) / 100
-    competenciasComCredito++
+    if (c > 0) {
+      credito += c
+      const acumulada = selicAcumuladaParaPeriodo(l.competencia)
+      if (acumulada !== null) atualizacao += Math.round(acumulada * c * 100) / 100
+      competenciasComCredito++
+    }
+    const cont = contingenciaDaLinha(l)
+    if (cont > 0) {
+      contingencia += cont
+      competenciasComContingencia++
+    }
+    if (temDivergenciaDctf(l)) divergenciasDctf++
   }
-  return { credito, atualizacao, competenciasComCredito }
+  return { credito, atualizacao, competenciasComCredito, contingencia, competenciasComContingencia, divergenciasDctf }
 }
 
 function somaDctf(tributo: string, competencia: string, dctf: DeclaracaoDctfRegistro[], dctfWeb: DeclaracaoDctfWebRegistro[]): number {
@@ -182,7 +208,8 @@ async function montarAbaConsolidacao(
     { width: 15 }, // R Contingência
     { width: 15 }, // S Atualização
     { width: 15 }, // T Pagamento Indev
-    { width: 22 }, // U Oportunidade (🌟 quando recolhido a maior)
+    { width: 24 }, // U Oportunidade (🌟 recolhido a maior / ☠️ pago a menor)
+    { width: 20 }, // V Divergência DCTF (⚠️ quando apurado ≠ declarado)
   ]
 
   ws.getRow(1).height = 60
@@ -200,7 +227,7 @@ async function montarAbaConsolidacao(
   const colunas = [
     "CNPJ", "Tributo", "ANO", "Período", "Apuração Débito Original", "Novo Débito", `Dif Cred ${opts.rotuloFonte}`, "DCTF",
     `Dif DCTF x ${opts.rotuloFonte}`, "Pgto DARF", "Valor já restituído", "Parcelado", "Dcomp", `DARF x ${opts.rotuloFonte} Orig`,
-    "DIF DCTF x DARF x Dcomp", "Crédito", "Contingência", "Atualização", "Pagamento Indev", "Oportunidade",
+    "DIF DCTF x DARF x Dcomp", "Crédito", "Contingência", "Atualização", "Pagamento Indev", "Oportunidade", "Divergência DCTF",
   ]
 
   ws.addTable({
@@ -211,7 +238,7 @@ async function montarAbaConsolidacao(
     style: { theme: "TableStyleMedium2", showRowStripes: true },
     columns: colunas.map((name) => ({ name, filterButton: true })),
     // placeholders — as células de fórmula são sobrescritas logo abaixo
-    rows: linhas.map((l) => [l.cnpj, l.tributo, 0, l.periodo, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ""]),
+    rows: linhas.map((l) => [l.cnpj, l.tributo, 0, l.periodo, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", ""]),
   })
 
   const primeiraLinha = LINHA_HEADER + 1
@@ -267,11 +294,30 @@ async function montarAbaConsolidacao(
     row.getCell(20).value = f(`S${r}+Q${r}`, sRes + credito) // T Pagamento Indev
 
     // U Oportunidade: o "analisador" da linha — 🌟 quando o DARF pago supera o débito apurado
-    // (crédito > 0). Fórmula (não valor fixo) pra reagir se o analista mexer em G/L/M/N.
-    const temCredito = Math.round(credito * 100) / 100 > 0.01
-    row.getCell(21).value = f(`IF(Q${r}>0.01,"🌟 Recolhido a maior","")`, temCredito ? "🌟 Recolhido a maior" : "")
+    // (crédito > 0), ☠️ quando pagou a MENOR que o apurado (contingência). Fórmula (não valor
+    // fixo) pra reagir se o analista mexer em G/L/M/N.
+    const baseArred = Math.round(base * 100) / 100
+    const temCredito = baseArred > 0.01
+    const temContingencia = baseArred < -0.01
+    row.getCell(21).value = f(
+      `IF(Q${r}>0.01,"🌟 Recolhido a maior",IF(R${r}<-0.01,"☠️ Pago a menor que o apurado",""))`,
+      temCredito ? "🌟 Recolhido a maior" : temContingencia ? "☠️ Pago a menor que o apurado" : ""
+    )
 
-    for (let c = 2; c <= 21; c++) {
+    // V Divergência DCTF: sinaliza a coluna J (apurado ≠ declarado). Distingue o débito que não
+    // aparece na DCTF/DCTFWeb ("não localizada") de valor divergente (⚠️). Sem nenhuma
+    // DCTF/DCTFWeb no projeto, fica vazio — não há o que cruzar.
+    const temDivergencia = (temDctf || temDctfWeb) && jRes !== 0
+    if (temDctf || temDctfWeb) {
+      row.getCell(22).value = f(
+        `IF(J${r}=0,"",IF(I${r}=0,"DCTF não localizada","⚠️ Apurado ≠ DCTF"))`,
+        jRes === 0 ? "" : l.dctf === 0 ? "DCTF não localizada" : "⚠️ Apurado ≠ DCTF"
+      )
+    } else {
+      row.getCell(22).value = ""
+    }
+
+    for (let c = 2; c <= 22; c++) {
       const cell = row.getCell(c)
       cell.font = { name: "Calibri", size: 10 }
       cell.alignment = { horizontal: "center", vertical: "middle" }
@@ -279,6 +325,16 @@ async function montarAbaConsolidacao(
     }
     if (temCredito) {
       row.getCell(21).font = { name: "Calibri", size: 10, bold: true, color: { argb: "FFBF8F00" } }
+    } else if (temContingencia) {
+      row.getCell(21).font = { name: "Calibri", size: 10, bold: true, color: { argb: "FFC00000" } }
+    }
+    if (temDivergencia) {
+      row.getCell(22).font = {
+        name: "Calibri",
+        size: 10,
+        bold: l.dctf !== 0,
+        color: { argb: l.dctf === 0 ? "FF808080" : "FFC00000" },
+      }
     }
   })
 
@@ -295,7 +351,7 @@ async function montarAbaConsolidacao(
   }
 
   const headerRow = ws.getRow(LINHA_HEADER)
-  for (let c = 2; c <= 21; c++) {
+  for (let c = 2; c <= 22; c++) {
     const cell = headerRow.getCell(c)
     cell.font = { name: "Calibri", bold: true, size: 10, color: { argb: COR_HEADER_TEXTO } }
     cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true }

@@ -617,3 +617,32 @@ determinístico.
 - **Próximos cruzamentos candidatos** (ainda não implementados): retenções (Fontes Pagadoras ×
   abatido nas apurações), EFD × DCTF divergente (coluna J já calcula — falta sinalizar), débito
   declarado e não pago (contingência R).
+
+### §17-B. Cruzamentos 2, 3 e 4 (retenções, divergência DCTF, pago a menor)
+
+- **Retenções (Fontes Pagadoras × abatido nas apurações)** — `src/lib/retencoes-analise.ts`,
+  `compararRetencoes(fontes, efd, ecf)`, comparação ANUAL por tributo:
+  - Retido: IRPJ = códigos 1708+6256+3426; PIS/COFINS/CSLL = 5979/5960/5987 + **rateio do 5952**
+    (retenção conjunta 4,65% → PIS 0,65 / COFINS 3,00 / CSLL 1,00, Lei 10.833 art. 31).
+  - Abatido: PIS/COFINS = Σ `retencoesOutrasDeducoes` da EFD (CAVEAT: inclui outras deduções
+    além de retenção — comparação indicativa); IRPJ/CSLL = deduções do P300/P500 com "Retido/a
+    na Fonte" na descrição (P300 códigos 10/12/13; P500 9-12, validado nos arquivos reais).
+  - Só anos comparáveis (fontes E apuração importadas); ano parcial superestima a sobra.
+  - Resultado nos itens do Checklist "Fontes pagadoras x utilizado nas apurações" (PIS/COFINS) e
+    "Fontes Pagadoras x valor utilizado nas apurações" (IRPJ/CSLL): oportunidade 🌟 = retido não
+    aproveitado (detalhe por ano/tributo); contingência 🌟 = abatido acima do retido informado.
+- **Divergência EFD × DCTF** — nova coluna **V "Divergência DCTF"** nas consolidações, fórmula
+  sinalizando a coluna J: `⚠️ Apurado ≠ DCTF` (débito localizado com valor diferente) ou
+  `DCTF não localizada` (débito da competência não aparece em DCTF/DCTFWeb nenhuma). Vazia
+  quando o projeto não tem DCTF/DCTFWeb importada (sem o que cruzar).
+- **Pago a menor que o apurado (contingência)** — a coluna U agora também marca
+  `☠️ Pago a menor que o apurado` (vermelho) quando R < -0,01; e o item de pagamentos do
+  Checklist ganhou a coluna de CONTINGÊNCIA preenchida (🌟 = contingência identificada com
+  totais por grupo, ☠️ = pagamentos cobrem o apurado — legenda do próprio Checklist).
+- `AnaliseChecklist` mudou de `situacoesOportunidade` para `situacoes` (oportunidade E
+  contingência por tópico). `ResumoOportunidades` ganhou contingencia/competenciasComContingencia/
+  divergenciasDctf.
+- **Validação (CORE, projeto com as 5 Fontes 2021-2025)**: 2023 com retenção não aproveitada em
+  todos os tributos (PIS +99,18; COFINS +457,82; IRPJ +112,70; CSLL +152,62); 2025 compara só
+  PIS/COFINS (sem ECF 2025) — recorte correto; ☠️ nos meses recentes sem DARF e "DCTF não
+  localizada" em 2026-05 (sem DCTF do período) conferidos manualmente.

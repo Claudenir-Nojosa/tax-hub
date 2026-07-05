@@ -18,35 +18,88 @@ import {
   resumoOportunidades,
 } from "./consolidacao-pis-cofins-excel"
 import type { AnaliseChecklist } from "./checklist-excel"
+import { compararRetencoes, type ComparativoRetencao, type TributoRetencao } from "./retencoes-analise"
 import { montarAbaSelic } from "./selic-excel"
 
 const BRL_FMT = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
 
-// Analisador do diagnóstico (primeiro cruzamento): recolhido a maior de PIS/COFINS/IRPJ/CSLL.
-// Traduz os resumos das consolidações no preenchimento automático do item "Pagamentos
-// realizados no e-CAC x Tributos devidos" do Checklist (🌟 com o total quando há crédito, ☠️
-// quando os pagamentos conferem). Sem DARFs importados não há cruzamento possível — o item fica
-// em branco como antes.
+// Analisador do diagnóstico — cruzamento 1 (pagamentos × apurado): preenche o item "Pagamentos
+// realizados no e-CAC x Tributos devidos" do Checklist. Oportunidade = recolhido a maior (🌟
+// com totais, ☠️ quando confere); contingência = pago a MENOR que o apurado (🌟 = contingência
+// identificada, seguindo a legenda do Checklist). Sem DARFs importados não há cruzamento — o
+// item fica em branco como antes.
 function analisePagamentos(
   temComprovantes: boolean,
-  resumos: { rotulo: string; credito: number; atualizacao: number; competencias: number }[]
-): AnaliseChecklist | undefined {
+  resumos: { rotulo: string; resumo: import("./consolidacao-pis-cofins-excel").ResumoOportunidades }[]
+): AnaliseChecklist["situacoes"] {
   if (!temComprovantes || resumos.length === 0) return undefined
-  const comCredito = resumos.filter((r) => r.credito > 0)
-  const observacao =
-    comCredito.length > 0
-      ? `Recolhido a maior: ${comCredito
-          .map((r) => `${r.rotulo} ${BRL_FMT.format(r.credito)} (+ Selic ${BRL_FMT.format(r.atualizacao)}) em ${r.competencias} competência(s)`)
-          .join("; ")} — ver coluna "Oportunidade" nas abas de consolidação`
-      : "Pagamentos conferem com os débitos apurados em todas as competências cruzadas (sem recolhimento a maior)"
+  const comCredito = resumos.filter((r) => r.resumo.credito > 0)
+  const comContingencia = resumos.filter((r) => r.resumo.contingencia > 0)
   return {
-    situacoesOportunidade: {
-      "Pagamentos realizados no e-CAC x Tributos devidos": {
+    "Pagamentos realizados no e-CAC x Tributos devidos": {
+      oportunidade: {
         situacao: comCredito.length > 0 ? "estrela" : "caveira",
-        observacao,
+        observacao:
+          comCredito.length > 0
+            ? `Recolhido a maior: ${comCredito
+                .map(
+                  (r) =>
+                    `${r.rotulo} ${BRL_FMT.format(r.resumo.credito)} (+ Selic ${BRL_FMT.format(r.resumo.atualizacao)}) em ${r.resumo.competenciasComCredito} competência(s)`
+                )
+                .join("; ")} — ver coluna "Oportunidade" nas abas de consolidação`
+            : "Pagamentos conferem com os débitos apurados em todas as competências cruzadas (sem recolhimento a maior)",
+      },
+      contingencia: {
+        situacao: comContingencia.length > 0 ? "estrela" : "caveira",
+        observacao:
+          comContingencia.length > 0
+            ? `Pago a menor que o apurado: ${comContingencia
+                .map((r) => `${r.rotulo} ${BRL_FMT.format(r.resumo.contingencia)} em ${r.resumo.competenciasComContingencia} competência(s)`)
+                .join("; ")} — ver coluna "Oportunidade" nas abas de consolidação`
+            : "Pagamentos cobrem os débitos apurados em todas as competências cruzadas",
       },
     },
   }
+}
+
+// Analisador — cruzamento 2 (retenções × abatido): preenche os itens "Fontes pagadoras x
+// utilizado nas apurações" (PIS/COFINS, categoria RETENÇÕES) e "Fontes Pagadoras x valor
+// utilizado nas apurações" (IRPJ/CSLL). Oportunidade = retido pelas fontes e não abatido na
+// apuração; contingência = abatido ACIMA do retido informado. Ver src/lib/retencoes-analise.ts.
+function analiseRetencoes(comparativos: ComparativoRetencao[]): AnaliseChecklist["situacoes"] {
+  if (comparativos.length === 0) return undefined
+
+  const item = (tributos: TributoRetencao[]) => {
+    const doGrupo = comparativos.filter((c) => tributos.includes(c.tributo))
+    if (doGrupo.length === 0) return undefined
+    const sobras = doGrupo.filter((c) => c.dif > 0.01)
+    const excessos = doGrupo.filter((c) => c.dif < -0.01)
+    const detalhe = (lista: ComparativoRetencao[], sinal: 1 | -1) =>
+      lista.map((c) => `${c.tributo} ${c.ano}: ${BRL_FMT.format(sinal * c.dif)}`).join("; ")
+    return {
+      oportunidade: {
+        situacao: (sobras.length > 0 ? "estrela" : "caveira") as "estrela" | "caveira",
+        observacao:
+          sobras.length > 0
+            ? `Retenção não aproveitada (retido nas fontes > abatido na apuração): ${detalhe(sobras, 1)}`
+            : `Retenções integralmente aproveitadas nos anos comparados (${[...new Set(doGrupo.map((c) => c.ano))].join(", ")})`,
+      },
+      contingencia: {
+        situacao: (excessos.length > 0 ? "estrela" : "caveira") as "estrela" | "caveira",
+        observacao:
+          excessos.length > 0
+            ? `Abatido acima do retido informado pelas fontes: ${detalhe(excessos, -1)} — conferir origem das deduções`
+            : "Nenhum abatimento acima do retido informado pelas fontes",
+      },
+    }
+  }
+
+  const situacoes: NonNullable<AnaliseChecklist["situacoes"]> = {}
+  const pisCofins = item(["PIS", "COFINS"])
+  if (pisCofins) situacoes["Fontes pagadoras x utilizado nas apurações"] = pisCofins
+  const irpjCsll = item(["IRPJ", "CSLL"])
+  if (irpjCsll) situacoes["Fontes Pagadoras x valor utilizado nas apurações"] = irpjCsll
+  return Object.keys(situacoes).length > 0 ? situacoes : undefined
 }
 
 function sanitizarNomeArquivo(nome: string): string {
@@ -130,17 +183,18 @@ export async function exportarDeclaracaoFiscalExcel(
   const linhasPisCofins = dadosConsolidacaoPisCofins ? calcularConsolidacaoPisCofins(dadosConsolidacaoPisCofins) : []
   const linhasIrpjCsll = dadosConsolidacaoIrpjCsll ? calcularConsolidacaoIrpjCsll(dadosConsolidacaoIrpjCsll) : []
 
-  const resumos: { rotulo: string; credito: number; atualizacao: number; competencias: number }[] = []
-  if (linhasPisCofins.length > 0) {
-    const r = resumoOportunidades(linhasPisCofins)
-    resumos.push({ rotulo: "PIS/COFINS", credito: r.credito, atualizacao: r.atualizacao, competencias: r.competenciasComCredito })
-  }
-  if (linhasIrpjCsll.length > 0) {
-    const r = resumoOportunidades(linhasIrpjCsll)
-    resumos.push({ rotulo: "IRPJ/CSLL", credito: r.credito, atualizacao: r.atualizacao, competencias: r.competenciasComCredito })
-  }
+  const resumos: { rotulo: string; resumo: import("./consolidacao-pis-cofins-excel").ResumoOportunidades }[] = []
+  if (linhasPisCofins.length > 0) resumos.push({ rotulo: "PIS/COFINS", resumo: resumoOportunidades(linhasPisCofins) })
+  if (linhasIrpjCsll.length > 0) resumos.push({ rotulo: "IRPJ/CSLL", resumo: resumoOportunidades(linhasIrpjCsll) })
 
-  await montarAbaChecklist(wb, nomeCliente, analisePagamentos(temComprovantes, resumos))
+  const comparativosRetencao = temFontes
+    ? compararRetencoes(dados.fontesPagadoras!, dados.pisCofins ?? [], dados.ecf ?? [])
+    : []
+  const situacoes: NonNullable<AnaliseChecklist["situacoes"]> = {
+    ...analisePagamentos(temComprovantes, resumos),
+    ...analiseRetencoes(comparativosRetencao),
+  }
+  await montarAbaChecklist(wb, nomeCliente, Object.keys(situacoes).length > 0 ? { situacoes } : undefined)
 
   if (dadosConsolidacaoPisCofins) await montarAbaConsolidacaoPisCofins(wb, dadosConsolidacaoPisCofins, linhasPisCofins)
   if (dadosConsolidacaoIrpjCsll) await montarAbaConsolidacaoIrpjCsll(wb, dadosConsolidacaoIrpjCsll, linhasIrpjCsll)
