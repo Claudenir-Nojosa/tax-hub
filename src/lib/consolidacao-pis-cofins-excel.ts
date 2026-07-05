@@ -259,7 +259,7 @@ async function montarAbaConsolidacao(
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COR_HEADER_BG } }
   }
 
-  ws.views = [{ showGridLines: false, state: "frozen", xSplit: 0, ySplit: LINHA_HEADER }]
+  // sem congelamento de painéis nas consolidações (pedido do usuário) — só oculta as gridlines
 }
 
 export async function montarAbaConsolidacaoPisCofins(wb: ExcelJS.Workbook, dados: DadosConsolidacaoPisCofins): Promise<void> {
