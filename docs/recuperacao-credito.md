@@ -589,3 +589,31 @@ determinístico.
   gravaram débitos sem `tributo`/`valorDebito` (só grupo/código/vencimento). Pra coluna DCTF das
   consolidações funcionar nesses projetos, reimportar os `.dec` (o upsert por competência
   substitui).
+
+## 17. Analisador do diagnóstico (1º cruzamento: recolhido a maior)
+
+- **O quê**: primeiro cruzamento automático do diagnóstico — DARF pago > débito apurado
+  (PIS/COFINS pela EFD Contribuições; IRPJ/CSLL pela ECF). Materializa em dois lugares:
+  - **Coluna "Oportunidade" (U)** nas abas de consolidação "PIS e COFINS" e "IRPJ e CSLL":
+    fórmula `=SE(Q{r}>0,01;"🌟 Recolhido a maior";"")` — em fórmula (não valor fixo) pra reagir
+    quando o analista mexer em Novo Débito/restituído/parcelado/Dcomp; a célula ganha
+    negrito/dourado quando marca 🌟 na geração.
+  - **Checklist automático**: `montarAbaChecklist` ganhou o parâmetro opcional
+    `AnaliseChecklist.situacoesOportunidade` (chave = texto exato do tópico). O orquestrador
+    preenche o item **"Pagamentos realizados no e-CAC x Tributos devidos"** (categoria
+    PAGAMENTOS): 🌟 + observação com os totais por grupo (crédito + Selic + nº de competências)
+    quando há recolhido a maior; ☠️ quando os pagamentos conferem. Sem DARFs importados não há
+    cruzamento — o item fica em branco como antes. É o começo do "checklist automático" da §11.
+- **Como**: `calcularConsolidacao{PisCofins,IrpjCsll}` foram separadas da montagem — o
+  orquestrador calcula as linhas ANTES do Checklist (que vem antes das consolidações no
+  arquivo), tira `resumoOportunidades(linhas)` (crédito/atualização Selic/nº competências) e
+  passa as mesmas linhas pras montagens (nada é calculado duas vezes).
+- **Limiar**: crédito só conta acima de R$ 0,01, com arredondamento a 2 casas ANTES da
+  comparação — sem isso, ruído de ponto flutuante (0.010000000002) marcava 🌟 em linhas de
+  1 centavo que o Excel recalcularia como empate.
+- **Validação (dados reais CORE, 324 DARFs)**: PIS/COFINS R$ 19,74 em 3 competências; IRPJ/CSLL
+  R$ 2.740,25 + Selic R$ 731,42 em 4 competências (ex.: IRPJ 1T/2024 R$ 1.771,97); Checklist com
+  🌟 e observação completa.
+- **Próximos cruzamentos candidatos** (ainda não implementados): retenções (Fontes Pagadoras ×
+  abatido nas apurações), EFD × DCTF divergente (coluna J já calcula — falta sinalizar), débito
+  declarado e não pago (contingência R).

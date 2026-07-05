@@ -210,7 +210,18 @@ const EXTRAS = [
   "Analisar Relação de QSA - Soma de Faturamento",
 ]
 
-export async function montarAbaChecklist(wb: ExcelJS.Workbook, nomeCliente: string): Promise<void> {
+// Resultado do "analisador" automático — preenchido pelo orquestrador a partir dos cruzamentos
+// das abas de consolidação (por enquanto só o de pagamentos; os demais tópicos continuam em
+// branco aguardando seus cruzamentos). Chave = texto exato do tópico na coluna "Oportunidade".
+export interface AnaliseChecklist {
+  situacoesOportunidade?: Record<string, { situacao: Situacao; observacao: string }>
+}
+
+export async function montarAbaChecklist(
+  wb: ExcelJS.Workbook,
+  nomeCliente: string,
+  analise?: AnaliseChecklist
+): Promise<void> {
   const ws = wb.addWorksheet("Checklist", {
     views: [{ showGridLines: false, state: "frozen", ySplit: 5 }],
   })
@@ -249,7 +260,18 @@ export async function montarAbaChecklist(wb: ExcelJS.Workbook, nomeCliente: stri
   const iconeValor = (s: Situacao | undefined) => (s === "estrela" ? "🌟" : s === "caveira" ? "☠️" : null)
   const corIcone = (s: Situacao | undefined) => (s === "estrela" ? COR.estrela : "FF000000")
 
-  for (const categoria of CATEGORIAS) {
+  // aplica o resultado do analisador sem mutar a constante de módulo
+  const categorias: ChecklistCategoria[] = CATEGORIAS.map((c) => ({
+    ...c,
+    itens: c.itens.map((item) => {
+      const resultado = analise?.situacoesOportunidade?.[item.oportunidade]
+      return resultado
+        ? { ...item, situacaoOportunidade: resultado.situacao, observacaoOportunidade: resultado.observacao }
+        : item
+    }),
+  }))
+
+  for (const categoria of categorias) {
     // Estiliza TODAS as células do range antes de mesclar — mesclar faz as células
     // compartilharem o mesmo objeto de estilo internamente no ExcelJS, então estilizar de novo
     // depois (ex.: só a cor de fundo) sobrescreve negrito/alinhamento da célula mestre.

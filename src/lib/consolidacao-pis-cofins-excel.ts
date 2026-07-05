@@ -73,7 +73,7 @@ export interface DadosConsolidacaoIrpjCsll extends FontesLookup {
 }
 
 // linha da consolidação com os resultados pré-calculados em JS (mesma conta das fórmulas)
-interface LinhaConsolidacao {
+export interface LinhaConsolidacao {
   cnpj: string
   tributo: string
   competencia: string // "YYYY-MM" — mês que casa com o PA das abas DCTF/DCTFWeb/Comprovante
@@ -82,6 +82,40 @@ interface LinhaConsolidacao {
   debitoOriginal: number
   dctf: number
   darf: number
+}
+
+// Cruzamento "recolhido a maior": crédito = DARF pago além do débito apurado (coluna Q da
+// consolidação, com restituído/parcelado/Dcomp ainda zerados) + atualização Selic (coluna S).
+// É o resumo que o orquestrador usa pra preencher automaticamente o item "Pagamentos realizados
+// no e-CAC x Tributos devidos" do Checklist — ver docs §11 (a visão de checklist automático).
+export interface ResumoOportunidades {
+  credito: number
+  atualizacao: number
+  competenciasComCredito: number
+}
+
+const LIMIAR_CREDITO = 0.01
+
+// arredonda a 2 casas antes de comparar com o limiar — sem isso, ruído de ponto flutuante
+// (0.010000000002) marcaria 🌟 numa linha que o Excel recalcularia como exatamente 0,01
+function creditoDaLinha(l: LinhaConsolidacao): number {
+  const base = Math.round((l.darf - l.debitoOriginal) * 100) / 100
+  return base > LIMIAR_CREDITO ? base : 0
+}
+
+export function resumoOportunidades(linhas: LinhaConsolidacao[]): ResumoOportunidades {
+  let credito = 0
+  let atualizacao = 0
+  let competenciasComCredito = 0
+  for (const l of linhas) {
+    const c = creditoDaLinha(l)
+    if (c === 0) continue
+    credito += c
+    const acumulada = selicAcumuladaParaPeriodo(l.competencia)
+    if (acumulada !== null) atualizacao += Math.round(acumulada * c * 100) / 100
+    competenciasComCredito++
+  }
+  return { credito, atualizacao, competenciasComCredito }
 }
 
 function somaDctf(tributo: string, competencia: string, dctf: DeclaracaoDctfRegistro[], dctfWeb: DeclaracaoDctfWebRegistro[]): number {
@@ -148,6 +182,7 @@ async function montarAbaConsolidacao(
     { width: 15 }, // R Contingência
     { width: 15 }, // S Atualização
     { width: 15 }, // T Pagamento Indev
+    { width: 22 }, // U Oportunidade (🌟 quando recolhido a maior)
   ]
 
   ws.getRow(1).height = 60
@@ -165,7 +200,7 @@ async function montarAbaConsolidacao(
   const colunas = [
     "CNPJ", "Tributo", "ANO", "Período", "Apuração Débito Original", "Novo Débito", `Dif Cred ${opts.rotuloFonte}`, "DCTF",
     `Dif DCTF x ${opts.rotuloFonte}`, "Pgto DARF", "Valor já restituído", "Parcelado", "Dcomp", `DARF x ${opts.rotuloFonte} Orig`,
-    "DIF DCTF x DARF x Dcomp", "Crédito", "Contingência", "Atualização", "Pagamento Indev",
+    "DIF DCTF x DARF x Dcomp", "Crédito", "Contingência", "Atualização", "Pagamento Indev", "Oportunidade",
   ]
 
   ws.addTable({
@@ -176,11 +211,11 @@ async function montarAbaConsolidacao(
     style: { theme: "TableStyleMedium2", showRowStripes: true },
     columns: colunas.map((name) => ({ name, filterButton: true })),
     // placeholders — as células de fórmula são sobrescritas logo abaixo
-    rows: linhas.map((l) => [l.cnpj, l.tributo, 0, l.periodo, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    rows: linhas.map((l) => [l.cnpj, l.tributo, 0, l.periodo, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ""]),
   })
 
   const primeiraLinha = LINHA_HEADER + 1
-  const f = (formula: string, result: number | Date): ExcelJS.CellFormulaValue =>
+  const f = (formula: string, result: number | Date | string): ExcelJS.CellFormulaValue =>
     ({ formula, result }) as ExcelJS.CellFormulaValue
 
   linhas.forEach((l, i) => {
@@ -231,11 +266,19 @@ async function montarAbaConsolidacao(
     ) // S Atualização
     row.getCell(20).value = f(`S${r}+Q${r}`, sRes + credito) // T Pagamento Indev
 
-    for (let c = 2; c <= 20; c++) {
+    // U Oportunidade: o "analisador" da linha — 🌟 quando o DARF pago supera o débito apurado
+    // (crédito > 0). Fórmula (não valor fixo) pra reagir se o analista mexer em G/L/M/N.
+    const temCredito = Math.round(credito * 100) / 100 > 0.01
+    row.getCell(21).value = f(`IF(Q${r}>0.01,"🌟 Recolhido a maior","")`, temCredito ? "🌟 Recolhido a maior" : "")
+
+    for (let c = 2; c <= 21; c++) {
       const cell = row.getCell(c)
       cell.font = { name: "Calibri", size: 10 }
       cell.alignment = { horizontal: "center", vertical: "middle" }
-      if (c >= 6) cell.numFmt = BRL
+      if (c >= 6 && c <= 20) cell.numFmt = BRL
+    }
+    if (temCredito) {
+      row.getCell(21).font = { name: "Calibri", size: 10, bold: true, color: { argb: "FFBF8F00" } }
     }
   })
 
@@ -252,7 +295,7 @@ async function montarAbaConsolidacao(
   }
 
   const headerRow = ws.getRow(LINHA_HEADER)
-  for (let c = 2; c <= 20; c++) {
+  for (let c = 2; c <= 21; c++) {
     const cell = headerRow.getCell(c)
     cell.font = { name: "Calibri", bold: true, size: 10, color: { argb: COR_HEADER_TEXTO } }
     cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true }
@@ -262,7 +305,10 @@ async function montarAbaConsolidacao(
   // sem congelamento de painéis nas consolidações (pedido do usuário) — só oculta as gridlines
 }
 
-export async function montarAbaConsolidacaoPisCofins(wb: ExcelJS.Workbook, dados: DadosConsolidacaoPisCofins): Promise<void> {
+// Cálculo separado da montagem: o orquestrador calcula as linhas ANTES de montar o Checklist
+// (que fica antes das consolidações no arquivo) pra poder preencher o item de "pago a maior"
+// com o resumo — e depois passa as mesmas linhas pra montagem, sem calcular duas vezes.
+export function calcularConsolidacaoPisCofins(dados: DadosConsolidacaoPisCofins): LinhaConsolidacao[] {
   const porCompetencia = new Map(dados.declaracoes.map((d) => [d.competencia, d.dados]))
 
   // mesma ordem do WP de referência: bloco COFINS inteiro, depois bloco PIS
@@ -286,13 +332,20 @@ export async function montarAbaConsolidacaoPisCofins(wb: ExcelJS.Workbook, dados
       })
     }
   }
+  return linhas
+}
 
+export async function montarAbaConsolidacaoPisCofins(
+  wb: ExcelJS.Workbook,
+  dados: DadosConsolidacaoPisCofins,
+  linhasPreCalculadas?: LinhaConsolidacao[]
+): Promise<void> {
   await montarAbaConsolidacao(wb, {
     nomeAba: "PIS e COFINS",
     nomeTabela: "ConsolidacaoPisCofins",
     titulo: "Consolidação de Créditos Tributários - PIS e COFINS",
     rotuloFonte: "EFD",
-    linhas,
+    linhas: linhasPreCalculadas ?? calcularConsolidacaoPisCofins(dados),
     fontes: dados,
   })
 }
@@ -301,7 +354,7 @@ export async function montarAbaConsolidacaoPisCofins(wb: ExcelJS.Workbook, dados
 // do PA impresso no DARF: 31/03 → 01/03 etc.)
 const MES_FIM_TRIMESTRE: Record<string, string> = { T01: "03", T02: "06", T03: "09", T04: "12" }
 
-export async function montarAbaConsolidacaoIrpjCsll(wb: ExcelJS.Workbook, dados: DadosConsolidacaoIrpjCsll): Promise<void> {
+export function calcularConsolidacaoIrpjCsll(dados: DadosConsolidacaoIrpjCsll): LinhaConsolidacao[] {
   const ordenadas = [...dados.declaracoes].sort((a, b) => a.competencia.localeCompare(b.competencia))
 
   const linhas: LinhaConsolidacao[] = []
@@ -327,13 +380,20 @@ export async function montarAbaConsolidacaoIrpjCsll(wb: ExcelJS.Workbook, dados:
       }
     }
   }
+  return linhas
+}
 
+export async function montarAbaConsolidacaoIrpjCsll(
+  wb: ExcelJS.Workbook,
+  dados: DadosConsolidacaoIrpjCsll,
+  linhasPreCalculadas?: LinhaConsolidacao[]
+): Promise<void> {
   await montarAbaConsolidacao(wb, {
     nomeAba: "IRPJ e CSLL",
     nomeTabela: "ConsolidacaoIrpjCsll",
     titulo: "Consolidação de Créditos Tributários - IRPJ e CSLL",
     rotuloFonte: "ECF",
-    linhas,
+    linhas: linhasPreCalculadas ?? calcularConsolidacaoIrpjCsll(dados),
     fontes: dados,
   })
 }

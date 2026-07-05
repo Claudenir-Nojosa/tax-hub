@@ -10,8 +10,44 @@ import { montarAbasEcd, type DeclaracaoEcdRegistro } from "./ecd-excel"
 import { montarAbaChecklist } from "./checklist-excel"
 import { criarAbaMenu, preencherAbaMenu } from "./cadastro-excel"
 import type { DadosCadastroEmpresa } from "./cadastro-parser"
-import { montarAbaConsolidacaoPisCofins, montarAbaConsolidacaoIrpjCsll } from "./consolidacao-pis-cofins-excel"
+import {
+  calcularConsolidacaoIrpjCsll,
+  calcularConsolidacaoPisCofins,
+  montarAbaConsolidacaoIrpjCsll,
+  montarAbaConsolidacaoPisCofins,
+  resumoOportunidades,
+} from "./consolidacao-pis-cofins-excel"
+import type { AnaliseChecklist } from "./checklist-excel"
 import { montarAbaSelic } from "./selic-excel"
+
+const BRL_FMT = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+
+// Analisador do diagnóstico (primeiro cruzamento): recolhido a maior de PIS/COFINS/IRPJ/CSLL.
+// Traduz os resumos das consolidações no preenchimento automático do item "Pagamentos
+// realizados no e-CAC x Tributos devidos" do Checklist (🌟 com o total quando há crédito, ☠️
+// quando os pagamentos conferem). Sem DARFs importados não há cruzamento possível — o item fica
+// em branco como antes.
+function analisePagamentos(
+  temComprovantes: boolean,
+  resumos: { rotulo: string; credito: number; atualizacao: number; competencias: number }[]
+): AnaliseChecklist | undefined {
+  if (!temComprovantes || resumos.length === 0) return undefined
+  const comCredito = resumos.filter((r) => r.credito > 0)
+  const observacao =
+    comCredito.length > 0
+      ? `Recolhido a maior: ${comCredito
+          .map((r) => `${r.rotulo} ${BRL_FMT.format(r.credito)} (+ Selic ${BRL_FMT.format(r.atualizacao)}) em ${r.competencias} competência(s)`)
+          .join("; ")} — ver coluna "Oportunidade" nas abas de consolidação`
+      : "Pagamentos conferem com os débitos apurados em todas as competências cruzadas (sem recolhimento a maior)"
+  return {
+    situacoesOportunidade: {
+      "Pagamentos realizados no e-CAC x Tributos devidos": {
+        situacao: comCredito.length > 0 ? "estrela" : "caveira",
+        observacao,
+      },
+    },
+  }
+}
 
 function sanitizarNomeArquivo(nome: string): string {
   return nome.replace(/[\\/:*?"<>|]/g, "").trim()
@@ -66,29 +102,49 @@ export async function exportarDeclaracaoFiscalExcel(
   if (temDctfWeb || temDctf) await montarAbasDctf(wb, { dctfWeb: dados.dctfWeb, dctf: dados.dctf })
   if (temFontes) await montarAbasFontesPagadoras(wb, dados.fontesPagadoras!)
   if (temComprovantes) await montarAbaComprovantePagamento(wb, dados.comprovantes!, nomeCliente)
-  await montarAbaChecklist(wb, nomeCliente)
+
   // Consolidações "PIS e COFINS" / "IRPJ e CSLL" + tabela "Selic" ficam no FINAL do arquivo
   // (pedido do usuário); referenciam por fórmula as abas PIS/COFINS/IRPJ/CSLL, DCTF/DCTFWeb,
-  // Comprovante e Selic.
-  if (temPisCofins && refsDebito) {
-    await montarAbaConsolidacaoPisCofins(wb, {
-      declaracoes: dados.pisCofins!,
-      refsDebito,
-      dctf: dados.dctf,
-      dctfWeb: dados.dctfWeb,
-      comprovantes: dados.comprovantes,
-    })
+  // Comprovante e Selic. As linhas são calculadas ANTES do Checklist (que vem antes delas no
+  // arquivo) pra alimentar o analisador de recolhido a maior.
+  const dadosConsolidacaoPisCofins =
+    temPisCofins && refsDebito
+      ? {
+          declaracoes: dados.pisCofins!,
+          refsDebito,
+          dctf: dados.dctf,
+          dctfWeb: dados.dctfWeb,
+          comprovantes: dados.comprovantes,
+        }
+      : null
+  const dadosConsolidacaoIrpjCsll =
+    temEcf && refsDebitoEcf
+      ? {
+          declaracoes: dados.ecf!,
+          refsDebito: refsDebitoEcf,
+          dctf: dados.dctf,
+          dctfWeb: dados.dctfWeb,
+          comprovantes: dados.comprovantes,
+        }
+      : null
+  const linhasPisCofins = dadosConsolidacaoPisCofins ? calcularConsolidacaoPisCofins(dadosConsolidacaoPisCofins) : []
+  const linhasIrpjCsll = dadosConsolidacaoIrpjCsll ? calcularConsolidacaoIrpjCsll(dadosConsolidacaoIrpjCsll) : []
+
+  const resumos: { rotulo: string; credito: number; atualizacao: number; competencias: number }[] = []
+  if (linhasPisCofins.length > 0) {
+    const r = resumoOportunidades(linhasPisCofins)
+    resumos.push({ rotulo: "PIS/COFINS", credito: r.credito, atualizacao: r.atualizacao, competencias: r.competenciasComCredito })
   }
-  if (temEcf && refsDebitoEcf) {
-    await montarAbaConsolidacaoIrpjCsll(wb, {
-      declaracoes: dados.ecf!,
-      refsDebito: refsDebitoEcf,
-      dctf: dados.dctf,
-      dctfWeb: dados.dctfWeb,
-      comprovantes: dados.comprovantes,
-    })
+  if (linhasIrpjCsll.length > 0) {
+    const r = resumoOportunidades(linhasIrpjCsll)
+    resumos.push({ rotulo: "IRPJ/CSLL", credito: r.credito, atualizacao: r.atualizacao, competencias: r.competenciasComCredito })
   }
-  if ((temPisCofins && refsDebito) || (temEcf && refsDebitoEcf)) montarAbaSelic(wb)
+
+  await montarAbaChecklist(wb, nomeCliente, analisePagamentos(temComprovantes, resumos))
+
+  if (dadosConsolidacaoPisCofins) await montarAbaConsolidacaoPisCofins(wb, dadosConsolidacaoPisCofins, linhasPisCofins)
+  if (dadosConsolidacaoIrpjCsll) await montarAbaConsolidacaoIrpjCsll(wb, dadosConsolidacaoIrpjCsll, linhasIrpjCsll)
+  if (dadosConsolidacaoPisCofins || dadosConsolidacaoIrpjCsll) montarAbaSelic(wb)
   if (wsMenu && cadastro) await preencherAbaMenu(wsMenu, wb, cadastro, nomeCliente)
 
   const contextos: string[] = []
