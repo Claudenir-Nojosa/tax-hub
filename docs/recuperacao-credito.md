@@ -646,3 +646,28 @@ determinístico.
   todos os tributos (PIS +99,18; COFINS +457,82; IRPJ +112,70; CSLL +152,62); 2025 compara só
   PIS/COFINS (sem ECF 2025) — recorte correto; ☠️ nos meses recentes sem DARF e "DCTF não
   localizada" em 2026-05 (sem DCTF do período) conferidos manualmente.
+
+### §17-C. Cruzamento 5 — crédito de estoque de abertura (mudança pro Lucro Real)
+
+- **Regra**: Simples/Presumido → Lucro Real dá crédito presumido sobre o estoque de 31/dez do
+  último ano no regime anterior: PIS 0,65% + COFINS 3%, em 12 parcelas mensais (Lei 10.637/2002
+  art. 11; Lei 10.833/2003 art. 12). `src/lib/estoque-abertura-analise.ts`.
+- **Detecção da mudança** (determinística): regime por ano pela EFD Contribuições (contribuição
+  não cumulativa > 0 = Real; só cumulativa = Presumido). Ano da mudança = primeiro ano não
+  cumulativo cujo ano anterior era cumulativo na EFD OU tinha ECF Presumido (formaTributacao 5)
+  OU estava no Simples (Consulta Optantes do cadastro — opção vigente/período cobrindo dez do
+  ano). Primeiro ano já não cumulativo SEM dado do ano anterior não afirma mudança.
+- **Estoque**: saldo de ABERTURA (pós-encerramento, fonte validada — §10) das contas da ECD do
+  ano da mudança com natureza Ativo e "estoque" no nome; soma só as RAÍZES do conjunto (conta
+  sem outra conta de estoque como ancestral, comparando prefixo de COD_CTA) pra não somar
+  sintética + analítica em dobro.
+- **Checklist** — item "Mudança de Regime - Inventário" (REVISÃO DE BASE DE CÁLCULO):
+  🌟 com estoque + créditos calculados; ☠️ sem mudança no período analisado ou com estoque
+  zerado; mudança detectada SEM a ECD do ano → observação SEM ícone pedindo a ECD
+  (`AnaliseChecklist` agora aceita `situacao` opcional = só observação).
+- **GAP CONHECIDO**: não conferimos se o crédito JÁ FOI aproveitado — o parser da EFD não lê
+  F150/M105/M505 (gap de créditos, §5). A observação manda conferir manualmente.
+- **Validação**: CORE real = cumulativa 2021-2026 → ☠️ "sem mudança" ✓; sintéticos: Presumido→
+  Real 2023 com estoque 200k → PIS 1.300,00 / COFINS 6.000,00 (conta raiz única, sem dupla
+  contagem) ✓; Simples→Real via cadastro ✓; mudança sem ECD → observação sem ícone ✓; estoque
+  zero → ☠️ ✓; "sempre Real sem histórico" → não afirma ✓.

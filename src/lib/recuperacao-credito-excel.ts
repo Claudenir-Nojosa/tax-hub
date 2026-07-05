@@ -19,6 +19,7 @@ import {
 } from "./consolidacao-pis-cofins-excel"
 import type { AnaliseChecklist } from "./checklist-excel"
 import { compararRetencoes, type ComparativoRetencao, type TributoRetencao } from "./retencoes-analise"
+import { analisarEstoqueAbertura } from "./estoque-abertura-analise"
 import { montarAbaSelic } from "./selic-excel"
 
 const BRL_FMT = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
@@ -100,6 +101,71 @@ function analiseRetencoes(comparativos: ComparativoRetencao[]): AnaliseChecklist
   const irpjCsll = item(["IRPJ", "CSLL"])
   if (irpjCsll) situacoes["Fontes Pagadoras x valor utilizado nas apurações"] = irpjCsll
   return Object.keys(situacoes).length > 0 ? situacoes : undefined
+}
+
+// Analisador — cruzamento 5 (crédito de estoque de abertura): mudança pro Lucro Real vinda do
+// Simples/Presumido dá crédito de PIS 0,65% + COFINS 3% sobre o estoque de 31/dez do último ano
+// no regime anterior (saldo de abertura das contas de estoque na ECD do ano da mudança). Ver
+// src/lib/estoque-abertura-analise.ts. Preenche o item "Mudança de Regime - Inventário".
+function analiseEstoqueAbertura(dados: {
+  pisCofins?: DeclaracaoEfdContribuicoesRegistro[]
+  ecd?: DeclaracaoEcdRegistro[]
+  ecf?: DeclaracaoEcfRegistro[]
+  cadastro?: DadosCadastroEmpresa | null
+}): AnaliseChecklist["situacoes"] {
+  const resultado = analisarEstoqueAbertura(
+    dados.pisCofins ?? [],
+    dados.ecd ?? [],
+    dados.ecf ?? [],
+    dados.cadastro?.simplesNacional
+  )
+  if (!resultado) return undefined
+
+  const chave = "Mudança de Regime - Inventário"
+  if (!resultado.mudanca) {
+    const anos = resultado.anosAnalisados
+    return {
+      [chave]: {
+        oportunidade: {
+          situacao: "caveira",
+          observacao: `Nenhuma mudança para o regime não cumulativo (Lucro Real) identificada nos anos analisados (${anos[0]}–${anos[anos.length - 1]}) — sem crédito de estoque de abertura`,
+        },
+      },
+    }
+  }
+
+  const { anoMudanca, regimeAnterior } = resultado.mudanca
+  const anoEstoque = String(Number(anoMudanca) - 1)
+  if (!resultado.temEcdDoAnoMudanca) {
+    return {
+      [chave]: {
+        oportunidade: {
+          // sem ícone: a mudança existe, mas sem a ECD não dá pra afirmar nem descartar o crédito
+          observacao: `Mudança ${regimeAnterior} → Lucro Real em ${anoMudanca} detectada — importe a ECD de ${anoMudanca} para apurar o estoque de 31/12/${anoEstoque} e calcular o crédito (PIS 0,65% + COFINS 3%)`,
+        },
+      },
+    }
+  }
+
+  if ((resultado.estoque ?? 0) <= 0.01) {
+    return {
+      [chave]: {
+        oportunidade: {
+          situacao: "caveira",
+          observacao: `Mudança ${regimeAnterior} → Lucro Real em ${anoMudanca}, mas sem saldo de estoque em 31/12/${anoEstoque} na ECD — sem crédito de estoque de abertura`,
+        },
+      },
+    }
+  }
+
+  return {
+    [chave]: {
+      oportunidade: {
+        situacao: "estrela",
+        observacao: `Mudança ${regimeAnterior} → Lucro Real em ${anoMudanca}: estoque de ${BRL_FMT.format(resultado.estoque!)} em 31/12/${anoEstoque} (ECD) → crédito potencial de PIS ${BRL_FMT.format(resultado.creditoPis!)} (0,65%) + COFINS ${BRL_FMT.format(resultado.creditoCofins!)} (3%), apropriável em 12 parcelas mensais — conferir se já foi aproveitado na EFD (F150/M105)`,
+      },
+    },
+  }
 }
 
 function sanitizarNomeArquivo(nome: string): string {
@@ -193,6 +259,7 @@ export async function exportarDeclaracaoFiscalExcel(
   const situacoes: NonNullable<AnaliseChecklist["situacoes"]> = {
     ...analisePagamentos(temComprovantes, resumos),
     ...analiseRetencoes(comparativosRetencao),
+    ...analiseEstoqueAbertura(dados),
   }
   await montarAbaChecklist(wb, nomeCliente, Object.keys(situacoes).length > 0 ? { situacoes } : undefined)
 

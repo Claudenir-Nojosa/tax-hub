@@ -218,8 +218,10 @@ export interface AnaliseChecklist {
   situacoes?: Record<
     string,
     {
-      oportunidade?: { situacao: Situacao; observacao: string }
-      contingencia?: { situacao: Situacao; observacao: string }
+      // situacao ausente = só observação, sem ícone (ex.: cruzamento detectou algo mas falta um
+      // arquivo pra concluir — nem 🌟 nem ☠️ seriam honestos)
+      oportunidade?: { situacao?: Situacao; observacao: string }
+      contingencia?: { situacao?: Situacao; observacao: string }
     }
   >
 }
@@ -273,15 +275,16 @@ export async function montarAbaChecklist(
     itens: c.itens.map((item) => {
       const resultado = analise?.situacoes?.[item.oportunidade]
       if (!resultado) return item
-      return {
-        ...item,
-        ...(resultado.oportunidade
-          ? { situacaoOportunidade: resultado.oportunidade.situacao, observacaoOportunidade: resultado.oportunidade.observacao }
-          : {}),
-        ...(resultado.contingencia
-          ? { situacaoContingencia: resultado.contingencia.situacao, observacaoContingencia: resultado.contingencia.observacao }
-          : {}),
+      const aplicado = { ...item }
+      if (resultado.oportunidade) {
+        aplicado.observacaoOportunidade = resultado.oportunidade.observacao
+        if (resultado.oportunidade.situacao) aplicado.situacaoOportunidade = resultado.oportunidade.situacao
       }
+      if (resultado.contingencia) {
+        aplicado.observacaoContingencia = resultado.contingencia.observacao
+        if (resultado.contingencia.situacao) aplicado.situacaoContingencia = resultado.contingencia.situacao
+      }
+      return aplicado
     }),
   }))
 
