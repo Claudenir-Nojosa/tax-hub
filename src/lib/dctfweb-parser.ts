@@ -16,6 +16,9 @@ export interface DebitoDctfWeb {
   tributo: string | null // "PIS"/"COFINS"/"IRPJ"/"CSLL" (só p/ os 4 códigos principais) ou null
   periodoApuracaoDebito: string // "01/2025" ou "1º Trimestre/2025"
   debitoApurado: number
+  // texto cru dos créditos vinculados quando existem (ex.: "Pagamento: 5.772,23") — aparece
+  // entre o Débito Apurado e o Saldo a Pagar em débitos parcialmente quitados/compensados
+  creditosVinculados?: string
   saldoAPagar: number
 }
 
@@ -69,7 +72,11 @@ export function parseDctfWebDeTexto(textoBruto: string, arquivoNome: string): Da
   // Cada débito começa com "Débito Apurado e Crédito Vinculado"
   const blocos = texto.split(/D[ée]bito Apurado e Cr[ée]dito Vinculado/i).slice(1)
   const debitos: DebitoDctfWeb[] = []
-  const RE = /C[óo]digo da Receita (\S+) Descri[çc][ãa]o (.+?) Per[íi]odo Apura[çc][ãa]o D[ée]bito (.+?) D[ée]bito Apurado ([\d.,]+) Saldo a Pagar ([\d.,]+)/i
+  // Entre "Débito Apurado" e "Saldo a Pagar" pode existir um bloco "Créditos ..." (ex.:
+  // "Créditos Pagamento: 5.772,23" nos IRPJ/CSLL trimestrais pagos por quota) — sem o grupo
+  // opcional, esses débitos eram silenciosamente pulados (bug real: 1º tri/2025 da CORE).
+  const RE =
+    /C[óo]digo da Receita (\S+) Descri[çc][ãa]o (.+?) Per[íi]odo Apura[çc][ãa]o D[ée]bito (.+?) D[ée]bito Apurado ([\d.,]+)(?: Cr[ée]ditos (.+?))? Saldo a Pagar ([\d.,]+)/i
   for (const bloco of blocos) {
     const m = bloco.match(RE)
     if (!m) continue
@@ -81,7 +88,8 @@ export function parseDctfWebDeTexto(textoBruto: string, arquivoNome: string): Da
       tributo: labelTributo(prefixo),
       periodoApuracaoDebito: m[3].trim(),
       debitoApurado: parseNumeroBR(m[4]),
-      saldoAPagar: parseNumeroBR(m[5]),
+      ...(m[5] ? { creditosVinculados: m[5].trim() } : {}),
+      saldoAPagar: parseNumeroBR(m[6]),
     })
   }
 

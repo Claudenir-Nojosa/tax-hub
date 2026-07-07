@@ -9,7 +9,7 @@ const COR_HEADER_BG = "FF0E2841"
 const COR_HEADER_TEXTO = "FFFFFFFF"
 const TAB_COLOR = "FF1F3864"
 const LOGO_URL = "/icons/taxhub_logo_principal_claro_transparente.png"
-const MESES_TRI = ["MAR", "JUN", "SET"] as const
+const MESES_ABREV = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"] as const
 
 function sanitizarNomeArquivo(nome: string): string {
   return nome.replace(/[\\/:*?"<>|]/g, "").trim()
@@ -51,14 +51,26 @@ function compararCodigo(a: string, b: string): number {
 }
 
 interface ColunaPeriodo {
-  label: string // "MAR/2021"
+  label: string // "JAN/2021"
   ano: string
-  campo?: "saldoMar" | "saldoJun" | "saldoSet"
+  mes?: string // "01".."11" — saldo mensal do próprio arquivo
   dezDoProximo?: string // ano do arquivo cuja abertura vira o Dez desta coluna
 }
 
-// Monta a aba "Balanço Patrimonial (ECD)" — Código, Conta, Tipo, Natureza + colunas trimestrais
-// (Mar/Jun/Set do ano vêm do próprio arquivo; Dez/Y = abertura do arquivo Y+1).
+// saldo do mês no shape novo (saldosMensais) com fallback pro legado trimestral (registros
+// gravados antes da mudança pra mensal só têm Mar/Jun/Set — os demais meses ficam vazios até o
+// arquivo ser reimportado)
+function saldoDoMes(conta: ContaEcd, mes: string): number | "" {
+  const doNovo = conta.saldosMensais?.[mes]
+  if (doNovo !== undefined) return doNovo
+  if (mes === "03" && conta.saldoMar !== undefined) return conta.saldoMar
+  if (mes === "06" && conta.saldoJun !== undefined) return conta.saldoJun
+  if (mes === "09" && conta.saldoSet !== undefined) return conta.saldoSet
+  return ""
+}
+
+// Monta a aba "Balanço Patrimonial (ECD)" — Código, Conta, Tipo, Natureza + colunas MENSAIS
+// (Jan..Nov do ano vêm do próprio arquivo; Dez/Y = abertura do arquivo Y+1, pós-encerramento).
 export async function montarAbaEcd(
   wb: ExcelJS.Workbook,
   registros: DeclaracaoEcdRegistro[],
@@ -67,11 +79,12 @@ export async function montarAbaEcd(
   const anos = [...new Set(registros.map((r) => r.dados.anoCalendario))].sort()
   const porAno = new Map(registros.map((r) => [r.dados.anoCalendario, r.dados]))
 
-  // colunas de período
+  // colunas de período: JAN..NOV do arquivo do ano + DEZ via abertura do arquivo seguinte
   const colunas: ColunaPeriodo[] = []
   for (const ano of anos) {
-    for (const campo of ["saldoMar", "saldoJun", "saldoSet"] as const) {
-      colunas.push({ label: `${MESES_TRI[["saldoMar", "saldoJun", "saldoSet"].indexOf(campo)]}/${ano}`, ano, campo })
+    for (let m = 1; m <= 11; m++) {
+      const mes = String(m).padStart(2, "0")
+      colunas.push({ label: `${MESES_ABREV[m - 1]}/${ano}`, ano, mes })
     }
     const proximo = String(Number(ano) + 1)
     if (porAno.has(proximo)) colunas.push({ label: `DEZ/${ano}`, ano, dezDoProximo: proximo })
@@ -89,7 +102,9 @@ export async function montarAbaEcd(
       return conta ? Math.abs(conta.abertura) : ""
     }
     const conta = porAno.get(col.ano)?.contas.find((c) => c.codCta === codCta)
-    return conta ? Math.abs(conta[col.campo!]) : ""
+    if (!conta) return ""
+    const s = saldoDoMes(conta, col.mes!)
+    return s === "" ? "" : Math.abs(s)
   }
 
   // só contas do Balanço Patrimonial (Ativo/Passivo/PL) com algum saldo não-zero

@@ -226,15 +226,31 @@ export interface AnaliseChecklist {
   >
 }
 
+// Cria a aba vazia — o orquestrador chama isso logo depois do Menu pra Checklist ficar na 2ª
+// posição do arquivo, e preenche por último (a análise automática depende das consolidações,
+// calculadas depois). Os exports standalone usam montarAbaChecklist, que faz os dois de uma vez.
+export function criarAbaChecklist(wb: ExcelJS.Workbook): ExcelJS.Worksheet {
+  const ws = wb.addWorksheet("Checklist", {
+    views: [{ showGridLines: false, state: "frozen", ySplit: 5 }],
+  })
+  ws.properties.tabColor = { argb: "FFFFFF00" } // amarela (pedido do usuário)
+  return ws
+}
+
 export async function montarAbaChecklist(
   wb: ExcelJS.Workbook,
   nomeCliente: string,
   analise?: AnaliseChecklist
 ): Promise<void> {
-  const ws = wb.addWorksheet("Checklist", {
-    views: [{ showGridLines: false, state: "frozen", ySplit: 5 }],
-  })
-  ws.properties.tabColor = { argb: "FFD9D9D9" }
+  await preencherAbaChecklist(criarAbaChecklist(wb), wb, nomeCliente, analise)
+}
+
+export async function preencherAbaChecklist(
+  ws: ExcelJS.Worksheet,
+  wb: ExcelJS.Workbook,
+  nomeCliente: string,
+  analise?: AnaliseChecklist
+): Promise<void> {
 
   ws.columns = [
     { width: 3 },

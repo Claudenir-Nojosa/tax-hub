@@ -7,7 +7,7 @@ import { montarAbasEcf, type DeclaracaoEcfRegistro } from "./ecf-excel"
 import { montarAbasDctf, type DeclaracaoDctfWebRegistro, type DeclaracaoDctfRegistro } from "./dctf-excel"
 import { montarAbasFontesPagadoras, type DeclaracaoFontesPagadorasRegistro } from "./fontes-pagadoras-excel"
 import { montarAbasEcd, type DeclaracaoEcdRegistro } from "./ecd-excel"
-import { montarAbaChecklist } from "./checklist-excel"
+import { criarAbaChecklist, preencherAbaChecklist } from "./checklist-excel"
 import { criarAbaMenu, preencherAbaMenu } from "./cadastro-excel"
 import type { DadosCadastroEmpresa } from "./cadastro-parser"
 import {
@@ -210,9 +210,11 @@ export async function exportarDeclaracaoFiscalExcel(
   wb.creator = "Tax Hub — Recuperação de Crédito"
   wb.created = new Date()
 
-  // A aba Menu precisa ser a PRIMEIRA do arquivo, mas os links internos dela dependem das abas
-  // que ainda vão ser montadas — então cria vazia agora e preenche no final.
+  // A aba Menu precisa ser a PRIMEIRA do arquivo e a Checklist a SEGUNDA, mas o conteúdo das
+  // duas depende do que vem depois (links internos / análise das consolidações) — então cria as
+  // duas vazias agora e preenche no final.
   const wsMenu = temCadastro ? criarAbaMenu(wb) : null
+  const wsChecklist = criarAbaChecklist(wb)
 
   if (temIcms) await montarAbaIcms(wb, dados.icms!, nomeCliente)
   const refsDebito = temPisCofins ? await montarAbasPisCofins(wb, dados.pisCofins!, nomeCliente) : null
@@ -261,7 +263,7 @@ export async function exportarDeclaracaoFiscalExcel(
     ...analiseRetencoes(comparativosRetencao),
     ...analiseEstoqueAbertura(dados),
   }
-  await montarAbaChecklist(wb, nomeCliente, Object.keys(situacoes).length > 0 ? { situacoes } : undefined)
+  await preencherAbaChecklist(wsChecklist, wb, nomeCliente, Object.keys(situacoes).length > 0 ? { situacoes } : undefined)
 
   if (dadosConsolidacaoPisCofins) await montarAbaConsolidacaoPisCofins(wb, dadosConsolidacaoPisCofins, linhasPisCofins)
   if (dadosConsolidacaoIrpjCsll) await montarAbaConsolidacaoIrpjCsll(wb, dadosConsolidacaoIrpjCsll, linhasIrpjCsll)

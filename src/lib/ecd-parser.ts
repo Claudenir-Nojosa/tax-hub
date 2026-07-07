@@ -1,13 +1,15 @@
 // Parser da ECD (Escrituração Contábil Digital, SPED Contábil) — texto pipe-delimited (latin1),
 // determinístico. 1 arquivo = 1 ano-calendário. Extrai o plano de contas (I050) e monta os saldos
-// trimestrais das contas do Balanço Patrimonial, agregando as sintéticas pela árvore de contas.
+// MENSAIS das contas do Balanço Patrimonial, agregando as sintéticas pela árvore de contas.
 //
-// Método dos saldos (validado contra a planilha de referência do usuário, 2021-2024):
-//   - Mar/Jun/Set do ano = saldo final acumulado (I155 VL_SLD_FIN) do período que termina no
-//     último dia do trimestre (últ. I155 com data <= fim do trimestre).
-//   - Dez do ano (pós-encerramento) NÃO vem deste arquivo — vem da ABERTURA (VL_SLD_INI do 1º
-//     período) do arquivo do ano seguinte. Por isso guardamos `abertura` (= Dez do ano anterior)
-//     em cada arquivo, e o Excel liga Dez/Y = abertura do arquivo Y+1.
+// Método dos saldos (o trimestral foi validado contra a planilha de referência do usuário,
+// 2021-2024; o mensal usa exatamente a mesma regra com limite no fim de cada mês):
+//   - Saldo do mês M = saldo final acumulado (I155 VL_SLD_FIN) do período que termina no último
+//     dia do mês (últ. I155 com data <= fim do mês M).
+//   - Dez do ano PÓS-encerramento NÃO vem deste arquivo (o I155 de dez é pré-encerramento) — vem
+//     da ABERTURA (VL_SLD_INI do 1º período) do arquivo do ano seguinte. Por isso guardamos
+//     `abertura` (= Dez do ano anterior) em cada arquivo, e o Excel liga Dez/Y = abertura do
+//     arquivo Y+1. O `saldosMensais["12"]` existe mas é o valor PRÉ-encerramento.
 //   - Saldo de conta sintética = soma dos saldos (assinados: devedor +, credor -) das analíticas
 //     descendentes. Exibição no Excel = módulo (valor positivo), como na referência.
 
@@ -39,9 +41,12 @@ export interface ContaEcd {
   nivel: number
   // saldos assinados (devedor +, credor -) já agregados para este ano-calendário:
   abertura: number // = saldo em 31/12 do ano anterior (VL_SLD_INI do 1º período)
-  saldoMar: number
-  saldoJun: number
-  saldoSet: number
+  saldosMensais?: Record<string, number> // "01".."12" (12 = PRÉ-encerramento; ver cabeçalho)
+  // legado: registros gravados antes da mudança pra mensal só têm os fechamentos de trimestre —
+  // o Excel usa como fallback (Mar/Jun/Set) até o arquivo ser reimportado
+  saldoMar?: number
+  saldoJun?: number
+  saldoSet?: number
 }
 
 export interface DadosEcd {
@@ -164,6 +169,13 @@ function parseUmEcd(conteudo: string, arquivoNome: string): DadosEcd | null {
 
   const contas: ContaEcd[] = []
   for (const [codCta, info] of plano) {
+    // limite "AAAA MM 31": comparação lexicográfica de AAAAMMDD — dia 31 cobre o fim de
+    // qualquer mês (30/28/29 <= 31)
+    const saldosMensais: Record<string, number> = {}
+    for (let mes = 1; mes <= 12; mes++) {
+      const mm = String(mes).padStart(2, "0")
+      saldosMensais[mm] = saldoContaFim(codCta, `${anoCalendario}${mm}31`)
+    }
     contas.push({
       codCta,
       codFormatado: formatarCodigo(codCta, codSupMap),
@@ -173,9 +185,7 @@ function parseUmEcd(conteudo: string, arquivoNome: string): DadosEcd | null {
       codNat: info.codNat,
       nivel: info.nivel,
       abertura: saldoAberturaConta(codCta),
-      saldoMar: saldoContaFim(codCta, `${anoCalendario}0331`),
-      saldoJun: saldoContaFim(codCta, `${anoCalendario}0630`),
-      saldoSet: saldoContaFim(codCta, `${anoCalendario}0930`),
+      saldosMensais,
     })
   }
 

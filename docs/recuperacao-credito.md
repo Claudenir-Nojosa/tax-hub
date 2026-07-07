@@ -337,12 +337,14 @@ referência do usuário, "DCTF e DCTFWeb.xlsx"). Ambos listam os **débitos decl
 - **Parser**: `src/lib/ecd-parser.ts`. SPED Contábil (`.txt`, latin1), 1 arquivo = 1
   ano-calendário. Entra pelo endpoint unificado de `.txt` (`detectarEcd` = começa com
   `\|0000\|LECD\|`). Extrai o plano de contas (`I050`: código, natureza `COD_NAT`, tipo
-  `IND_CTA`, nível, superior, nome) e monta os saldos trimestrais do Balanço Patrimonial a partir
+  `IND_CTA`, nível, superior, nome) e monta os saldos MENSAIS do Balanço Patrimonial a partir
   dos saldos periódicos (`I150`/`I155`).
 - **Método dos saldos (validado campo a campo contra a planilha "B P ECF - OK" do usuário,
   2021-2024)**:
-  - **Mar/Jun/Set** do ano = saldo final acumulado (`I155` VL_SLD_FIN) do último período que
-    termina até o fim do trimestre.
+  - **Saldo do mês M** = saldo final acumulado (`I155` VL_SLD_FIN) do último período que
+    termina até o fim do mês (mesma regra validada no trimestral original — Mar/Jun/Set mensais
+    reproduzem os valores conferidos contra a referência). Contas guardam `saldosMensais`
+    ("01".."12"); registros antigos (só Mar/Jun/Set) funcionam via fallback até reimportar.
   - **Dez** do ano (pós-encerramento) NÃO é confiável no próprio arquivo (o `I155` mensal é
     pré-encerramento); vem da **abertura** (VL_SLD_INI do 1º período) do arquivo do ano seguinte.
     Por isso o Excel liga `Dez/Y = abertura do arquivo Y+1` — o Dez do último ano importado (sem
@@ -352,8 +354,8 @@ referência do usuário, "DCTF e DCTFWeb.xlsx"). Ambos listam os **débitos decl
 - **Excel** (`src/lib/ecd-excel.ts`, aba "Balanço Patrimonial (ECD)", estilo Excel Table): colunas
   **Código Conta** (formatado com pontos, ex. `1.01.01`), **Conta**, **Tipo Conta**
   (Sintética/Analítica — a "PROCV" pedida ao I050) e **Natureza** (Ativo/Passivo/Patrimônio
-  Líquido/Resultado/Outras, do `COD_NAT`), seguidas de uma coluna por trimestre (Mar/Jun/Set/Dez ×
-  ano). Só as contas do Balanço Patrimonial (natureza 01/02/03) com algum saldo ≠ 0 entram.
+  Líquido/Resultado/Outras, do `COD_NAT`), seguidas de uma coluna por MÊS (Jan..Nov do
+  próprio arquivo + Dez/Y = abertura do arquivo Y+1). Só as contas do Balanço Patrimonial (natureza 01/02/03) com algum saldo ≠ 0 entram.
 - **Índice de campo a vigiar**: no `I050`, `COD_NAT` é `campos[3]` (não `[2]`, que é a DT_ALT) —
   já mordeu uma vez. As demais colunas do `I050`: `IND_CTA`=[4], `NIVEL`=[5], `COD_CTA`=[6],
   `COD_CTA_SUP`=[7], `CTA`=[8].
@@ -671,3 +673,20 @@ determinístico.
   Real 2023 com estoque 200k → PIS 1.300,00 / COFINS 6.000,00 (conta raiz única, sem dupla
   contagem) ✓; Simples→Real via cadastro ✓; mudança sem ECD → observação sem ícone ✓; estoque
   zero → ☠️ ✓; "sempre Real sem histórico" → não afirma ✓.
+
+### Ajustes de 07/2026 (pedidos do usuário)
+
+- **Balanço Patrimonial (ECD) mensal**: parser guarda `saldosMensais` ("01".."12"; 12 é
+  PRÉ-encerramento) e a aba tem colunas Jan..Nov + Dez (= abertura do arquivo seguinte).
+  Registros gravados antes da mudança só têm Mar/Jun/Set (fallback na aba) — **reimportar os
+  .txt de ECD** preenche os demais meses (upsert substitui). Validado: aberturas cruzadas
+  2022/2023/2024 idênticas aos valores conferidos contra a referência original.
+- **Checklist**: aba AMARELA (FFFFFF00) e SEGUNDA posição (logo após o Menu) — mesma técnica do
+  Menu: `criarAbaChecklist` cedo, `preencherAbaChecklist` no final (a análise automática depende
+  das consolidações). `montarAbaChecklist` continua existindo pros exports standalone.
+- **Cores nas consolidações**: colunas Crédito (Q) e Oportunidade (U) com fundo verde claro
+  (FFC6EFCE); Contingência (R) com fundo vermelho claro (FFFFC7CE).
+- **Fix DCTFWeb**: débitos com créditos vinculados (ex.: IRPJ/CSLL trimestral pago por quota —
+  "Débito Apurado X **Créditos Pagamento: Y** Saldo a Pagar Z") eram silenciosamente pulados
+  pelo regex (bug real: 1º tri/2025 da CORE sem IRPJ/CSLL). Grupo opcional adicionado; o texto
+  dos créditos fica em `creditosVinculados`. **Reimportar os PDFs de DCTFWeb afetados.**

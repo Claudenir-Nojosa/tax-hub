@@ -31,6 +31,10 @@ import { NOME_ABA_SELIC, selicAcumuladaParaPeriodo } from "./selic-excel"
 const BRL = '_-"R$"* #,##0.00_-;-"R$"* #,##0.00_-;_-"R$"* "-"??_-;_-@_-'
 const COR_HEADER_BG = "FF0E2841"
 const COR_HEADER_TEXTO = "FFFFFFFF"
+// destaque pedido pelo usuário: Crédito (Q) e Oportunidade (U) em verde claro; Contingência (R)
+// em vermelho claro (paleta "good/bad" padrão do Excel)
+const COR_VERDE_CLARO = "FFC6EFCE"
+const COR_VERMELHO_CLARO = "FFFFC7CE"
 const TAB_COLOR = "FF1F3864"
 const LOGO_URL = "/icons/taxhub_logo_principal_claro_transparente.png"
 
@@ -322,6 +326,9 @@ async function montarAbaConsolidacao(
       cell.font = { name: "Calibri", size: 10 }
       cell.alignment = { horizontal: "center", vertical: "middle" }
       if (c >= 6 && c <= 20) cell.numFmt = BRL
+      // 17=Q Crédito e 21=U Oportunidade (verde claro); 18=R Contingência (vermelho claro)
+      if (c === 17 || c === 21) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COR_VERDE_CLARO } }
+      if (c === 18) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COR_VERMELHO_CLARO } }
     }
     if (temCredito) {
       row.getCell(21).font = { name: "Calibri", size: 10, bold: true, color: { argb: "FFBF8F00" } }
