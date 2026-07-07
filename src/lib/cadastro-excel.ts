@@ -236,17 +236,55 @@ export async function preencherAbaMenu(
     linha++
   }
 
-  // ── Navegação: links internos pras demais abas ───────────────────────────
+  // ── Navegação: links internos pras demais abas, no visual do WP de referência do usuário —
+  // pílula colorida com o link (navy = relatórios/gestão; verde = consolidações e Selic) e a
+  // coluna "Descrição" ao lado, cabeçalho em negrito itálico.
   const outrasAbas = wb.worksheets.map((w) => w.name).filter((n) => n !== ws.name)
   if (outrasAbas.length > 0) {
-    banda("ABAS DESTE ARQUIVO")
+    const VERDE = "FF548235"
+    const DESCRICAO_ABA: Record<string, string> = {
+      Checklist: "Checklist do diagnóstico",
+      "ICMS e IPI": "Gestão ICMS/IPI - AS IS",
+      PIS: "Gestão PIS - AS IS",
+      COFINS: "Gestão COFINS - AS IS",
+      IRPJ: "Gestão IRPJ Presumido - AS IS",
+      CSLL: "Gestão CSLL Presumido - AS IS",
+      "Balanço Patrimonial (ECD)": "Balancete ECD",
+      DCTFWeb: "Relatório DCTFWeb",
+      DCTF: "Relatório DCTF",
+      "Fontes Pagadoras": "Relatório de fontes pagadoras",
+      "Comprovante de Pagamentos": "Relatório de pagamentos - Comprovantes DARFs",
+      "PIS e COFINS": "Consolidação de Créditos Tributários - PIS e COFINS",
+      "IRPJ e CSLL": "Consolidação de Créditos Tributários - IRPJ e CSLL",
+      Selic: "Tabela atualização taxa SELIC",
+    }
+    const ABAS_VERDES = new Set(["PIS e COFINS", "IRPJ e CSLL", "Selic"])
+
+    const header = ws.getRow(linha)
+    sc(header.getCell(2), { value: "Menu", bold: true, align: "center" })
+    header.getCell(2).font = { name: "Calibri", bold: true, italic: true, size: 11, color: { argb: "FF000000" } }
+    sc(header.getCell(3), { value: "Descrição", bold: true })
+    header.getCell(3).font = { name: "Calibri", bold: true, italic: true, size: 11, color: { argb: "FF000000" } }
+    linha++
+
+    const bordaBranca = { style: "medium" as const, color: { argb: COR.branco } }
     for (const nome of outrasAbas) {
       const row = ws.getRow(linha)
-      sc(row.getCell(2), { border: true })
-      row.getCell(2).value = { text: nome, hyperlink: `#'${nome}'!A1` }
-      row.getCell(2).font = { name: "Calibri", size: 11, color: { argb: "FF0563C1" }, underline: true }
-      for (let c = 3; c <= 6; c++) sc(row.getCell(c), { border: true })
-      ws.mergeCells(linha, 2, linha, 6)
+      row.height = 18
+
+      const pilula = row.getCell(2)
+      pilula.value = { text: nome, hyperlink: `#'${nome}'!A1` }
+      pilula.font = { name: "Calibri", size: 11, bold: true, underline: true, color: { argb: COR.branco } }
+      pilula.alignment = { horizontal: "center", vertical: "middle" }
+      pilula.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ABAS_VERDES.has(nome) ? VERDE : COR.navy } }
+      // borda branca separa as pílulas visualmente (linhas contíguas não viram um bloco só)
+      pilula.border = { top: bordaBranca, bottom: bordaBranca, left: bordaBranca, right: bordaBranca }
+
+      const desc = row.getCell(3)
+      desc.value = DESCRICAO_ABA[nome] ?? nome
+      desc.font = { name: "Calibri", size: 11, italic: true, color: { argb: "FF000000" } }
+      desc.alignment = { horizontal: "left", vertical: "middle" }
+      ws.mergeCells(linha, 3, linha, 6)
       linha++
     }
   }
