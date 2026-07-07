@@ -81,6 +81,7 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
   const [formTopico, setFormTopico] = useState<string>("");
   const [formDesc, setFormDesc] = useState("");
   const [formDuracaoStr, setFormDuracaoStr] = useState("50");
+  const [formPaginasStr, setFormPaginasStr] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const { year, month } = viewDate;
@@ -98,6 +99,7 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
     setFormTopico("");
     setFormDesc("");
     setFormDuracaoStr("50");
+    setFormPaginasStr("");
     setEditingId(null);
     setModalOpen(true);
   };
@@ -109,6 +111,7 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
     setFormTopico(a.topico ?? "");
     setFormDesc(a.descricao);
     setFormDuracaoStr(String(a.duracao));
+    setFormPaginasStr(a.paginas ? String(a.paginas) : "");
     setEditingId(a.id);
   };
 
@@ -122,6 +125,7 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
   const resetForm = () => {
     setFormDesc("");
     setFormDuracaoStr("50");
+    setFormPaginasStr("");
     setFormGrupo(null);
     setFormMateria("");
     setFormTopico("");
@@ -132,6 +136,7 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
     if (!selectedDay) return;
     if (formTipo === "materia_concluida" && !formMateria) return;
     const duracao = Math.max(1, parseInt(formDuracaoStr) || 1);
+    const paginas = parseInt(formPaginasStr) || 0;
     const autoDesc = buildAutoDesc(formTipo, formGrupo, formMateria, formTopico);
     const campos = {
       tipo: formTipo,
@@ -140,6 +145,8 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
       ...(formGrupo ? { grupo: formGrupo } : {}),
       ...(formMateria ? { materia: formMateria } : {}),
       ...(formTopico ? { topico: formTopico } : {}),
+      // undefined LIMPA o campo ao editar (some no persist); os consumidores usam (paginas ?? 0)
+      paginas: paginas > 0 ? paginas : undefined,
     };
 
     const prev = calendario[selectedDay] ?? [];
@@ -310,7 +317,11 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
                         <AtivIcon className="h-3.5 w-3.5 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-medium truncate">{a.descricao}</div>
-                          <div className="text-xs opacity-70">{a.duracao} min</div>
+                          <div className="text-xs opacity-70">
+                            {a.duracao} min
+                            {(a.paginas ?? 0) > 0 &&
+                              ` · ${a.paginas} pág (${((a.paginas ?? 0) / (a.duracao / 60)).toFixed(1)} pág/h)`}
+                          </div>
                         </div>
                         <button type="button" onClick={() => startEdit(a)} className="p-0.5 hover:opacity-70 flex-shrink-0" title="Editar">
                           <Pencil className="h-3.5 w-3.5" />
@@ -431,8 +442,8 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
                 />
               )}
 
-              {/* Duração + botão */}
-              <div className="flex items-center gap-2">
+              {/* Duração + páginas + botão */}
+              <div className="flex items-center gap-2 flex-wrap">
                 <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Duração (min):</label>
                 <input
                   type="text"
@@ -440,17 +451,33 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
                   value={formDuracaoStr}
                   onChange={(e) => setFormDuracaoStr(e.target.value.replace(/\D/g, ""))}
                   onFocus={(e) => e.target.select()}
-                  className="w-20 text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                  className="w-16 text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                />
+                <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Páginas:</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={formPaginasStr}
+                  onChange={(e) => setFormPaginasStr(e.target.value.replace(/\D/g, ""))}
+                  onFocus={(e) => e.target.select()}
+                  placeholder="—"
+                  title="Páginas lidas (opcional) — alimenta o KPI de páginas por hora"
+                  className="w-16 text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
                 />
                 <button
                   type="button"
                   onClick={addAtividade}
                   disabled={!canAdd}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {editingId ? <><Pencil className="h-3.5 w-3.5" /> Salvar</> : <><Plus className="h-3.5 w-3.5" /> Adicionar</>}
                 </button>
               </div>
+              {parseInt(formPaginasStr) > 0 && parseInt(formDuracaoStr) > 0 && (
+                <p className="text-[11px] text-cyan-600 dark:text-cyan-400 text-right font-medium">
+                  📖 {(parseInt(formPaginasStr) / (parseInt(formDuracaoStr) / 60)).toFixed(1)} pág/h
+                </p>
+              )}
             </div>
           </div>
         </div>

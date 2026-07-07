@@ -233,7 +233,7 @@ export function criarAbaChecklist(wb: ExcelJS.Workbook): ExcelJS.Worksheet {
   const ws = wb.addWorksheet("Checklist", {
     views: [{ showGridLines: false, state: "frozen", ySplit: 5 }],
   })
-  ws.properties.tabColor = { argb: "FFFFFF00" } // amarela (pedido do usuário)
+  ws.properties.tabColor = { argb: "FFFFF2CC" } // amarelo claro/areia (pedido do usuário)
   return ws
 }
 

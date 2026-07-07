@@ -211,6 +211,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
     clearTimer();
     const cur = accRef.current + Math.floor((Date.now() - startRef.current) / 1000);
     accRef.current = cur;
+    startRef.current = 0; // zera: em pausa o total já está todo em accRef
     setStatus("paused");
     saveSnapshot("paused", cur, 0, materia, topico, tipo, grupo, pomodoroMode, pomodoroPhase, pomodoroCount);
   };
@@ -225,7 +226,12 @@ export default function TimerEstudo({ onSalvar }: Props) {
 
   const handleStop = () => {
     clearTimer();
-    const cur = accRef.current + Math.floor((Date.now() - startRef.current) / 1000);
+    // BUG CORRIGIDO: parando a partir da PAUSA, o total já está em accRef — somar de novo o
+    // delta desde startRef (que fica velho na pausa) dobrava o tempo (22min viravam 44min)
+    const cur =
+      status === "running" && startRef.current > 0
+        ? accRef.current + Math.floor((Date.now() - startRef.current) / 1000)
+        : accRef.current;
     accRef.current = cur;
     setElapsed(cur);
     setStatus("idle");

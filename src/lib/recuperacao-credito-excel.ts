@@ -8,7 +8,8 @@ import { montarAbasDctf, type DeclaracaoDctfWebRegistro, type DeclaracaoDctfRegi
 import { montarAbasFontesPagadoras, type DeclaracaoFontesPagadorasRegistro } from "./fontes-pagadoras-excel"
 import { montarAbasEcd, type DeclaracaoEcdRegistro } from "./ecd-excel"
 import { criarAbaChecklist, preencherAbaChecklist } from "./checklist-excel"
-import { criarAbaMenu, preencherAbaMenu } from "./cadastro-excel"
+import { criarAbaMenu, preencherAbaMenu, type ImpostosPagos } from "./cadastro-excel"
+import { labelTributo } from "./comprovante-pagamento-parser"
 import type { DadosCadastroEmpresa } from "./cadastro-parser"
 import {
   calcularConsolidacaoIrpjCsll,
@@ -268,7 +269,20 @@ export async function exportarDeclaracaoFiscalExcel(
   if (dadosConsolidacaoPisCofins) await montarAbaConsolidacaoPisCofins(wb, dadosConsolidacaoPisCofins, linhasPisCofins)
   if (dadosConsolidacaoIrpjCsll) await montarAbaConsolidacaoIrpjCsll(wb, dadosConsolidacaoIrpjCsll, linhasIrpjCsll)
   if (dadosConsolidacaoPisCofins || dadosConsolidacaoIrpjCsll) montarAbaSelic(wb)
-  if (wsMenu && cadastro) await preencherAbaMenu(wsMenu, wb, cadastro, nomeCliente)
+  if (wsMenu && cadastro) {
+    // quadro "Imposto pago" do Menu: Σ Vlr Principal dos DARFs por tributo (mesma conta da UI)
+    let impostosPagos: ImpostosPagos | null = null
+    if (temComprovantes) {
+      impostosPagos = { PIS: 0, COFINS: 0, IRPJ: 0, CSLL: 0 }
+      for (const darf of dados.comprovantes!) {
+        for (const cod of darf.codigos) {
+          const tributo = labelTributo(cod.codigo)
+          if (tributo && tributo in impostosPagos) impostosPagos[tributo as keyof ImpostosPagos] += cod.principal
+        }
+      }
+    }
+    await preencherAbaMenu(wsMenu, wb, cadastro, nomeCliente, impostosPagos)
+  }
 
   const contextos: string[] = []
   if (temIcms) contextos.push("ICMS e IPI")

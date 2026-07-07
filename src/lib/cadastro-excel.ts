@@ -107,11 +107,16 @@ export function criarAbaMenu(wb: ExcelJS.Workbook): ExcelJS.Worksheet {
   return ws
 }
 
+// Totais pagos por tributo (soma do Vlr Principal dos DARFs importados) — vira o quadro
+// "Imposto pago" do Menu, igual ao WP de referência do usuário.
+export type ImpostosPagos = Record<"PIS" | "COFINS" | "IRPJ" | "CSLL", number>
+
 export async function preencherAbaMenu(
   ws: ExcelJS.Worksheet,
   wb: ExcelJS.Workbook,
   cadastro: DadosCadastroEmpresa,
-  nomeCliente: string
+  nomeCliente: string,
+  impostosPagos?: ImpostosPagos | null
 ): Promise<void> {
   ws.columns = [{ width: 3 }, { width: 30 }, { width: 62 }, { width: 34 }, { width: 20 }, { width: 16 }]
 
@@ -234,6 +239,51 @@ export async function preencherAbaMenu(
       linha++
     }
     linha++
+  }
+
+  // ── Imposto pago (DARFs): quadro do WP de referência — cabeçalho navy "Imposto pago | Valor",
+  // uma linha por tributo em formato contábil e Total destacado em azul claro
+  const totalPago = impostosPagos ? impostosPagos.PIS + impostosPagos.COFINS + impostosPagos.IRPJ + impostosPagos.CSLL : 0
+  if (impostosPagos && totalPago > 0.005) {
+    const BRL = '_-"R$"* #,##0.00_-;-"R$"* #,##0.00_-;_-"R$"* "-"??_-;_-@_-'
+    const header = ws.getRow(linha)
+    header.getCell(2).value = "Imposto pago"
+    header.getCell(2).font = { name: "Calibri", size: 11, bold: true, italic: true, color: { argb: COR.branco } }
+    header.getCell(2).alignment = { horizontal: "left", vertical: "middle" }
+    header.getCell(3).value = "Valor"
+    header.getCell(3).font = { name: "Calibri", size: 11, bold: true, color: { argb: COR.branco } }
+    header.getCell(3).alignment = { horizontal: "right", vertical: "middle" }
+    for (const c of [2, 3]) {
+      header.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0E2841" } }
+    }
+    linha++
+
+    const thin = { style: "thin" as const, color: { argb: "FFBFBFBF" } }
+    for (const tributo of ["PIS", "COFINS", "IRPJ", "CSLL"] as const) {
+      const row = ws.getRow(linha)
+      row.getCell(2).value = tributo
+      row.getCell(2).font = { name: "Calibri", size: 11, color: { argb: "FF000000" } }
+      row.getCell(2).border = { left: thin, right: thin, bottom: thin }
+      const val = row.getCell(3)
+      val.value = impostosPagos[tributo]
+      val.numFmt = BRL
+      val.font = { name: "Calibri", size: 11 }
+      val.alignment = { horizontal: "right", vertical: "middle" }
+      val.border = { left: thin, right: thin, bottom: thin }
+      linha++
+    }
+    const total = ws.getRow(linha)
+    total.getCell(2).value = "Total"
+    total.getCell(3).value = totalPago
+    total.getCell(3).numFmt = BRL
+    for (const c of [2, 3]) {
+      const cell = total.getCell(c)
+      cell.font = { name: "Calibri", size: 11, bold: true }
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDDEBF7" } }
+      cell.alignment = { horizontal: c === 3 ? "right" : "left", vertical: "middle" }
+      cell.border = { top: { style: "medium", color: { argb: "FF0E2841" } }, bottom: thin, left: thin, right: thin }
+    }
+    linha += 2
   }
 
   // ── Navegação: links internos pras demais abas, no visual do WP de referência do usuário —
