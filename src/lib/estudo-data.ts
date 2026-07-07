@@ -51,6 +51,7 @@ export interface AtividadeCalendario {
   grupo?: Grupo;
   materia?: string;
   topico?: string;
+  paginas?: number; // páginas lidas na sessão — alimenta o KPI "páginas por hora"
 }
 
 export interface ErroEntry {

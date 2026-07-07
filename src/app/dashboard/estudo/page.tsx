@@ -167,7 +167,7 @@ export default function EstudoPage() {
   }, []);
 
   const handleTimerSalvar = useCallback(
-    (duracao: number, tipo: AtividadeTipo, descricao: string, grupo?: Grupo, materia?: string, topico?: string) => {
+    (duracao: number, tipo: AtividadeTipo, descricao: string, grupo?: Grupo, materia?: string, topico?: string, paginas?: number) => {
       const today = new Date().toISOString().split("T")[0];
       const nova: AtividadeCalendario = {
         id: Date.now().toString(),
@@ -177,6 +177,7 @@ export default function EstudoPage() {
         ...(grupo ? { grupo } : {}),
         ...(materia ? { materia } : {}),
         ...(topico ? { topico } : {}),
+        ...(paginas && paginas > 0 ? { paginas } : {}),
       };
       setState((prev) => ({
         ...prev,

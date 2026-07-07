@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, HelpCircle, Target, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles } from "lucide-react";
+import { BookOpen, HelpCircle, Target, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles, Gauge } from "lucide-react";
 import {
   NIVEL_CONFIG,
   CONQUISTAS,
@@ -178,6 +178,13 @@ export default function DashboardTab({ state, materiasConcurso }: Props) {
     acc + (["A", "B", "C", "D"] as const).reduce((s, g) => s + t.cadernos[g].acertos, 0), 0);
   const percAcertos = totalQuestoes > 0 ? Math.round((totalAcertosCaderno / totalQuestoes) * 100) : 0;
 
+  // Páginas por hora: só sessões que registraram páginas entram na conta (senão sessões sem
+  // páginas diluiriam a velocidade real de leitura)
+  const sessoesComPaginas = Object.values(state.calendario).flat().filter((a) => (a.paginas ?? 0) > 0);
+  const totalPaginas = sessoesComPaginas.reduce((s, a) => s + (a.paginas ?? 0), 0);
+  const minutosComPaginas = sessoesComPaginas.reduce((s, a) => s + a.duracao, 0);
+  const pagPorHora = minutosComPaginas > 0 ? totalPaginas / (minutosComPaginas / 60) : null;
+
   const NivelIcon = nivelConfig.icone;
 
   return (
@@ -221,12 +228,20 @@ export default function DashboardTab({ state, materiasConcurso }: Props) {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: "Tópicos Estudados", value: `${estudados}/${totalTopicos}`, Icon: BookOpen, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/30" },
-          { label: "% do Edital", value: `${percEdital}%`, Icon: TrendingUp, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/30" },
-          { label: "Questões Feitas", value: totalQuestoes, Icon: HelpCircle, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
-          { label: "% de Acertos", value: totalQuestoes > 0 ? `${percAcertos}%` : "—", Icon: Target, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30" },
+          { label: "Tópicos Estudados", value: `${estudados}/${totalTopicos}` as string | number, sub: null as string | null, Icon: BookOpen, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/30" },
+          { label: "% do Edital", value: `${percEdital}%`, sub: null, Icon: TrendingUp, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/30" },
+          { label: "Questões Feitas", value: totalQuestoes, sub: null, Icon: HelpCircle, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
+          { label: "% de Acertos", value: totalQuestoes > 0 ? `${percAcertos}%` : "—", sub: null, Icon: Target, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30" },
+          {
+            label: "Páginas/Hora",
+            value: pagPorHora !== null ? pagPorHora.toFixed(1) : "—",
+            sub: pagPorHora !== null ? `${totalPaginas} pág registradas` : "registre páginas no timer",
+            Icon: Gauge,
+            color: "text-cyan-600 dark:text-cyan-400",
+            bg: "bg-cyan-50 dark:bg-cyan-950/30",
+          },
         ].map((s) => (
           <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center shadow-sm">
             <div className={`flex items-center justify-center w-9 h-9 rounded-lg mx-auto mb-2 ${s.bg}`}>
@@ -234,6 +249,7 @@ export default function DashboardTab({ state, materiasConcurso }: Props) {
             </div>
             <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{s.label}</div>
+            {s.sub && <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{s.sub}</div>}
           </div>
         ))}
       </div>

@@ -39,7 +39,15 @@ function playBell() {
 }
 
 interface Props {
-  onSalvar: (duracao: number, tipo: AtividadeTipo, descricao: string, grupo?: Grupo, materia?: string, topico?: string) => void;
+  onSalvar: (
+    duracao: number,
+    tipo: AtividadeTipo,
+    descricao: string,
+    grupo?: Grupo,
+    materia?: string,
+    topico?: string,
+    paginas?: number
+  ) => void;
 }
 
 type Status = "idle" | "running" | "paused";
@@ -56,6 +64,7 @@ interface TimerSnapshot {
   pomodoroMode?: boolean;
   pomodoroPhase?: PomodoroPhase;
   pomodoroCount?: number;
+  paginas?: string;
 }
 
 const TIMER_KEY = "taxhub_timer_v1";
@@ -85,6 +94,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
   const [topico, setTopico] = useState("");
   const [tipo, setTipo] = useState<AtividadeTipo>("estudo");
   const [grupo, setGrupo] = useState<Grupo | null>(null);
+  const [paginas, setPaginas] = useState(""); // páginas lidas na sessão (opcional)
   const [showSave, setShowSave] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -96,6 +106,11 @@ export default function TimerEstudo({ onSalvar }: Props) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startRef = useRef<number>(0);
   const accRef = useRef<number>(0);
+  // espelho de `paginas` pro saveSnapshot (useCallback com deps vazias) não capturar valor velho
+  const paginasRef = useRef("");
+  useEffect(() => {
+    paginasRef.current = paginas;
+  }, [paginas]);
 
   const clearTimer = useCallback(() => {
     if (intervalRef.current) {
@@ -120,6 +135,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
       setTopico(snap.topico ?? "");
       setTipo(snap.tipo ?? "estudo");
       setGrupo(snap.grupo ?? null);
+      setPaginas(snap.paginas ?? "");
       if (snap.pomodoroMode) setPomodoroMode(true);
       if (snap.pomodoroPhase) setPomodoroPhase(snap.pomodoroPhase);
       if (snap.pomodoroCount) setPomodoroCount(snap.pomodoroCount);
@@ -168,6 +184,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
       pomodoroMode: currentPomodoroMode,
       pomodoroPhase: currentPomodoroPhase,
       pomodoroCount: currentPomodoroCount,
+      paginas: paginasRef.current,
     };
     localStorage.setItem(TIMER_KEY, JSON.stringify(snap));
   }, []);
@@ -225,6 +242,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
     setShowSave(false);
     setSaved(false);
     setGrupo(null);
+    setPaginas("");
     if (pomodoroMode) {
       setPomodoroPhase("work");
       setPomodoroCount(0);
@@ -259,7 +277,18 @@ export default function TimerEstudo({ onSalvar }: Props) {
     if (pomodoroPhase === "work") {
       const sub = topico || materia;
       const descricao = sub ? `Pomodoro — ${sub}` : "Pomodoro";
-      onSalvar(Math.round(WORK_SECS / 60), tipo, descricao, grupo ?? undefined, materia || undefined, topico || undefined);
+      // páginas digitadas durante o bloco vão junto e o campo zera — cada work conta as suas
+      const pgs = Number(paginas);
+      onSalvar(
+        Math.round(WORK_SECS / 60),
+        tipo,
+        descricao,
+        grupo ?? undefined,
+        materia || undefined,
+        topico || undefined,
+        Number.isFinite(pgs) && pgs > 0 ? pgs : undefined
+      );
+      setPaginas("");
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
       const newCount = pomodoroCount + 1;
@@ -290,11 +319,27 @@ export default function TimerEstudo({ onSalvar }: Props) {
       const sub = topico || materia;
       descricao = sub ? `${tipoLabel} — ${sub}` : tipoLabel;
     }
-    onSalvar(duracao, tipo, descricao, grupo ?? undefined, materia || undefined, topico || undefined);
+    const pgs = Number(paginas);
+    onSalvar(
+      duracao,
+      tipo,
+      descricao,
+      grupo ?? undefined,
+      materia || undefined,
+      topico || undefined,
+      Number.isFinite(pgs) && pgs > 0 ? pgs : undefined
+    );
     handleReset();
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
+
+  // pág/h da sessão atual (ao vivo no relógio e na hora de salvar)
+  const paginasNum = Number(paginas);
+  const pagPorHora =
+    Number.isFinite(paginasNum) && paginasNum > 0 && elapsed >= 60
+      ? paginasNum / (elapsed / 3600)
+      : null;
 
   useEffect(() => {
     return () => clearTimer();
@@ -477,6 +522,23 @@ export default function TimerEstudo({ onSalvar }: Props) {
                 </div>
               )}
 
+              {/* Páginas lidas — no Pomodoro dá pra digitar durante o bloco (salva e zera a cada
+                  work); no cronômetro também dá pra ajustar na hora de salvar */}
+              <div>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                  Páginas lidas <span className="text-gray-400">(opcional)</span>
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={paginas}
+                  onChange={(e) => setPaginas(e.target.value)}
+                  placeholder="ex.: 12"
+                  className="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
               {/* Tipo e Grupo — só cronômetro quando idle */}
               {!pomodoroMode && status === "idle" && (
                 <>
@@ -565,6 +627,11 @@ export default function TimerEstudo({ onSalvar }: Props) {
             {!pomodoroMode && elapsed > 0 && (
               <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                 {Math.round(elapsed / 60)} min líquidos
+              </div>
+            )}
+            {pagPorHora !== null && (
+              <div className="text-xs text-blue-500 dark:text-blue-400 mt-0.5 font-medium">
+                📖 {paginasNum} pág · {pagPorHora.toFixed(1)} pág/h
               </div>
             )}
           </div>
@@ -667,6 +734,25 @@ export default function TimerEstudo({ onSalvar }: Props) {
             <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
               <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 text-center">
                 Sessão de <span className="font-semibold text-gray-700 dark:text-gray-200">{Math.round(elapsed / 60)} min</span> concluída. Salvar no calendário?
+              </div>
+              <div className="mb-2">
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                  Páginas lidas nessa sessão <span className="text-gray-400">(opcional)</span>
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={paginas}
+                  onChange={(e) => setPaginas(e.target.value)}
+                  placeholder="ex.: 12"
+                  className="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {pagPorHora !== null && (
+                  <p className="mt-1 text-center text-[10px] text-blue-500 dark:text-blue-400 font-medium">
+                    📖 {pagPorHora.toFixed(1)} páginas/hora nessa sessão
+                  </p>
+                )}
               </div>
               <div className="flex gap-2">
                 <button
