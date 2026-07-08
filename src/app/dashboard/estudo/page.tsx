@@ -18,7 +18,7 @@ import {
   type Grupo,
   type Carta,
 } from "@/lib/estudo-data";
-import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers, RefreshCw, GitCompare } from "lucide-react";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
 
@@ -29,13 +29,14 @@ const CalendarioTab = dynamic(() => import("@/components/estudo/CalendarioTab"),
 const CadernoErrosTab = dynamic(() => import("@/components/estudo/CadernoErrosTab"), { ssr: false });
 const RelatoriosTab = dynamic(() => import("@/components/estudo/RelatoriosTab"), { ssr: false });
 const CartasTab = dynamic(() => import("@/components/estudo/CartasTab"), { ssr: false });
+const ResumosTab = dynamic(() => import("@/components/estudo/ResumosTab"), { ssr: false });
 const TimerEstudo = dynamic(() => import("@/components/estudo/TimerEstudo"), { ssr: false });
 const CompararEditaisTab = dynamic(() => import("@/components/estudo/CompararEditaisTab"), { ssr: false });
 
 const storageKey = (concursoId: string | null) =>
   concursoId ? `taxhub_estudo_c_${concursoId}` : "taxhub_estudo_v1";
 
-type Tab = "dashboard" | "edital" | "ciclo" | "calendario" | "caderno" | "relatorios" | "cartas" | "comparar";
+type Tab = "dashboard" | "edital" | "ciclo" | "calendario" | "caderno" | "relatorios" | "cartas" | "resumos" | "comparar";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -45,6 +46,7 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "caderno", label: "Caderno de Erros", icon: NotebookPen },
   { id: "relatorios", label: "Relatórios", icon: BarChart2 },
   { id: "cartas", label: "Cartas", icon: Layers },
+  { id: "resumos", label: "Resumos", icon: FileText },
   { id: "comparar", label: "Comparar Editais", icon: GitCompare },
 ];
 
@@ -330,6 +332,10 @@ export default function EstudoPage() {
 
           {activeTab === "cartas" && (
             <CartasTab cartas={state.cartas} onChange={updateCartas} cadernoErros={state.cadernoErros} />
+          )}
+
+          {activeTab === "resumos" && (
+            <ResumosTab materiasConcurso={concursoAtivo?.materias as MateriaBase[] | undefined} />
           )}
 
           {activeTab === "comparar" && <CompararEditaisTab />}

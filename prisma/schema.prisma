@@ -34,6 +34,27 @@ model User {
 
   empresasReforma  EmpresaReforma[]
   clientesRecuperacaoCredito ClienteRecuperacaoCredito[]
+  resumosEstudo    ResumoEstudo[]
+}
+
+// Resumos gerados por IA na aba "Resumos" do Estudo: o usuário sobe um PDF de material, a IA
+// devolve markdown (pontos que mais caem, pegadinhas, conceitos com analogias) e o resumo fica
+// salvo vinculado à matéria/tópico. Fora do blob EstudoProgresso.dados de propósito — resumos
+// são grandes e inflariam o autosave (o state inteiro é POSTado com debounce a cada mudança).
+model ResumoEstudo {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  materia     String
+  topico      String   @default("")
+  titulo      String
+  arquivoNome String
+  conteudo    String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, materia])
 }
 
 
