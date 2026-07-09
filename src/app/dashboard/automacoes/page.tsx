@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FlipHorizontal2, HeartPulse, ArrowRight } from "lucide-react";
+import { FlipHorizontal2, HeartPulse, BadgeCheck, ArrowRight } from "lucide-react";
 
 const automacoes = [
   {
@@ -17,6 +17,14 @@ const automacoes = [
       "Importa os XMLs de NFS-e, analisa a descrição de cada serviço e classifica se há oportunidade de equiparação hospitalar (redução de IRPJ/CSLL no lucro presumido), gerando um Excel com o resultado.",
     tags: ["NFS-e", "IRPJ", "CSLL"],
     icon: HeartPulse,
+  },
+  {
+    href: "/dashboard/automacoes/consulta-simples-nacional",
+    nome: "Consulta Simples Nacional",
+    descricao:
+      "Verifica em lote, por CNPJ, se a empresa é optante do Simples Nacional — via upload de Excel com a coluna de CNPJ ou colando a lista, com exportação do resultado.",
+    tags: ["Simples Nacional", "CNPJ"],
+    icon: BadgeCheck,
   },
 ];
 
