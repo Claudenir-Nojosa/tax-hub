@@ -9,7 +9,10 @@ import type { ResultadoConsultaCnpj } from "@/lib/consulta-simples-nacional"
 // a pena forçar reuso e arriscar regressão na rota em produção da Reforma Tributária.
 
 const MAX_CNPJS_POR_REQUISICAO = 50
-const CONCORRENCIA = 5 // chamadas simultâneas às APIs externas por requisição
+const CONCORRENCIA = 3 // chamadas simultâneas às APIs externas por requisição — BrasilAPI e
+// principalmente a ReceitaWS (fallback, rate limit público bem restritivo) toleram mal rajadas
+// grandes; 5 em paralelo já causava falsos "CNPJ não encontrado" em CNPJs que existem (validado
+// manualmente: o mesmo CNPJ consultado direto via curl respondia 200 nas duas APIs).
 
 function formatarCnpj(cnpjLimpo: string): string {
   return cnpjLimpo.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")
@@ -37,25 +40,44 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+// Busca com retry: tenta até 3 vezes (1 original + 2 retries) com backoff crescente pra
+// QUALQUER falha que não seja um 404 confirmado — BrasilAPI e ReceitaWS têm hiccups transitórios
+// sob concorrência (rate limit momentâneo, timeout) que não significam "CNPJ não existe". Um
+// CNPJ real (confirmado via curl direto) já apareceu como "não encontrado" na ferramenta por
+// causa disso — daí a insistência antes de desistir.
+async function fetchComRetry(url: string, userAgent: string): Promise<Response | null> {
+  const DELAYS_MS = [400, 1200]
+  let ultimaResposta: Response | null = null
+  for (let tentativa = 0; tentativa <= DELAYS_MS.length; tentativa++) {
+    try {
+      const res = await fetch(url, { headers: { "User-Agent": userAgent } })
+      // 404 = CNPJ bem formado mas não encontrado; 400 = dígito verificador inválido (BrasilAPI
+      // valida o checksum do CNPJ) — os dois são falhas DEFINITIVAS, retry não muda o resultado
+      if (res.ok || res.status === 404 || res.status === 400) return res
+      ultimaResposta = res
+    } catch {
+      // erro de rede — cai pro retry abaixo (ultimaResposta permanece null nessa tentativa)
+    }
+    if (tentativa < DELAYS_MS.length) await sleep(DELAYS_MS[tentativa])
+  }
+  return ultimaResposta
+}
+
 async function consultarUm(cnpjLimpo: string): Promise<ResultadoConsultaCnpj> {
   try {
-    let res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`, {
-      headers: { "User-Agent": "TaxHub/1.0 (taxhubapp.vercel.app)" },
-    })
+    const res = await fetchComRetry(
+      `https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`,
+      "TaxHub/1.0 (taxhubapp.vercel.app)"
+    )
 
-    // backoff simples: um retry após pausa curta em caso de rate limit
-    if (res.status === 429) {
-      await sleep(700)
-      res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`, {
-        headers: { "User-Agent": "TaxHub/1.0 (taxhubapp.vercel.app)" },
-      })
-    }
-
-    if (res.status === 404) {
+    if (res?.status === 404) {
       return vazio(cnpjLimpo, "CNPJ não encontrado na Receita Federal")
     }
+    if (res?.status === 400) {
+      return vazio(cnpjLimpo, "CNPJ inválido (dígito verificador não confere)")
+    }
 
-    if (res.ok) {
+    if (res?.ok) {
       const data = await res.json()
       // BrasilAPI manda `opcao_pelo_simples`/`opcao_pelo_mei` como null quando a empresa NUNCA
       // foi optante (não é "erro" nem "desconhecido" — validado com CNPJ real de empresa Lucro
@@ -78,13 +100,20 @@ async function consultarUm(cnpjLimpo: string): Promise<ResultadoConsultaCnpj> {
       }
     }
 
-    // BrasilAPI indisponível/erro: fallback ReceitaWS (mesmo par de fontes da consulta unitária)
-    const fallback = await fetch(`https://receitaws.com.br/v1/cnpj/${cnpjLimpo}`, {
-      headers: { "User-Agent": "TaxHub/1.0" },
-    })
-    if (!fallback.ok) return vazio(cnpjLimpo, "CNPJ não encontrado")
+    // BrasilAPI indisponível mesmo após retries: fallback ReceitaWS (mesmo par de fontes da
+    // consulta unitária). ReceitaWS free tem limite de poucas requisições/minuto, então também
+    // leva retry com backoff maior antes de desistir.
+    const fallback = await fetchComRetry(`https://receitaws.com.br/v1/cnpj/${cnpjLimpo}`, "TaxHub/1.0")
+    if (!fallback || !fallback.ok) {
+      return vazio(cnpjLimpo, "Não foi possível consultar agora — tente novamente em instantes")
+    }
     const fb = await fallback.json()
-    if (fb.status === "ERROR") return vazio(cnpjLimpo, fb.message ?? "CNPJ não encontrado")
+    if (fb.status === "ERROR") {
+      // ReceitaWS usa esse status tanto pra CNPJ inexistente quanto pra rate limit
+      // ("REQUEST_LIMIT_EXCEEDED") — só a 1ª é "não encontrado" de fato.
+      const rateLimited = /limit/i.test(fb.message ?? "")
+      return vazio(cnpjLimpo, rateLimited ? "Limite de consultas atingido — tente novamente em instantes" : (fb.message ?? "CNPJ não encontrado"))
+    }
 
     return {
       cnpj: cnpjLimpo,
@@ -125,7 +154,9 @@ export async function POST(req: NextRequest) {
   const resultados: ResultadoConsultaCnpj[] = new Array(cnpjs.length)
 
   // concorrência controlada: processa em grupos de CONCORRENCIA chamadas simultâneas às APIs
-  // externas, evitando tanto uma rajada grande quanto processar um por um (lento).
+  // externas, evitando tanto uma rajada grande quanto processar um por um (lento). Pequena
+  // pausa entre ondas pra não bombardear a ReceitaWS (fallback com rate limit restrito) em
+  // listas maiores.
   for (let i = 0; i < cnpjs.length; i += CONCORRENCIA) {
     const grupo = cnpjs.slice(i, i + CONCORRENCIA)
     const resolvidos = await Promise.all(
@@ -138,6 +169,7 @@ export async function POST(req: NextRequest) {
       })
     )
     resolvidos.forEach((r, idx) => (resultados[i + idx] = r))
+    if (i + CONCORRENCIA < cnpjs.length) await sleep(200)
   }
 
   return NextResponse.json({ resultados })
