@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   BookOpen, HelpCircle, RotateCcw, Lock, CheckCircle2, ChevronDown, Sparkles,
-  Signal, Route, RefreshCw, ArrowLeft, ArrowRight, PlusCircle, Target, CalendarClock,
+  Signal, Route, RefreshCw, ArrowLeft, ArrowRight, PlusCircle, Target, CalendarClock, Trash2,
 } from "lucide-react";
 import {
   MATERIAS, topicoKey,
@@ -102,6 +102,7 @@ export default function TrilhaTab({
       onUpdateTrilha={onUpdateTrilha}
       onUpdateTopicos={onUpdateTopicos}
       onRefazer={() => setModoWizard(true)}
+      onExcluir={() => onUpdateTrilha(undefined)}
     />
   );
 }
@@ -415,7 +416,7 @@ function Wizard({
 // ─── Trilha ativa ────────────────────────────────────────────────────────────
 
 function TrilhaAtiva({
-  trilha, topicos, configCiclo, materias, dataProva, onUpdateTrilha, onUpdateTopicos, onRefazer,
+  trilha, topicos, configCiclo, materias, dataProva, onUpdateTrilha, onUpdateTopicos, onRefazer, onExcluir,
 }: {
   trilha: TrilhaEstudo;
   topicos: Record<string, TopicoState>;
@@ -425,6 +426,7 @@ function TrilhaAtiva({
   onUpdateTrilha: (t: TrilhaEstudo) => void;
   onUpdateTopicos: (t: Record<string, TopicoState>) => void;
   onRefazer: () => void;
+  onExcluir: () => void;
 }) {
   const [expandida, setExpandida] = useState<number | null>(null); // metas concluídas expansíveis
   const idxAtual = metaAtualIndex(trilha.metas);
@@ -512,6 +514,17 @@ function TrilhaAtiva({
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
             >
               <RefreshCw className="h-3.5 w-3.5" /> Refazer
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm("Excluir a trilha atual? As metas e o progresso de atividades (status, orientações) somem — os tópicos já marcados como estudados no Edital e os cadernos de questões continuam intactos. Você pode criar uma trilha nova depois."))
+                  onExcluir();
+              }}
+              title="Excluir a trilha e voltar ao início"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-red-500/40 rounded-lg text-xs font-medium transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Excluir
             </button>
           </div>
         </div>
