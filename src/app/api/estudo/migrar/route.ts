@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "../../../../../auth"
 import db from "@/lib/db"
-import { materiasDefaultSefaz } from "@/app/api/concurso/route"
+import { materiasDefaultSefaz } from "@/lib/estudo-data"
 
 // POST — migra EstudoProgresso → Concurso "SEFAZ-CE 2026" + ConcursoProgresso
 // Idempotente: só cria se ainda não existem concursos para o usuário

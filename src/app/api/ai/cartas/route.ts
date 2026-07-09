@@ -120,7 +120,9 @@ Retorne APENAS um JSON válido com esta estrutura:
     const text = completion.choices[0].message.content ?? "{}";
     const parsed = JSON.parse(text) as { cartas?: Record<string, unknown>[] };
 
-    const today = new Date().toISOString().split("T")[0];
+    // dia no fuso do usuário (BR), não UTC do servidor — senão cartas criadas à noite ganham a
+    // data de amanhã ("en-CA" formata como YYYY-MM-DD)
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
     const cartas = (parsed.cartas ?? []).map((c, i) => ({
       id: `ai_${Date.now()}_${i}_${Math.random().toString(36).slice(2)}`,
       tipo: c.tipo ?? "monstro",

@@ -8,6 +8,7 @@ import {
   calcularXP,
   calcularNivel,
   calcularStreakDias,
+  dateKeyLocal,
   type EstudoState,
   type TopicoState,
   type MateriaConcurso,
@@ -93,7 +94,7 @@ function getProgressoMateria(nome: string, topicos: Record<string, TopicoState>,
 const DOW_TO_KEY = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"] as const;
 
 function MetaDiaria({ state }: { state: EstudoState }) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = dateKeyLocal();
   const dayKey = DOW_TO_KEY[new Date().getDay()];
   const metaMin = state.configCiclo.horasPorDia[dayKey] ?? 0;
   const estudadoMin = (state.calendario[today] ?? []).reduce((s, a) => s + a.duracao, 0);

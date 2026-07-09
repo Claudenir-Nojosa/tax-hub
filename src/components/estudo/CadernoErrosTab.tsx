@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Plus, Trash2, CheckCircle, Circle, X, BookOpen, Filter, NotebookPen, PartyPopper, Highlighter, Pencil } from "lucide-react";
-import { MATERIAS, type ErroEntry, type TopicoState } from "@/lib/estudo-data";
+import { MATERIAS, dateKeyLocal, type ErroEntry, type TopicoState } from "@/lib/estudo-data";
 
 interface Props {
   erros: ErroEntry[];
@@ -103,7 +103,7 @@ export default function CadernoErrosTab({ erros, topicos, onUpdate }: Props) {
         topico: form.topico,
         questao: form.questao.trim(),
         revisado: false,
-        data: new Date().toISOString().split("T")[0],
+        data: dateKeyLocal(),
       };
       onUpdate([...erros, novo]);
     }

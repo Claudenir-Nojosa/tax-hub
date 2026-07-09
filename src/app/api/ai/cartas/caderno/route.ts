@@ -92,7 +92,9 @@ export async function POST(request: NextRequest) {
     const resultados = await Promise.all(lotes.map(processarLote));
     const todasCartas = resultados.flat();
 
-    const today = new Date().toISOString().split("T")[0];
+    // dia no fuso do usuário (BR), não UTC do servidor — senão cartas criadas à noite ganham a
+    // data de amanhã ("en-CA" formata como YYYY-MM-DD)
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(new Date());
     const cartas = todasCartas.map((c, i) => ({
       id: `caderno_${Date.now()}_${i}_${Math.random().toString(36).slice(2)}`,
       tipo: c.tipo ?? "monstro",

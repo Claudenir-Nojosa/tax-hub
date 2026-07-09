@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "../../../../auth"
 import db from "@/lib/db"
-import { MATERIAS } from "@/lib/estudo-data"
 import type { MateriaConcurso } from "@/lib/estudo-data"
 
 // GET — lista concursos do usuário
@@ -56,16 +55,5 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(concurso, { status: 201 })
 }
 
-// Função utilitária: converte MATERIAS hardcoded → MateriaConcurso[]
-export function materiasDefaultSefaz(): MateriaConcurso[] {
-  const CORES = [
-    "sky","blue","emerald","violet","rose","amber","teal","indigo",
-    "pink","cyan","lime","orange","purple","red","green","yellow","fuchsia","slate","zinc",
-  ]
-  return MATERIAS.map((m, i) => ({
-    id: m.nome.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""),
-    nome: m.nome,
-    cor: CORES[i % CORES.length],
-    topicos: m.topicos,
-  }))
-}
+// materiasDefaultSefaz mudou pra src/lib/estudo-data.ts — route handlers não podem exportar
+// além dos métodos HTTP (o typecheck dos tipos gerados em .next reprovava).

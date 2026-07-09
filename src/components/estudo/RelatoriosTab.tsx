@@ -11,7 +11,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import {
-  MATERIAS, topicoKey,
+  MATERIAS, topicoKey, dateKeyLocal,
   type EstudoState, type TopicoState, type AtividadeTipo, type AtividadeCalendario, type MateriaBase,
 } from "@/lib/estudo-data";
 
@@ -184,7 +184,7 @@ function buildHeatmap(calendario: Record<string, AtividadeCalendario[]>): HeatDa
     const d = new Date(start);
     d.setDate(start.getDate() + i);
     d.setHours(12, 0, 0, 0);
-    const ds = d.toISOString().split("T")[0];
+    const ds = dateKeyLocal(d);
     const min = (calendario[ds] ?? []).reduce((s, a) => s + a.duracao, 0);
     const h = min / 60;
     days.push({

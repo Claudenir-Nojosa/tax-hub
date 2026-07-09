@@ -8,6 +8,7 @@ import {
   calcularXP,
   calcularNivel,
   calcularStreakDias,
+  dateKeyLocal,
   NIVEL_CONFIG,
   type EstudoState,
   type TopicoState,
@@ -170,7 +171,7 @@ export default function EstudoPage() {
 
   const handleTimerSalvar = useCallback(
     (duracao: number, tipo: AtividadeTipo, descricao: string, grupo?: Grupo, materia?: string, topico?: string, paginas?: number) => {
-      const today = new Date().toISOString().split("T")[0];
+      const today = dateKeyLocal();
       const nova: AtividadeCalendario = {
         id: Date.now().toString(),
         tipo,

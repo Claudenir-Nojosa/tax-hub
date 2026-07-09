@@ -274,8 +274,31 @@ export function calcularProximaRevisao(carta: Carta, qualidade: 0 | 1 | 2 | 3 | 
     repeticoes,
     acertos,
     erros,
-    proximaRevisao: next.toISOString().split("T")[0],
+    proximaRevisao: dateKeyLocal(next),
   };
+}
+
+// Converte MATERIAS hardcoded → MateriaConcurso[] (matérias default SEFAZ). Morava em
+// src/app/api/concurso/route.ts, mas route handlers do Next não podem ter exports extras —
+// quebrava o typecheck dos tipos gerados em .next.
+export function materiasDefaultSefaz(): MateriaConcurso[] {
+  const CORES = [
+    "sky","blue","emerald","violet","rose","amber","teal","indigo",
+    "pink","cyan","lime","orange","purple","red","green","yellow","fuchsia","slate","zinc",
+  ];
+  return MATERIAS.map((m, i) => ({
+    id: m.nome.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""),
+    nome: m.nome,
+    cor: CORES[i % CORES.length],
+    topicos: m.topicos,
+  }));
+}
+
+// Chave de dia "YYYY-MM-DD" no FUSO LOCAL do usuário. NUNCA usar toISOString() pra isso: ISO é
+// UTC, e no Brasil (UTC-3) a partir das 21h o dia já "virava" — atividade salva às 21h de 08/07
+// caía no dia 09/07 (bug real reportado).
+export function dateKeyLocal(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export function calcularNivel(xp: number): number {
@@ -305,14 +328,14 @@ export function calcularStreakDias(calendario: Record<string, AtividadeCalendari
   hoje.setHours(0, 0, 0, 0);
   const dia = new Date(hoje);
 
-  const todayKey = dia.toISOString().split("T")[0];
+  const todayKey = dateKeyLocal(dia);
   if (!calendario[todayKey] || calendario[todayKey].length === 0) {
     dia.setDate(dia.getDate() - 1);
   }
 
   let streak = 0;
   while (true) {
-    const key = dia.toISOString().split("T")[0];
+    const key = dateKeyLocal(dia);
     if (calendario[key] && calendario[key].length > 0) {
       streak++;
       dia.setDate(dia.getDate() - 1);

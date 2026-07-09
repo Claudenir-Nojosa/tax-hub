@@ -7,7 +7,7 @@ import {
   XCircle, AlertTriangle, BookOpen, Loader2, NotebookPen, Pencil,
 } from "lucide-react";
 import {
-  type Carta, type TipoCarta, type ErroEntry, MATERIAS, calcularProximaRevisao,
+  type Carta, type TipoCarta, type ErroEntry, MATERIAS, calcularProximaRevisao, dateKeyLocal,
 } from "@/lib/estudo-data";
 
 // ── Configuração visual por tipo ──────────────────────────────────────────────
@@ -64,7 +64,7 @@ const CARTA_CONFIG = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function hoje(): string {
-  return new Date().toISOString().split("T")[0];
+  return dateKeyLocal();
 }
 
 function novaCarta(dados: Partial<Carta>): Carta {
