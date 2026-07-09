@@ -6,8 +6,8 @@ import {
   type TrilhaConfig,
   type TrilhaEstudo,
   type TrilhaNivelMateria,
-} from "./src/lib/estudo-data";
-import { gerarTrilha, estimarResumo, atualizarTrilha, topicosNaoCobertos, metaAtualIndex, proximoStatus } from "./src/lib/trilha-generator";
+} from "../src/lib/estudo-data";
+import { gerarTrilha, estimarResumo, atualizarTrilha, topicosNaoCobertos, metaAtualIndex, proximoStatus } from "../src/lib/trilha-generator";
 
 let falhas = 0;
 function assert(cond: boolean, msg: string) {
