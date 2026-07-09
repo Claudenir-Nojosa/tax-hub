@@ -18,8 +18,9 @@ import {
   type AtividadeTipo,
   type Grupo,
   type Carta,
+  type TrilhaEstudo,
 } from "@/lib/estudo-data";
-import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText } from "lucide-react";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
 
@@ -31,18 +32,20 @@ const CadernoErrosTab = dynamic(() => import("@/components/estudo/CadernoErrosTa
 const RelatoriosTab = dynamic(() => import("@/components/estudo/RelatoriosTab"), { ssr: false });
 const CartasTab = dynamic(() => import("@/components/estudo/CartasTab"), { ssr: false });
 const ResumosTab = dynamic(() => import("@/components/estudo/ResumosTab"), { ssr: false });
+const TrilhaTab = dynamic(() => import("@/components/estudo/TrilhaTab"), { ssr: false });
 const TimerEstudo = dynamic(() => import("@/components/estudo/TimerEstudo"), { ssr: false });
 const CompararEditaisTab = dynamic(() => import("@/components/estudo/CompararEditaisTab"), { ssr: false });
 
 const storageKey = (concursoId: string | null) =>
   concursoId ? `taxhub_estudo_c_${concursoId}` : "taxhub_estudo_v1";
 
-type Tab = "dashboard" | "edital" | "ciclo" | "calendario" | "caderno" | "relatorios" | "cartas" | "resumos" | "comparar";
+type Tab = "dashboard" | "edital" | "ciclo" | "trilha" | "calendario" | "caderno" | "relatorios" | "cartas" | "resumos" | "comparar";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "edital", label: "Edital", icon: BookOpen },
   { id: "ciclo", label: "Ciclo de Estudos", icon: RotateCcw },
+  { id: "trilha", label: "Trilha", icon: Route },
   { id: "calendario", label: "Calendário", icon: CalendarDays },
   { id: "caderno", label: "Caderno de Erros", icon: NotebookPen },
   { id: "relatorios", label: "Relatórios", icon: BarChart2 },
@@ -55,6 +58,9 @@ function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {
   return {
     ...DEFAULT_ESTUDO_STATE,
     ...parsed,
+    // trilha é um blob atômico: passa inteira ou fica ausente — NUNCA deep-mergear com default
+    // (não existe default; metas/atividades são geradas de uma vez pelo trilha-generator)
+    trilha: parsed.trilha,
     cartas: parsed.cartas ?? [],
     topicos: {
       ...DEFAULT_ESTUDO_STATE.topicos,
@@ -167,6 +173,10 @@ export default function EstudoPage() {
 
   const updateConfigCiclo = useCallback((configCiclo: EstudoConfigCiclo) => {
     setState((prev) => ({ ...prev, configCiclo }));
+  }, []);
+
+  const updateTrilha = useCallback((trilha: TrilhaEstudo | undefined) => {
+    setState((prev) => ({ ...prev, trilha }));
   }, []);
 
   const handleTimerSalvar = useCallback(
@@ -290,7 +300,11 @@ export default function EstudoPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-6">
           {activeTab === "dashboard" && (
-            <DashboardTab state={state} materiasConcurso={concursoAtivo?.materias as MateriaBase[] | undefined} />
+            <DashboardTab
+              state={state}
+              materiasConcurso={concursoAtivo?.materias as MateriaBase[] | undefined}
+              onIrParaTrilha={() => setActiveTab("trilha")}
+            />
           )}
 
           {activeTab === "edital" && (
@@ -306,6 +320,19 @@ export default function EstudoPage() {
               config={state.configCiclo}
               onChange={updateConfigCiclo}
               materiasConcurso={concursoAtivo?.materias as MateriaBase[] | undefined}
+            />
+          )}
+
+          {activeTab === "trilha" && (
+            <TrilhaTab
+              trilha={state.trilha}
+              topicos={state.topicos}
+              configCiclo={state.configCiclo}
+              materiasConcurso={concursoAtivo?.materias as MateriaBase[] | undefined}
+              dataProva={concursoAtivo?.dataProva}
+              concursoNome={concursoAtivo?.nome}
+              onUpdateTrilha={updateTrilha}
+              onUpdateTopicos={updateTopicos}
             />
           )}
 

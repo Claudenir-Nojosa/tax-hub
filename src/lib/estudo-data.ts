@@ -83,6 +83,65 @@ export interface EstudoConfigCiclo {
   };
 }
 
+// --- Trilha de estudos (plano guiado por metas, estilo Gurujá) ---
+// Gerada por src/lib/trilha-generator.ts (algoritmo determinístico); a IA só escreve a
+// `orientacao` de cada meta depois (graceful degradation: sem IA a trilha funciona igual).
+
+export type TrilhaDisponibilidade = "easy" | "normal" | "hard" | "hardcore";
+export type TrilhaNivelMateria = "nunca" | "comecei" | "sem_confianca" | "arestas";
+export type TrilhaAtividadeTipo = "teoria" | "questoes" | "revisao";
+export type TrilhaAtividadeStatus = "nao_iniciada" | "iniciada" | "falta_acabar" | "concluida";
+
+export interface TrilhaAtividade {
+  id: string; // determinístico: `${meta}:${tipo}:${materia}:${primeiroTopico}` — estável em regeração
+  tipo: TrilhaAtividadeTipo;
+  materia: string; // nome (mesma chave usada em topicoKey)
+  topicos: string[]; // bloco de tópicos cobertos pela atividade
+  duracaoMin: number;
+  quantidadeQuestoes?: number; // só tipo "questoes"
+  numeroRevisao?: 1 | 2; // só tipo "revisao" (1 = ~7 dias, 2 = ~30 dias no ritmo de 1 meta/semana)
+  teoriaRapida?: boolean; // teoria de nível "sem_confianca" (rótulo "revisão rápida" na UI)
+  status: TrilhaAtividadeStatus;
+}
+
+export interface TrilhaMeta {
+  numero: number; // 1-based, sequencial
+  atividades: TrilhaAtividade[];
+  orientacao?: string; // 1-2 frases da IA
+  concluidaEm?: string; // ISO datetime — alimenta o cálculo de ritmo real
+}
+
+export interface TrilhaConfig {
+  disponibilidade: TrilhaDisponibilidade;
+  nivelPorMateria: Record<string, TrilhaNivelMateria>; // chave = nome da matéria
+  puladas: string[]; // matérias excluídas no wizard
+}
+
+export interface TrilhaEstudo {
+  config: TrilhaConfig;
+  metas: TrilhaMeta[];
+  criadaEm: string; // ISO
+  versao: number; // incrementa em regeneração/atualização
+}
+
+// Fonte única (wizard + gerador). minutosSemana = ponto médio da faixa.
+export const TRILHA_DISPONIBILIDADE_CONFIG: Record<
+  TrilhaDisponibilidade,
+  { label: string; faixa: string; minutosSemana: number }
+> = {
+  easy: { label: "Easy", faixa: "21 a 28 horas semanais", minutosSemana: 1470 },
+  normal: { label: "Normal", faixa: "28 a 35 horas semanais", minutosSemana: 1890 },
+  hard: { label: "Hard", faixa: "35 a 42 horas semanais", minutosSemana: 2310 },
+  hardcore: { label: "Hardcore", faixa: "+ 42 horas semanais", minutosSemana: 2700 },
+};
+
+export const TRILHA_NIVEL_CONFIG: Record<TrilhaNivelMateria, { label: string; curto: string }> = {
+  nunca: { label: "Nunca estudei", curto: "Nunca estudei" },
+  comecei: { label: "Comecei teoria, mas não terminei", curto: "Comecei teoria" },
+  sem_confianca: { label: "Terminei teoria, mas não tenho confiança", curto: "Sem confiança" },
+  arestas: { label: "Só falta aparar as arestas", curto: "Aparar arestas" },
+};
+
 export interface EstudoState {
   topicos: Record<string, TopicoState>;
   calendario: Record<string, AtividadeCalendario[]>;
@@ -91,6 +150,7 @@ export interface EstudoState {
   configCiclo: EstudoConfigCiclo;
   streak: number;
   semanasOK: number;
+  trilha?: TrilhaEstudo; // ausente = usuário ainda não gerou a trilha (aba mostra o wizard)
 }
 
 // --- Tipos de Concurso ---
