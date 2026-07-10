@@ -40,7 +40,9 @@ export default function StepEntradasEfd({ data, onChange, onBack, onNext }: Prop
 
   const classificarPendentes = async (arquivos: EntradasEfdData["arquivos"], classificacoesAtuais: Record<string, ResultadoConsultaCnpj>) => {
     const todosCnpjs = new Set(arquivos.flatMap((a) => a.linhas.map((l) => l.cnpjFornecedor).filter(Boolean)))
-    const pendentes = Array.from(todosCnpjs).filter((cnpj) => !classificacoesAtuais[cnpj])
+    // "pendente" = nunca classificado OU classificado com erro — assim reclassificar tenta de novo
+    // só quem falhou, sem gastar chamada em quem já resolveu certo (e sem perder o resultado bom)
+    const pendentes = Array.from(todosCnpjs).filter((cnpj) => !classificacoesAtuais[cnpj] || classificacoesAtuais[cnpj].erro)
     if (pendentes.length === 0) return classificacoesAtuais
 
     setClassificando(true)
@@ -94,7 +96,9 @@ export default function StepEntradasEfd({ data, onChange, onBack, onNext }: Prop
   }
 
   const reclassificar = async () => {
-    const classificacoes = await classificarPendentes(data.arquivos, {})
+    // passa as classificações já obtidas (não {}) — senão reclassificarPendentes acha que TODO
+    // mundo está pendente de novo, incluindo quem já classificou certo, e refaz o lote inteiro
+    const classificacoes = await classificarPendentes(data.arquivos, data.classificacoes)
     onChange({ ...data, classificacoes })
   }
 
