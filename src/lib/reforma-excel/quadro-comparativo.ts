@@ -4,9 +4,7 @@ import type { EmpresaData } from "@/components/reforma/Step1Empresa"
 import type { PremissasReformaData } from "@/components/reforma/StepPremissasReforma"
 import { letraColunaAno, LINHA_DADOS_INICIO_ANO, LINHA_FIM_RANGE_ANO, ABAS_ANO } from "./anos"
 import { calcularCamposAno, aliquotasEfetivasDoAno, REDUCAO_ICMS_ISS, type CamposCalculadosAno } from "./calculo-linha-ano"
-import {
-  LINHA_ESTABELECIMENTO_TODOS, LINHA_ESTABELECIMENTO_EMPRESA,
-} from "./premissas-legislacoes"
+import { layoutListasPremissas } from "./premissas-legislacoes"
 
 // Aba "Quadro Comparativo" — total de PIS/COFINS, ICMS, ISS, CBS e IBS por ano (2026-2033),
 // filtrado por Empresa (dropdown). Diferente de Valor Total NF-e, aqui cada COLUNA já sabe a
@@ -55,17 +53,19 @@ export function montarAbaQuadroComparativo(
 
   celula(ws, "C1", "TOTAL DOS TRIBUTOS INDIRETOS", { bold: true })
 
+  const layout = layoutListasPremissas(empresa)
+
   celula(ws, "C4", "Empresa")
   celula(ws, "D4", "Todos")
   ws.getCell("D4").dataValidation = {
     type: "list",
     allowBlank: false,
-    formulae: [`Premissas!$C$${LINHA_ESTABELECIMENTO_TODOS}:$C$${LINHA_ESTABELECIMENTO_EMPRESA}`],
+    formulae: [`Premissas!$C$${layout.linhaTodos}:$C$${layout.linhaEstabelecimentoFim}`],
   }
   celula(ws, "E4", "CNPJ")
   celula(
     ws, "F4",
-    f(`IFERROR(VLOOKUP(D4,Premissas!$C$${LINHA_ESTABELECIMENTO_TODOS}:$D$${LINHA_ESTABELECIMENTO_EMPRESA},2,FALSE),"Todos")`, "Todos"),
+    f(`IFERROR(VLOOKUP(D4,Premissas!$C$${layout.linhaTodos}:$D$${layout.linhaEstabelecimentoFim},2,FALSE),"Todos")`, "Todos"),
     { numFmt: "@" }
   )
 

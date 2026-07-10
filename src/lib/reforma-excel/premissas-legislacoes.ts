@@ -77,27 +77,53 @@ export function montarAbaPremissas(wb: ExcelJS.Workbook, premissas: PremissasRef
   ANOS_ICMS_ISS.forEach((ano, i) => celula(ws, `${colLetra(3 + i + 1)}15`, REDUCAO_ICMS_ISS[ano], { numFmt: "0%" }))
 
   // Estabelecimento → CNPJ (B47:C50 no modelo) — usado por VLOOKUP nas abas Valor Total NF-e e
-  // Quadro Comparativo (Fase 4). Nesta fase só há 1 empresa no wizard.
-  celula(ws, "C17", "Todos")
-  celula(ws, "C18", empresa.razaoSocial)
-  celula(ws, `D18`, empresa.cnpj, { numFmt: "@" })
+  // Quadro Comparativo. "Todos" na linha 17, matriz na 18, filiais/grupo (Passo 1) a partir da 19
+  // — tamanho da lista é dinâmico conforme quantos CNPJs o usuário cadastrou no Passo 1
+  // (layoutListasPremissas calcula onde cada bloco começa a partir disso).
+  const layout = layoutListasPremissas(empresa)
+  celula(ws, `C${layout.linhaTodos}`, "Todos")
+  const estabelecimentos = [
+    { cnpj: empresa.cnpj, razaoSocial: empresa.razaoSocial },
+    ...empresa.estabelecimentosAdicionais,
+  ]
+  estabelecimentos.forEach((e, i) => {
+    const r = layout.linhaTodos + 1 + i
+    celula(ws, `C${r}`, e.razaoSocial)
+    celula(ws, `D${r}`, e.cnpj, { numFmt: "@" })
+  })
 
   // Listas suspensas auxiliares (Documento / Ano) — reaproveitadas pelas abas Valor Total NF-e e
-  // Quadro Comparativo (Fase 4). Ano usa os mesmos 7 rótulos das abas de ano geradas (anos.ts) —
-  // "2027 e 2028" é uma única aba, por isso a lista tem 7 itens, não 8.
-  celula(ws, "C22", "Nota Fiscal de Mercadoria (DANFE)")
-  celula(ws, "C23", "Nota Fiscal de Serviço (NFS)")
-  LISTA_ANOS.forEach((label, i) => celula(ws, `C${24 + i}`, label))
+  // Quadro Comparativo. Ano usa os mesmos 7 rótulos das abas de ano geradas (anos.ts) — "2027 e
+  // 2028" é uma única aba, por isso a lista tem 7 itens, não 8.
+  celula(ws, `C${layout.linhaDocumentoDanfe}`, "Nota Fiscal de Mercadoria (DANFE)")
+  celula(ws, `C${layout.linhaDocumentoNfs}`, "Nota Fiscal de Serviço (NFS)")
+  LISTA_ANOS.forEach((label, i) => celula(ws, `C${layout.linhaAnoInicio + i}`, label))
 }
 
 // 7 abas de ano (ver src/lib/reforma-excel/anos.ts — ABAS_ANO) — exportado pra reaproveitar em
 // Valor Total NF-e e Quadro Comparativo sem duplicar a lista.
 export const LISTA_ANOS = ["2026", "2027 e 2028", "2029", "2030", "2031", "2032", "2033"] as const
-export const LINHA_ESTABELECIMENTO_TODOS = 17
-export const LINHA_ESTABELECIMENTO_EMPRESA = 18
-export const LINHA_DOCUMENTO_DANFE = 22
-export const LINHA_DOCUMENTO_NFS = 23
-export const LINHA_ANO_INICIO = 24
+
+// Linhas das listas suspensas da aba Premissas — dependem de quantos estabelecimentos (matriz +
+// adicionais do Passo 1) o usuário cadastrou, por isso são calculadas a partir de `empresa`, não
+// constantes fixas. Exportado pra Valor Total NF-e e Quadro Comparativo montarem os mesmos
+// ranges de VLOOKUP/dropdown sem duplicar essa conta.
+export function layoutListasPremissas(empresa: EmpresaData) {
+  const totalEstabelecimentos = 1 + empresa.estabelecimentosAdicionais.length
+  const linhaTodos = 17
+  const linhaEstabelecimentoFim = linhaTodos + totalEstabelecimentos
+  const linhaDocumentoDanfe = linhaEstabelecimentoFim + 2 // 1 linha em branco de respiro
+  const linhaDocumentoNfs = linhaDocumentoDanfe + 1
+  const linhaAnoInicio = linhaDocumentoNfs + 2
+  return {
+    linhaTodos,
+    linhaEstabelecimentoFim,
+    linhaDocumentoDanfe,
+    linhaDocumentoNfs,
+    linhaAnoInicio,
+    linhaAnoFim: linhaAnoInicio + LISTA_ANOS.length - 1,
+  }
+}
 
 export function montarAbaLegislacoes(wb: ExcelJS.Workbook, legislacao: LegislacaoData) {
   const ws = wb.addWorksheet("Legislações", { views: [{ showGridLines: false }] })

@@ -64,8 +64,19 @@ export const COL_INICIO_ANO = 3 // C — A/B são margem, igual ao padrão do m�
 const LINHA_TITULO = 1
 const LINHA_ALIQ_IBS = 2
 const LINHA_ALIQ_CBS = 3
-const LINHA_HEADER = 4
-export const LINHA_DADOS_INICIO_ANO = 5
+const LINHA_SUBTOTAL = 4
+const LINHA_HEADER = 5
+export const LINHA_DADOS_INICIO_ANO = 6
+
+// Colunas numéricas que recebem SUBTOTAL(9,...) na linha 4 — mesmo espírito do Excel-modelo
+// (linha de subtotal logo acima do cabeçalho, soma só o que estiver visível se a aba tiver
+// filtro). Cobre os valores monetários/quantidades; deixa de fora códigos, datas e textos.
+const COLUNAS_SUBTOTAL = [
+  "Vlr Documento", "Vlr Desconto NF", "Vlr Mercadoria/Operação", "Vlr Frete", "Vlr Seguro",
+  "Vlr Outras DA", "Vlr Item", "Qtde", "Vlr Desconto Item", "Vlr ISS", "Vlr ICMS", "Vlr ICMS-ST",
+  "Vlr IPI", "Vlr Base Cálculo PIS", "Vlr PIS", "Vlr Base Cálculo Cofins", "Vlr Cofins",
+  ...CALC_HEADERS,
+] as const
 // margem generosa de linhas nas fórmulas cross-sheet (Valor Total NF-e, Quadro Comparativo) —
 // mesmo espírito do "BI8:BI999999" do Excel-modelo, cobre reimportações futuras sem quebrar
 export const LINHA_FIM_RANGE_ANO = 200_000
@@ -87,11 +98,12 @@ const CFOP_DESCRICOES: Record<string, string> = {
   "6102": "Venda de mercadoria adquirida ou recebida de terceiros (fora do estado)",
 }
 
-function celula(ws: ExcelJS.Worksheet, ref: string, valor: ExcelJS.CellValue, opts?: { bold?: boolean; numFmt?: string }) {
+function celula(ws: ExcelJS.Worksheet, ref: string, valor: ExcelJS.CellValue, opts?: { bold?: boolean; numFmt?: string; centralizado?: boolean }) {
   const cell = ws.getCell(ref)
   cell.value = valor
   cell.font = { name: FONTE, size: 11, bold: opts?.bold ?? false }
   if (opts?.numFmt) cell.numFmt = opts.numFmt
+  if (opts?.centralizado) cell.alignment = { horizontal: "center", vertical: "middle" }
   return cell
 }
 
@@ -133,7 +145,7 @@ export function montarAbaAno(
   celula(ws, `C${LINHA_ALIQ_CBS}`, "Alíquota CBS (ano, já com redução se aplicável)")
   celula(ws, `D${LINHA_ALIQ_CBS}`, aliqCbs, { numFmt: "0.0000%" })
 
-  TODOS_HEADERS.forEach((nome, i) => celula(ws, `${colLetra(COL_INICIO_ANO + i)}${LINHA_HEADER}`, nome, { bold: true }))
+  TODOS_HEADERS.forEach((nome, i) => celula(ws, `${colLetra(COL_INICIO_ANO + i)}${LINHA_HEADER}`, nome, { bold: true, centralizado: true }))
 
   const cAH = letraDe("Vlr Item"), cAQ = letraDe("Vlr ISS"), cBA = letraDe("Vlr PIS"),
     cBG = letraDe("Vlr Cofins"), cAS = letraDe("Vlr ICMS"), cAK = letraDe("Vlr Desconto Item"),
@@ -145,6 +157,9 @@ export function montarAbaAno(
 
   const refAliqIbs = `$D$${LINHA_ALIQ_IBS}`
   const refAliqCbs = `$D$${LINHA_ALIQ_CBS}`
+
+  const somasSubtotal: Record<string, number> = {}
+  for (const nome of COLUNAS_SUBTOTAL) somasSubtotal[nome] = 0
 
   linhas.forEach((l, i) => {
     const r = LINHA_DADOS_INICIO_ANO + i
@@ -181,7 +196,41 @@ export function montarAbaAno(
     celula(ws, `${cBX}${r}`, f(`${cBQ}${r}+${cBO}${r}`, c.totalNfFinance))
     celula(ws, `${letraDe("TOTAL NF CLIENTE")}${r}`, f(`${cAH}${r}-${cAK}${r}`, c.totalNfCliente))
     celula(ws, `${letraDe("DIF")}${r}`, f(`${letraDe("TOTAL NF CLIENTE")}${r}-${cBX}${r}`, c.dif))
+
+    // acumula pra linha de SUBTOTAL (escrita depois do loop, quando já sabemos o total de linhas)
+    const valoresLinha: Record<string, number> = {
+      "Vlr Documento": l.vlrDocumento, "Vlr Desconto NF": l.vlrDescontoNF,
+      "Vlr Mercadoria/Operação": l.vlrMercadoriaOperacao, "Vlr Frete": l.vlrFrete,
+      "Vlr Seguro": l.vlrSeguro, "Vlr Outras DA": l.vlrOutrasDA, "Vlr Item": l.vlrItem,
+      "Qtde": l.qtde, "Vlr Desconto Item": l.vlrDescontoItem, "Vlr ISS": 0,
+      "Vlr ICMS": l.vlrIcms, "Vlr ICMS-ST": 0, "Vlr IPI": 0,
+      "Vlr Base Cálculo PIS": l.vlrBaseCalculoPis, "Vlr PIS": l.vlrPis,
+      "Vlr Base Cálculo Cofins": l.vlrBaseCalculoCofins, "Vlr Cofins": l.vlrCofins,
+      "VALOR SEM TRIBUTO": c.vlrSemTributo, "BASE PIS COFINS": c.basePisCofins,
+      "VLR PIS": c.vlrPis, "VLR COFINS": c.vlrCofins, "VLR PIS + COFINS": c.vlrPisCofins,
+      "BASE ICMS FINANCE": c.baseIcmsFinance, "ICMS": c.icms, "BASE ISS FINANCE": c.baseIssFinance,
+      "ISS": c.iss, "VLR PIS + COFINS + ISS": c.vlrPisCofinsIss,
+      "DIF VALOR PRODUTO": c.difValorProduto, "BASE IBS/CBS": c.baseIbsCbs, "IBS": c.ibs,
+      "CBS": c.cbs, "TOTAL NF FINANCE": c.totalNfFinance, "TOTAL NF CLIENTE": c.totalNfCliente,
+      "DIF": c.dif,
+    }
+    for (const nome of COLUNAS_SUBTOTAL) somasSubtotal[nome] += valoresLinha[nome] ?? 0
   })
+
+  // Linha de SUBTOTAL (mesmo padrão do Excel-modelo: SUBTOTAL(9,...) logo acima do cabeçalho,
+  // soma só as linhas visíveis se a aba tiver filtro aplicado)
+  if (linhas.length > 0) {
+    const primeiraLinhaDados = LINHA_DADOS_INICIO_ANO
+    const ultimaLinhaDados = LINHA_DADOS_INICIO_ANO + linhas.length - 1
+    for (const nome of COLUNAS_SUBTOTAL) {
+      const col = letraDe(nome)
+      celula(
+        ws, `${col}${LINHA_SUBTOTAL}`,
+        f(`SUBTOTAL(9,${col}${primeiraLinhaDados}:${col}${ultimaLinhaDados})`, somasSubtotal[nome]),
+        { bold: true }
+      )
+    }
+  }
 
   ws.views = [{ showGridLines: false, state: "frozen", xSplit: 0, ySplit: LINHA_HEADER }]
 }

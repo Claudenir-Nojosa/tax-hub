@@ -38,6 +38,7 @@ const defaultEmpresa: EmpresaData = {
   cnaePrincipalCodigo: "",
   cnaesSecundarios: [],
   faturamento: 0,
+  estabelecimentosAdicionais: [],
 }
 
 export default function EmpresaWizardPage() {
@@ -87,6 +88,7 @@ function EmpresaWizardInner() {
           cnaePrincipalCodigo: data.parametrosExtra?.cnaePrincipalCodigo ?? "",
           cnaesSecundarios: data.parametrosExtra?.cnaesSecundarios ?? [],
           faturamento: data.faturamento,
+          estabelecimentosAdicionais: data.parametrosExtra?.estabelecimentosAdicionais ?? [],
         })
         if (data.parametrosExtra?.premissasReforma) {
           setPremissasReforma(data.parametrosExtra.premissasReforma)
@@ -119,6 +121,7 @@ function EmpresaWizardInner() {
           parametrosExtra: {
             cnaePrincipalCodigo: empresa.cnaePrincipalCodigo,
             cnaesSecundarios: empresa.cnaesSecundarios,
+            estabelecimentosAdicionais: empresa.estabelecimentosAdicionais,
             premissasReforma,
             legislacao,
           },

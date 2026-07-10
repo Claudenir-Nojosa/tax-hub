@@ -2,10 +2,7 @@ import ExcelJS from "exceljs"
 import type { LinhaSaidaEfd } from "@/lib/efd-contribuicoes-saidas-parser"
 import type { EmpresaData } from "@/components/reforma/Step1Empresa"
 import { letraColunaAno, LINHA_DADOS_INICIO_ANO, LINHA_FIM_RANGE_ANO } from "./anos"
-import {
-  LINHA_ESTABELECIMENTO_TODOS, LINHA_ESTABELECIMENTO_EMPRESA,
-  LINHA_DOCUMENTO_DANFE, LINHA_DOCUMENTO_NFS, LINHA_ANO_INICIO, LISTA_ANOS,
-} from "./premissas-legislacoes"
+import { layoutListasPremissas, LISTA_ANOS } from "./premissas-legislacoes"
 
 // Aba "Valor Total NF-e" — dropdowns (Estabelecimento/Documento/Ano) cruzando as abas de ano via
 // INDIRECT (o nome da aba muda conforme o Ano escolhido, então SUMIFS sozinho não alcança — mesma
@@ -31,19 +28,21 @@ export function montarAbaValorTotalNfe(wb: ExcelJS.Workbook, empresa: EmpresaDat
 
   celula(ws, "C1", "Valor Total NF-e", { bold: true })
 
+  const layout = layoutListasPremissas(empresa)
+
   celula(ws, "C2", "Estabelecimento")
   celula(ws, "D2", "Todos")
   ws.getCell("D2").dataValidation = {
     type: "list",
     allowBlank: false,
-    formulae: [`Premissas!$C$${LINHA_ESTABELECIMENTO_TODOS}:$C$${LINHA_ESTABELECIMENTO_EMPRESA}`],
+    formulae: [`Premissas!$C$${layout.linhaTodos}:$C$${layout.linhaEstabelecimentoFim}`],
   }
 
   celula(ws, "C3", "CNPJ")
   celula(
     ws, "D3",
     f(
-      `IFERROR(VLOOKUP(D2,Premissas!$C$${LINHA_ESTABELECIMENTO_TODOS}:$D$${LINHA_ESTABELECIMENTO_EMPRESA},2,FALSE),"Todos")`,
+      `IFERROR(VLOOKUP(D2,Premissas!$C$${layout.linhaTodos}:$D$${layout.linhaEstabelecimentoFim},2,FALSE),"Todos")`,
       "Todos"
     ),
     { numFmt: "@" }
@@ -54,7 +53,7 @@ export function montarAbaValorTotalNfe(wb: ExcelJS.Workbook, empresa: EmpresaDat
   ws.getCell("D4").dataValidation = {
     type: "list",
     allowBlank: false,
-    formulae: [`Premissas!$C$${LINHA_DOCUMENTO_DANFE}:$C$${LINHA_DOCUMENTO_NFS}`],
+    formulae: [`Premissas!$C$${layout.linhaDocumentoDanfe}:$C$${layout.linhaDocumentoNfs}`],
   }
 
   celula(ws, "C5", "Ano")
@@ -62,7 +61,7 @@ export function montarAbaValorTotalNfe(wb: ExcelJS.Workbook, empresa: EmpresaDat
   ws.getCell("D5").dataValidation = {
     type: "list",
     allowBlank: false,
-    formulae: [`Premissas!$C$${LINHA_ANO_INICIO}:$C$${LINHA_ANO_INICIO + LISTA_ANOS.length - 1}`],
+    formulae: [`Premissas!$C$${layout.linhaAnoInicio}:$C$${layout.linhaAnoFim}`],
   }
 
   const cCnpj = letraColunaAno("CNPJ")
