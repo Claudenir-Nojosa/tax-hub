@@ -5,19 +5,26 @@ import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { Scale, ChevronRight } from "lucide-react"
 import Step1Empresa, { type EmpresaData } from "@/components/reforma/Step1Empresa"
-import Step2Premissas, {
-  type PremissasData,
-  type FonteSaidas,
-  type FonteEntradas,
-  defaultPremissas,
-} from "@/components/reforma/Step2Premissas"
-import Step3Simulacao from "@/components/reforma/Step3Simulacao"
-import Step4Analise from "@/components/reforma/Step4Analise"
-import type { ResultadoAno } from "@/lib/reforma-engine"
-import type { DadosReaisXml } from "@/lib/nfe-parser"
-import type { DadosEfd } from "@/lib/efd-parser"
+import StepPremissasReforma, {
+  type PremissasReformaData,
+  defaultPremissasReforma,
+} from "@/components/reforma/StepPremissasReforma"
+import StepLegislacaoIA, {
+  type LegislacaoData,
+  defaultLegislacao,
+} from "@/components/reforma/StepLegislacaoIA"
+import StepBaseNcm, { type BaseNcmData, defaultBaseNcm } from "@/components/reforma/StepBaseNcm"
+import StepSaidasEfd, { type SaidasEfdData, defaultSaidasEfd } from "@/components/reforma/StepSaidasEfd"
+import StepEntradasEfd, { type EntradasEfdData, defaultEntradasEfd } from "@/components/reforma/StepEntradasEfd"
+import StepRevisao from "@/components/reforma/StepRevisao"
 
-const STEPS = ["Empresa", "Premissas", "Simulação", "Análise"]
+// Wizard v2: 7 passos rumo à geração do Excel fiel ao modelo (ver docs/reforma-tributaria-v2.md).
+// Todos os 7 passos já funcionam. O Excel gerado no Passo 7 (Fase 2) só tem as abas Premissas e
+// Legislações prontas — as abas de ano/entradas/análise são fases seguintes (tasks #65+), mas os
+// dados de saídas/entradas já importados aqui ficam no estado do wizard pra quando existirem. O
+// wizard antigo de 4 passos (Empresa/Premissas ICMS-IPI-FCBF/Simulação/Análise, com gráficos e
+// export estático) foi substituído por este fluxo — a reconstrução é intencional, ver plano.
+const STEPS = ["Empresa", "Premissas", "Legislação", "Base NCM", "Saídas", "Entradas", "Revisão"]
 
 const defaultEmpresa: EmpresaData = {
   cnpj: "",
@@ -28,6 +35,8 @@ const defaultEmpresa: EmpresaData = {
   uf: "",
   municipio: "",
   cnaePrincipal: "",
+  cnaePrincipalCodigo: "",
+  cnaesSecundarios: [],
   faturamento: 0,
 }
 
@@ -45,29 +54,22 @@ function EmpresaWizardInner() {
   const searchParams = useSearchParams()
   const isNova = params.empresaId === "nova"
   const empresaId = isNova ? null : (params.empresaId as string)
-  const viewMode = searchParams.get("view") === "analise"
   const editMode = searchParams.get("edit") === "true"
 
-  const [step, setStep] = useState(viewMode ? 3 : 0)
+  const [step, setStep] = useState(0)
   const [loadingEmpresa, setLoadingEmpresa] = useState(!isNova)
   const [empresa, setEmpresa] = useState<EmpresaData>(defaultEmpresa)
-  const [premissas, setPremissas] = useState<PremissasData>(defaultPremissas())
-  const [resultados, setResultados] = useState<ResultadoAno[]>([])
+  const [premissasReforma, setPremissasReforma] = useState<PremissasReformaData>(defaultPremissasReforma())
+  const [legislacao, setLegislacao] = useState<LegislacaoData>(defaultLegislacao())
+  // Base NCM / saídas / entradas ficam só no estado do wizard (não vão pro parametrosExtra do
+  // Prisma) — os dois últimos podem ter milhares de linhas, grande demais pra um campo JSON.
+  const [baseNcm, setBaseNcm] = useState<BaseNcmData>(defaultBaseNcm())
+  const [saidasEfd, setSaidasEfd] = useState<SaidasEfdData>(defaultSaidasEfd())
+  const [entradasEfd, setEntradasEfd] = useState<EntradasEfdData>(defaultEntradasEfd())
   const [savedEmpresaId, setSavedEmpresaId] = useState<string | null>(empresaId)
-  const [loadingSimulacao, setLoadingSimulacao] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Fontes
-  const [fonteSaidas, setFonteSaidas] = useState<FonteSaidas>("manual")
-  const [fonteEntradas, setFonteEntradas] = useState<FonteEntradas>("nenhuma")
-
-  // Dados
-  const [dadosXml, setDadosXml] = useState<DadosReaisXml | null>(null)       // saídas XML (salvo no DB)
-  const [dadosXmlEntradas, setDadosXmlEntradas] = useState<DadosReaisXml | null>(null) // entradas XML (client-side)
-  const [dadosEfd, setDadosEfd] = useState<DadosEfd | null>(null)             // EFD TXT (client-side)
-  const [usouXml, setUsouXml] = useState(false)
-
-  // Carrega empresa existente
+  // Carrega empresa existente (inclui parametrosExtra com premissasReforma/legislacao salvos)
   useEffect(() => {
     if (!empresaId) return
     fetch(`/api/reforma-tributaria/empresas/${empresaId}`)
@@ -82,54 +84,19 @@ function EmpresaWizardInner() {
           uf: data.uf,
           municipio: data.municipio ?? "",
           cnaePrincipal: data.cnaePrincipal ?? "",
+          cnaePrincipalCodigo: data.parametrosExtra?.cnaePrincipalCodigo ?? "",
+          cnaesSecundarios: data.parametrosExtra?.cnaesSecundarios ?? [],
           faturamento: data.faturamento,
         })
-        setPremissas({
-          aliquotaICMS: data.aliquotaICMS,
-          aliquotaICMSCompras: data.aliquotaICMSCompras,
-          temIPI: data.temIPI,
-          aliquotaIPI: data.aliquotaIPI ?? 0,
-          percentualIPISaidas: data.percentualIPISaidas ?? 0,
-          temFCBF: data.temFCBF,
-          fcbfPercentual: data.fcbfPercentual ?? 0,
-          fcbfBaseCalculo: data.fcbfBaseCalculo ?? 0,
-          premissasAnuais: defaultPremissas().premissasAnuais,
-        })
-        if (data.simulacoes?.length > 0) {
-          setResultados(data.simulacoes[0].resultados as ResultadoAno[])
-          setUsouXml(data.simulacoes[0].usouXml ?? false)
+        if (data.parametrosExtra?.premissasReforma) {
+          setPremissasReforma(data.parametrosExtra.premissasReforma)
+        }
+        if (data.parametrosExtra?.legislacao) {
+          setLegislacao(data.parametrosExtra.legislacao)
         }
         setLoadingEmpresa(false)
       })
       .catch(() => { toast.error("Erro ao carregar empresa"); setLoadingEmpresa(false) })
-
-    // Carrega XML de saídas do DB
-    fetch(`/api/reforma-tributaria/xml?empresaId=${empresaId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data && data.totalItens > 0) {
-          setDadosXml({
-            periodos: data.periodos,
-            totalNFs: data.totalNFs,
-            totalItens: data.totalItens,
-            totalVProd: data.totalVProd,
-            totalVICMS: data.totalVICMS,
-            totalVPIS: data.totalVPIS,
-            totalVCOFINS: data.totalVCOFINS,
-            totalVIPI: data.totalVIPI,
-            totalVBCICMS: 0,
-            totalBaseIbsCbs: data.totalBaseIbsCbs,
-            aliquotaICMSEfetiva: data.aliquotaICMSEfetiva,
-            aliquotaIPIEfetiva: data.aliquotaIPIEfetiva,
-            percentualIPISaidas: data.percentualIPISaidas,
-            mesesImportados: data.mesesImportados,
-            fatorAnualizacao: 12 / data.mesesImportados,
-            itens: data.itens ?? [],
-          })
-          setFonteSaidas("xml")
-        }
-      })
-      .catch(() => {/* sem dados XML é ok */})
   }, [empresaId])
 
   const salvarEmpresa = async (): Promise<string | null> => {
@@ -147,82 +114,39 @@ function EmpresaWizardInner() {
           municipio: empresa.municipio,
           cnaePrincipal: empresa.cnaePrincipal,
           faturamento: empresa.faturamento,
-          aliquotaICMS: premissas.aliquotaICMS,
-          aliquotaICMSCompras: premissas.aliquotaICMSCompras,
-          temIPI: premissas.temIPI,
-          aliquotaIPI: premissas.aliquotaIPI,
-          percentualIPISaidas: premissas.percentualIPISaidas,
-          temFCBF: premissas.temFCBF,
-          fcbfPercentual: premissas.fcbfPercentual,
-          fcbfBaseCalculo: premissas.fcbfBaseCalculo,
+          // Campos ainda sem coluna própria no Prisma (Fase 1) — ficam em parametrosExtra até
+          // uma fase futura decidir se merecem migração dedicada.
+          parametrosExtra: {
+            cnaePrincipalCodigo: empresa.cnaePrincipalCodigo,
+            cnaesSecundarios: empresa.cnaesSecundarios,
+            premissasReforma,
+            legislacao,
+          },
         }),
       })
       const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Falha ao salvar empresa")
       return data.id
-    } catch {
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar empresa")
       return null
     }
   }
 
-  const rodarSimulacao = async () => {
-    setLoadingSimulacao(true)
-    setStep(2)
-    try {
-      const id = await salvarEmpresa()
-      if (!id) throw new Error("Falha ao salvar empresa")
-      setSavedEmpresaId(id)
-
-      // Salva XML de saídas no DB se fonte = xml e dados disponíveis
-      if (fonteSaidas === "xml" && dadosXml) {
-        await fetch("/api/reforma-tributaria/xml", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ empresaId: id, dadosXml }),
-        })
-      }
-
-      // Determina bcICMSEntradas conforme fonte das entradas
-      let bcICMSEntradas: number | undefined
-      if (fonteEntradas === "efd" && dadosEfd) {
-        bcICMSEntradas = dadosEfd.bcICMSEntradas
-      } else if (fonteEntradas === "xml" && dadosXmlEntradas) {
-        bcICMSEntradas = dadosXmlEntradas.totalBaseIbsCbs
-      }
-
-      const res = await fetch("/api/reforma-tributaria/simulacao", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          empresaId: id,
-          premissasOverride: premissas.premissasAnuais,
-          usarXml: fonteSaidas === "xml",
-          usarEfdSaidas: fonteSaidas === "efd",
-          efdSaidasInput: fonteSaidas === "efd" && dadosEfd ? dadosEfd.saidasParaSimulacao : undefined,
-          bcICMSEntradas,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setResultados(data.resultados)
-      setUsouXml(data.usouXml ?? false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao calcular simulação")
-      setStep(1)
-    } finally {
-      setLoadingSimulacao(false)
-    }
+  const avancarDoPasso1 = async () => {
+    const id = await salvarEmpresa()
+    if (!id) return
+    setSavedEmpresaId(id)
+    setStep(1)
   }
 
-  const handleSave = async () => {
+  const salvarEAvancar = async (proximoStep: number) => {
     setSaving(true)
-    try {
-      toast.success("Simulação salva com sucesso!")
-      router.push("/dashboard/reforma-tributaria")
-    } catch {
-      toast.error("Erro ao salvar")
-    } finally {
-      setSaving(false)
-    }
+    const id = await salvarEmpresa()
+    setSaving(false)
+    if (!id) return
+    setSavedEmpresaId(id)
+    setStep(proximoStep)
   }
 
   return (
@@ -263,60 +187,48 @@ function EmpresaWizardInner() {
       </div>
 
       <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-6">
-        {step === 0 && (
-          <Step1Empresa data={empresa} onChange={setEmpresa} onNext={() => setStep(1)} />
-        )}
-        {step === 1 && (
-          <Step2Premissas
-            data={premissas}
-            onChange={setPremissas}
+        {loadingEmpresa ? (
+          <div className="flex items-center justify-center py-20 text-gray-400 text-sm">Carregando...</div>
+        ) : step === 0 ? (
+          <Step1Empresa data={empresa} onChange={setEmpresa} onNext={avancarDoPasso1} />
+        ) : step === 1 ? (
+          <StepPremissasReforma
+            data={premissasReforma}
+            onChange={setPremissasReforma}
             onBack={() => setStep(0)}
-            onNext={rodarSimulacao}
-            empresaId={savedEmpresaId || "nova"}
-            fonteSaidas={fonteSaidas}
-            onFonteSaidas={setFonteSaidas}
-            dadosXml={dadosXml}
-            onDadosXml={setDadosXml}
-            fonteEntradas={fonteEntradas}
-            onFonteEntradas={setFonteEntradas}
-            dadosXmlEntradas={dadosXmlEntradas}
-            onDadosXmlEntradas={setDadosXmlEntradas}
-            dadosEfd={dadosEfd}
-            onDadosEfd={setDadosEfd}
+            onNext={() => salvarEAvancar(2)}
           />
-        )}
-        {step === 2 && (
-          <Step3Simulacao
-            resultados={resultados}
-            temFCBF={premissas.temFCBF}
-            loading={loadingSimulacao}
-            usouXml={usouXml}
-            nomeEmpresa={empresa.razaoSocial}
-            regime={empresa.regime}
-            dadosXml={dadosXml}
-            dadosEfd={dadosEfd}
+        ) : step === 2 ? (
+          <StepLegislacaoIA
+            data={legislacao}
+            onChange={setLegislacao}
+            cnaePrincipal={{ codigo: empresa.cnaePrincipalCodigo, descricao: empresa.cnaePrincipal }}
+            cnaesSecundarios={empresa.cnaesSecundarios}
             onBack={() => setStep(1)}
-            onNext={() => setStep(3)}
+            onNext={() => salvarEAvancar(3)}
           />
-        )}
-        {step === 3 && (
-          <Step4Analise
-            resultados={resultados}
-            regime={empresa.regime}
-            temFCBF={premissas.temFCBF}
-            razaoSocial={empresa.razaoSocial}
-            faturamento={empresa.faturamento}
-            loading={loadingEmpresa}
-            onBack={() => setStep(2)}
-            onSave={handleSave}
-            saving={saving}
+        ) : step === 3 ? (
+          <StepBaseNcm data={baseNcm} onChange={setBaseNcm} onBack={() => setStep(2)} onNext={() => setStep(4)} />
+        ) : step === 4 ? (
+          <StepSaidasEfd data={saidasEfd} onChange={setSaidasEfd} onBack={() => setStep(3)} onNext={() => setStep(5)} />
+        ) : step === 5 ? (
+          <StepEntradasEfd data={entradasEfd} onChange={setEntradasEfd} onBack={() => setStep(4)} onNext={() => setStep(6)} />
+        ) : step === 6 ? (
+          <StepRevisao
+            empresa={empresa}
+            premissasReforma={premissasReforma}
+            legislacao={legislacao}
+            baseNcm={baseNcm}
+            saidasEfd={saidasEfd}
+            entradasEfd={entradasEfd}
+            onBack={() => setStep(5)}
           />
-        )}
+        ) : null}
       </div>
 
       {savedEmpresaId && (
         <p className="text-xs text-center text-gray-400 mt-4">
-          ID da empresa: {savedEmpresaId}
+          ID da empresa: {savedEmpresaId} {saving && "— salvando..."}
         </p>
       )}
     </div>

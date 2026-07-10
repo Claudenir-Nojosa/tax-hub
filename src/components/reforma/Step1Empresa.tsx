@@ -9,6 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Loader2, Building2 } from "lucide-react"
 import { toast } from "sonner"
 
+export type CnaeInfo = {
+  codigo: string
+  descricao: string
+}
+
 export type EmpresaData = {
   cnpj: string
   razaoSocial: string
@@ -18,6 +23,8 @@ export type EmpresaData = {
   uf: string
   municipio: string
   cnaePrincipal: string
+  cnaePrincipalCodigo: string
+  cnaesSecundarios: CnaeInfo[]
   faturamento: number
 }
 
@@ -71,6 +78,8 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
         uf: json.uf || "",
         municipio: json.municipio || "",
         cnaePrincipal: json.cnaePrincipal || "",
+        cnaePrincipalCodigo: json.cnaeCode || "",
+        cnaesSecundarios: Array.isArray(json.cnaesSecundarios) ? json.cnaesSecundarios : [],
       })
       toast.success("CNPJ encontrado!")
     } catch (e) {
@@ -123,7 +132,21 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
             </Badge>
           </div>
           {data.cnaePrincipal && (
-            <p className="text-xs text-gray-500">{data.cnaePrincipal}</p>
+            <p className="text-xs text-gray-500">
+              {data.cnaePrincipalCodigo && <span className="font-mono">{data.cnaePrincipalCodigo}</span>} {data.cnaePrincipal}
+            </p>
+          )}
+          {data.cnaesSecundarios.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-gray-600 dark:text-gray-400">CNAEs secundários</p>
+              <ul className="text-xs text-gray-500 space-y-0.5">
+                {data.cnaesSecundarios.map((c) => (
+                  <li key={c.codigo}>
+                    <span className="font-mono">{c.codigo}</span> {c.descricao}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
           <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
             <span>UF: <span className="text-gray-700 dark:text-gray-300 font-medium">{data.uf}</span></span>

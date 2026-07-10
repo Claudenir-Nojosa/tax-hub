@@ -48,7 +48,10 @@ export async function POST(req: NextRequest) {
       municipio: body.municipio,
       cnaePrincipal: body.cnaePrincipal,
       faturamento: body.faturamento,
-      aliquotaICMS: body.aliquotaICMS,
+      // Alíquota ICMS/IPI/FCBF eram coletadas no Step2Premissas antigo — o wizard v2 (a partir
+      // da Fase 1) não passa mais por essa tela nos passos 1-3, então aceitam 0/false/undefined
+      // até a Fase 2 decidir se esses campos continuam relevantes na reconstrução.
+      aliquotaICMS: body.aliquotaICMS ?? 0,
       aliquotaICMSCompras: body.aliquotaICMSCompras ?? 0,
       temIPI: body.temIPI ?? false,
       aliquotaIPI: body.aliquotaIPI,
@@ -56,6 +59,7 @@ export async function POST(req: NextRequest) {
       temFCBF: body.temFCBF ?? false,
       fcbfPercentual: body.fcbfPercentual,
       fcbfBaseCalculo: body.fcbfBaseCalculo,
+      parametrosExtra: body.parametrosExtra ?? undefined,
     },
     update: {
       razaoSocial: body.razaoSocial,
@@ -66,7 +70,7 @@ export async function POST(req: NextRequest) {
       municipio: body.municipio,
       cnaePrincipal: body.cnaePrincipal,
       faturamento: body.faturamento,
-      aliquotaICMS: body.aliquotaICMS,
+      aliquotaICMS: body.aliquotaICMS ?? 0,
       aliquotaICMSCompras: body.aliquotaICMSCompras ?? 0,
       temIPI: body.temIPI ?? false,
       aliquotaIPI: body.aliquotaIPI,
@@ -74,6 +78,7 @@ export async function POST(req: NextRequest) {
       temFCBF: body.temFCBF ?? false,
       fcbfPercentual: body.fcbfPercentual,
       fcbfBaseCalculo: body.fcbfBaseCalculo,
+      parametrosExtra: body.parametrosExtra ?? undefined,
     },
   })
 

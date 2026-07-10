@@ -50,6 +50,13 @@ export async function GET(
         municipio: fb.municipio,
         cnaePrincipal: fb.atividade_principal?.[0]?.text || null,
         cnaeCode: fb.atividade_principal?.[0]?.code || null,
+        // ReceitaWS expõe atividades_secundarias com o mesmo shape {code, text} da principal
+        cnaesSecundarios: Array.isArray(fb.atividades_secundarias)
+          ? fb.atividades_secundarias.map((a: { code?: string; text?: string }) => ({
+              codigo: a.code ?? "",
+              descricao: a.text ?? "",
+            }))
+          : [],
         situacaoCadastral: fb.situacao,
         naturezaJuridica: fb.natureza_juridica,
         capitalSocial: null,
@@ -69,6 +76,14 @@ export async function GET(
       municipio: data.municipio,
       cnaePrincipal: data.cnae_fiscal_descricao || null,
       cnaeCode: data.cnae_fiscal ? String(data.cnae_fiscal) : null,
+      // BrasilAPI já retorna isso; só não era repassado antes — necessário pro Passo 3
+      // do wizard (busca de legislação relevante por CNAE, inclusive secundários)
+      cnaesSecundarios: Array.isArray(data.cnaes_secundarios)
+        ? data.cnaes_secundarios.map((a: { codigo?: number | string; descricao?: string }) => ({
+            codigo: a.codigo != null ? String(a.codigo) : "",
+            descricao: a.descricao ?? "",
+          }))
+        : [],
       situacaoCadastral: data.descricao_situacao_cadastral,
       naturezaJuridica: data.descricao_natureza_juridica,
       capitalSocial: data.capital_social,

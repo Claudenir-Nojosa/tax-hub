@@ -3,6 +3,17 @@
 > Fonte legal: EC 132/2023 + LC 214/2025  
 > Qualquer alteração nesta feature **deve** seguir estas regras. Não altere alíquotas, cronograma ou lógica de cálculo sem atualizar este documento.
 
+> **Wizard v2 (atual)**: o wizard de 7 passos que gera o Excel de entrega fiel ao modelo do
+> cliente (com fórmulas nativas, 14 abas) está documentado em detalhe em
+> [`docs/reforma-tributaria-v2.md`](../../../../docs/reforma-tributaria-v2.md) — leia aquele
+> documento primeiro se for mexer no wizard, nos parsers de EFD ou no gerador de Excel
+> (`src/lib/reforma-excel/`). As seções 1-8 e 11 deste README (cronograma, conceitos dos
+> tributos, período de teste, FCBF, crédito de compras sem XML, comparativo Simples) continuam
+> válidas e são a fonte legal de referência para os dois wizards. As seções 9, 10, 12 e 13
+> abaixo descrevem o wizard **antigo** de 4 passos (`reforma-engine.ts` + `Step1-4*.tsx`), que
+> continua no código como engine de simulação rápida (sem EFD granular), mas não é mais o fluxo
+> principal do módulo.
+
 ---
 
 ## 1. Cronograma de Transição (imutável por lei)
@@ -261,3 +272,27 @@ O EFD é 100% **client-side** — não é salvo no banco. O usuário reimporta q
 | [`src/components/reforma/Step4Analise.tsx`](../../../components/reforma/Step4Analise.tsx) | Step 4 — análise IA e export |
 | [`src/app/api/reforma-tributaria/simulacao/route.ts`](../../api/reforma-tributaria/simulacao/route.ts) | API de cálculo |
 | [`src/app/api/reforma-tributaria/xml/route.ts`](../../api/reforma-tributaria/xml/route.ts) | API de importação XML |
+
+---
+
+## 14. Arquivos do Wizard v2 (fluxo atual)
+
+Ver `docs/reforma-tributaria-v2.md` para o detalhamento completo. Resumo dos arquivos principais:
+
+| Arquivo | Responsabilidade |
+|---------|-----------------|
+| [`src/app/dashboard/reforma-tributaria/[empresaId]/page.tsx`](./[empresaId]/page.tsx) | Wizard 7 passos (mesmo arquivo do wizard antigo — substituído) |
+| `src/components/reforma/Step1Empresa.tsx` a `StepRevisao.tsx` | Os 7 passos |
+| `src/lib/efd-contribuicoes-saidas-parser.ts` | Parser granular de saídas (EFD Contribuições, por item de NF) |
+| `src/lib/efd-icms-ipi-entradas-parser.ts` | Parser granular de entradas (EFD ICMS/IPI, com CNPJ do fornecedor) |
+| `src/lib/reforma-legislacao-busca.ts` + `src/app/api/reforma-tributaria/legislacao-ia/route.ts` | Busca de legislação por CNAE via IA |
+| `src/lib/reforma-base-ibs-cbs.ts` + `-custom.ts` | Base padrão/customizada de NCM |
+| `src/lib/reforma-excel/*.ts` | Gerador do Excel — uma aba por módulo (`anos.ts`, `entradas-efd.ts`, `analise-fornecedores.ts` etc.), orquestrado por `gerar-excel-reforma.ts` |
+| `src/data/reforma-legislacoes/*.txt`, `src/data/reforma-base-ibs-cbs/base.json` | Assets extraídos do Excel-modelo real (legislações e base de NCM) |
+
+**Limitação de escala conhecida** (ver `docs/reforma-tributaria-v2.md`, Fase 7): cada linha de
+saída importada é replicada nas 7 abas de ano. Testado com sucesso até ~20.000 itens (139.769
+linhas de fórmula geradas, zero erros), mas nesse volume a geração leva minutos e usa vários GB de
+memória — inviável em alguns navegadores/máquinas. `StepRevisao.tsx` avisa o usuário acima de 8.000
+itens. Não há correção implementada ainda (exigiria reescrever o gerador para streaming); a
+mitigação prática é gerar menos meses de EFD por vez.
