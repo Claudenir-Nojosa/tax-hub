@@ -155,6 +155,21 @@ Ver plano completo em `TaskList` (tasks #62-#69, prefixo "Reforma v2"), cada uma
   - `README.md` do módulo atualizado: nota no topo apontando pro wizard v2 e pra este documento, seção 14 nova listando os arquivos do fluxo atual e a limitação de escala.
   - `type-check` limpo em todas as 7 fases; nenhum arquivo de teste/scratch deixado no repositório (todos os `_scratch_*` foram apagados após validação).
 
+## Correções pós-lançamento (uso real, task #72)
+
+Lote de correções reportado pelo usuário após uso em produção com dados reais da Art Farma (4 prints: cadastro, geração travando, aba de ano com `#VALOR!`, comparação "como foi vs correto" de PIS/COFINS):
+
+- **Bug crítico corrigido — `#VALOR!` e PIS/COFINS lendo errado**: `rawRowValues()` em `anos.ts` estava com um valor faltando (só emitia uma célula pra "Alíquota ISS"+"Vlr ISS", que são duas colunas no cabeçalho `RAW_HEADERS`). Isso desalinhava TODAS as colunas seguintes por uma posição — a "Vlr Base Cálculo PIS" recebia o CST PIS (texto tipo `"01"`) em vez de um número, causando `#VALOR!` em cascata. Corrigido com o placeholder que faltava. Validado com dados reais da Art Farma: 0 erros de fórmula, células numéricas com tipo correto.
+- **"Página sem resposta" durante a geração**: os loops pesados do gerador (até ~140 mil linhas de fórmula) rodavam 100% síncronos, travando a thread principal do browser. Corrigido com `yieldToEventLoop()` (`src/lib/reforma-excel/yield.ts`) chamado a cada 500 linhas dentro de `montarAbaAno` (agora assíncrona) e entre cada aba no orquestrador.
+- **Barra de progresso real**: `gerarExcelReforma()` agora aceita um callback `onProgress(percentual, etapa)`, ponderado pelo tamanho de cada aba (as 7 abas de ano pesam proporcionalmente a `linhasSaidas.length × 7`, o resto é uma fatia pequena fixa). `StepRevisao.tsx` mostra a barra com % e a etapa atual durante a geração.
+- **Larguras de coluna + formato contábil**: `anos.ts` ganhou `larguraColuna()` (largura por nome de cabeçalho, nada cortado) e os subtotais agora usam o formato contábil `_-"R$" * #,##0.00_-;...` em vez de número cru.
+- **Regime tributário por CNPJ**: antes só dava pra escolher o regime da empresa principal; `EstabelecimentoData` (Step1Empresa.tsx) ganhou campos `regime`/`simplesNacional` próprios, com um dropdown de regime por estabelecimento adicionado na lista de CNPJs extras.
+- **Busca de legislação não achava o Art. 133 da LC 214/2025**: `buscarTrechosRelevantes()` limitava resultados por POSIÇÃO no documento (top 6 por fonte), não por relevância — quando a empresa tinha vários CNAEs secundários genéricos (alimentício, cosméticos etc.), os termos deles apareciam mais cedo no texto da lei e ocupavam todo o orçamento de busca, escondendo o artigo específico do CNAE principal (farmácia de manipulação). Corrigido separando busca de termos principais (orçamento maior, garantido) de termos secundários (preenchem o restante sem sobrepor regiões já cobertas). Validado com o cenário exato relatado pelo usuário: achou o Art. 133 corretamente.
+- **Nota manual de legislação não aparecia no Excel**: decisão original do projeto era deixar a aba Legislações em branco (B4+) pro usuário anotar depois de revisar na tela. Na prática o usuário queria que o texto digitado no wizard fosse pro Excel — `montarAbaLegislacoes()` agora grava `legislacao.notaManual` linha a linha em B4+ quando o usuário digitou algo (reversão explícita da decisão anterior, feita a pedido direto do usuário).
+- **Otimização encontrada de passagem (não reportada pelo usuário)**: `quadro-comparativo.ts` recalculava `calcularCamposAno()` 5× por (ano, linha) — uma vez por tributo — sem necessidade, já que a função devolve os 5 campos de uma vez. Reduzido de 40N para 8N chamadas via pré-soma em `somasPorAno`.
+- Campo "Faturamento Anual Estimado" — já tinha sido removido em commit anterior (`c29eb34`); o print do usuário estava desatualizado, nenhuma mudança de código necessária aqui.
+- Validado: `npx tsc --noEmit` limpo, dev server sem erros de compilação, commit `665b36f`.
+
 ## Fase 8 — registrada para sessão futura (não iniciada)
 
 **Reescrever o gerador de Excel para streaming**, resolvendo o achado de escala da Fase 7 (~8GB/132s para 139.769 linhas de fórmula). Não é "polish rápido" — é uma reescrita real:
