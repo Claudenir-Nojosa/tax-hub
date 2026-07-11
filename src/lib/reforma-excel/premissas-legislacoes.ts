@@ -135,7 +135,14 @@ export function montarAbaLegislacoes(wb: ExcelJS.Workbook, legislacao: Legislaca
   celula(ws, "C2", primeiroAchado?.fonte ?? "", { bold: true })
   celula(ws, "C3", primeiroAchado?.artigoOuTrecho ?? "")
 
-  // B4 em diante fica deliberadamente em branco — espaço de estudo/anotação do próprio usuário
-  // (decisão explícita do usuário, ver docs/reforma-tributaria-v2.md). A nota manual do wizard
-  // (legislacao.notaManual) NÃO é escrita aqui de propósito.
+  // B4 em diante: a nota manual que o usuário escreveu no Passo 3 (revisão/confirmação do que a
+  // IA encontrou). Se o usuário não escrever nada, fica em branco — espaço livre pro estudo do
+  // próprio usuário, como pedido originalmente; mas se ele escreveu algo esperando que aparecesse
+  // no Excel, agora aparece (uma linha por parágrafo, quebras de linha preservadas).
+  if (legislacao.notaManual.trim()) {
+    const linhas = legislacao.notaManual.split(/\r?\n/)
+    linhas.forEach((linha, i) => {
+      if (linha.trim()) celula(ws, `B${4 + i}`, linha)
+    })
+  }
 }

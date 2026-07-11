@@ -6,6 +6,7 @@ import { montarAbaQuadroComparativo } from "./quadro-comparativo"
 import { montarAbaBaseIbsCbs } from "./base-ibs-cbs"
 import { montarAbaEntradasEfd } from "./entradas-efd"
 import { montarAbaAnaliseFornecedores } from "./analise-fornecedores"
+import { yieldToEventLoop } from "./yield"
 import type { PremissasReformaData } from "@/components/reforma/StepPremissasReforma"
 import type { LegislacaoData } from "@/components/reforma/StepLegislacaoIA"
 import type { EmpresaData } from "@/components/reforma/Step1Empresa"
@@ -28,23 +29,68 @@ export interface DadosGeracaoExcel {
   classificacoesFornecedores: Record<string, ResultadoConsultaCnpj>
 }
 
-export async function gerarExcelReforma(dados: DadosGeracaoExcel): Promise<void> {
+export type ProgressoGeracao = (percentual: number, etapa: string) => void
+
+export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: ProgressoGeracao): Promise<void> {
   const wb = new ExcelJS.Workbook()
   wb.creator = "Tax Hub — Reforma Tributária"
   wb.created = new Date()
 
-  montarAbaPremissas(wb, dados.premissasReforma, dados.empresa)
-  montarAbaLegislacoes(wb, dados.legislacao)
-  for (const aba of ABAS_ANO) {
-    montarAbaAno(wb, aba, dados.linhasSaidas, dados.premissasReforma)
+  // Progresso ponderado: as 7 abas de ano são de longe a parte mais pesada (cada linha de saída
+  // vira 1 linha × 7 abas), então pesam proporcionalmente a linhasSaidas.length×7; as demais abas
+  // são rápidas e entram como uma fatia fixa pequena do total, só pra a barra não parecer parada.
+  const pesoAnos = Math.max(dados.linhasSaidas.length * ABAS_ANO.length, 1)
+  const pesoOutras = Math.max(Math.round(pesoAnos * 0.15), 7)
+  const pesoTotal = pesoAnos + pesoOutras
+  let concluido = 0
+  const reportar = (etapa: string, incremento: number) => {
+    concluido += incremento
+    onProgress?.(Math.min(100, Math.round((concluido / pesoTotal) * 100)), etapa)
   }
-  montarAbaValorTotalNfe(wb, dados.empresa, dados.linhasSaidas)
-  montarAbaQuadroComparativo(wb, dados.empresa, dados.linhasSaidas, dados.premissasReforma)
-  montarAbaBaseIbsCbs(wb, dados.baseIbsCbs)
-  montarAbaEntradasEfd(wb, dados.linhasEntradas, dados.classificacoesFornecedores, dados.premissasReforma)
-  await montarAbaAnaliseFornecedores(wb, dados.empresa, dados.linhasEntradas, dados.classificacoesFornecedores)
 
+  montarAbaPremissas(wb, dados.premissasReforma, dados.empresa)
+  reportar("Premissas", pesoOutras / 6)
+  await yieldToEventLoop()
+
+  montarAbaLegislacoes(wb, dados.legislacao)
+  reportar("Legislações", pesoOutras / 6)
+  await yieldToEventLoop()
+
+  for (const aba of ABAS_ANO) {
+    const concluidoAntesDaAba = concluido
+    await montarAbaAno(wb, aba, dados.linhasSaidas, dados.premissasReforma, (linhaAtual) => {
+      const progressoNaAba = concluidoAntesDaAba + linhaAtual
+      onProgress?.(
+        Math.min(100, Math.round((progressoNaAba / pesoTotal) * 100)),
+        `Aba ${aba.label} (${linhaAtual}/${dados.linhasSaidas.length})`
+      )
+    })
+    concluido = concluidoAntesDaAba + dados.linhasSaidas.length
+  }
+
+  montarAbaValorTotalNfe(wb, dados.empresa, dados.linhasSaidas)
+  reportar("Valor Total NF-e", pesoOutras / 6)
+  await yieldToEventLoop()
+
+  montarAbaQuadroComparativo(wb, dados.empresa, dados.linhasSaidas, dados.premissasReforma)
+  reportar("Quadro Comparativo", pesoOutras / 6)
+  await yieldToEventLoop()
+
+  montarAbaBaseIbsCbs(wb, dados.baseIbsCbs)
+  reportar("Base IBS-CBS", pesoOutras / 6)
+  await yieldToEventLoop()
+
+  montarAbaEntradasEfd(wb, dados.linhasEntradas, dados.classificacoesFornecedores, dados.premissasReforma)
+  reportar("Entradas EFD ICMS/IPI", pesoOutras / 6)
+  await yieldToEventLoop()
+
+  await montarAbaAnaliseFornecedores(wb, dados.empresa, dados.linhasEntradas, dados.classificacoesFornecedores)
+  onProgress?.(99, "Análise Fornecedores")
+
+  onProgress?.(99, "Compactando o arquivo Excel...")
   const buffer = await wb.xlsx.writeBuffer()
+  onProgress?.(100, "Pronto")
+
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")

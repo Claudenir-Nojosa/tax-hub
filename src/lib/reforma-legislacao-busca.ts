@@ -61,11 +61,16 @@ export interface TrechoEncontrado {
 }
 
 const JANELA_CONTEXTO = 900 // caracteres antes/depois do termo encontrado
-const MAX_TRECHOS_POR_FONTE = 6
 
 // Busca janelas de contexto ao redor de cada termo, por fonte. Sobreposições próximas são
-// mescladas pra não duplicar o mesmo artigo várias vezes.
-function buscarNaFonte(texto: string, termos: string[]): TrechoEncontrado[] {
+// mescladas pra não duplicar o mesmo artigo várias vezes. `jaCobertas` evita que uma busca
+// secundária repita uma região já trazida pela busca principal.
+function buscarNaFonte(
+  texto: string,
+  termos: string[],
+  cap: number,
+  jaCobertas: { inicio: number; fim: number }[] = []
+): { inicio: number; fim: number; termo: string; trecho: string }[] {
   const textoNormalizado = texto.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
   const janelas: { inicio: number; fim: number; termo: string }[] = []
 
@@ -73,11 +78,11 @@ function buscarNaFonte(texto: string, termos: string[]): TrechoEncontrado[] {
     let idx = textoNormalizado.indexOf(termo)
     let ocorrencias = 0
     while (idx !== -1 && ocorrencias < 3) {
-      janelas.push({
-        inicio: Math.max(0, idx - JANELA_CONTEXTO),
-        fim: Math.min(texto.length, idx + termo.length + JANELA_CONTEXTO),
-        termo,
-      })
+      const inicio = Math.max(0, idx - JANELA_CONTEXTO)
+      const fim = Math.min(texto.length, idx + termo.length + JANELA_CONTEXTO)
+      if (!jaCobertas.some((c) => inicio <= c.fim && fim >= c.inicio)) {
+        janelas.push({ inicio, fim, termo })
+      }
       ocorrencias++
       idx = textoNormalizado.indexOf(termo, idx + termo.length)
     }
@@ -95,22 +100,29 @@ function buscarNaFonte(texto: string, termos: string[]): TrechoEncontrado[] {
     }
   }
 
-  return mescladas.slice(0, MAX_TRECHOS_POR_FONTE).map((j) => ({
-    fonte: "",
-    termo: j.termo,
-    trecho: texto.slice(j.inicio, j.fim).trim(),
-  }))
+  return mescladas.slice(0, cap).map((j) => ({ ...j, trecho: texto.slice(j.inicio, j.fim).trim() }))
 }
 
-// Busca trechos relevantes nas 3 legislações pra um conjunto de termos de CNAE. Retorna vazio
-// se nada bater — o chamador decide como comunicar "nada específico encontrado" ao usuário.
-export function buscarTrechosRelevantes(termos: string[]): TrechoEncontrado[] {
-  if (termos.length === 0) return []
+// Busca trechos relevantes nas 3 legislações — termos do CNAE PRINCIPAL têm prioridade e um
+// orçamento generoso; termos dos CNAEs secundários só preenchem o restante, sem competir posição
+// a posição com os principais (bug corrigido: antes, um único corte por posição no documento
+// deixava CNAEs secundários genéricos — "produtos alimentícios", "cosméticos" etc — engolirem o
+// espaço de trechos específicos do CNAE principal que apareciam mais adiante no texto, mesmo eles
+// sendo o que realmente importa). Retorna vazio só se NENHUM termo bater — o chamador decide como
+// comunicar "nada específico encontrado" ao usuário.
+export function buscarTrechosRelevantes(termosPrincipais: string[], termosSecundarios: string[] = []): TrechoEncontrado[] {
+  const CAP_PRINCIPAL = 10
+  const CAP_SECUNDARIO = 4
+  if (termosPrincipais.length === 0 && termosSecundarios.length === 0) return []
+
   const resultado: TrechoEncontrado[] = []
   for (const fonte of FONTES_LEGISLACAO) {
     const texto = carregarTexto(fonte)
-    const encontrados = buscarNaFonte(texto, termos)
-    for (const e of encontrados) resultado.push({ ...e, fonte: fonte.nome })
+    const principais = buscarNaFonte(texto, termosPrincipais, CAP_PRINCIPAL)
+    const secundarios = buscarNaFonte(texto, termosSecundarios, CAP_SECUNDARIO, principais)
+    for (const e of [...principais, ...secundarios]) {
+      resultado.push({ fonte: fonte.nome, termo: e.termo, trecho: e.trecho })
+    }
   }
   return resultado
 }

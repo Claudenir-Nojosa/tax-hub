@@ -17,12 +17,14 @@ export type CnaeInfo = {
 // Matriz/filial ou empresas do mesmo grupo comercial — cada uma tem CNPJ próprio e entra na
 // tabela Estabelecimento→CNPJ da aba Premissas, usada pelos dropdowns de Valor Total NF-e e
 // Quadro Comparativo (ver premissas-legislacoes.ts). A empresa buscada no topo (cnpj/razaoSocial
-// deste EmpresaData) é sempre a matriz/principal — é dela que vêm regime, CNAE e faturamento
-// usados no restante do wizard (premissas, legislação); as adicionais só entram na lista de
-// estabelecimentos, sem duplicar essas informações.
+// deste EmpresaData) é sempre a matriz/principal — é dela que vêm CNAE e faturamento usados no
+// restante do wizard (premissas, legislação); cada estabelecimento (matriz e adicionais) tem seu
+// próprio regime tributário, já que filiais/empresas do grupo podem estar em regimes diferentes.
 export type EstabelecimentoData = {
   cnpj: string
   razaoSocial: string
+  regime: string
+  simplesNacional: boolean
 }
 
 export type EmpresaData = {
@@ -84,11 +86,12 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
       const res = await fetch(`/api/reforma-tributaria/cnpj/${digits}`)
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
+      const regimeDetectado = json.simplesNacional ? "SIMPLES_II" : "LUCRO_PRESUMIDO"
       onChange({
         ...data,
         estabelecimentosAdicionais: [
           ...data.estabelecimentosAdicionais,
-          { cnpj: digits, razaoSocial: json.razaoSocial || digits },
+          { cnpj: digits, razaoSocial: json.razaoSocial || digits, regime: regimeDetectado, simplesNacional: Boolean(json.simplesNacional) },
         ],
       })
       setCnpjAdicionalInput("")
@@ -102,6 +105,15 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
 
   const removerEstabelecimento = (cnpj: string) => {
     onChange({ ...data, estabelecimentosAdicionais: data.estabelecimentosAdicionais.filter((e) => e.cnpj !== cnpj) })
+  }
+
+  const alterarRegimeEstabelecimento = (cnpj: string, regime: string) => {
+    onChange({
+      ...data,
+      estabelecimentosAdicionais: data.estabelecimentosAdicionais.map((e) =>
+        e.cnpj === cnpj ? { ...e, regime, simplesNacional: regime.startsWith("SIMPLES") } : e
+      ),
+    })
   }
 
   const buscarCNPJ = async () => {
@@ -243,8 +255,8 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
         <p className="text-xs text-gray-500">
           Se a simulação envolve mais de um CNPJ (matriz + filiais, ou empresas do mesmo grupo),
           adicione aqui — cada um vira um estabelecimento nos filtros do Excel final (Valor Total
-          NF-e, Quadro Comparativo). O CNPJ buscado acima continua sendo o principal (dele vêm o
-          regime, o CNAE e o faturamento usados no restante do wizard).
+          NF-e, Quadro Comparativo), com seu próprio regime tributário. O CNPJ buscado acima
+          continua sendo o principal (dele vêm o CNAE e o faturamento usados no restante do wizard).
         </p>
         <div className="flex gap-2">
           <Input
@@ -266,11 +278,21 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
                 key={e.cnpj}
                 className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-3 py-2"
               >
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
                   <Landmark className="h-3.5 w-3.5 text-gray-400 shrink-0" />
                   <span className="text-xs font-medium truncate">{e.razaoSocial}</span>
                   <span className="text-xs font-mono text-gray-400 shrink-0">{formatCNPJ(e.cnpj)}</span>
                 </div>
+                <Select value={e.regime} onValueChange={(v) => alterarRegimeEstabelecimento(e.cnpj, v)}>
+                  <SelectTrigger className="h-7 w-44 text-xs shrink-0">
+                    <SelectValue placeholder="Regime" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REGIMES.map((r) => (
+                      <SelectItem key={r.value} value={r.value} className="text-xs">{r.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <button onClick={() => removerEstabelecimento(e.cnpj)} className="text-gray-400 hover:text-red-500 shrink-0">
                   <X className="h-4 w-4" />
                 </button>

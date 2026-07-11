@@ -43,6 +43,7 @@ function LinhaResumo({ icon: Icon, titulo, valor }: { icon: React.ElementType; t
 export default function StepRevisao({ empresa, premissasReforma, legislacao, baseNcm, saidasEfd, entradasEfd, onBack }: Props) {
   const [gerando, setGerando] = useState(false)
   const [gerado, setGerado] = useState(false)
+  const [progresso, setProgresso] = useState<{ pct: number; etapa: string } | null>(null)
 
   const totalSaidas = saidasEfd.arquivos.reduce((s, a) => s + a.linhas.length, 0)
   const totalEntradas = entradasEfd.arquivos.reduce((s, a) => s + a.linhas.length, 0)
@@ -54,6 +55,7 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
 
   const gerar = async () => {
     setGerando(true)
+    setProgresso({ pct: 0, etapa: "Carregando base de NCM..." })
     try {
       const linhasSaidas = saidasEfd.arquivos.flatMap((a) => a.linhas)
 
@@ -70,16 +72,20 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
       }
 
       const linhasEntradas = entradasEfd.arquivos.flatMap((a) => a.linhas)
-      await gerarExcelReforma({
-        empresa, premissasReforma, legislacao, linhasSaidas, baseIbsCbs,
-        linhasEntradas, classificacoesFornecedores: entradasEfd.classificacoes,
-      })
+      await gerarExcelReforma(
+        {
+          empresa, premissasReforma, legislacao, linhasSaidas, baseIbsCbs,
+          linhasEntradas, classificacoesFornecedores: entradasEfd.classificacoes,
+        },
+        (pct, etapa) => setProgresso({ pct, etapa })
+      )
       setGerado(true)
       toast.success("Excel gerado com sucesso")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao gerar Excel")
     } finally {
       setGerando(false)
+      setProgresso(null)
     }
   }
 
@@ -123,11 +129,26 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
         </div>
       )}
 
+      {gerando && progresso && (
+        <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-4 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-blue-700 dark:text-blue-400 font-medium truncate">{progresso.etapa}</span>
+            <span className="text-blue-700 dark:text-blue-400 font-semibold shrink-0 ml-2">{progresso.pct}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-blue-100 dark:bg-blue-900/50 overflow-hidden">
+            <div
+              className="h-full bg-blue-600 transition-all duration-150 ease-out"
+              style={{ width: `${progresso.pct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
-        <Button variant="outline" onClick={onBack}>← Voltar</Button>
+        <Button variant="outline" onClick={onBack} disabled={gerando}>← Voltar</Button>
         <Button onClick={gerar} disabled={gerando} className="bg-emerald-600 hover:bg-emerald-700 text-white">
           {gerando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : gerado ? <CheckCircle2 className="h-4 w-4 mr-2" /> : <FileDown className="h-4 w-4 mr-2" />}
-          {gerando ? (volumeGrande ? "Gerando... pode levar alguns minutos" : "Gerando...") : gerado ? "Excel gerado — gerar novamente" : "Gerar Excel"}
+          {gerando ? "Gerando..." : gerado ? "Excel gerado — gerar novamente" : "Gerar Excel"}
         </Button>
       </div>
     </div>

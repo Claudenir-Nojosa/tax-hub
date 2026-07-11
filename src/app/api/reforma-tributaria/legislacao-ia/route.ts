@@ -42,10 +42,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "cnaePrincipal é obrigatório" }, { status: 400 })
   }
 
-  const todosCnaes = [cnaePrincipal, ...cnaesSecundarios].filter((c) => c.descricao)
-  const termos = Array.from(new Set(todosCnaes.flatMap((c) => extrairTermosCnae(c.descricao))))
+  // Termos do CNAE principal têm prioridade na busca — CNAEs secundários costumam ser genéricos
+  // (ex: "comércio de cosméticos", "produtos alimentícios") e, sem essa separação, seus termos
+  // mais comuns no texto das leis engoliam o espaço dos trechos realmente específicos do CNAE
+  // principal (bug real encontrado: Art Farma tem CNAE principal de farmácia de manipulação —
+  // exatamente o caso do art. 133 da LC 214/2025 — mas a busca não encontrava por causa disso).
+  const termosPrincipais = extrairTermosCnae(cnaePrincipal.descricao)
+  const termosSecundarios = Array.from(
+    new Set(cnaesSecundarios.flatMap((c) => extrairTermosCnae(c.descricao)).filter((t) => !termosPrincipais.includes(t)))
+  )
 
-  if (termos.length === 0) {
+  if (termosPrincipais.length === 0 && termosSecundarios.length === 0) {
     return NextResponse.json({
       encontrado: false,
       resumo: "Não foi possível extrair termos de busca da descrição do CNAE — revise manualmente as legislações.",
@@ -53,7 +60,7 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const trechos = buscarTrechosRelevantes(termos)
+  const trechos = buscarTrechosRelevantes(termosPrincipais, termosSecundarios)
   if (trechos.length === 0) {
     return NextResponse.json({
       encontrado: false,
@@ -65,7 +72,7 @@ export async function POST(req: NextRequest) {
   const contexto = trechos
     .map((t, i) => `[Trecho ${i + 1} — ${t.fonte}, termo "${t.termo}"]\n${t.trecho}`)
     .join("\n\n---\n\n")
-    .slice(0, 60_000)
+    .slice(0, 100_000)
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 3 })
 

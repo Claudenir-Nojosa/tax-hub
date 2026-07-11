@@ -3,6 +3,7 @@ import type { LinhaSaidaEfd } from "@/lib/efd-contribuicoes-saidas-parser"
 import type { PremissasReformaData } from "@/components/reforma/StepPremissasReforma"
 import { colLetra } from "./coluna-letra"
 import { calcularCamposAno, aliquotasEfetivasDoAno, REDUCAO_ICMS_ISS } from "./calculo-linha-ano"
+import { yieldToEventLoop } from "./yield"
 
 // Gera as abas de ano (2026, "2027 e 2028", 2029...2033) — a peça central do Excel de entrega.
 // Cada aba recebe o MESMO conjunto de linhas de saída (Passo 5 do wizard) e recalcula o imposto
@@ -68,6 +69,32 @@ const LINHA_SUBTOTAL = 4
 const LINHA_HEADER = 5
 export const LINHA_DADOS_INICIO_ANO = 6
 
+// Formato contábil (padrão do Excel) — alinha o cifrão à esquerda e os valores à direita,
+// mostra "-" pra zero, parênteses implícitos pra negativo
+const FORMATO_CONTABIL = '_-"R$" * #,##0.00_-;-"R$" * #,##0.00_-;_-"R$" * "-"??_-;_-@_-'
+
+// Largura de coluna por tipo de conteúdo — sem isso o ExcelJS usa a largura padrão (~8,43
+// caracteres) e cabeçalhos/valores longos ficam cortados (chave de NF-e, nomes, descrições).
+function larguraColuna(nome: string): number {
+  if (nome === "") return 3
+  if (nome === "Chave NF-e") return 46
+  if (nome === "Nome Participante" || nome === "Empresa") return 28
+  if (nome === "Registros") return 32
+  if (nome === "Descrição Complementar" || nome === "Descrição Item" || nome === "Descrição CFOP") return 30
+  if (nome === "Documento" || nome === "Tipo Item") return 26
+  if (nome === "CNPJ" || nome === "CNPJ Participante" || nome === "CPF Participante") return 17
+  if (nome === "UF Origem/Destino") return 10
+  if (nome === "Data Documento" || nome === "Data Entrada/Saída") return 12
+  if (["Número Documento", "Código Participante", "Código Item", "Código Serviço", "Código Barra"].includes(nome)) return 14
+  if (nome.startsWith("Alíquota")) return 11
+  if (nome.startsWith("Qtde")) return 10
+  if (nome === "CFOP") return 8
+  if (["CST PIS", "CST Cofins", "Modelo", "Situação", "Série"].includes(nome)) return 9
+  if (nome === "NCM") return 11
+  if (nome === "Unidade Medida") return 11
+  return 14 // colunas de valor (Vlr *, e todas as CALC_HEADERS)
+}
+
 // Colunas numéricas que recebem SUBTOTAL(9,...) na linha 4 — mesmo espírito do Excel-modelo
 // (linha de subtotal logo acima do cabeçalho, soma só o que estiver visível se a aba tiver
 // filtro). Cobre os valores monetários/quantidades; deixa de fora códigos, datas e textos.
@@ -117,7 +144,8 @@ function rawRowValues(l: LinhaSaidaEfd): (string | number)[] {
     l.vlrOutrasDA, l.numeroItem, l.codigoItem, l.descricaoComplementar, l.descricaoItem,
     l.ncm, l.codigoServico, l.codigoBarra, l.documento, l.tipoItem, l.vlrItem, l.qtde,
     l.unidadeMedida, l.vlrDescontoItem, l.cfop, descricaoCfop, l.faturamento, l.natureza,
-    0 /* Vlr ISS — EFD Contribuições não traz ISS por linha, é premissa (ver aliq. ISS) */,
+    0 /* Alíquota ISS — placeholder, sobrescrita logo abaixo com a premissa (ver aliqIss) */,
+    0 /* Vlr ISS — EFD Contribuições não traz ISS por linha, é premissa */,
     l.aliquotaIcms, l.vlrIcms, 0, 0, l.cstPis,
     l.vlrBaseCalculoPis, 0, l.aliquotaPis, 0, l.vlrPis,
     l.cstCofins, l.vlrBaseCalculoCofins, 0, l.aliquotaCofins, 0, l.vlrCofins,
@@ -125,13 +153,15 @@ function rawRowValues(l: LinhaSaidaEfd): (string | number)[] {
   ]
 }
 
-export function montarAbaAno(
+export async function montarAbaAno(
   wb: ExcelJS.Workbook,
   aba: AbaAno,
   linhas: LinhaSaidaEfd[],
-  premissas: PremissasReformaData
+  premissas: PremissasReformaData,
+  onProgress?: (linhaAtual: number, totalLinhas: number) => void
 ) {
   const ws = wb.addWorksheet(aba.label, { views: [{ showGridLines: false }] })
+  ws.columns = [{ width: 3 }, { width: 3 }, ...TODOS_HEADERS.map((nome) => ({ width: larguraColuna(nome) }))]
   const p = premissas.premissasPorAno[aba.anoPremissa]
   const { aliqIbs, aliqCbs } = aliquotasEfetivasDoAno(p.cbs, p.ibsUF, p.ibsMUN, premissas.reducao60)
   // ICMS/ISS reduzem gradualmente 2029-2033 (aba Premissas, tabela "ICMS e ISS") — a alíquota que
@@ -161,7 +191,9 @@ export function montarAbaAno(
   const somasSubtotal: Record<string, number> = {}
   for (const nome of COLUNAS_SUBTOTAL) somasSubtotal[nome] = 0
 
-  linhas.forEach((l, i) => {
+  const TAMANHO_LOTE = 500 // cede o event loop e reporta progresso a cada N linhas
+  for (let i = 0; i < linhas.length; i++) {
+    const l = linhas[i]
     const r = LINHA_DADOS_INICIO_ANO + i
     const raw = rawRowValues(l)
     raw.forEach((v, ci) => {
@@ -215,7 +247,12 @@ export function montarAbaAno(
       "DIF": c.dif,
     }
     for (const nome of COLUNAS_SUBTOTAL) somasSubtotal[nome] += valoresLinha[nome] ?? 0
-  })
+
+    if ((i + 1) % TAMANHO_LOTE === 0 || i === linhas.length - 1) {
+      onProgress?.(i + 1, linhas.length)
+      await yieldToEventLoop()
+    }
+  }
 
   // Linha de SUBTOTAL (mesmo padrão do Excel-modelo: SUBTOTAL(9,...) logo acima do cabeçalho,
   // soma só as linhas visíveis se a aba tiver filtro aplicado)
@@ -227,7 +264,7 @@ export function montarAbaAno(
       celula(
         ws, `${col}${LINHA_SUBTOTAL}`,
         f(`SUBTOTAL(9,${col}${primeiraLinhaDados}:${col}${ultimaLinhaDados})`, somasSubtotal[nome]),
-        { bold: true }
+        { bold: true, numFmt: nome === "Qtde" ? "#,##0" : FORMATO_CONTABIL }
       )
     }
   }

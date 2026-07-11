@@ -87,6 +87,25 @@ export function montarAbaQuadroComparativo(
     aliqPorAno.set(ano, { aliqIss: p.aliquotaISS * fatorIcmsIss, aliqIbs, aliqCbs, fatorIcmsIss })
   }
 
+  // Uma única passada por linha por ano (não por tributo×ano) — calcularCamposAno já devolve os
+  // 5 campos de uma vez, então soma-se todos aqui em vez de recalcular a mesma linha 5x (era
+  // 5 tributos × 8 anos × N linhas = 40N chamadas; agora é 8 × N, a maior parte do tempo de
+  // geração do Excel travando o navegador vinha daqui).
+  const somasPorAno = new Map<number, Record<string, number>>()
+  for (const ano of ANOS_COLUNA) {
+    const { aliqIss, aliqIbs, aliqCbs, fatorIcmsIss } = aliqPorAno.get(ano)!
+    const somas: Record<string, number> = { vlrPisCofins: 0, icms: 0, iss: 0, cbs: 0, ibs: 0 }
+    for (const l of linhasSaidas) {
+      const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, l.aliquotaIcms * fatorIcmsIss)
+      somas.vlrPisCofins += c.vlrPisCofins
+      somas.icms += c.icms
+      somas.iss += c.iss
+      somas.cbs += c.cbs
+      somas.ibs += c.ibs
+    }
+    somasPorAno.set(ano, somas)
+  }
+
   LINHAS_TRIBUTO.forEach((linha, li) => {
     const r = 6 + li
     celula(ws, `C${r}`, linha.label)
@@ -95,11 +114,7 @@ export function montarAbaQuadroComparativo(
       const aba = abaDoAno(ano)
       const rangeValor = `'${aba}'!$${cValor}$${l1}:$${cValor}$${l2}`
       const rangeCnpj = `'${aba}'!$${cCnpj}$${l1}:$${cCnpj}$${l2}`
-      const { aliqIss, aliqIbs, aliqCbs, fatorIcmsIss } = aliqPorAno.get(ano)!
-      const total = linhasSaidas.reduce(
-        (s, l) => s + calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, l.aliquotaIcms * fatorIcmsIss)[linha.campo],
-        0
-      )
+      const total = somasPorAno.get(ano)![linha.campo]
       celula(
         ws, `${String.fromCharCode(68 + ci)}${r}`,
         f(`IF($D$4="Todos",SUM(${rangeValor}),SUMIFS(${rangeValor},${rangeCnpj},$F$4))`, total),
