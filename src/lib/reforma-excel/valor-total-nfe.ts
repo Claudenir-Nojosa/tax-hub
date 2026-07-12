@@ -78,7 +78,9 @@ export function montarAbaValorTotalNfe(wb: ExcelJS.Workbook, empresa: EmpresaDat
   // espelha o que a fórmula produz ao abrir o arquivo com os valores padrão dos dropdowns
   const totalPadrao = linhasSaidas
     .filter((l) => l.documento === "Nota Fiscal de Mercadoria (DANFE)")
-    .reduce((s, l) => s + (l.vlrItem - l.vlrDescontoItem), 0)
+    // F550 (consolidação) não tem Vlr Item por linha — TOTAL NF CLIENTE parte do Vlr Documento,
+    // mesma regra da coluna BY das abas de ano (ver anos.ts)
+    .reduce((s, l) => s + ((l.registros.startsWith("F550") ? l.vlrDocumento : l.vlrItem) - l.vlrDescontoItem), 0)
 
   celula(ws, "C6", "VALOR TOTAL DA NOTA FISCAL", { bold: true })
   celula(

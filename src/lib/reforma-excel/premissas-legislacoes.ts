@@ -8,9 +8,9 @@ import { REDUCAO_ICMS_ISS } from "./calculo-linha-ano"
 
 // Gera as abas "Premissas" e "Legislações" do Excel de entrega, seguindo o layout exato do
 // modelo (ver docs/reforma-tributaria-v2.md): fórmulas nativas (padrão f(formula,result) de
-// consolidacao-pis-cofins-excel.ts/selic-excel.ts), fonte Calibri, e a aba Legislações com B4 em
-// diante deliberadamente em branco — a nota que o usuário escreveu no wizard (Passo 3) é só um
-// apoio de decisão (ex: confirmar a redução de 60%), não é escrita no Excel entregue.
+// consolidacao-pis-cofins-excel.ts/selic-excel.ts), fonte Calibri. A aba Legislações grava TODOS
+// os achados da busca (fonte + artigo + texto completo) e, abaixo, a nota manual do usuário —
+// a decisão original de deixá-la em branco foi revertida a pedido do usuário.
 
 const FONTE = "Calibri"
 
@@ -26,8 +26,12 @@ function celula(ws: ExcelJS.Worksheet, ref: string, valor: ExcelJS.CellValue, op
   return cell
 }
 
+// amarelo alaranjado das guias Premissas/Legislações (mesma paleta das abas de ano, ver anos.ts)
+const COR_GUIA = "FFFFC000"
+
 export function montarAbaPremissas(wb: ExcelJS.Workbook, premissas: PremissasReformaData, empresa: EmpresaData) {
   const ws = wb.addWorksheet("Premissas", { views: [{ showGridLines: false }] })
+  ws.properties.tabColor = { argb: COR_GUIA }
   ws.columns = [{ width: 3 }, { width: 3 }, { width: 26 }, ...ANOS_TRANSICAO.map(() => ({ width: 12 }))]
 
   celula(ws, "C1", "Alíquotas Estimadas", { bold: true, size: 12 })
@@ -127,22 +131,45 @@ export function layoutListasPremissas(empresa: EmpresaData) {
 
 export function montarAbaLegislacoes(wb: ExcelJS.Workbook, legislacao: LegislacaoData) {
   const ws = wb.addWorksheet("Legislações", { views: [{ showGridLines: false }] })
-  ws.columns = [{ width: 3 }, { width: 3 }, { width: 100 }]
+  ws.properties.tabColor = { argb: COR_GUIA }
+  ws.columns = [{ width: 3 }, { width: 3 }, { width: 110 }]
 
   celula(ws, "C1", "Legislações", { bold: true, size: 12 })
 
-  const primeiroAchado = legislacao.achados[0]
-  celula(ws, "C2", primeiroAchado?.fonte ?? "", { bold: true })
-  celula(ws, "C3", primeiroAchado?.artigoOuTrecho ?? "")
+  // TODOS os achados da busca de legislação, completos: fonte + artigo/trecho + o texto do
+  // resumo/trecho encontrado (com quebra de linha dentro da célula). Antes só saíam a fonte e o
+  // rótulo do artigo do primeiro achado, e o usuário reclamou que "o valor achado da legislação
+  // não está aparecendo tudo".
+  let r = 2
+  for (const achado of legislacao.achados) {
+    celula(ws, `C${r}`, achado.fonte, { bold: true })
+    r++
+    if (achado.artigoOuTrecho?.trim()) {
+      celula(ws, `C${r}`, achado.artigoOuTrecho, { bold: true })
+      r++
+    }
+    if (achado.resumo?.trim()) {
+      for (const paragrafo of achado.resumo.split(/\r?\n/)) {
+        if (!paragrafo.trim()) continue
+        const cell = celula(ws, `C${r}`, paragrafo)
+        cell.alignment = { wrapText: true, vertical: "top" }
+        r++
+      }
+    }
+    r++ // linha em branco entre achados
+  }
 
-  // B4 em diante: a nota manual que o usuário escreveu no Passo 3 (revisão/confirmação do que a
-  // IA encontrou). Se o usuário não escrever nada, fica em branco — espaço livre pro estudo do
-  // próprio usuário, como pedido originalmente; mas se ele escreveu algo esperando que aparecesse
-  // no Excel, agora aparece (uma linha por parágrafo, quebras de linha preservadas).
+  // Nota manual do usuário (Passo 3) depois dos achados, uma linha por parágrafo
   if (legislacao.notaManual.trim()) {
-    const linhas = legislacao.notaManual.split(/\r?\n/)
-    linhas.forEach((linha, i) => {
-      if (linha.trim()) celula(ws, `B${4 + i}`, linha)
-    })
+    if (legislacao.achados.length > 0) {
+      celula(ws, `C${r}`, "Anotações", { bold: true })
+      r++
+    }
+    for (const linha of legislacao.notaManual.split(/\r?\n/)) {
+      if (!linha.trim()) continue
+      const cell = celula(ws, `C${r}`, linha)
+      cell.alignment = { wrapText: true, vertical: "top" }
+      r++
+    }
   }
 }

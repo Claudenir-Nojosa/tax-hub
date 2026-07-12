@@ -187,6 +187,15 @@ O usuário comparou o Excel gerado com o Excel-modelo real ("Reforma_Tributária
 - **Validação (dados reais, 20 arquivos EFD do grupo)**: contagens por registro IGUAIS aos arquivos (C170 2.450 no total dos 20 — 91 na amostra do modelo —, C175 6.864 ✓, A170 19.876 ✓, F100 685 ✓, F550 61; modelo tem 34 F550 porque na época só existiam jan–jun da Pharmaplus); 4 CNPJs presentes ✓; a linha do doc 112 (set/2025) saiu IDÊNTICA à linha 8 do modelo em todas as colunas brutas e nas 17 calculadas (tolerância 1e-6); linha F550 da Pharmaplus idêntica à linha 27524 do modelo; 333.471 fórmulas geradas no teste integrado (7 abas de ano + Valor Total NF-e + Quadro Comparativo) com 0 erros e referências cruzadas apontando pro novo layout (coluna B, linha 8).
 - **Espelho JS atualizado** (`calculo-linha-ano.ts`): mesmas convenções de unidade das fórmulas (PIS/COFINS ÷100, ICMS ÷100 na fórmula, ISS decimal direto) e VALOR SEM TRIBUTO agora subtrai o Vlr ISS calculado (o modelo subtrai AQ, que é fórmula, não 0).
 
+## Ajustes visuais + F550 por Vlr Documento (task #74)
+
+Segundo lote de ajustes do usuário sobre as abas de ano e Legislações (com prints do modelo como referência):
+
+- **F550 parte do Vlr Documento**: linhas F550 não têm Vlr Item (fica 0), então VALOR SEM TRIBUTO (BJ) e TOTAL NF CLIENTE (BY) agora usam a coluna S (Vlr Documento) nessas linhas — `=S8-AK8-AS8-BA8-BG8-AQ8`. Espelho JS (`calcularCamposAno`) e o cache do Valor Total NF-e acompanham. Validado com os valores exatos do print do usuário: BJ=1.294,90 / BK=1.343,95 / BQ(mod 98)=358.603,10 / BR=10.758,09.
+- **Visual das abas de ano igual ao modelo**: headers das colunas FINANCE em laranja `#FFC000` (negrito, centralizado), BASE IBS/CBS + IBS + CBS + DIF em vermelho `#FF0000` com fonte branca; barra do ano em azul `#5B9BD5` (mesclada sobre BASE IBS/CBS..CBS), "DÉBITO" em laranja logo abaixo, alíquota efetiva em negrito centrada acima; "FINANCE" mesclado e centralizado sobre BJ..BT; negativos da linha de subtotal em vermelho (`[Red]` no formato contábil).
+- **Aba Legislações completa**: agora grava TODOS os achados da busca (fonte em negrito + artigo + texto completo do resumo, com wrapText), separados por linha em branco, e a nota manual do usuário numa seção "Anotações" no final. Antes só saíam fonte e rótulo do artigo do primeiro achado.
+- **Cores das guias**: abas de ano em azul claro (`#9DC3E6`), Premissas e Legislações em amarelo alaranjado (`#FFC000`), como no modelo.
+
 ## Fase 8 — registrada para sessão futura (não iniciada)
 
 **Reescrever o gerador de Excel para streaming**, resolvendo o achado de escala da Fase 7 (~8GB/132s para 139.769 linhas de fórmula). Não é "polish rápido" — é uma reescrita real:

@@ -52,7 +52,10 @@ export function calcularCamposAno(
   const isServico = l.documento === "Nota Fiscal de Serviço (NFS)"
   const aliqIssLinha = isServico ? aliqIss : 0 // fórmula AP: IF(Tipo Item="09 Serviços",premissa,0)
   const vlrIss = l.vlrItem * aliqIssLinha // fórmula AQ = AH×AP
-  const vlrSemTributo = l.vlrItem - l.vlrDescontoItem - l.vlrIcms - l.vlrPis - l.vlrCofins - vlrIss
+  // F550 é consolidação: não tem Vlr Item por linha (fica 0), o valor da operação está em
+  // Vlr Documento — VALOR SEM TRIBUTO e TOTAL NF CLIENTE partem dele nessas linhas
+  const valorBase = l.registros.startsWith("F550") ? l.vlrDocumento : l.vlrItem
+  const vlrSemTributo = valorBase - l.vlrDescontoItem - l.vlrIcms - l.vlrPis - l.vlrCofins - vlrIss
   const divisorPisCofins = 1 - l.aliquotaPis / 100 - l.aliquotaCofins / 100
   const basePisCofins = divisorPisCofins !== 0 ? vlrSemTributo / divisorPisCofins : 0
   const vlrPis = basePisCofins * (l.aliquotaPis / 100)
@@ -66,7 +69,7 @@ export function calcularCamposAno(
   const ibs = baseIbsCbs * aliqIbs
   const cbs = baseIbsCbs * aliqCbs
   const totalNfFinance = baseIssFinance + baseIcmsFinance
-  const totalNfCliente = l.vlrItem - l.vlrDescontoItem
+  const totalNfCliente = valorBase - l.vlrDescontoItem
 
   return {
     aliqIssLinha, vlrIss,

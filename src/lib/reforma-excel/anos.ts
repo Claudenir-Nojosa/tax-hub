@@ -71,6 +71,8 @@ export const LINHA_DADOS_INICIO_ANO = 8
 // Formatos numéricos — copiados do Excel-modelo
 const FMT_CONTABIL_RS = '_-"R$" * #,##0.00_-;-"R$" * #,##0.00_-;_-"R$" * "-"??_-;_-@_-'
 const FMT_CONTABIL = '_-* #,##0.00_-;-* #,##0.00_-;_-* "-"??_-;_-@_-'
+// linha de subtotal: negativo em vermelho, como na planilha-modelo
+const FMT_CONTABIL_RS_SUBTOTAL = '_-"R$" * #,##0.00_-;[Red]-"R$" * #,##0.00_-;_-"R$" * "-"??_-;_-@_-'
 const FMT_PA = "mm-dd-yy"
 
 // Largura de coluna por tipo de conteúdo — sem isso o ExcelJS usa a largura padrão (~8,43
@@ -129,12 +131,32 @@ const CFOP_DESCRICOES: Record<string, string> = {
   "6102": "Venda de mercadoria adquirida ou recebida de terceiros (fora do estado)",
 }
 
-function celula(ws: ExcelJS.Worksheet, ref: string, valor: ExcelJS.CellValue, opts?: { bold?: boolean; numFmt?: string; centralizado?: boolean }) {
+// Cores do Excel-modelo (primeira imagem de referência do usuário)
+const COR_LARANJA = "FFFFC000" // headers das colunas FINANCE + barra DÉBITO
+const COR_VERMELHO = "FFFF0000" // headers BASE IBS/CBS, IBS, CBS e DIF
+const COR_AZUL_ANO = "FF5B9BD5" // barra do ano (2026...) sobre o bloco DÉBITO
+const COR_GUIA_ANO = "FF9DC3E6" // azul claro das guias das abas de ano
+export const COR_GUIA_PREMISSAS = "FFFFC000" // amarelo alaranjado (Premissas/Legislações)
+
+// Headers de coluna calculada com fundo laranja (bloco FINANCE + totais); o restante das
+// calculadas (BASE IBS/CBS, IBS, CBS, DIF) é vermelho com fonte branca
+const HEADERS_LARANJA = new Set<string>([
+  "VALOR SEM TRIBUTO", "BASE PIS COFINS", "VLR PIS", "VLR COFINS", "VLR PIS + COFINS",
+  "BASE ICMS FINANCE", "ICMS", "BASE ISS FINANCE", "ISS", "VLR PIS + COFINS + ISS",
+  "DIF VALOR PRODUTO", "TOTAL NF FINANCE", "TOTAL NF CLIENTE",
+])
+const HEADERS_VERMELHO = new Set<string>(["BASE IBS/CBS", "IBS", "CBS", "DIF"])
+
+function celula(
+  ws: ExcelJS.Worksheet, ref: string, valor: ExcelJS.CellValue,
+  opts?: { bold?: boolean; numFmt?: string; centralizado?: boolean; fundo?: string; corFonte?: string }
+) {
   const cell = ws.getCell(ref)
   cell.value = valor
-  cell.font = { name: FONTE, size: 11, bold: opts?.bold ?? false }
+  cell.font = { name: FONTE, size: 11, bold: opts?.bold ?? false, color: opts?.corFonte ? { argb: opts.corFonte } : undefined }
   if (opts?.numFmt) cell.numFmt = opts.numFmt
   if (opts?.centralizado) cell.alignment = { horizontal: "center", vertical: "middle" }
+  if (opts?.fundo) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fundo } }
   return cell
 }
 
@@ -186,6 +208,7 @@ export async function montarAbaAno(
   onProgress?: (linhaAtual: number, totalLinhas: number) => void
 ) {
   const ws = wb.addWorksheet(aba.label, { views: [{ showGridLines: false }] })
+  ws.properties.tabColor = { argb: COR_GUIA_ANO } // azul claro nas guias dos anos
   ws.columns = [{ width: 3 }, ...TODOS_HEADERS.map((nome) => ({ width: larguraColuna(nome) }))]
   const p = premissas.premissasPorAno[aba.anoPremissa]
   const { aliqIbs, aliqCbs } = aliquotasEfetivasDoAno(p.cbs, p.ibsUF, p.ibsMUN, premissas.reducao60)
@@ -218,14 +241,23 @@ export async function montarAbaAno(
   const ultimaLinhaDados = LINHA_DADOS_INICIO_ANO + Math.max(linhas.length, 1) - 1
   celula(ws, `${cAH}2`, "Nota Fiscal de Mercadoria (DANFE)")
   celula(ws, `${cAH}3`, "Nota Fiscal de Serviço (NFS)")
-  celula(ws, `${cBU}3`, f(`IFERROR((${cBW}${LINHA_SUBTOTAL}+${cBV}${LINHA_SUBTOTAL})/${cBU}${LINHA_SUBTOTAL},0)`, aliqIbs + aliqCbs), { numFmt: "0.00%" })
-  celula(ws, `${cBU}4`, /^\d+$/.test(aba.label) ? Number(aba.label) : aba.label, { bold: true })
+  // Bloco DÉBITO (BASE IBS/CBS..CBS): alíquota efetiva em cima, barra azul do ano, barra amarela
+  ws.mergeCells(`${cBU}3:${cBW}3`)
+  celula(ws, `${cBU}3`, f(`IFERROR((${cBW}${LINHA_SUBTOTAL}+${cBV}${LINHA_SUBTOTAL})/${cBU}${LINHA_SUBTOTAL},0)`, aliqIbs + aliqCbs), { numFmt: "0.00%", bold: true, centralizado: true })
+  ws.mergeCells(`${cBU}4:${cBW}4`)
+  celula(ws, `${cBU}4`, /^\d+$/.test(aba.label) ? Number(aba.label) : aba.label, { bold: true, centralizado: true, fundo: COR_AZUL_ANO })
+  ws.mergeCells(`${cBU}5:${cBW}5`)
+  celula(ws, `${cBU}5`, "DÉBITO", { bold: true, centralizado: true, fundo: COR_LARANJA })
   celula(ws, "B5", "Saídas - EFD Contribuições", { bold: true })
-  celula(ws, `${cBJ}5`, "FINANCE", { bold: true })
-  celula(ws, `${cBU}5`, "DÉBITO", { bold: true })
+  ws.mergeCells(`${cBJ}5:${letraDe("DIF VALOR PRODUTO")}5`)
+  celula(ws, `${cBJ}5`, "FINANCE", { bold: true, centralizado: true })
 
   TODOS_HEADERS.forEach((nome, i) => {
-    if (nome !== "") celula(ws, `${colLetra(COL_INICIO_ANO + i)}${LINHA_HEADER}`, nome, { bold: true, centralizado: true })
+    if (nome === "") return
+    const ref = `${colLetra(COL_INICIO_ANO + i)}${LINHA_HEADER}`
+    if (HEADERS_LARANJA.has(nome)) celula(ws, ref, nome, { bold: true, centralizado: true, fundo: COR_LARANJA })
+    else if (HEADERS_VERMELHO.has(nome)) celula(ws, ref, nome, { bold: true, centralizado: true, fundo: COR_VERMELHO, corFonte: "FFFFFFFF" })
+    else celula(ws, ref, nome, { bold: true, centralizado: true })
   })
 
   const somasSubtotal: Record<string, number> = {}
@@ -260,10 +292,13 @@ export async function montarAbaAno(
     const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha)
 
     // fórmulas idênticas ao modelo, célula a célula (aba 2026, linha 8)
+    // F550 é consolidação sem Vlr Item por linha — VALOR SEM TRIBUTO e TOTAL NF CLIENTE partem
+    // do Vlr Documento (coluna S) nessas linhas; nas demais, do Vlr Item (AH), como no modelo
+    const cValorBase = l.registros.startsWith("F550") ? cS : cAH
     celula(ws, `${cP}${r}`, f(`${cO}${r}&${cS}${r}`, `${l.chaveNFe}${String(l.vlrDocumento).replace(".", ",")}`))
     celula(ws, `${cAP}${r}`, f(`IF(${cAG}${r}="09 Serviços",${issLiteral},0)`, c.aliqIssLinha), { numFmt: "0.00%" })
     celula(ws, `${cAQ}${r}`, f(`${cAH}${r}*${cAP}${r}`, c.vlrIss), { numFmt: FMT_CONTABIL_RS })
-    celula(ws, `${cBJ}${r}`, f(`${cAH}${r}-${cAK}${r}-${cAS}${r}-${cBA}${r}-${cBG}${r}-${cAQ}${r}`, c.vlrSemTributo), { numFmt: FMT_CONTABIL })
+    celula(ws, `${cBJ}${r}`, f(`${cValorBase}${r}-${cAK}${r}-${cAS}${r}-${cBA}${r}-${cBG}${r}-${cAQ}${r}`, c.vlrSemTributo), { numFmt: FMT_CONTABIL })
     celula(ws, `${cBK}${r}`, f(`${cBJ}${r}/(1-${cAY}${r}%-${cBE}${r}%)`, c.basePisCofins), { numFmt: FMT_CONTABIL })
     celula(ws, `${cBL}${r}`, f(`${cBK}${r}*${cAY}${r}%`, c.vlrPis), { numFmt: FMT_CONTABIL })
     celula(ws, `${cBM}${r}`, f(`${cBK}${r}*${cBE}${r}%`, c.vlrCofins), { numFmt: FMT_CONTABIL })
@@ -278,7 +313,7 @@ export async function montarAbaAno(
     celula(ws, `${cBV}${r}`, f(`${cBU}${r}*${ibsLiteral}`, c.ibs), { numFmt: FMT_CONTABIL })
     celula(ws, `${cBW}${r}`, f(`${cBU}${r}*${cbsLiteral}`, c.cbs), { numFmt: FMT_CONTABIL })
     celula(ws, `${cBX}${r}`, f(`${cBO}${r}+${cBQ}${r}`, c.totalNfFinance), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBY}${r}`, f(`${cAH}${r}-${cAK}${r}`, c.totalNfCliente), { numFmt: FMT_CONTABIL })
+    celula(ws, `${cBY}${r}`, f(`${cValorBase}${r}-${cAK}${r}`, c.totalNfCliente), { numFmt: FMT_CONTABIL })
     celula(ws, `${letraDe("DIF")}${r}`, f(`${cBY}${r}-${cBX}${r}`, c.dif), { numFmt: FMT_CONTABIL })
 
     // acumula pra linha de SUBTOTAL (escrita depois do loop, quando já sabemos o total de linhas)
@@ -312,7 +347,7 @@ export async function montarAbaAno(
       celula(
         ws, `${col}${LINHA_SUBTOTAL}`,
         f(`SUBTOTAL(9,${col}${LINHA_DADOS_INICIO_ANO}:${col}${ultimaLinhaDados})`, somasSubtotal[nome]),
-        { bold: true, numFmt: FMT_CONTABIL_RS }
+        { bold: true, numFmt: FMT_CONTABIL_RS_SUBTOTAL }
       )
     }
     for (const nome of COLUNAS_X) celula(ws, `${letraDe(nome)}${LINHA_SUBTOTAL}`, "X", { bold: true, centralizado: true })
