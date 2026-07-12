@@ -2,7 +2,7 @@ import ExcelJS from "exceljs"
 import type { LinhaSaidaEfd } from "@/lib/efd-contribuicoes-saidas-parser"
 import type { EmpresaData } from "@/components/reforma/Step1Empresa"
 import { letraColunaAno, LINHA_DADOS_INICIO_ANO, LINHA_FIM_RANGE_ANO } from "./anos"
-import { layoutListasPremissas, LISTA_ANOS } from "./premissas-legislacoes"
+import { layoutListasPremissas, listaEstabelecimentos, LISTA_ANOS } from "./premissas-legislacoes"
 
 // Aba "Valor Total NF-e" — dropdowns (Estabelecimento/Documento/Ano) cruzando as abas de ano via
 // INDIRECT (o nome da aba muda conforme o Ano escolhido, então SUMIFS sozinho não alcança — mesma
@@ -28,7 +28,7 @@ export function montarAbaValorTotalNfe(wb: ExcelJS.Workbook, empresa: EmpresaDat
 
   celula(ws, "C1", "Valor Total NF-e", { bold: true })
 
-  const layout = layoutListasPremissas(empresa)
+  const layout = layoutListasPremissas(listaEstabelecimentos(empresa, linhasSaidas).length)
 
   celula(ws, "C2", "Estabelecimento")
   celula(ws, "D2", "Todos")

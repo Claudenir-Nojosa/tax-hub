@@ -4,7 +4,7 @@ import type { EmpresaData } from "@/components/reforma/Step1Empresa"
 import type { PremissasReformaData } from "@/components/reforma/StepPremissasReforma"
 import { letraColunaAno, LINHA_DADOS_INICIO_ANO, LINHA_FIM_RANGE_ANO, ABAS_ANO } from "./anos"
 import { calcularCamposAno, aliquotasEfetivasDoAno, REDUCAO_ICMS_ISS, type CamposCalculadosAno } from "./calculo-linha-ano"
-import { layoutListasPremissas } from "./premissas-legislacoes"
+import { layoutListasPremissas, listaEstabelecimentos } from "./premissas-legislacoes"
 
 // Aba "Quadro Comparativo" — total de PIS/COFINS, ICMS, ISS, CBS e IBS por ano (2026-2033),
 // filtrado por Empresa (dropdown). Visual replicado da planilha de referência do usuário:
@@ -85,7 +85,7 @@ export function montarAbaQuadroComparativo(
     bold: true, size: 14, fundo: COR_TITULO, corFonte: "FFFFFFFF", centralizado: true,
   })
 
-  const layout = layoutListasPremissas(empresa)
+  const layout = layoutListasPremissas(listaEstabelecimentos(empresa, linhasSaidas).length)
 
   // Caixa "Empresa" (azul-marinho) + dropdown com borda + lookup do CNPJ fora da área visível
   ws.mergeCells(`B${LINHA_EMPRESA}:C${LINHA_EMPRESA}`)

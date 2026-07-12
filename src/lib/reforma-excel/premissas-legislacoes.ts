@@ -29,7 +29,12 @@ function celula(ws: ExcelJS.Worksheet, ref: string, valor: ExcelJS.CellValue, op
 // amarelo alaranjado das guias Premissas/Legislações (mesma paleta das abas de ano, ver anos.ts)
 const COR_GUIA = "FFFFC000"
 
-export function montarAbaPremissas(wb: ExcelJS.Workbook, premissas: PremissasReformaData, empresa: EmpresaData) {
+export function montarAbaPremissas(
+  wb: ExcelJS.Workbook,
+  premissas: PremissasReformaData,
+  empresa: EmpresaData,
+  linhasSaidas: { cnpj: string; empresa: string }[] = []
+) {
   const ws = wb.addWorksheet("Premissas", { views: [{ showGridLines: false }] })
   ws.properties.tabColor = { argb: COR_GUIA }
   ws.columns = [{ width: 3 }, { width: 3 }, { width: 26 }, ...ANOS_TRANSICAO.map(() => ({ width: 12 }))]
@@ -81,18 +86,15 @@ export function montarAbaPremissas(wb: ExcelJS.Workbook, premissas: PremissasRef
   ANOS_ICMS_ISS.forEach((ano, i) => celula(ws, `${colLetra(3 + i + 1)}15`, REDUCAO_ICMS_ISS[ano], { numFmt: "0%" }))
 
   // Estabelecimento → CNPJ (B47:C50 no modelo) — usado por VLOOKUP nas abas Valor Total NF-e e
-  // Quadro Comparativo. "Todos" na linha 17, matriz na 18, filiais/grupo (Passo 1) a partir da 19
-  // — tamanho da lista é dinâmico conforme quantos CNPJs o usuário cadastrou no Passo 1
-  // (layoutListasPremissas calcula onde cada bloco começa a partir disso).
-  const layout = layoutListasPremissas(empresa)
+  // Quadro Comparativo. "Todos" na linha 17, e a partir da 18 UM ITEM POR CNPJ presente nas
+  // saídas importadas (matriz e filiais dos EFDs, com sufixo Matriz/Filial quando a razão social
+  // se repete) — não a lista do cadastro, que pode ter menos estabelecimentos que os arquivos.
+  const estabelecimentos = listaEstabelecimentos(empresa, linhasSaidas)
+  const layout = layoutListasPremissas(estabelecimentos.length)
   celula(ws, `C${layout.linhaTodos}`, "Todos")
-  const estabelecimentos = [
-    { cnpj: empresa.cnpj, razaoSocial: empresa.razaoSocial },
-    ...empresa.estabelecimentosAdicionais,
-  ]
   estabelecimentos.forEach((e, i) => {
     const r = layout.linhaTodos + 1 + i
-    celula(ws, `C${r}`, e.razaoSocial)
+    celula(ws, `C${r}`, e.nome)
     celula(ws, `D${r}`, e.cnpj, { numFmt: "@" })
   })
 
@@ -108,12 +110,48 @@ export function montarAbaPremissas(wb: ExcelJS.Workbook, premissas: PremissasRef
 // Valor Total NF-e e Quadro Comparativo sem duplicar a lista.
 export const LISTA_ANOS = ["2026", "2027 e 2028", "2029", "2030", "2031", "2032", "2033"] as const
 
-// Linhas das listas suspensas da aba Premissas — dependem de quantos estabelecimentos (matriz +
-// adicionais do Passo 1) o usuário cadastrou, por isso são calculadas a partir de `empresa`, não
-// constantes fixas. Exportado pra Valor Total NF-e e Quadro Comparativo montarem os mesmos
-// ranges de VLOOKUP/dropdown sem duplicar essa conta.
-export function layoutListasPremissas(empresa: EmpresaData) {
-  const totalEstabelecimentos = 1 + empresa.estabelecimentosAdicionais.length
+// Lista de estabelecimentos do dropdown "Empresa"/"Estabelecimento" — derivada dos CNPJs que
+// REALMENTE aparecem nas saídas importadas (registros C010/A010/F010 dos EFDs), não do cadastro
+// do Passo 1: o usuário pode ter cadastrado só as matrizes, mas os arquivos trazem as filiais, e
+// o filtro por CNPJ das abas de ano precisa de um item por estabelecimento. Quando a mesma razão
+// social tem mais de um CNPJ, o rótulo ganha o sufixo "- Matriz" / "- Filial NNNN" pra
+// diferenciar. Se não houver saídas (não deveria acontecer no fluxo real), cai no cadastro.
+export interface EstabelecimentoLista {
+  nome: string
+  cnpj: string
+}
+
+export function listaEstabelecimentos(
+  empresa: EmpresaData,
+  linhasSaidas: { cnpj: string; empresa: string }[]
+): EstabelecimentoLista[] {
+  const vistos = new Map<string, string>() // cnpj → razão social (ordem de aparição nas saídas)
+  for (const l of linhasSaidas) {
+    if (l.cnpj && !vistos.has(l.cnpj)) vistos.set(l.cnpj, l.empresa)
+  }
+  if (vistos.size === 0) {
+    return [
+      { nome: empresa.razaoSocial, cnpj: empresa.cnpj },
+      ...empresa.estabelecimentosAdicionais.map((e) => ({ nome: e.razaoSocial, cnpj: e.cnpj })),
+    ]
+  }
+  const cnpjsPorNome = new Map<string, number>()
+  for (const nome of vistos.values()) cnpjsPorNome.set(nome, (cnpjsPorNome.get(nome) ?? 0) + 1)
+  return [...vistos.entries()].map(([cnpj, nome]) => {
+    if ((cnpjsPorNome.get(nome) ?? 0) <= 1) return { nome, cnpj }
+    const numeroFilial = cnpj.slice(8, 12) // posições do nº do estabelecimento no CNPJ
+    return {
+      nome: numeroFilial === "0001" ? `${nome} - Matriz` : `${nome} - Filial ${numeroFilial}`,
+      cnpj,
+    }
+  })
+}
+
+// Linhas das listas suspensas da aba Premissas — dependem de quantos estabelecimentos existem
+// nas saídas importadas, por isso são calculadas a partir do total, não constantes fixas.
+// Exportado pra Valor Total NF-e e Quadro Comparativo montarem os mesmos ranges de
+// VLOOKUP/dropdown sem duplicar essa conta.
+export function layoutListasPremissas(totalEstabelecimentos: number) {
   const linhaTodos = 17
   const linhaEstabelecimentoFim = linhaTodos + totalEstabelecimentos
   const linhaDocumentoDanfe = linhaEstabelecimentoFim + 2 // 1 linha em branco de respiro

@@ -48,7 +48,7 @@ export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: P
     onProgress?.(Math.min(100, Math.round((concluido / pesoTotal) * 100)), etapa)
   }
 
-  montarAbaPremissas(wb, dados.premissasReforma, dados.empresa)
+  montarAbaPremissas(wb, dados.premissasReforma, dados.empresa, dados.linhasSaidas)
   reportar("Premissas", pesoOutras / 6)
   await yieldToEventLoop()
 
