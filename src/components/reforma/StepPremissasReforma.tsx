@@ -20,6 +20,10 @@ export type PremissaAnoWizard = PremissaAno & { aliquotaISS: number }
 export type PremissasReformaData = {
   premissasPorAno: Record<number, PremissaAnoWizard>
   reducao60: boolean
+  // Alíquota de ICMS usada na coluna "Alíquota ICMS" das abas de ano — é uma PREMISSA do
+  // analista (alíquota modal do estado, ex: 22,5% no PI), constante em todas as linhas DANFE,
+  // exatamente como no Excel-modelo (que ignora a alíquota por item do EFD nessa coluna).
+  aliquotaICMS: number
 }
 
 export function defaultPremissasReforma(): PremissasReformaData {
@@ -27,7 +31,7 @@ export function defaultPremissasReforma(): PremissasReformaData {
   for (const ano of ANOS_TRANSICAO) {
     premissasPorAno[ano] = { ...PREMISSAS_PADRAO[ano], aliquotaISS: 0.05 }
   }
-  return { premissasPorAno, reducao60: false }
+  return { premissasPorAno, reducao60: false, aliquotaICMS: 0.225 }
 }
 
 interface Props {
@@ -83,6 +87,24 @@ export default function StepPremissasReforma({ data, onChange, onBack, onNext }:
             (confirme no Passo 3 — Legislação).
           </p>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between gap-4">
+        <div>
+          <Label htmlFor="aliquotaIcms" className="text-sm font-medium">Alíquota ICMS padrão (%)</Label>
+          <p className="text-xs text-gray-500 mt-1">
+            Alíquota modal do estado do cliente (ex: 22,5% no Piauí). Usada como premissa constante
+            na coluna Alíquota ICMS de todas as linhas de mercadoria das abas de ano.
+          </p>
+        </div>
+        <Input
+          id="aliquotaIcms"
+          type="number"
+          step="0.1"
+          value={pct(data.aliquotaICMS ?? 0.225)}
+          onChange={(e) => onChange({ ...data, aliquotaICMS: (parseFloat(e.target.value) || 0) / 100 })}
+          className="w-24 h-8 text-right shrink-0"
+        />
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">

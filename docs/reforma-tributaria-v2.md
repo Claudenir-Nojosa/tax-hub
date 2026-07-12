@@ -170,6 +170,23 @@ Lote de correções reportado pelo usuário após uso em produção com dados re
 - Campo "Faturamento Anual Estimado" — já tinha sido removido em commit anterior (`c29eb34`); o print do usuário estava desatualizado, nenhuma mudança de código necessária aqui.
 - Validado: `npx tsc --noEmit` limpo, dev server sem erros de compilação, commit `665b36f`.
 
+## Abas de ano fiéis ao modelo (task #73)
+
+O usuário comparou o Excel gerado com o Excel-modelo real ("Reforma_Tributária - Art Farma vff.xlsx", grupo L Cardoso Melo + Pharmaplus, 4 CNPJs) e pediu que as ABAS DE ANO ficassem idênticas. A investigação célula a célula do modelo revelou que o gerador estava incompleto em vários pontos estruturais:
+
+- **CNPJ por estabelecimento**: o parser pegava o CNPJ do registro 0000 (sempre a matriz) e ignorava os registros C010/A010/F010, que alternam os blocos de cada estabelecimento dentro do MESMO arquivo. Resultado: tudo saía com 1 CNPJ quando o modelo mostra 4 (matriz+filial de cada empresa). Corrigido rastreando o estabelecimento corrente na segunda passada do parser.
+- **Registros que não eram lidos** (e no caso Pharmaplus significavam TODO o faturamento ausente):
+  - `C175` — NFC-e (modelo 65) consolidada por CFOP/CST dentro do documento: 6.864 linhas nos arquivos reais, 25% da aba do modelo. Sem participante/quantidade, Vlr ICMS = 0, alíquota ICMS derivada do C100 quando existe.
+  - `F100` — demais documentos e operações: 685 linhas, TODAS entram (sem filtro de IND_OPER — confirmado 685/685 no modelo).
+  - `F550` — consolidação por regime de competência: os EFDs da Pharmaplus só têm F550 (nenhum C170/A170), então antes o parser retornava 0 linhas pra eles. Mod 98 = serviço (NFS), demais = DANFE; PA = período do arquivo; Vlr Item = 0 (como no modelo).
+- **Formato das alíquotas**: PIS/COFINS agora ficam como NÚMERO PERCENTUAL (1,65 / 7,6, formato do EFD e do modelo) e as fórmulas usam `AY8%`/`BE8%`. Alíquota ICMS fica decimal (0,225) com fórmula `(1-AR8%)` — reproduz fielmente o modelo, inclusive a dupla divisão por 100 no gross-up de ICMS que o modelo tem.
+- **Alíquota ICMS é PREMISSA, não dado**: descoberta importante — o modelo usa 22,5% constante em TODAS as linhas DANFE (até nos C170 onde o EFD diz 27%, 21%, 7%...) e 0 nas NFS. É a alíquota modal do estado escolhida pelo analista. Virou campo novo no Passo 2 do wizard (`PremissasReformaData.aliquotaICMS`, default 22,5%), usado nas abas de ano e no Quadro Comparativo.
+- **Layout idêntico ao modelo**: dados começam na coluna B, linha 8; título "Saídas - EFD Contribuições" em B5; "FINANCE"/"DÉBITO" na linha 5; linha 6 = SUBTOTALs em formato contábil R$ (conjunto EXATO de colunas do modelo) com "X" em Frete/Seguro/Outras DA/Tipo Item; cabeçalho na linha 7; rótulos DANFE/NFS em AH2/AH3; alíquota efetiva IBS+CBS em BU3 (`IFERROR((BW6+BV6)/BU6,0)`); ano em BU4.
+- **Coluna `id`** (P): fórmula `=O8&S8` (chave & valor do documento), igual ao modelo.
+- **Fórmulas por linha idênticas ao modelo**: Alíquota ISS = `IF(AG8="09 Serviços",3%,0)` (premissa embutida como literal); Vlr ISS = `AH8*AP8`; IBS/CBS = `BU8*0.1%`/`BU8*0.9%` (literais do ano, com redução de 60% se marcada); PA como DATA (1º dia do mês, formato mm-dd-yy); rótulo de A170 corrigido pra "A100/A170 - Nota Fiscal de Serviço"; Descrição CFOP truncada em 50 caracteres como no modelo; CFOP 5933 nas linhas de serviço.
+- **Validação (dados reais, 20 arquivos EFD do grupo)**: contagens por registro IGUAIS aos arquivos (C170 2.450 no total dos 20 — 91 na amostra do modelo —, C175 6.864 ✓, A170 19.876 ✓, F100 685 ✓, F550 61; modelo tem 34 F550 porque na época só existiam jan–jun da Pharmaplus); 4 CNPJs presentes ✓; a linha do doc 112 (set/2025) saiu IDÊNTICA à linha 8 do modelo em todas as colunas brutas e nas 17 calculadas (tolerância 1e-6); linha F550 da Pharmaplus idêntica à linha 27524 do modelo; 333.471 fórmulas geradas no teste integrado (7 abas de ano + Valor Total NF-e + Quadro Comparativo) com 0 erros e referências cruzadas apontando pro novo layout (coluna B, linha 8).
+- **Espelho JS atualizado** (`calculo-linha-ano.ts`): mesmas convenções de unidade das fórmulas (PIS/COFINS ÷100, ICMS ÷100 na fórmula, ISS decimal direto) e VALOR SEM TRIBUTO agora subtrai o Vlr ISS calculado (o modelo subtrai AQ, que é fórmula, não 0).
+
 ## Fase 8 — registrada para sessão futura (não iniciada)
 
 **Reescrever o gerador de Excel para streaming**, resolvendo o achado de escala da Fase 7 (~8GB/132s para 139.769 linhas de fórmula). Não é "polish rápido" — é uma reescrita real:

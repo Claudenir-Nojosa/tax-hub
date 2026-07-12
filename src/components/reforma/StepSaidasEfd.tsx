@@ -43,7 +43,7 @@ export default function StepSaidasEfd({ data, onChange, onBack, onNext }: Props)
         const texto = await file.text()
         const dados = parseSaidasEfdContribuicoes(texto)
         if (dados.linhas.length === 0) {
-          toast.warning(`${file.name}: nenhum registro de saída (C100/C170 ou A100/A170) encontrado`)
+          toast.warning(`${file.name}: nenhum registro de saída (C170/C175, A170, F100 ou F550) encontrado`)
           continue
         }
         novos.push({ nome: file.name, linhas: dados.linhas })
@@ -69,8 +69,10 @@ export default function StepSaidasEfd({ data, onChange, onBack, onNext }: Props)
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Saídas — EFD Contribuições</h3>
         <p className="text-xs text-gray-500 mt-1">
           Envie os arquivos .txt do EFD Contribuições (PIS/COFINS) dos períodos que serão simulados.
-          Cada nota fiscal de mercadoria (C100/C170) ou serviço (A100/A170) vira uma linha nas abas
-          de ano. Pode enviar mais de um arquivo (um por mês/estabelecimento).
+          Cada item de nota (C170), NFC-e consolidada (C175), serviço (A170), demais operações (F100)
+          e consolidação por competência (F550) vira uma linha nas abas de ano, com o CNPJ do
+          estabelecimento correto (matriz e filiais do mesmo arquivo são separadas). Pode enviar
+          mais de um arquivo (um por mês/empresa).
         </p>
       </div>
 

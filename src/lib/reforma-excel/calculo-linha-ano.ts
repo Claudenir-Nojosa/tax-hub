@@ -16,6 +16,8 @@ export const REDUCAO_ICMS_ISS: Record<number, number> = {
 // recalculado, o que já quase aconteceu nesta fase).
 
 export interface CamposCalculadosAno {
+  aliqIssLinha: number // resultado da fórmula AP: premissa ISS pra serviço, 0 pra mercadoria
+  vlrIss: number // resultado da fórmula AQ = Vlr Item × Alíquota ISS
   vlrSemTributo: number
   basePisCofins: number
   vlrPis: number
@@ -42,16 +44,23 @@ export function calcularCamposAno(
   aliqCbs: number,
   aliqIcms: number = l.aliquotaIcms
 ): CamposCalculadosAno {
+  // Convenções de unidade — as MESMAS do Excel-modelo, célula a célula:
+  //   aliquotaPis/aliquotaCofins: número percentual (1,65) → fórmulas usam AY8% (÷100)
+  //   aliquotaIcms: decimal (0,225) → fórmulas usam AR8% (÷100 DE NOVO — comportamento do
+  //     modelo, reproduzido fielmente; o ICMS "finance" sai proporcionalmente pequeno lá também)
+  //   aliqIss: decimal (0,03) → fórmulas usam AP8 direto (sem %)
   const isServico = l.documento === "Nota Fiscal de Serviço (NFS)"
-  const vlrSemTributo = l.vlrItem - 0 - l.vlrPis - l.vlrCofins - l.vlrIcms - l.vlrDescontoItem
-  const divisorPisCofins = 1 - l.aliquotaPis - l.aliquotaCofins
+  const aliqIssLinha = isServico ? aliqIss : 0 // fórmula AP: IF(Tipo Item="09 Serviços",premissa,0)
+  const vlrIss = l.vlrItem * aliqIssLinha // fórmula AQ = AH×AP
+  const vlrSemTributo = l.vlrItem - l.vlrDescontoItem - l.vlrIcms - l.vlrPis - l.vlrCofins - vlrIss
+  const divisorPisCofins = 1 - l.aliquotaPis / 100 - l.aliquotaCofins / 100
   const basePisCofins = divisorPisCofins !== 0 ? vlrSemTributo / divisorPisCofins : 0
-  const vlrPis = basePisCofins * l.aliquotaPis
-  const vlrCofins = basePisCofins * l.aliquotaCofins
-  const baseIcmsFinance = isServico ? 0 : (aliqIcms !== 1 ? (vlrSemTributo + vlrPis + vlrCofins) / (1 - aliqIcms) : 0)
-  const icms = baseIcmsFinance * aliqIcms
-  const baseIssFinance = isServico ? (aliqIss !== 1 ? (vlrSemTributo + vlrPis + vlrCofins) / (1 - aliqIss) : 0) : 0
-  const iss = baseIssFinance * aliqIss
+  const vlrPis = basePisCofins * (l.aliquotaPis / 100)
+  const vlrCofins = basePisCofins * (l.aliquotaCofins / 100)
+  const baseIcmsFinance = isServico ? 0 : (vlrSemTributo + vlrPis + vlrCofins) / (1 - aliqIcms / 100)
+  const icms = baseIcmsFinance * (aliqIcms / 100)
+  const baseIssFinance = isServico && aliqIss !== 1 ? (vlrSemTributo + vlrPis + vlrCofins) / (1 - aliqIss) : 0
+  const iss = baseIssFinance * aliqIssLinha
   const difValorProduto = baseIssFinance - baseIcmsFinance - vlrSemTributo
   const baseIbsCbs = vlrSemTributo
   const ibs = baseIbsCbs * aliqIbs
@@ -60,6 +69,7 @@ export function calcularCamposAno(
   const totalNfCliente = l.vlrItem - l.vlrDescontoItem
 
   return {
+    aliqIssLinha, vlrIss,
     vlrSemTributo, basePisCofins, vlrPis, vlrCofins, vlrPisCofins: vlrPis + vlrCofins,
     baseIcmsFinance, icms, baseIssFinance, iss, vlrPisCofinsIss: vlrPis + vlrCofins + iss,
     difValorProduto, baseIbsCbs, ibs, cbs, totalNfFinance, totalNfCliente,
