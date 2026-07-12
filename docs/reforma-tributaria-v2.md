@@ -196,6 +196,11 @@ Segundo lote de ajustes do usuário sobre as abas de ano e Legislações (com pr
 - **Aba Legislações completa**: agora grava TODOS os achados da busca (fonte em negrito + artigo + texto completo do resumo, com wrapText), separados por linha em branco, e a nota manual do usuário numa seção "Anotações" no final. Antes só saíam fonte e rótulo do artigo do primeiro achado.
 - **Cores das guias**: abas de ano em azul claro (`#9DC3E6`), Premissas e Legislações em amarelo alaranjado (`#FFC000`), como no modelo.
 
+## PIS/COFINS zerado 2027+ e Quadro Comparativo no visual da referência (task #75)
+
+- **PIS/COFINS zera a partir de 2027** (a CBS substitui; 2026 é o único ano de convivência): nas abas de ano 2027+, a célula BASE PIS COFINS vira a fórmula literal `=0` — VLR PIS, VLR COFINS e VLR PIS + COFINS zeram por consequência (referenciam a base), e o gross-up de ICMS/ISS passa a não embutir PIS/COFINS (os valores de ICMS/ISS de 2027 ficam levemente menores que 2026, como na referência do usuário). `calcularCamposAno()` ganhou o parâmetro `zerarPisCofins`, usado também no pré-cálculo do Quadro Comparativo.
+- **Quadro Comparativo reformatado** (réplica da planilha de referência): faixa azul-marinho `#1F3864` com "TOTAL DOS TRIBUTOS INDIRETOS" (mesclada, fonte branca 14), caixa "Empresa" azul-marinho + dropdown com borda, cabeçalho TRIBUTO/anos e linha VALOR TOTAL em banda cinza `#F2F2F2`, linha "IMPACTO CARGA TRIBUTÁRIA" em azul claro `#DDEBF7` com a variação % vs 2026 (2026 mostra "-"), rótulos com sufixo ("ICMS (Não cumulativo)", "ISS (Cumulativo)" etc.), CBS/IBS de 2026 em fonte cinza (ano de teste). O lookup Empresa→CNPJ saiu da área visível (foi pra coluna M, discreto), os SUMIFS agora filtram por `$M$5`.
+
 ## Fase 8 — registrada para sessão futura (não iniciada)
 
 **Reescrever o gerador de Excel para streaming**, resolvendo o achado de escala da Fase 7 (~8GB/132s para 139.769 linhas de fórmula). Não é "polish rápido" — é uma reescrita real:

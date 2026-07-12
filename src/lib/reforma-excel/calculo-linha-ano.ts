@@ -42,7 +42,10 @@ export function calcularCamposAno(
   aliqIss: number,
   aliqIbs: number,
   aliqCbs: number,
-  aliqIcms: number = l.aliquotaIcms
+  aliqIcms: number = l.aliquotaIcms,
+  // A partir de 2027 a CBS substitui PIS/COFINS — a simulação zera BASE PIS COFINS (e por
+  // consequência VLR PIS/VLR COFINS) nas abas de 2027 em diante
+  zerarPisCofins: boolean = false
 ): CamposCalculadosAno {
   // Convenções de unidade — as MESMAS do Excel-modelo, célula a célula:
   //   aliquotaPis/aliquotaCofins: número percentual (1,65) → fórmulas usam AY8% (÷100)
@@ -57,7 +60,7 @@ export function calcularCamposAno(
   const valorBase = l.registros.startsWith("F550") ? l.vlrDocumento : l.vlrItem
   const vlrSemTributo = valorBase - l.vlrDescontoItem - l.vlrIcms - l.vlrPis - l.vlrCofins - vlrIss
   const divisorPisCofins = 1 - l.aliquotaPis / 100 - l.aliquotaCofins / 100
-  const basePisCofins = divisorPisCofins !== 0 ? vlrSemTributo / divisorPisCofins : 0
+  const basePisCofins = zerarPisCofins ? 0 : divisorPisCofins !== 0 ? vlrSemTributo / divisorPisCofins : 0
   const vlrPis = basePisCofins * (l.aliquotaPis / 100)
   const vlrCofins = basePisCofins * (l.aliquotaCofins / 100)
   const baseIcmsFinance = isServico ? 0 : (vlrSemTributo + vlrPis + vlrCofins) / (1 - aliqIcms / 100)

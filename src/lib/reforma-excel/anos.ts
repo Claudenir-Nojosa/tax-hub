@@ -216,6 +216,10 @@ export async function montarAbaAno(
   // efetivamente incide na linha já sai daqui multiplicada pelo fator do ano; 2026-2028 = 100%
   const fatorReducaoIcmsIss = REDUCAO_ICMS_ISS[aba.anoPremissa] ?? 1
   const aliqIss = p.aliquotaISS * fatorReducaoIcmsIss
+  // A partir de 2027 a CBS substitui PIS/COFINS: BASE PIS COFINS vira 0 (e VLR PIS/VLR COFINS/
+  // VLR PIS + COFINS zeram por consequência, já que referenciam a base) — 2026 é o único ano em
+  // que PIS/COFINS convive com IBS/CBS de teste
+  const pisCofinsZerado = aba.anoPremissa >= 2027
   // Alíquota ICMS = PREMISSA constante (modal do estado, ex: 22,5%) em toda linha DANFE, 0 nas
   // NFS — exatamente como o Excel-modelo, que ignora a alíquota por item do EFD nessa coluna
   const aliqIcmsPremissa = (premissas.aliquotaICMS ?? 0.225) * fatorReducaoIcmsIss
@@ -289,7 +293,7 @@ export async function montarAbaAno(
 
     // cadeia de cálculo em JS (compartilhada com Valor Total NF-e/Quadro Comparativo) — alimenta
     // o "result" em cache de cada fórmula, pro Excel abrir já mostrando os valores certos
-    const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha)
+    const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha, pisCofinsZerado)
 
     // fórmulas idênticas ao modelo, célula a célula (aba 2026, linha 8)
     // F550 é consolidação sem Vlr Item por linha — VALOR SEM TRIBUTO e TOTAL NF CLIENTE partem
@@ -299,7 +303,7 @@ export async function montarAbaAno(
     celula(ws, `${cAP}${r}`, f(`IF(${cAG}${r}="09 Serviços",${issLiteral},0)`, c.aliqIssLinha), { numFmt: "0.00%" })
     celula(ws, `${cAQ}${r}`, f(`${cAH}${r}*${cAP}${r}`, c.vlrIss), { numFmt: FMT_CONTABIL_RS })
     celula(ws, `${cBJ}${r}`, f(`${cValorBase}${r}-${cAK}${r}-${cAS}${r}-${cBA}${r}-${cBG}${r}-${cAQ}${r}`, c.vlrSemTributo), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBK}${r}`, f(`${cBJ}${r}/(1-${cAY}${r}%-${cBE}${r}%)`, c.basePisCofins), { numFmt: FMT_CONTABIL })
+    celula(ws, `${cBK}${r}`, pisCofinsZerado ? f("0", 0) : f(`${cBJ}${r}/(1-${cAY}${r}%-${cBE}${r}%)`, c.basePisCofins), { numFmt: FMT_CONTABIL })
     celula(ws, `${cBL}${r}`, f(`${cBK}${r}*${cAY}${r}%`, c.vlrPis), { numFmt: FMT_CONTABIL })
     celula(ws, `${cBM}${r}`, f(`${cBK}${r}*${cBE}${r}%`, c.vlrCofins), { numFmt: FMT_CONTABIL })
     celula(ws, `${cBN}${r}`, f(`${cBL}${r}+${cBM}${r}`, c.vlrPisCofins), { numFmt: FMT_CONTABIL })
