@@ -47,11 +47,10 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
 
   const totalSaidas = saidasEfd.arquivos.reduce((s, a) => s + a.linhas.length, 0)
   const totalEntradas = entradasEfd.arquivos.reduce((s, a) => s + a.linhas.length, 0)
-  // Cada linha de saída é replicada nas 7 abas de ano — testado com dados reais até ~20.000
-  // linhas (139.769 linhas geradas, 0 erros), mas leva ~2min e ~8GB de memória no processo que
-  // gera o Excel. Acima desse volume o navegador pode travar ou ficar sem memória — aviso
-  // preventivo, não um limite bloqueante (o usuário decide se tenta mesmo assim).
-  const volumeGrande = totalSaidas > 8000
+  // Com a geração híbrida (cabeçalhos via ExcelJS + linhas de dados injetadas como XML no .xlsx),
+  // 27.577 linhas × 7 abas usaram ~1,4GB de pico — cabe no navegador com folga. O aviso agora só
+  // aparece em volumes bem maiores, como precaução.
+  const volumeGrande = totalSaidas > 60000
 
   const gerar = async () => {
     setGerando(true)
@@ -123,8 +122,8 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
           <p className="text-xs text-amber-800 dark:text-amber-300">
             {totalSaidas.toLocaleString("pt-BR")} itens de saída — cada um vira uma linha em 7 abas
             (2026 a 2033), então o Excel final terá {(totalSaidas * 7).toLocaleString("pt-BR")} linhas
-            de fórmula. Testado até ~20.000 itens sem erro, mas a geração pode levar alguns minutos e
-            usar bastante memória do navegador. Se travar, tente gerar com menos meses de EFD por vez.
+            de fórmula. A geração pode levar alguns minutos. Se travar, tente gerar com menos meses
+            de EFD por vez.
           </p>
         </div>
       )}

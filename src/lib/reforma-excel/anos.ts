@@ -147,13 +147,18 @@ const HEADERS_LARANJA = new Set<string>([
 ])
 const HEADERS_VERMELHO = new Set<string>(["BASE IBS/CBS", "IBS", "CBS", "DIF"])
 
+// IMPORTANTE (memória): só cria objeto de fonte quando a célula precisa de algo diferente do
+// padrão do Excel (que já é Calibri 11) — com ~200 mil linhas × 76 colunas, criar um objeto de
+// estilo por célula estourava a memória da aba do navegador ("Out of Memory" no Chrome).
 function celula(
   ws: ExcelJS.Worksheet, ref: string, valor: ExcelJS.CellValue,
   opts?: { bold?: boolean; numFmt?: string; centralizado?: boolean; fundo?: string; corFonte?: string }
 ) {
   const cell = ws.getCell(ref)
   cell.value = valor
-  cell.font = { name: FONTE, size: 11, bold: opts?.bold ?? false, color: opts?.corFonte ? { argb: opts.corFonte } : undefined }
+  if (opts?.bold || opts?.corFonte) {
+    cell.font = { name: FONTE, size: 11, bold: opts?.bold ?? false, color: opts?.corFonte ? { argb: opts.corFonte } : undefined }
+  }
   if (opts?.numFmt) cell.numFmt = opts.numFmt
   if (opts?.centralizado) cell.alignment = { horizontal: "center", vertical: "middle" }
   if (opts?.fundo) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fundo } }
@@ -200,44 +205,55 @@ function rawRowValues(l: LinhaSaidaEfd): (string | number | Date | null)[] {
   ]
 }
 
-export async function montarAbaAno(
+// Parâmetros derivados da premissa do ano — compartilhados entre o cabeçalho (ExcelJS) e o
+// gerador de XML das linhas de dados (gerarXmlDadosAno)
+function contextoDaAba(aba: AbaAno, premissas: PremissasReformaData) {
+  const p = premissas.premissasPorAno[aba.anoPremissa]
+  const { aliqIbs, aliqCbs } = aliquotasEfetivasDoAno(p.cbs, p.ibsUF, p.ibsMUN, premissas.reducao60)
+  const fatorReducaoIcmsIss = REDUCAO_ICMS_ISS[aba.anoPremissa] ?? 1
+  const aliqIss = p.aliquotaISS * fatorReducaoIcmsIss
+  const pisCofinsZerado = aba.anoPremissa >= 2027
+  const aliqIcmsPremissa = (premissas.aliquotaICMS ?? 0.225) * fatorReducaoIcmsIss
+  return { aliqIss, aliqIbs, aliqCbs, pisCofinsZerado, aliqIcmsPremissa }
+}
+
+// GERAÇÃO EM DUAS PARTES (a "Fase 8" adaptada pro navegador): o ExcelJS monta só o CABEÇALHO
+// das abas de ano (linhas 1-7, estilos, larguras, subtotais) — as ~200 mil linhas de dados são
+// geradas como XML puro (gerarXmlDadosAno) e injetadas direto no .xlsx pelo orquestrador, sem
+// criar objetos de célula do ExcelJS. Antes disso o Chrome estourava memória ("Out of Memory")
+// com bases grandes: só as células de dados eram ~14 milhões de objetos.
+export function montarAbaAnoCabecalho(
   wb: ExcelJS.Workbook,
   aba: AbaAno,
   linhas: LinhaSaidaEfd[],
-  premissas: PremissasReformaData,
-  onProgress?: (linhaAtual: number, totalLinhas: number) => void
+  premissas: PremissasReformaData
 ) {
   const ws = wb.addWorksheet(aba.label, { views: [{ showGridLines: false }] })
   ws.properties.tabColor = { argb: COR_GUIA_ANO } // azul claro nas guias dos anos
-  ws.columns = [{ width: 3 }, ...TODOS_HEADERS.map((nome) => ({ width: larguraColuna(nome) }))]
-  const p = premissas.premissasPorAno[aba.anoPremissa]
-  const { aliqIbs, aliqCbs } = aliquotasEfetivasDoAno(p.cbs, p.ibsUF, p.ibsMUN, premissas.reducao60)
-  // ICMS/ISS reduzem gradualmente 2029-2033 (aba Premissas, tabela "ICMS e ISS") — a alíquota que
-  // efetivamente incide na linha já sai daqui multiplicada pelo fator do ano; 2026-2028 = 100%
-  const fatorReducaoIcmsIss = REDUCAO_ICMS_ISS[aba.anoPremissa] ?? 1
-  const aliqIss = p.aliquotaISS * fatorReducaoIcmsIss
-  // A partir de 2027 a CBS substitui PIS/COFINS: BASE PIS COFINS vira 0 (e VLR PIS/VLR COFINS/
-  // VLR PIS + COFINS zeram por consequência, já que referenciam a base) — 2026 é o único ano em
-  // que PIS/COFINS convive com IBS/CBS de teste
-  const pisCofinsZerado = aba.anoPremissa >= 2027
-  // Alíquota ICMS = PREMISSA constante (modal do estado, ex: 22,5%) em toda linha DANFE, 0 nas
-  // NFS — exatamente como o Excel-modelo, que ignora a alíquota por item do EFD nessa coluna
-  const aliqIcmsPremissa = (premissas.aliquotaICMS ?? 0.225) * fatorReducaoIcmsIss
-  const issLiteral = pctLiteral(aliqIss) // vai dentro da fórmula da coluna Alíquota ISS
-  const ibsLiteral = pctLiteral(aliqIbs)
-  const cbsLiteral = pctLiteral(aliqCbs)
+  // Formato numérico definido NO NÍVEL DA COLUNA (não célula a célula) — além de ser o que o
+  // Excel faz, evita criar um objeto de estilo por célula em ~200 mil linhas (era uma das causas
+  // do "Out of Memory" no navegador com bases grandes)
+  const estiloColuna = (nome: string): Partial<ExcelJS.Style> | undefined => {
+    if (nome === "PA") return { numFmt: FMT_PA }
+    if (["Vlr Documento", "Vlr Desconto NF", "Vlr ISS", "BASE ISS FINANCE"].includes(nome)) return { numFmt: FMT_CONTABIL_RS }
+    if (nome === "Alíquota ISS") return { numFmt: "0.00%" }
+    if (nome === "Alíquota ICMS") return { numFmt: "0.0%" }
+    if (nome !== "BASE ISS FINANCE" && (CALC_HEADERS as readonly string[]).includes(nome)) return { numFmt: FMT_CONTABIL }
+    return undefined
+  }
+  ws.columns = [
+    { width: 3 },
+    ...TODOS_HEADERS.map((nome) => {
+      const estilo = estiloColuna(nome)
+      return estilo ? { width: larguraColuna(nome), style: estilo } : { width: larguraColuna(nome) }
+    }),
+  ]
+  const { aliqIss, aliqIbs, aliqCbs, pisCofinsZerado, aliqIcmsPremissa } = contextoDaAba(aba, premissas)
 
   // letras usadas nas fórmulas (nomes de variável = letras da aba "2026" do modelo, por leitura)
-  const cAG = letraDe("Tipo Item"), cAH = letraDe("Vlr Item"), cAK = letraDe("Vlr Desconto Item"),
-    cAP = letraDe("Alíquota ISS"), cAQ = letraDe("Vlr ISS"), cAR = letraDe("Alíquota ICMS"),
-    cAS = letraDe("Vlr ICMS"), cAY = letraDe("Alíquota PIS"), cBA = letraDe("Vlr PIS"),
-    cBE = letraDe("Alíquota Cofins"), cBG = letraDe("Vlr Cofins"),
-    cO = letraDe("Chave NF-e"), cP = letraDe("id"), cS = letraDe("Vlr Documento")
-  const cBJ = letraDe("VALOR SEM TRIBUTO"), cBK = letraDe("BASE PIS COFINS"), cBL = letraDe("VLR PIS"),
-    cBM = letraDe("VLR COFINS"), cBN = letraDe("VLR PIS + COFINS"), cBO = letraDe("BASE ICMS FINANCE"),
-    cBP = letraDe("ICMS"), cBQ = letraDe("BASE ISS FINANCE"), cBR = letraDe("ISS"),
-    cBU = letraDe("BASE IBS/CBS"), cBV = letraDe("IBS"), cBW = letraDe("CBS"),
-    cBX = letraDe("TOTAL NF FINANCE"), cBY = letraDe("TOTAL NF CLIENTE")
+  const cAH = letraDe("Vlr Item"),
+    cBJ = letraDe("VALOR SEM TRIBUTO"), cBU = letraDe("BASE IBS/CBS"),
+    cBV = letraDe("IBS"), cBW = letraDe("CBS")
 
   // Cabeçalho da aba — réplica do modelo (linhas 2-5): rótulos de documento em AH2/AH3, alíquota
   // efetiva IBS+CBS em BU3, o ano em BU4, título em B5, "FINANCE" e "DÉBITO" sobre as colunas
@@ -249,7 +265,8 @@ export async function montarAbaAno(
   ws.mergeCells(`${cBU}3:${cBW}3`)
   celula(ws, `${cBU}3`, f(`IFERROR((${cBW}${LINHA_SUBTOTAL}+${cBV}${LINHA_SUBTOTAL})/${cBU}${LINHA_SUBTOTAL},0)`, aliqIbs + aliqCbs), { numFmt: "0.00%", bold: true, centralizado: true })
   ws.mergeCells(`${cBU}4:${cBW}4`)
-  celula(ws, `${cBU}4`, /^\d+$/.test(aba.label) ? Number(aba.label) : aba.label, { bold: true, centralizado: true, fundo: COR_AZUL_ANO })
+  // numFmt General explícito: a coluna BU tem formato contábil e o ano viraria "2.026,00"
+  celula(ws, `${cBU}4`, /^\d+$/.test(aba.label) ? Number(aba.label) : aba.label, { bold: true, centralizado: true, fundo: COR_AZUL_ANO, numFmt: "General" })
   ws.mergeCells(`${cBU}5:${cBW}5`)
   celula(ws, `${cBU}5`, "DÉBITO", { bold: true, centralizado: true, fundo: COR_LARANJA })
   celula(ws, "B5", "Saídas - EFD Contribuições", { bold: true })
@@ -264,88 +281,42 @@ export async function montarAbaAno(
     else celula(ws, ref, nome, { bold: true, centralizado: true })
   })
 
-  const somasSubtotal: Record<string, number> = {}
-  for (const nome of COLUNAS_SUBTOTAL) somasSubtotal[nome] = 0
-
-  const idxNumFmt = new Map<string, string>([
-    [letraDe("PA"), FMT_PA],
-    [cS, FMT_CONTABIL_RS],
-    [letraDe("Vlr Desconto NF"), FMT_CONTABIL_RS],
-  ])
-
-  const TAMANHO_LOTE = 500 // cede o event loop e reporta progresso a cada N linhas
-  for (let i = 0; i < linhas.length; i++) {
-    const l = linhas[i]
-    const r = LINHA_DADOS_INICIO_ANO + i
-    const raw = rawRowValues(l)
-    raw.forEach((v, ci) => {
-      if (v === null) return
-      const cell = ws.getCell(r, COL_INICIO_ANO + ci)
-      cell.value = v
-      cell.font = { name: FONTE, size: 11 }
-      const fmt = idxNumFmt.get(colLetra(COL_INICIO_ANO + ci))
-      if (fmt) cell.numFmt = fmt
-    })
-
-    // Alíquota ICMS: premissa constante pra DANFE, 0 pra NFS (já reduzida pelo fator do ano)
-    const aliqIcmsLinha = l.documento === "Nota Fiscal de Mercadoria (DANFE)" ? aliqIcmsPremissa : 0
-    celula(ws, `${cAR}${r}`, aliqIcmsLinha, { numFmt: aliqIcmsLinha === 0 ? "0%" : "0.0%" })
-
-    // cadeia de cálculo em JS (compartilhada com Valor Total NF-e/Quadro Comparativo) — alimenta
-    // o "result" em cache de cada fórmula, pro Excel abrir já mostrando os valores certos
-    const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha, pisCofinsZerado)
-
-    // fórmulas idênticas ao modelo, célula a célula (aba 2026, linha 8)
-    // F550 é consolidação sem Vlr Item por linha — VALOR SEM TRIBUTO e TOTAL NF CLIENTE partem
-    // do Vlr Documento (coluna S) nessas linhas; nas demais, do Vlr Item (AH), como no modelo
-    const cValorBase = l.registros.startsWith("F550") ? cS : cAH
-    celula(ws, `${cP}${r}`, f(`${cO}${r}&${cS}${r}`, `${l.chaveNFe}${String(l.vlrDocumento).replace(".", ",")}`))
-    celula(ws, `${cAP}${r}`, f(`IF(${cAG}${r}="09 Serviços",${issLiteral},0)`, c.aliqIssLinha), { numFmt: "0.00%" })
-    celula(ws, `${cAQ}${r}`, f(`${cAH}${r}*${cAP}${r}`, c.vlrIss), { numFmt: FMT_CONTABIL_RS })
-    celula(ws, `${cBJ}${r}`, f(`${cValorBase}${r}-${cAK}${r}-${cAS}${r}-${cBA}${r}-${cBG}${r}-${cAQ}${r}`, c.vlrSemTributo), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBK}${r}`, pisCofinsZerado ? f("0", 0) : f(`${cBJ}${r}/(1-${cAY}${r}%-${cBE}${r}%)`, c.basePisCofins), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBL}${r}`, f(`${cBK}${r}*${cAY}${r}%`, c.vlrPis), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBM}${r}`, f(`${cBK}${r}*${cBE}${r}%`, c.vlrCofins), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBN}${r}`, f(`${cBL}${r}+${cBM}${r}`, c.vlrPisCofins), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBO}${r}`, f(`IF(${cAG}${r}="09 Serviços",0,(${cBJ}${r}+${cBL}${r}+${cBM}${r})/(1-${cAR}${r}%))`, c.baseIcmsFinance), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBP}${r}`, f(`${cBO}${r}*${cAR}${r}%`, c.icms), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBQ}${r}`, f(`IF(${cAG}${r}="09 Serviços",(${cBJ}${r}+${cBL}${r}+${cBM}${r})/(1-${cAP}${r}),0)`, c.baseIssFinance), { numFmt: FMT_CONTABIL_RS })
-    celula(ws, `${cBR}${r}`, f(`${cBQ}${r}*${cAP}${r}`, c.iss), { numFmt: FMT_CONTABIL })
-    celula(ws, `${letraDe("VLR PIS + COFINS + ISS")}${r}`, f(`${cBR}${r}+${cBN}${r}`, c.vlrPisCofinsIss), { numFmt: FMT_CONTABIL })
-    celula(ws, `${letraDe("DIF VALOR PRODUTO")}${r}`, f(`${cBQ}${r}-${cBO}${r}-${cBJ}${r}`, c.difValorProduto), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBU}${r}`, f(`${cBJ}${r}`, c.baseIbsCbs), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBV}${r}`, f(`${cBU}${r}*${ibsLiteral}`, c.ibs), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBW}${r}`, f(`${cBU}${r}*${cbsLiteral}`, c.cbs), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBX}${r}`, f(`${cBO}${r}+${cBQ}${r}`, c.totalNfFinance), { numFmt: FMT_CONTABIL })
-    celula(ws, `${cBY}${r}`, f(`${cValorBase}${r}-${cAK}${r}`, c.totalNfCliente), { numFmt: FMT_CONTABIL })
-    celula(ws, `${letraDe("DIF")}${r}`, f(`${cBY}${r}-${cBX}${r}`, c.dif), { numFmt: FMT_CONTABIL })
-
-    // acumula pra linha de SUBTOTAL (escrita depois do loop, quando já sabemos o total de linhas)
-    const valoresLinha: Record<string, number> = {
-      "Vlr Documento": l.vlrDocumento, "Vlr Desconto NF": l.vlrDescontoNF,
-      "Vlr Item": l.vlrItem, "Vlr Desconto Item": l.vlrDescontoItem, "Vlr ISS": c.vlrIss,
-      "Vlr ICMS": l.vlrIcms, "Vlr IPI": 0,
-      "Vlr Base Cálculo PIS": l.vlrBaseCalculoPis, "Vlr PIS": l.vlrPis,
-      "Vlr Base Cálculo Cofins": l.vlrBaseCalculoCofins, "Vlr Cofins": l.vlrCofins,
-      "VALOR SEM TRIBUTO": c.vlrSemTributo, "BASE PIS COFINS": c.basePisCofins,
-      "VLR PIS": c.vlrPis, "VLR COFINS": c.vlrCofins, "VLR PIS + COFINS": c.vlrPisCofins,
-      "BASE ICMS FINANCE": c.baseIcmsFinance, "ICMS": c.icms,
-      "ISS": c.iss, "VLR PIS + COFINS + ISS": c.vlrPisCofinsIss,
-      "DIF VALOR PRODUTO": c.difValorProduto, "BASE IBS/CBS": c.baseIbsCbs, "IBS": c.ibs,
-      "CBS": c.cbs, "TOTAL NF FINANCE": c.totalNfFinance, "TOTAL NF CLIENTE": c.totalNfCliente,
-      "DIF": c.dif,
-    }
-    for (const nome of COLUNAS_SUBTOTAL) somasSubtotal[nome] += valoresLinha[nome] ?? 0
-
-    if ((i + 1) % TAMANHO_LOTE === 0 || i === linhas.length - 1) {
-      onProgress?.(i + 1, linhas.length)
-      await yieldToEventLoop()
-    }
-  }
-
   // Linha 6 — SUBTOTAL(9,...) nas colunas do modelo (soma só as linhas visíveis com filtro) e
-  // "X" nas colunas de conferência, tudo em formato contábil R$ como no modelo
+  // "X" nas colunas de conferência. As somas em cache vêm de uma passada 100% em JS pelas
+  // linhas (nenhuma célula de dado é criada aqui — os dados entram como XML, ver gerarXmlDadosAno)
   if (linhas.length > 0) {
+    const somasSubtotal: Record<string, number> = {}
+    for (const nome of COLUNAS_SUBTOTAL) somasSubtotal[nome] = 0
+    for (const l of linhas) {
+      const aliqIcmsLinha = l.documento === "Nota Fiscal de Mercadoria (DANFE)" ? aliqIcmsPremissa : 0
+      const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha, pisCofinsZerado)
+      somasSubtotal["Vlr Documento"] += l.vlrDocumento
+      somasSubtotal["Vlr Desconto NF"] += l.vlrDescontoNF
+      somasSubtotal["Vlr Item"] += l.vlrItem
+      somasSubtotal["Vlr Desconto Item"] += l.vlrDescontoItem
+      somasSubtotal["Vlr ISS"] += c.vlrIss
+      somasSubtotal["Vlr ICMS"] += l.vlrIcms
+      somasSubtotal["Vlr Base Cálculo PIS"] += l.vlrBaseCalculoPis
+      somasSubtotal["Vlr PIS"] += l.vlrPis
+      somasSubtotal["Vlr Base Cálculo Cofins"] += l.vlrBaseCalculoCofins
+      somasSubtotal["Vlr Cofins"] += l.vlrCofins
+      somasSubtotal["VALOR SEM TRIBUTO"] += c.vlrSemTributo
+      somasSubtotal["BASE PIS COFINS"] += c.basePisCofins
+      somasSubtotal["VLR PIS"] += c.vlrPis
+      somasSubtotal["VLR COFINS"] += c.vlrCofins
+      somasSubtotal["VLR PIS + COFINS"] += c.vlrPisCofins
+      somasSubtotal["BASE ICMS FINANCE"] += c.baseIcmsFinance
+      somasSubtotal["ICMS"] += c.icms
+      somasSubtotal["ISS"] += c.iss
+      somasSubtotal["VLR PIS + COFINS + ISS"] += c.vlrPisCofinsIss
+      somasSubtotal["DIF VALOR PRODUTO"] += c.difValorProduto
+      somasSubtotal["BASE IBS/CBS"] += c.baseIbsCbs
+      somasSubtotal["IBS"] += c.ibs
+      somasSubtotal["CBS"] += c.cbs
+      somasSubtotal["TOTAL NF FINANCE"] += c.totalNfFinance
+      somasSubtotal["TOTAL NF CLIENTE"] += c.totalNfCliente
+      somasSubtotal["DIF"] += c.dif
+    }
     for (const nome of COLUNAS_SUBTOTAL) {
       const col = letraDe(nome)
       celula(
@@ -358,4 +329,122 @@ export async function montarAbaAno(
   }
 
   ws.views = [{ showGridLines: false, state: "frozen", xSplit: 0, ySplit: LINHA_HEADER }]
+}
+
+// ---------------------------------------------------------------------------------------------
+// Gerador das LINHAS DE DADOS como XML de planilha (SpreadsheetML) — injetado no .xlsx depois
+// que o ExcelJS gera o arquivo com os cabeçalhos. Strings usam inlineStr (sem sharedStrings),
+// células sem estilo próprio (herdam o numFmt do <col> escrito pelo cabeçalho). Fórmulas saem
+// com <f> + <v> (resultado em cache), então até visualizadores sem recálculo mostram os valores
+// — e o Excel recalcula normal ao abrir.
+// ---------------------------------------------------------------------------------------------
+
+const EPOCH_EXCEL = 25569 // dias entre 1899-12-30 e 1970-01-01
+
+function escXml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
+
+function numXml(n: number): string {
+  if (!Number.isFinite(n)) return "0"
+  return String(Math.round(n * 1e10) / 1e10) // evita 1.0000000000000002e-3 nas células
+}
+
+export async function gerarXmlDadosAno(
+  aba: AbaAno,
+  linhas: LinhaSaidaEfd[],
+  premissas: PremissasReformaData,
+  onProgress?: (linhaAtual: number, totalLinhas: number) => void
+): Promise<string> {
+  const { aliqIss, aliqIbs, aliqCbs, pisCofinsZerado, aliqIcmsPremissa } = contextoDaAba(aba, premissas)
+  const issLiteral = pctLiteral(aliqIss)
+  const ibsLiteral = pctLiteral(aliqIbs)
+  const cbsLiteral = pctLiteral(aliqCbs)
+
+  const letra = (i: number) => colLetra(COL_INICIO_ANO + i)
+  const idxDe = (nome: string) => TODOS_HEADERS.indexOf(nome as (typeof TODOS_HEADERS)[number])
+  const LETRAS = TODOS_HEADERS.map((_, i) => letra(i))
+  const cAG = letraDe("Tipo Item"), cAH = letraDe("Vlr Item"), cAK = letraDe("Vlr Desconto Item"),
+    cAP = letraDe("Alíquota ISS"), cAQ = letraDe("Vlr ISS"), cAR = letraDe("Alíquota ICMS"),
+    cAS = letraDe("Vlr ICMS"), cAY = letraDe("Alíquota PIS"), cBA = letraDe("Vlr PIS"),
+    cBE = letraDe("Alíquota Cofins"), cBG = letraDe("Vlr Cofins"),
+    cO = letraDe("Chave NF-e"), cS = letraDe("Vlr Documento")
+  const cBJ = letraDe("VALOR SEM TRIBUTO"), cBK = letraDe("BASE PIS COFINS"), cBL = letraDe("VLR PIS"),
+    cBM = letraDe("VLR COFINS"), cBN = letraDe("VLR PIS + COFINS"), cBO = letraDe("BASE ICMS FINANCE"),
+    cBQ = letraDe("BASE ISS FINANCE"), cBR = letraDe("ISS"),
+    cBU = letraDe("BASE IBS/CBS"), cBX = letraDe("TOTAL NF FINANCE"), cBY = letraDe("TOTAL NF CLIENTE")
+  const iAR = idxDe("Alíquota ICMS"), iP = idxDe("id"), iAP = idxDe("Alíquota ISS"), iAQ = idxDe("Vlr ISS")
+  const idxCalc: Record<string, number> = {}
+  for (const nome of CALC_HEADERS) idxCalc[nome] = idxDe(nome)
+
+  const chunks: string[] = []
+  let lote: string[] = []
+  const TAMANHO_LOTE = 1000
+
+  for (let i = 0; i < linhas.length; i++) {
+    const l = linhas[i]
+    const r = LINHA_DADOS_INICIO_ANO + i
+    const cells: (string | null)[] = new Array(TODOS_HEADERS.length).fill(null)
+
+    // valores brutos (mesma ordem/conteúdo de rawRowValues)
+    const raw = rawRowValues(l)
+    for (let ci = 0; ci < raw.length; ci++) {
+      const v = raw[ci]
+      if (v === null) continue
+      if (typeof v === "number") {
+        cells[ci] = `<c r="${LETRAS[ci]}${r}"><v>${numXml(v)}</v></c>`
+      } else if (v instanceof Date) {
+        const serial = v.getTime() / 86400000 + EPOCH_EXCEL
+        cells[ci] = `<c r="${LETRAS[ci]}${r}"><v>${serial}</v></c>`
+      } else {
+        cells[ci] = `<c r="${LETRAS[ci]}${r}" t="inlineStr"><is><t xml:space="preserve">${escXml(v)}</t></is></c>`
+      }
+    }
+
+    const aliqIcmsLinha = l.documento === "Nota Fiscal de Mercadoria (DANFE)" ? aliqIcmsPremissa : 0
+    cells[iAR] = `<c r="${cAR}${r}"><v>${numXml(aliqIcmsLinha)}</v></c>`
+
+    const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha, pisCofinsZerado)
+    const cValorBase = l.registros.startsWith("F550") ? cS : cAH
+    const fx = (idx: number, colLetraRef: string, formula: string, result: number) => {
+      cells[idx] = `<c r="${colLetraRef}${r}"><f>${escXml(formula)}</f><v>${numXml(result)}</v></c>`
+    }
+    // id: fórmula com resultado TEXTO
+    const idResult = `${l.chaveNFe}${String(l.vlrDocumento).replace(".", ",")}`
+    cells[iP] = `<c r="${LETRAS[iP]}${r}" t="str"><f>${escXml(`${cO}${r}&${cS}${r}`)}</f><v>${escXml(idResult)}</v></c>`
+    fx(iAP, cAP, `IF(${cAG}${r}="09 Serviços",${issLiteral},0)`, c.aliqIssLinha)
+    fx(iAQ, cAQ, `${cAH}${r}*${cAP}${r}`, c.vlrIss)
+    fx(idxCalc["VALOR SEM TRIBUTO"], cBJ, `${cValorBase}${r}-${cAK}${r}-${cAS}${r}-${cBA}${r}-${cBG}${r}-${cAQ}${r}`, c.vlrSemTributo)
+    if (pisCofinsZerado) fx(idxCalc["BASE PIS COFINS"], cBK, "0", 0)
+    else fx(idxCalc["BASE PIS COFINS"], cBK, `${cBJ}${r}/(1-${cAY}${r}%-${cBE}${r}%)`, c.basePisCofins)
+    fx(idxCalc["VLR PIS"], cBL, `${cBK}${r}*${cAY}${r}%`, c.vlrPis)
+    fx(idxCalc["VLR COFINS"], cBM, `${cBK}${r}*${cBE}${r}%`, c.vlrCofins)
+    fx(idxCalc["VLR PIS + COFINS"], cBN, `${cBL}${r}+${cBM}${r}`, c.vlrPisCofins)
+    fx(idxCalc["BASE ICMS FINANCE"], cBO, `IF(${cAG}${r}="09 Serviços",0,(${cBJ}${r}+${cBL}${r}+${cBM}${r})/(1-${cAR}${r}%))`, c.baseIcmsFinance)
+    fx(idxCalc["ICMS"], letraDe("ICMS"), `${cBO}${r}*${cAR}${r}%`, c.icms)
+    fx(idxCalc["BASE ISS FINANCE"], cBQ, `IF(${cAG}${r}="09 Serviços",(${cBJ}${r}+${cBL}${r}+${cBM}${r})/(1-${cAP}${r}),0)`, c.baseIssFinance)
+    fx(idxCalc["ISS"], cBR, `${cBQ}${r}*${cAP}${r}`, c.iss)
+    fx(idxCalc["VLR PIS + COFINS + ISS"], letraDe("VLR PIS + COFINS + ISS"), `${cBR}${r}+${cBN}${r}`, c.vlrPisCofinsIss)
+    fx(idxCalc["DIF VALOR PRODUTO"], letraDe("DIF VALOR PRODUTO"), `${cBQ}${r}-${cBO}${r}-${cBJ}${r}`, c.difValorProduto)
+    fx(idxCalc["BASE IBS/CBS"], cBU, `${cBJ}${r}`, c.baseIbsCbs)
+    fx(idxCalc["IBS"], letraDe("IBS"), `${cBU}${r}*${ibsLiteral}`, c.ibs)
+    fx(idxCalc["CBS"], letraDe("CBS"), `${cBU}${r}*${cbsLiteral}`, c.cbs)
+    fx(idxCalc["TOTAL NF FINANCE"], cBX, `${cBO}${r}+${cBQ}${r}`, c.totalNfFinance)
+    fx(idxCalc["TOTAL NF CLIENTE"], cBY, `${cValorBase}${r}-${cAK}${r}`, c.totalNfCliente)
+    fx(idxCalc["DIF"], letraDe("DIF"), `${cBY}${r}-${cBX}${r}`, c.dif)
+
+    let row = `<row r="${r}">`
+    for (const cell of cells) if (cell !== null) row += cell
+    row += "</row>"
+    lote.push(row)
+
+    if (lote.length >= TAMANHO_LOTE || i === linhas.length - 1) {
+      chunks.push(lote.join(""))
+      lote = []
+      onProgress?.(i + 1, linhas.length)
+      await yieldToEventLoop()
+    }
+  }
+
+  return chunks.join("")
 }

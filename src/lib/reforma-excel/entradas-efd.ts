@@ -110,7 +110,15 @@ export function montarAbaEntradasEfd(
   premissas: PremissasReformaData
 ) {
   const ws = wb.addWorksheet("Entradas - EFD ICMS IPI", { views: [{ showGridLines: false }] })
-  ws.columns = [{ width: 3 }, { width: 3 }, ...Array(TODOS_HEADERS.length).fill({ width: 14 })]
+  // formato R$ das colunas de crédito no nível da COLUNA (não célula a célula) — memória
+  ws.columns = [
+    { width: 3 }, { width: 3 },
+    ...TODOS_HEADERS.map((nome) =>
+      nome.startsWith("Crédito IBS ") || nome.startsWith("Crédito CBS ")
+        ? { width: 14, style: { numFmt: FMT_RS } }
+        : { width: 14 }
+    ),
+  ]
 
   celula(ws, `C${LINHA_TITULO}`, "Entradas - EFD ICMS IPI", { bold: true, size: 12 })
 
@@ -180,9 +188,8 @@ export function montarAbaEntradasEfd(
       l.cfop, l.vlrBaseCalculoIcms, l.aliquotaIcms, l.vlrIcms, "",
     ]
     raw.forEach((v, ci) => {
-      const cell = ws.getCell(r, COL_INICIO + ci)
-      cell.value = v as ExcelJS.CellValue
-      cell.font = { name: FONTE, size: 10 }
+      // sem font por célula (Calibri 11 é o padrão do Excel) — crítico pra memória
+      ws.getCell(r, COL_INICIO + ci).value = v as ExcelJS.CellValue
     })
 
     const classificacao = classificacoes[l.cnpjFornecedor]
