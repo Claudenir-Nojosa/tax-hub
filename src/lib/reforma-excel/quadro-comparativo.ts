@@ -119,7 +119,7 @@ export function montarAbaQuadroComparativo(
 
   // premissas por ano da coluna (2027/2028 usam a mesma, ver Premissas) — pré-computadas uma vez,
   // já com a redução de ICMS/ISS 2029-2033 aplicada (mesmo cronograma usado em anos.ts)
-  const aliqPorAno = new Map<number, { aliqIss: number; aliqIbs: number; aliqCbs: number; aliqIcms: number }>()
+  const aliqPorAno = new Map<number, { aliqIss: number; aliqIssOriginal: number; aliqIbs: number; aliqCbs: number; aliqIcms: number }>()
   for (const ano of ANOS_COLUNA) {
     const anoPremissa = ano === 2028 ? 2027 : ano
     const p = premissas.premissasPorAno[anoPremissa]
@@ -127,7 +127,7 @@ export function montarAbaQuadroComparativo(
     const fatorIcmsIss = REDUCAO_ICMS_ISS[anoPremissa] ?? 1
     // ICMS = premissa constante (mesma regra das abas de ano — o modelo não usa a alíquota do EFD)
     aliqPorAno.set(ano, {
-      aliqIss: p.aliquotaISS * fatorIcmsIss, aliqIbs, aliqCbs,
+      aliqIss: p.aliquotaISS * fatorIcmsIss, aliqIssOriginal: p.aliquotaISS, aliqIbs, aliqCbs,
       aliqIcms: (premissas.aliquotaICMS ?? 0.225) * fatorIcmsIss,
     })
   }
@@ -136,12 +136,12 @@ export function montarAbaQuadroComparativo(
   // 5 campos de uma vez. PIS/COFINS zera a partir de 2027 (a CBS substitui), igual às abas de ano.
   const somasPorAno = new Map<number, Record<string, number>>()
   for (const ano of ANOS_COLUNA) {
-    const { aliqIss, aliqIbs, aliqCbs, aliqIcms } = aliqPorAno.get(ano)!
+    const { aliqIss, aliqIssOriginal, aliqIbs, aliqCbs, aliqIcms } = aliqPorAno.get(ano)!
     const zerarPisCofins = ano >= 2027
     const somas: Record<string, number> = { vlrPisCofins: 0, icms: 0, iss: 0, cbs: 0, ibs: 0 }
     for (const l of linhasSaidas) {
       const aliqIcmsLinha = l.documento === "Nota Fiscal de Mercadoria (DANFE)" ? aliqIcms : 0
-      const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha, zerarPisCofins)
+      const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha, zerarPisCofins, aliqIssOriginal)
       somas.vlrPisCofins += c.vlrPisCofins
       somas.icms += c.icms
       somas.iss += c.iss

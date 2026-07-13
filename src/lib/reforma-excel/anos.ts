@@ -60,6 +60,9 @@ const CALC_HEADERS = [
   "VALOR SEM TRIBUTO", "BASE PIS COFINS", "VLR PIS", "VLR COFINS", "VLR PIS + COFINS",
   "BASE ICMS FINANCE", "ICMS", "BASE ISS FINANCE", "ISS", "VLR PIS + COFINS + ISS",
   "DIF VALOR PRODUTO", "BASE IBS/CBS", "IBS", "CBS", "TOTAL NF FINANCE", "TOTAL NF CLIENTE", "DIF",
+  // valores de 2026 (sem a redução de alíquota 2029-2033) — o VALOR SEM TRIBUTO deduz sempre
+  // o ICMS/ISS ORIGINAIS, mesmo nas abas de ano com alíquota reduzida (pedido do usuário)
+  "ICMS ORIGINAL", "ISS ORIGINAL",
 ] as const
 
 const TODOS_HEADERS = [...RAW_HEADERS, ...CALC_HEADERS]
@@ -212,9 +215,10 @@ function contextoDaAba(aba: AbaAno, premissas: PremissasReformaData) {
   const { aliqIbs, aliqCbs } = aliquotasEfetivasDoAno(p.cbs, p.ibsUF, p.ibsMUN, premissas.reducao60)
   const fatorReducaoIcmsIss = REDUCAO_ICMS_ISS[aba.anoPremissa] ?? 1
   const aliqIss = p.aliquotaISS * fatorReducaoIcmsIss
+  const aliqIssOriginal = p.aliquotaISS // cheia (2026), usada nas colunas ICMS/ISS ORIGINAL
   const pisCofinsZerado = aba.anoPremissa >= 2027
   const aliqIcmsPremissa = (premissas.aliquotaICMS ?? 0.225) * fatorReducaoIcmsIss
-  return { aliqIss, aliqIbs, aliqCbs, pisCofinsZerado, aliqIcmsPremissa }
+  return { aliqIss, aliqIssOriginal, aliqIbs, aliqCbs, pisCofinsZerado, aliqIcmsPremissa }
 }
 
 // GERAÇÃO EM DUAS PARTES (a "Fase 8" adaptada pro navegador): o ExcelJS monta só o CABEÇALHO
@@ -248,7 +252,7 @@ export function montarAbaAnoCabecalho(
       return estilo ? { width: larguraColuna(nome), style: estilo } : { width: larguraColuna(nome) }
     }),
   ]
-  const { aliqIss, aliqIbs, aliqCbs, pisCofinsZerado, aliqIcmsPremissa } = contextoDaAba(aba, premissas)
+  const { aliqIss, aliqIssOriginal, aliqIbs, aliqCbs, pisCofinsZerado, aliqIcmsPremissa } = contextoDaAba(aba, premissas)
 
   // letras usadas nas fórmulas (nomes de variável = letras da aba "2026" do modelo, por leitura)
   const cAH = letraDe("Vlr Item"),
@@ -289,7 +293,7 @@ export function montarAbaAnoCabecalho(
     for (const nome of COLUNAS_SUBTOTAL) somasSubtotal[nome] = 0
     for (const l of linhas) {
       const aliqIcmsLinha = l.documento === "Nota Fiscal de Mercadoria (DANFE)" ? aliqIcmsPremissa : 0
-      const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha, pisCofinsZerado)
+      const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha, pisCofinsZerado, aliqIssOriginal)
       somasSubtotal["Vlr Documento"] += l.vlrDocumento
       somasSubtotal["Vlr Desconto NF"] += l.vlrDescontoNF
       somasSubtotal["Vlr Item"] += l.vlrItem
@@ -371,8 +375,9 @@ export async function gerarXmlDadosAno(
   estilosColunas: Map<number, string> = new Map(),
   onProgress?: (linhaAtual: number, totalLinhas: number) => void
 ): Promise<string> {
-  const { aliqIss, aliqIbs, aliqCbs, pisCofinsZerado, aliqIcmsPremissa } = contextoDaAba(aba, premissas)
+  const { aliqIss, aliqIssOriginal, aliqIbs, aliqCbs, pisCofinsZerado, aliqIcmsPremissa } = contextoDaAba(aba, premissas)
   const issLiteral = pctLiteral(aliqIss)
+  const issOriginalLiteral = pctLiteral(aliqIssOriginal) // cheia (2026), pra coluna ISS ORIGINAL
   const ibsLiteral = pctLiteral(aliqIbs)
   const cbsLiteral = pctLiteral(aliqCbs)
 
@@ -427,7 +432,7 @@ export async function gerarXmlDadosAno(
     const aliqIcmsLinha = l.documento === "Nota Fiscal de Mercadoria (DANFE)" ? aliqIcmsPremissa : 0
     cells[iAR] = `<c r="${cAR}${r}"${S_ATTR[iAR]}><v>${numXml(aliqIcmsLinha)}</v></c>`
 
-    const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha, pisCofinsZerado)
+    const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha, pisCofinsZerado, aliqIssOriginal)
     const cValorBase = l.registros.startsWith("F550") ? cS : cAH
     const fx = (idx: number, colLetraRef: string, formula: string, result: number) => {
       cells[idx] = `<c r="${colLetraRef}${r}"${S_ATTR[idx]}><f>${escXml(formula)}</f><v>${numXml(result)}</v></c>`
@@ -437,7 +442,13 @@ export async function gerarXmlDadosAno(
     cells[iP] = `<c r="${LETRAS[iP]}${r}"${S_ATTR[iP]} t="str"><f>${escXml(`${cO}${r}&${cS}${r}`)}</f><v>${escXml(idResult)}</v></c>`
     fx(iAP, cAP, `IF(${cAG}${r}="09 Serviços",${issLiteral},0)`, c.aliqIssLinha)
     fx(iAQ, cAQ, `${cAH}${r}*${cAP}${r}`, c.vlrIss)
-    fx(idxCalc["VALOR SEM TRIBUTO"], cBJ, `${cValorBase}${r}-${cAK}${r}-${cAS}${r}-${cBA}${r}-${cBG}${r}-${cAQ}${r}`, c.vlrSemTributo)
+    // Colunas ICMS/ISS ORIGINAL: os valores de 2026 (sem a redução 2029-2033) — o VALOR SEM
+    // TRIBUTO deduz sempre os originais, senão a base "cresceria" nos anos de alíquota reduzida
+    const cICMSO = letraDe("ICMS ORIGINAL")
+    const cISSO = letraDe("ISS ORIGINAL")
+    fx(idxCalc["ICMS ORIGINAL"], cICMSO, `${cAS}${r}`, c.vlrIcmsOriginal)
+    fx(idxCalc["ISS ORIGINAL"], cISSO, `IF(${cAG}${r}="09 Serviços",${cAH}${r}*${issOriginalLiteral},0)`, c.vlrIssOriginal)
+    fx(idxCalc["VALOR SEM TRIBUTO"], cBJ, `${cValorBase}${r}-${cAK}${r}-${cICMSO}${r}-${cBA}${r}-${cBG}${r}-${cISSO}${r}`, c.vlrSemTributo)
     if (pisCofinsZerado) fx(idxCalc["BASE PIS COFINS"], cBK, "0", 0)
     else fx(idxCalc["BASE PIS COFINS"], cBK, `${cBJ}${r}/(1-${cAY}${r}%-${cBE}${r}%)`, c.basePisCofins)
     fx(idxCalc["VLR PIS"], cBL, `${cBK}${r}*${cAY}${r}%`, c.vlrPis)

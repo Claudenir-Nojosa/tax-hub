@@ -18,6 +18,8 @@ export const REDUCAO_ICMS_ISS: Record<number, number> = {
 export interface CamposCalculadosAno {
   aliqIssLinha: number // resultado da fórmula AP: premissa ISS pra serviço, 0 pra mercadoria
   vlrIss: number // resultado da fórmula AQ = Vlr Item × Alíquota ISS
+  vlrIcmsOriginal: number // coluna ICMS ORIGINAL: Vlr ICMS do EFD (valor de 2026, sem redução)
+  vlrIssOriginal: number // coluna ISS ORIGINAL: Vlr Item × premissa ISS CHEIA (2026, sem redução)
   vlrSemTributo: number
   basePisCofins: number
   vlrPis: number
@@ -45,7 +47,10 @@ export function calcularCamposAno(
   aliqIcms: number = l.aliquotaIcms,
   // A partir de 2027 a CBS substitui PIS/COFINS — a simulação zera BASE PIS COFINS (e por
   // consequência VLR PIS/VLR COFINS) nas abas de 2027 em diante
-  zerarPisCofins: boolean = false
+  zerarPisCofins: boolean = false,
+  // Alíquota de ISS CHEIA (a de 2026, sem o fator de redução 2029-2033) — o VALOR SEM TRIBUTO
+  // deduz sempre o ISS/ICMS ORIGINAIS, mesmo nos anos de alíquota reduzida (pedido do usuário)
+  aliqIssOriginal: number = aliqIss
 ): CamposCalculadosAno {
   // Convenções de unidade — as MESMAS do Excel-modelo, célula a célula:
   //   aliquotaPis/aliquotaCofins: número percentual (1,65) → fórmulas usam AY8% (÷100)
@@ -55,10 +60,14 @@ export function calcularCamposAno(
   const isServico = l.documento === "Nota Fiscal de Serviço (NFS)"
   const aliqIssLinha = isServico ? aliqIss : 0 // fórmula AP: IF(Tipo Item="09 Serviços",premissa,0)
   const vlrIss = l.vlrItem * aliqIssLinha // fórmula AQ = AH×AP
+  // colunas ICMS/ISS ORIGINAL: os valores de 2026 (sem a redução 2029-2033) — o VALOR SEM
+  // TRIBUTO deduz sempre esses, pra base não "crescer" nos anos de alíquota reduzida
+  const vlrIcmsOriginal = l.vlrIcms
+  const vlrIssOriginal = isServico ? l.vlrItem * aliqIssOriginal : 0
   // F550 é consolidação: não tem Vlr Item por linha (fica 0), o valor da operação está em
   // Vlr Documento — VALOR SEM TRIBUTO e TOTAL NF CLIENTE partem dele nessas linhas
   const valorBase = l.registros.startsWith("F550") ? l.vlrDocumento : l.vlrItem
-  const vlrSemTributo = valorBase - l.vlrDescontoItem - l.vlrIcms - l.vlrPis - l.vlrCofins - vlrIss
+  const vlrSemTributo = valorBase - l.vlrDescontoItem - vlrIcmsOriginal - l.vlrPis - l.vlrCofins - vlrIssOriginal
   const divisorPisCofins = 1 - l.aliquotaPis / 100 - l.aliquotaCofins / 100
   const basePisCofins = zerarPisCofins ? 0 : divisorPisCofins !== 0 ? vlrSemTributo / divisorPisCofins : 0
   const vlrPis = basePisCofins * (l.aliquotaPis / 100)
@@ -78,7 +87,7 @@ export function calcularCamposAno(
   const totalNfCliente = valorBase - l.vlrDescontoItem
 
   return {
-    aliqIssLinha, vlrIss,
+    aliqIssLinha, vlrIss, vlrIcmsOriginal, vlrIssOriginal,
     vlrSemTributo, basePisCofins, vlrPis, vlrCofins, vlrPisCofins: vlrPis + vlrCofins,
     baseIcmsFinance, icms, baseIssFinance, iss, vlrPisCofinsIss: vlrPis + vlrCofins + iss,
     difValorProduto, baseIbsCbs, ibs, cbs, totalNfFinance, totalNfCliente,

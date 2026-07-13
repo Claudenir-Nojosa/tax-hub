@@ -110,7 +110,7 @@ export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: P
   // Pós-processamento: injeta as linhas de dados (XML) nas 7 abas de ano
   const zip = await JSZip.loadAsync(bufferBase)
   const caminhos = await mapearCaminhosDasAbas(zip)
-  const colFim = letraColunaAno("DIF")
+  const colFim = letraColunaAno("ISS ORIGINAL") // última coluna do layout das abas de ano
   const ultimaLinha = LINHA_DADOS_INICIO_ANO + Math.max(dados.linhasSaidas.length, 1) - 1
 
   if (dados.linhasSaidas.length > 0) {
