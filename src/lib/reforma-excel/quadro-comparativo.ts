@@ -72,6 +72,7 @@ export function montarAbaQuadroComparativo(
   premissas: PremissasReformaData
 ) {
   const ws = wb.addWorksheet("Quadro Comparativo", { views: [{ showGridLines: false }] })
+  ws.properties.tabColor = { argb: "FF000000" } // guia preta, como na referência
   ws.columns = [
     { width: 3 }, { width: 3 }, { width: 26 },
     ...ANOS_COLUNA.map(() => ({ width: 14 })),
@@ -87,9 +88,9 @@ export function montarAbaQuadroComparativo(
 
   const layout = layoutListasPremissas(listaEstabelecimentos(empresa, linhasSaidas).length)
 
-  // Caixa "Empresa" (azul-marinho) + dropdown com borda + lookup do CNPJ fora da área visível
-  ws.mergeCells(`B${LINHA_EMPRESA}:C${LINHA_EMPRESA}`)
-  celula(ws, `B${LINHA_EMPRESA}`, "Empresa", { bold: true, fundo: COR_TITULO, corFonte: "FFFFFFFF", centralizado: true })
+  // Caixa "Empresa" (azul-marinho, só na coluna C — sem mesclar) + dropdown com borda + lookup
+  // do CNPJ fora da área visível
+  celula(ws, `C${LINHA_EMPRESA}`, "Empresa", { bold: true, fundo: COR_TITULO, corFonte: "FFFFFFFF", centralizado: true })
   const dd = celula(ws, `D${LINHA_EMPRESA}`, "Todos")
   dd.border = {
     top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" },

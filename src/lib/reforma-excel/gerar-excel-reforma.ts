@@ -68,7 +68,7 @@ export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: P
     concluido = concluidoAntesDaAba + dados.linhasSaidas.length
   }
 
-  montarAbaValorTotalNfe(wb, dados.empresa, dados.linhasSaidas)
+  montarAbaValorTotalNfe(wb, dados.empresa, dados.linhasSaidas, dados.premissasReforma)
   reportar("Valor Total NF-e", pesoOutras / 6)
   await yieldToEventLoop()
 
