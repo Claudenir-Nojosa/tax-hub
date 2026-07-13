@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs"
 import JSZip from "jszip"
 import { montarAbaPremissas, montarAbaLegislacoes } from "./premissas-legislacoes"
-import { montarAbaAnoCabecalho, gerarXmlDadosAno, ABAS_ANO, LINHA_DADOS_INICIO_ANO, letraColunaAno } from "./anos"
+import { montarAbaAnoCabecalho, gerarXmlDadosAno, extrairEstilosDasColunas, ABAS_ANO, LINHA_DADOS_INICIO_ANO, letraColunaAno } from "./anos"
 import { montarAbaValorTotalNfe } from "./valor-total-nfe"
 import { montarAbaQuadroComparativo } from "./quadro-comparativo"
 import { montarAbaBaseIbsCbs } from "./base-ibs-cbs"
@@ -118,7 +118,11 @@ export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: P
       const caminho = caminhos.get(aba.label)
       if (!caminho || !zip.file(caminho)) throw new Error(`Aba "${aba.label}" não encontrada no arquivo gerado`)
       const concluidoAntesDaAba = concluido
-      const linhasXml = await gerarXmlDadosAno(aba, dados.linhasSaidas, dados.premissasReforma, (linhaAtual) => {
+      let sheetXml = await zip.file(caminho)!.async("string")
+      // ids de estilo das colunas (do <cols> do stub) — carimbados em cada célula gerada, senão
+      // o Excel não aplica o formato (PA viraria número serial, calculadas sem formato contábil)
+      const estilosColunas = extrairEstilosDasColunas(sheetXml)
+      const linhasXml = await gerarXmlDadosAno(aba, dados.linhasSaidas, dados.premissasReforma, estilosColunas, (linhaAtual) => {
         const progressoNaAba = concluidoAntesDaAba + linhaAtual
         onProgress?.(
           Math.min(99, Math.round((progressoNaAba / pesoTotal) * 100)),
@@ -126,7 +130,6 @@ export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: P
         )
       })
       concluido = concluidoAntesDaAba + dados.linhasSaidas.length
-      let sheetXml = await zip.file(caminho)!.async("string")
       sheetXml = sheetXml.replace(/<dimension ref="[^"]*"\s*\/>/, `<dimension ref="A1:${colFim}${ultimaLinha}"/>`)
       sheetXml = sheetXml.replace("</sheetData>", `${linhasXml}</sheetData>`)
       zip.file(caminho, sheetXml)

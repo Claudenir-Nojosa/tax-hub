@@ -350,10 +350,25 @@ function numXml(n: number): string {
   return String(Math.round(n * 1e10) / 1e10) // evita 1.0000000000000002e-3 nas células
 }
 
+// Extrai do XML do stub (gerado pelo ExcelJS) o id de estilo de cada coluna (<col style="N">).
+// As células injetadas precisam do atributo s="N" explícito: o Excel NÃO aplica o estilo da
+// coluna a células gravadas sem estilo próprio — sem isso, PA aparecia como número serial e as
+// colunas calculadas perdiam o formato contábil.
+export function extrairEstilosDasColunas(sheetXml: string): Map<number, string> {
+  const estilos = new Map<number, string>() // nº da coluna (1-based) → id do estilo
+  for (const m of sheetXml.matchAll(/<col[^>]*min="(\d+)"[^>]*max="(\d+)"[^>]*style="(\d+)"[^>]*\/>/g)) {
+    const min = Number(m[1])
+    const max = Number(m[2])
+    for (let c = min; c <= max; c++) estilos.set(c, m[3])
+  }
+  return estilos
+}
+
 export async function gerarXmlDadosAno(
   aba: AbaAno,
   linhas: LinhaSaidaEfd[],
   premissas: PremissasReformaData,
+  estilosColunas: Map<number, string> = new Map(),
   onProgress?: (linhaAtual: number, totalLinhas: number) => void
 ): Promise<string> {
   const { aliqIss, aliqIbs, aliqCbs, pisCofinsZerado, aliqIcmsPremissa } = contextoDaAba(aba, premissas)
@@ -372,10 +387,18 @@ export async function gerarXmlDadosAno(
   const cBJ = letraDe("VALOR SEM TRIBUTO"), cBK = letraDe("BASE PIS COFINS"), cBL = letraDe("VLR PIS"),
     cBM = letraDe("VLR COFINS"), cBN = letraDe("VLR PIS + COFINS"), cBO = letraDe("BASE ICMS FINANCE"),
     cBQ = letraDe("BASE ISS FINANCE"), cBR = letraDe("ISS"),
-    cBU = letraDe("BASE IBS/CBS"), cBX = letraDe("TOTAL NF FINANCE"), cBY = letraDe("TOTAL NF CLIENTE")
+    cBU = letraDe("BASE IBS/CBS"), cBV = letraDe("IBS"), cBW = letraDe("CBS"),
+    cBX = letraDe("TOTAL NF FINANCE"), cBY = letraDe("TOTAL NF CLIENTE")
   const iAR = idxDe("Alíquota ICMS"), iP = idxDe("id"), iAP = idxDe("Alíquota ISS"), iAQ = idxDe("Vlr ISS")
   const idxCalc: Record<string, number> = {}
   for (const nome of CALC_HEADERS) idxCalc[nome] = idxDe(nome)
+
+  // atributo s="N" por coluna (id de estilo herdado do <col> do stub) — obrigatório nas células
+  // gravadas pra o Excel aplicar o formato (data no PA, contábil nas calculadas etc.)
+  const S_ATTR = TODOS_HEADERS.map((_, ci) => {
+    const id = estilosColunas.get(COL_INICIO_ANO + ci)
+    return id ? ` s="${id}"` : ""
+  })
 
   const chunks: string[] = []
   let lote: string[] = []
@@ -392,26 +415,26 @@ export async function gerarXmlDadosAno(
       const v = raw[ci]
       if (v === null) continue
       if (typeof v === "number") {
-        cells[ci] = `<c r="${LETRAS[ci]}${r}"><v>${numXml(v)}</v></c>`
+        cells[ci] = `<c r="${LETRAS[ci]}${r}"${S_ATTR[ci]}><v>${numXml(v)}</v></c>`
       } else if (v instanceof Date) {
         const serial = v.getTime() / 86400000 + EPOCH_EXCEL
-        cells[ci] = `<c r="${LETRAS[ci]}${r}"><v>${serial}</v></c>`
+        cells[ci] = `<c r="${LETRAS[ci]}${r}"${S_ATTR[ci]}><v>${serial}</v></c>`
       } else {
-        cells[ci] = `<c r="${LETRAS[ci]}${r}" t="inlineStr"><is><t xml:space="preserve">${escXml(v)}</t></is></c>`
+        cells[ci] = `<c r="${LETRAS[ci]}${r}"${S_ATTR[ci]} t="inlineStr"><is><t xml:space="preserve">${escXml(v)}</t></is></c>`
       }
     }
 
     const aliqIcmsLinha = l.documento === "Nota Fiscal de Mercadoria (DANFE)" ? aliqIcmsPremissa : 0
-    cells[iAR] = `<c r="${cAR}${r}"><v>${numXml(aliqIcmsLinha)}</v></c>`
+    cells[iAR] = `<c r="${cAR}${r}"${S_ATTR[iAR]}><v>${numXml(aliqIcmsLinha)}</v></c>`
 
     const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha, pisCofinsZerado)
     const cValorBase = l.registros.startsWith("F550") ? cS : cAH
     const fx = (idx: number, colLetraRef: string, formula: string, result: number) => {
-      cells[idx] = `<c r="${colLetraRef}${r}"><f>${escXml(formula)}</f><v>${numXml(result)}</v></c>`
+      cells[idx] = `<c r="${colLetraRef}${r}"${S_ATTR[idx]}><f>${escXml(formula)}</f><v>${numXml(result)}</v></c>`
     }
     // id: fórmula com resultado TEXTO
     const idResult = `${l.chaveNFe}${String(l.vlrDocumento).replace(".", ",")}`
-    cells[iP] = `<c r="${LETRAS[iP]}${r}" t="str"><f>${escXml(`${cO}${r}&${cS}${r}`)}</f><v>${escXml(idResult)}</v></c>`
+    cells[iP] = `<c r="${LETRAS[iP]}${r}"${S_ATTR[iP]} t="str"><f>${escXml(`${cO}${r}&${cS}${r}`)}</f><v>${escXml(idResult)}</v></c>`
     fx(iAP, cAP, `IF(${cAG}${r}="09 Serviços",${issLiteral},0)`, c.aliqIssLinha)
     fx(iAQ, cAQ, `${cAH}${r}*${cAP}${r}`, c.vlrIss)
     fx(idxCalc["VALOR SEM TRIBUTO"], cBJ, `${cValorBase}${r}-${cAK}${r}-${cAS}${r}-${cBA}${r}-${cBG}${r}-${cAQ}${r}`, c.vlrSemTributo)
@@ -420,9 +443,12 @@ export async function gerarXmlDadosAno(
     fx(idxCalc["VLR PIS"], cBL, `${cBK}${r}*${cAY}${r}%`, c.vlrPis)
     fx(idxCalc["VLR COFINS"], cBM, `${cBK}${r}*${cBE}${r}%`, c.vlrCofins)
     fx(idxCalc["VLR PIS + COFINS"], cBN, `${cBL}${r}+${cBM}${r}`, c.vlrPisCofins)
-    fx(idxCalc["BASE ICMS FINANCE"], cBO, `IF(${cAG}${r}="09 Serviços",0,(${cBJ}${r}+${cBL}${r}+${cBM}${r})/(1-${cAR}${r}%))`, c.baseIcmsFinance)
+    // Gross-up das bases de ICMS/ISS: 2026 embute PIS/COFINS (BL+BM); 2027+ embute IBS+CBS
+    // (BV+BW), já que a CBS substitui PIS/COFINS — fórmula da referência do usuário
+    const embutido = pisCofinsZerado ? `${cBV}${r}+${cBW}${r}` : `${cBL}${r}+${cBM}${r}`
+    fx(idxCalc["BASE ICMS FINANCE"], cBO, `IF(${cAG}${r}="09 Serviços",0,(${cBJ}${r}+${embutido})/(1-${cAR}${r}%))`, c.baseIcmsFinance)
     fx(idxCalc["ICMS"], letraDe("ICMS"), `${cBO}${r}*${cAR}${r}%`, c.icms)
-    fx(idxCalc["BASE ISS FINANCE"], cBQ, `IF(${cAG}${r}="09 Serviços",(${cBJ}${r}+${cBL}${r}+${cBM}${r})/(1-${cAP}${r}),0)`, c.baseIssFinance)
+    fx(idxCalc["BASE ISS FINANCE"], cBQ, `IF(${cAG}${r}="09 Serviços",(${cBJ}${r}+${embutido})/(1-${cAP}${r}),0)`, c.baseIssFinance)
     fx(idxCalc["ISS"], cBR, `${cBQ}${r}*${cAP}${r}`, c.iss)
     fx(idxCalc["VLR PIS + COFINS + ISS"], letraDe("VLR PIS + COFINS + ISS"), `${cBR}${r}+${cBN}${r}`, c.vlrPisCofinsIss)
     fx(idxCalc["DIF VALOR PRODUTO"], letraDe("DIF VALOR PRODUTO"), `${cBQ}${r}-${cBO}${r}-${cBJ}${r}`, c.difValorProduto)

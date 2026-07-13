@@ -171,33 +171,39 @@ export function montarAbaQuadroComparativo(
     })
   })
 
-  // VALOR TOTAL (banda cinza)
+  // VALOR TOTAL (banda cinza). Em 2026 o total considera SÓ PIS/COFINS + ICMS + ISS (as 3
+  // primeiras linhas) — CBS/IBS de 2026 são alíquota-teste e ficam fora da carga real; nos
+  // demais anos soma as 5 linhas (PIS/COFINS já é zero a partir de 2027).
   celula(ws, `C${LINHA_TOTAL}`, "VALOR TOTAL", { bold: true, fundo: COR_BANDA_CINZA })
   ws.getCell(`C${LINHA_TOTAL}`).alignment = { horizontal: "right" }
+  const totalDoAno = (ano: number) => {
+    const somas = somasPorAno.get(ano)!
+    return ano === 2026
+      ? somas.vlrPisCofins + somas.icms + somas.iss
+      : somas.vlrPisCofins + somas.icms + somas.iss + somas.cbs + somas.ibs
+  }
   ANOS_COLUNA.forEach((ano, ci) => {
     const col = String.fromCharCode(68 + ci)
-    const somas = somasPorAno.get(ano)!
-    const total = somas.vlrPisCofins + somas.icms + somas.iss + somas.cbs + somas.ibs
+    const ultimaLinhaSoma = ano === 2026
+      ? LINHA_PRIMEIRO_TRIBUTO + 2 // PIS/COFINS, ICMS, ISS
+      : LINHA_PRIMEIRO_TRIBUTO + LINHAS_TRIBUTO.length - 1
     celula(
       ws, `${col}${LINHA_TOTAL}`,
-      f(`SUM(${col}${LINHA_PRIMEIRO_TRIBUTO}:${col}${LINHA_PRIMEIRO_TRIBUTO + LINHAS_TRIBUTO.length - 1})`, total),
+      f(`SUM(${col}${LINHA_PRIMEIRO_TRIBUTO}:${col}${ultimaLinhaSoma})`, totalDoAno(ano)),
       { bold: true, numFmt: FMT_RS, fundo: COR_BANDA_CINZA }
     )
   })
 
   // IMPACTO CARGA TRIBUTÁRIA (banda azul clara): variação percentual vs 2026; 2026 mostra "-"
   celula(ws, `C${LINHA_IMPACTO}`, "IMPACTO CARGA TRIBUTÁRIA", { bold: true, fundo: COR_BANDA_AZUL })
-  const total2026 = ANOS_COLUNA.length > 0
-    ? Object.values(somasPorAno.get(2026)!).reduce((s, v) => s + v, 0)
-    : 0
+  const total2026 = totalDoAno(2026)
   ANOS_COLUNA.forEach((ano, ci) => {
     const col = String.fromCharCode(68 + ci)
     if (ano === 2026) {
       celula(ws, `${col}${LINHA_IMPACTO}`, "-", { bold: true, fundo: COR_BANDA_AZUL, centralizado: true })
       return
     }
-    const somas = somasPorAno.get(ano)!
-    const totalAno = somas.vlrPisCofins + somas.icms + somas.iss + somas.cbs + somas.ibs
+    const totalAno = totalDoAno(ano)
     const impacto = total2026 !== 0 ? totalAno / total2026 - 1 : 0
     celula(
       ws, `${col}${LINHA_IMPACTO}`,

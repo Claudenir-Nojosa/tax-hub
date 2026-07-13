@@ -63,14 +63,17 @@ export function calcularCamposAno(
   const basePisCofins = zerarPisCofins ? 0 : divisorPisCofins !== 0 ? vlrSemTributo / divisorPisCofins : 0
   const vlrPis = basePisCofins * (l.aliquotaPis / 100)
   const vlrCofins = basePisCofins * (l.aliquotaCofins / 100)
-  const baseIcmsFinance = isServico ? 0 : (vlrSemTributo + vlrPis + vlrCofins) / (1 - aliqIcms / 100)
-  const icms = baseIcmsFinance * (aliqIcms / 100)
-  const baseIssFinance = isServico && aliqIss !== 1 ? (vlrSemTributo + vlrPis + vlrCofins) / (1 - aliqIss) : 0
-  const iss = baseIssFinance * aliqIssLinha
-  const difValorProduto = baseIssFinance - baseIcmsFinance - vlrSemTributo
   const baseIbsCbs = vlrSemTributo
   const ibs = baseIbsCbs * aliqIbs
   const cbs = baseIbsCbs * aliqCbs
+  // Gross-up das bases de ICMS/ISS: em 2026 embute PIS/COFINS; a partir de 2027 (quando a CBS
+  // substitui PIS/COFINS) embute IBS+CBS — fórmula (BJ+BV+BW)/(1-AR%), como na referência
+  const embutido = zerarPisCofins ? ibs + cbs : vlrPis + vlrCofins
+  const baseIcmsFinance = isServico ? 0 : (vlrSemTributo + embutido) / (1 - aliqIcms / 100)
+  const icms = baseIcmsFinance * (aliqIcms / 100)
+  const baseIssFinance = isServico && aliqIss !== 1 ? (vlrSemTributo + embutido) / (1 - aliqIss) : 0
+  const iss = baseIssFinance * aliqIssLinha
+  const difValorProduto = baseIssFinance - baseIcmsFinance - vlrSemTributo
   const totalNfFinance = baseIssFinance + baseIcmsFinance
   const totalNfCliente = valorBase - l.vlrDescontoItem
 
