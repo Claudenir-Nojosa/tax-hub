@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Loader2, FileDown, CheckCircle2, Building2, Percent, ScrollText, Database, ArrowDownToLine, ArrowUpFromLine, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import type { EmpresaData } from "./Step1Empresa"
@@ -25,6 +27,8 @@ interface Props {
   baseNcm: BaseNcmData
   saidasEfd: SaidasEfdData
   entradasEfd: EntradasEfdData
+  nomeProjeto: string
+  onNomeProjetoChange: (nome: string) => void
   onBack: () => void
 }
 
@@ -40,7 +44,7 @@ function LinhaResumo({ icon: Icon, titulo, valor }: { icon: React.ElementType; t
   )
 }
 
-export default function StepRevisao({ empresa, premissasReforma, legislacao, baseNcm, saidasEfd, entradasEfd, onBack }: Props) {
+export default function StepRevisao({ empresa, premissasReforma, legislacao, baseNcm, saidasEfd, entradasEfd, nomeProjeto, onNomeProjetoChange, onBack }: Props) {
   const [gerando, setGerando] = useState(false)
   const [gerado, setGerado] = useState(false)
   const [progresso, setProgresso] = useState<{ pct: number; etapa: string } | null>(null)
@@ -75,6 +79,7 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
         {
           empresa, premissasReforma, legislacao, linhasSaidas, baseIbsCbs,
           linhasEntradas, classificacoesFornecedores: entradasEfd.classificacoes,
+          nomeProjeto,
         },
         (pct, etapa) => setProgresso({ pct, etapa }),
         opcoes
@@ -103,6 +108,19 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
         <LinhaResumo icon={Database} titulo="Base NCM" valor={baseNcm.usarPadrao ? "Base padrão (4.524 NCMs)" : `Base própria: ${baseNcm.arquivoCustomNome}`} />
         <LinhaResumo icon={ArrowUpFromLine} titulo="Saídas (EFD Contribuições)" valor={`${saidasEfd.arquivos.length} arquivo(s), ${totalSaidas} itens de nota fiscal`} />
         <LinhaResumo icon={ArrowDownToLine} titulo="Entradas (EFD ICMS/IPI)" valor={`${entradasEfd.arquivos.length} arquivo(s), ${totalEntradas} itens de compra`} />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Nome do projeto</Label>
+        <Input
+          value={nomeProjeto}
+          onChange={(e) => onNomeProjetoChange(e.target.value)}
+          placeholder={`Reforma Tributária - ${empresa.razaoSocial || "Empresa"}`}
+        />
+        <p className="text-xs text-gray-500">
+          Este nome será o nome do arquivo Excel gerado (a versão do cliente ganha o sufixo
+          &quot;(Cliente)&quot;). Se ficar em branco, usa o padrão acima.
+        </p>
       </div>
 
       <div className="rounded-lg border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 p-4">

@@ -35,6 +35,9 @@ export interface DadosGeracaoExcel {
   baseIbsCbs: LinhaBaseIbsCbs[]
   linhasEntradas: LinhaEntradaEfd[]
   classificacoesFornecedores: Record<string, ResultadoConsultaCnpj>
+  // Nome escolhido pelo usuário na Revisão — vira o nome do arquivo .xlsx (a versão do cliente
+  // ganha o sufixo " (Cliente)"). Em branco, cai no padrão "Reforma Tributária - <razão social>".
+  nomeProjeto?: string
 }
 
 export type ProgressoGeracao = (percentual: number, etapa: string) => void
@@ -251,8 +254,10 @@ export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: P
   const url = URL.createObjectURL(blobFinal)
   const a = document.createElement("a")
   a.href = url
-  const prefixo = opcoes?.modoCliente ? "Reforma Tributária (Cliente)" : "Reforma Tributária"
-  const nomeArquivo = `${prefixo} - ${dados.empresa.razaoSocial || "Empresa"}`.replace(/[\\/:*?"<>|]/g, "").trim()
+  const nomeBase = dados.nomeProjeto?.trim()
+    ? dados.nomeProjeto.trim()
+    : `Reforma Tributária - ${dados.empresa.razaoSocial || "Empresa"}`
+  const nomeArquivo = `${nomeBase}${opcoes?.modoCliente ? " (Cliente)" : ""}`.replace(/[\\/:*?"<>|]/g, "").trim()
   a.download = `${nomeArquivo}.xlsx`
   a.click()
   URL.revokeObjectURL(url)

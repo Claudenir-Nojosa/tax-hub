@@ -3,8 +3,7 @@
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Building2, Trash2, TrendingDown, TrendingUp } from "lucide-react"
-import { formatarMoeda } from "@/lib/reforma-engine"
+import { Building2, FolderOpen, Trash2 } from "lucide-react"
 
 type Empresa = {
   id: string
@@ -14,7 +13,7 @@ type Empresa = {
   regime: string
   simplesNacional: boolean
   uf: string
-  faturamento: number
+  parametrosExtra?: { nomeProjeto?: string } | null
   simulacoes: { createdAt: string; resultados: unknown }[]
 }
 
@@ -36,10 +35,7 @@ function formatCNPJ(cnpj: string) {
 }
 
 export default function EmpresaCard({ empresa, onDelete }: Props) {
-  const ultimaSimulacao = empresa.simulacoes[0]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const resultados = ultimaSimulacao?.resultados as any[]
-  const delta2033 = resultados?.find((r: { ano: number }) => r.ano === 2033)?.delta
+  const nomeProjeto = empresa.parametrosExtra?.nomeProjeto?.trim()
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 hover:shadow-md transition-shadow flex flex-col gap-4">
@@ -74,43 +70,21 @@ export default function EmpresaCard({ empresa, onDelete }: Props) {
         </Badge>
       </div>
 
-      <div className="text-sm">
-        <p className="text-gray-500 text-xs">Faturamento anual</p>
-        <p className="font-medium">{formatarMoeda(empresa.faturamento)}</p>
-      </div>
-
-      {delta2033 !== undefined && (
+      {nomeProjeto && (
         <div className="text-sm">
-          <p className="text-gray-500 text-xs">Delta em 2033 vs. hoje</p>
-          <p className={`font-medium flex items-center gap-1 ${delta2033 < 0 ? "text-green-600" : "text-red-600"}`}>
-            {delta2033 < 0
-              ? <><TrendingDown className="h-4 w-4" /> Economia de {formatarMoeda(Math.abs(delta2033))}</>
-              : <><TrendingUp className="h-4 w-4" /> Custo adicional de {formatarMoeda(delta2033)}</>
-            }
-          </p>
+          <p className="text-gray-500 text-xs">Projeto</p>
+          <p className="font-medium">{nomeProjeto}</p>
         </div>
       )}
 
-      {ultimaSimulacao ? (
-        <div className="mt-auto flex gap-2">
-          <Link href={`/dashboard/reforma-tributaria/${empresa.id}?view=analise`} className="flex-1">
-            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm">
-              Visualizar
-            </Button>
-          </Link>
-          <Link href={`/dashboard/reforma-tributaria/${empresa.id}?edit=true`} className="flex-1">
-            <Button variant="outline" className="w-full text-sm">
-              Editar
-            </Button>
-          </Link>
-        </div>
-      ) : (
-        <Link href={`/dashboard/reforma-tributaria/${empresa.id}`} className="mt-auto">
-          <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm">
-            Iniciar Simulação
-          </Button>
-        </Link>
-      )}
+      {/* Abre o wizard em modo edição: se os dados do estudo estiverem salvos neste navegador
+          (IndexedDB), cai direto na Revisão — dá pra consultar, editar qualquer passo e baixar
+          o Excel de novo sem refazer nada. */}
+      <Link href={`/dashboard/reforma-tributaria/${empresa.id}?edit=true`} className="mt-auto">
+        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm">
+          <FolderOpen className="h-4 w-4 mr-2" /> Abrir projeto
+        </Button>
+      </Link>
     </div>
   )
 }

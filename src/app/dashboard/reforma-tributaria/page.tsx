@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Plus, Scale, Loader2 } from "lucide-react"
 import EmpresaCard from "@/components/reforma/EmpresaCard"
 import { toast } from "sonner"
+import { removerProjetoWizard } from "@/lib/reforma-wizard-store"
 
 type Empresa = {
   id: string
@@ -15,7 +16,7 @@ type Empresa = {
   regime: string
   simplesNacional: boolean
   uf: string
-  faturamento: number
+  parametrosExtra?: { nomeProjeto?: string } | null
   simulacoes: { createdAt: string; resultados: unknown }[]
 }
 
@@ -43,6 +44,8 @@ export default function ReformaTributariaPage() {
     if (!confirm("Excluir esta empresa e todas as simulações?")) return
     try {
       await fetch(`/api/reforma-tributaria/empresas/${id}`, { method: "DELETE" })
+      // limpa também os dados do estudo salvos neste navegador (IndexedDB)
+      await removerProjetoWizard(id).catch(() => {})
       setEmpresas((prev) => prev.filter((e) => e.id !== id))
       toast.success("Empresa excluída")
     } catch {

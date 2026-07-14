@@ -1,9 +1,10 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { Scale, ChevronRight } from "lucide-react"
+import { carregarProjetoWizard, salvarProjetoWizard } from "@/lib/reforma-wizard-store"
 import Step1Empresa, { type EmpresaData } from "@/components/reforma/Step1Empresa"
 import StepPremissasReforma, {
   type PremissasReformaData,
@@ -62,20 +63,30 @@ function EmpresaWizardInner() {
   const [empresa, setEmpresa] = useState<EmpresaData>(defaultEmpresa)
   const [premissasReforma, setPremissasReforma] = useState<PremissasReformaData>(defaultPremissasReforma())
   const [legislacao, setLegislacao] = useState<LegislacaoData>(defaultLegislacao())
-  // Base NCM / saídas / entradas ficam só no estado do wizard (não vão pro parametrosExtra do
-  // Prisma) — os dois últimos podem ter milhares de linhas, grande demais pra um campo JSON.
+  // Base NCM / saídas / entradas não vão pro parametrosExtra do Prisma (milhares de linhas,
+  // grande demais pra JSON via API) — ficam no estado do wizard e são persistidos LOCALMENTE no
+  // IndexedDB (reforma-wizard-store) para o estudo poder ser reaberto sem reimportar nada.
   const [baseNcm, setBaseNcm] = useState<BaseNcmData>(defaultBaseNcm())
   const [saidasEfd, setSaidasEfd] = useState<SaidasEfdData>(defaultSaidasEfd())
   const [entradasEfd, setEntradasEfd] = useState<EntradasEfdData>(defaultEntradasEfd())
+  const [nomeProjeto, setNomeProjeto] = useState("")
   const [savedEmpresaId, setSavedEmpresaId] = useState<string | null>(empresaId)
   const [saving, setSaving] = useState(false)
+  // evita que o auto-save dispare durante a restauração inicial dos dados do IndexedDB
+  const restauradoRef = useRef(false)
 
-  // Carrega empresa existente (inclui parametrosExtra com premissasReforma/legislacao salvos)
+  // Carrega empresa existente (inclui parametrosExtra com premissasReforma/legislacao salvos) e,
+  // em seguida, os dados pesados do wizard salvos neste navegador (IndexedDB). Se o estudo já foi
+  // concluído aqui, cai direto na Revisão — dá pra consultar, editar qualquer passo ou baixar o
+  // Excel de novo sem refazer nada.
   useEffect(() => {
-    if (!empresaId) return
+    if (!empresaId) {
+      restauradoRef.current = true
+      return
+    }
     fetch(`/api/reforma-tributaria/empresas/${empresaId}`)
       .then((r) => r.json())
-      .then((data) => {
+      .then(async (data) => {
         setEmpresa({
           cnpj: data.cnpj,
           razaoSocial: data.razaoSocial,
@@ -96,10 +107,38 @@ function EmpresaWizardInner() {
         if (data.parametrosExtra?.legislacao) {
           setLegislacao(data.parametrosExtra.legislacao)
         }
+        if (typeof data.parametrosExtra?.nomeProjeto === "string") {
+          setNomeProjeto(data.parametrosExtra.nomeProjeto)
+        }
+        try {
+          const salvo = await carregarProjetoWizard(empresaId)
+          if (salvo) {
+            setBaseNcm(salvo.baseNcm)
+            setSaidasEfd(salvo.saidasEfd)
+            setEntradasEfd(salvo.entradasEfd)
+            if (salvo.saidasEfd.arquivos.length > 0) {
+              setStep(6)
+              toast.success("Projeto recuperado — revise, edite ou gere o Excel novamente")
+            }
+          }
+        } catch {
+          // IndexedDB indisponível (modo privado etc.) — segue sem os dados locais
+        }
+        restauradoRef.current = true
         setLoadingEmpresa(false)
       })
-      .catch(() => { toast.error("Erro ao carregar empresa"); setLoadingEmpresa(false) })
+      .catch(() => { toast.error("Erro ao carregar empresa"); restauradoRef.current = true; setLoadingEmpresa(false) })
   }, [empresaId])
+
+  // Auto-save local dos dados pesados: sempre que saídas/entradas/base NCM mudarem (depois da
+  // restauração inicial), persiste no IndexedDB chaveado pelo id da empresa.
+  useEffect(() => {
+    if (!restauradoRef.current || !savedEmpresaId) return
+    if (saidasEfd.arquivos.length === 0 && entradasEfd.arquivos.length === 0 && baseNcm.usarPadrao) return
+    salvarProjetoWizard({ empresaId: savedEmpresaId, saidasEfd, entradasEfd, baseNcm }).catch(() => {
+      // sem IndexedDB o wizard continua funcionando — só perde o "reabrir depois"
+    })
+  }, [savedEmpresaId, saidasEfd, entradasEfd, baseNcm])
 
   const salvarEmpresa = async (): Promise<string | null> => {
     try {
@@ -124,6 +163,7 @@ function EmpresaWizardInner() {
             estabelecimentosAdicionais: empresa.estabelecimentosAdicionais,
             premissasReforma,
             legislacao,
+            nomeProjeto,
           },
         }),
       })
@@ -151,6 +191,15 @@ function EmpresaWizardInner() {
     setSavedEmpresaId(id)
     setStep(proximoStep)
   }
+
+  // Persiste o nome do projeto (parametrosExtra) com debounce enquanto o usuário digita na
+  // Revisão — assim o nome sobrevive mesmo se ele fechar a página sem gerar o Excel.
+  useEffect(() => {
+    if (!restauradoRef.current || !savedEmpresaId || !empresa.cnpj) return
+    const t = setTimeout(() => { salvarEmpresa() }, 800)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nomeProjeto])
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
@@ -224,6 +273,8 @@ function EmpresaWizardInner() {
             baseNcm={baseNcm}
             saidasEfd={saidasEfd}
             entradasEfd={entradasEfd}
+            nomeProjeto={nomeProjeto}
+            onNomeProjetoChange={setNomeProjeto}
             onBack={() => setStep(5)}
           />
         ) : null}
