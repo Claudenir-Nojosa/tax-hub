@@ -132,7 +132,12 @@ export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: P
       concluido = concluidoAntesDaAba + dados.linhasSaidas.length
       sheetXml = sheetXml.replace(/<dimension ref="[^"]*"\s*\/>/, `<dimension ref="A1:${colFim}${ultimaLinha}"/>`)
       sheetXml = sheetXml.replace("</sheetData>", `${linhasXml}</sheetData>`)
-      zip.file(caminho, sheetXml)
+      // CRÍTICO: entregar BYTES (não string) ao JSZip. Com strings de ~100MB contendo caracteres
+      // multi-byte (ç, õ, "Serviços"...), o JSZip do NAVEGADOR grava tamanhos inconsistentes no
+      // zip ("uncompressed data size mismatch") e o Excel abre como corrompido ("Reparado"),
+      // travando no reparo. Com TextEncoder o caminho vira binário, idêntico ao do Node — onde o
+      // arquivo foi validado abrindo limpo no Excel real via COM.
+      zip.file(caminho, new TextEncoder().encode(sheetXml))
       await yieldToEventLoop()
     }
   }
