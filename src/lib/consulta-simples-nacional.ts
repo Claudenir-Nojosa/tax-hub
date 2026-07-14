@@ -82,8 +82,9 @@ export async function extrairCnpjsDoExcel(file: File): Promise<string[]> {
 
 // Requisições menores e sequenciais: BrasilAPI é gratuita/pública, listas grandes (centenas de
 // CNPJs) não devem virar uma rajada de requisições simultâneas — cada request já processa seu
-// lote com concorrência controlada no servidor (ver a rota).
-const TAMANHO_LOTE = 20
+// lote com concorrência controlada no servidor (ver a rota). 10 por request mantém cada chamada
+// bem abaixo do limite de duração da função no Vercel mesmo com as APIs externas lentas.
+const TAMANHO_LOTE = 10
 
 async function consultarLote(cnpjs: string[]): Promise<ResultadoConsultaCnpj[]> {
   try {

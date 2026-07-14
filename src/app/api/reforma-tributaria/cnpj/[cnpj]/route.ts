@@ -28,24 +28,61 @@ export async function GET(
     }
 
     if (!res.ok) {
-      // Fallback: tenta receitaws.me
+      // BrasilAPI fora (aconteceu na prática: HTTP 500 geral por horas). 2º da cadeia:
+      // OpenCNPJ — gratuita, sem rate limit agressivo, traz CNAEs principal e secundários.
+      const open = await fetch(`https://api.opencnpj.org/${cnpjLimpo}`, {
+        headers: { "User-Agent": "TaxHub/1.0" },
+        signal: AbortSignal.timeout(8000),
+      }).catch(() => null)
+      if (open?.status === 404) {
+        return NextResponse.json({ error: "CNPJ não encontrado na Receita Federal" }, { status: 404 })
+      }
+      if (open?.ok) {
+        const oc = await open.json()
+        const cnaes = Array.isArray(oc.cnaes) ? (oc.cnaes as { codigo?: string; descricao?: string; is_principal?: boolean }[]) : []
+        const principal = cnaes.find((c) => c.is_principal)
+        return NextResponse.json({
+          cnpj: cnpjLimpo,
+          razaoSocial: oc.razao_social,
+          nomeFantasia: oc.nome_fantasia || null,
+          // "" = nunca constou no cadastro do Simples (mesma semântica do null da BrasilAPI)
+          simplesNacional: oc.opcao_simples === "S",
+          mei: oc.opcao_mei === "S",
+          uf: oc.uf,
+          municipio: oc.municipio,
+          cnaePrincipal: principal?.descricao || null,
+          cnaeCode: principal?.codigo ?? oc.cnae_principal ?? null,
+          cnaesSecundarios: cnaes
+            .filter((c) => !c.is_principal)
+            .map((c) => ({ codigo: c.codigo ?? "", descricao: c.descricao ?? "" })),
+          situacaoCadastral: oc.situacao_cadastral,
+          naturezaJuridica: oc.natureza_juridica,
+          capitalSocial: null,
+          porte: oc.porte_empresa,
+        })
+      }
+
+      // 3º da cadeia: ReceitaWS (plano público limita ~3 consultas/minuto — só resgate pontual)
       const fallback = await fetch(
         `https://receitaws.com.br/v1/cnpj/${cnpjLimpo}`,
-        { headers: { "User-Agent": "TaxHub/1.0" } }
-      )
-      if (!fallback.ok) {
+        { headers: { "User-Agent": "TaxHub/1.0" }, signal: AbortSignal.timeout(8000) }
+      ).catch(() => null)
+      if (!fallback || !fallback.ok) {
         return NextResponse.json(
           { error: "CNPJ não encontrado. Tente novamente." },
           { status: 404 }
         )
       }
       const fb = await fallback.json()
+      // "simples" veio historicamente como string "Sim"/"Não"; hoje é objeto {optante: boolean}
+      const optante = (v: unknown) =>
+        v && typeof v === "object" && "optante" in v ? Boolean((v as { optante?: boolean }).optante) : v === "Sim"
       return NextResponse.json({
         cnpj: cnpjLimpo,
         razaoSocial: fb.nome,
         nomeFantasia: fb.fantasia || null,
-        simplesNacional: fb.simples === "Sim",
-        mei: fb.mei === "Sim",
+        simplesNacional: optante(fb.simples),
+        mei: optante(fb.simei ?? fb.mei),
         uf: fb.uf,
         municipio: fb.municipio,
         cnaePrincipal: fb.atividade_principal?.[0]?.text || null,

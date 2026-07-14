@@ -8,6 +8,11 @@ import type { ResultadoConsultaCnpj } from "@/lib/consulta-simples-nacional"
 // controlada e erro por item, o que muda o formato de entrada/saída o suficiente pra não valer
 // a pena forçar reuso e arriscar regressão na rota em produção da Reforma Tributária.
 
+// No Vercel a função serverless tem limite PADRÃO de 10s — com 20 CNPJs por lote + retries com
+// backoff, qualquer lentidão da BrasilAPI estourava o limite, o Vercel matava a requisição e o
+// wizard marcava TODOS os fornecedores do lote como "não classificados". 60s dá folga real.
+export const maxDuration = 60
+
 const MAX_CNPJS_POR_REQUISICAO = 50
 const CONCORRENCIA = 3 // chamadas simultâneas às APIs externas por requisição — BrasilAPI e
 // principalmente a ReceitaWS (fallback, rate limit público bem restritivo) toleram mal rajadas
@@ -50,7 +55,9 @@ async function fetchComRetry(url: string, userAgent: string): Promise<Response |
   let ultimaResposta: Response | null = null
   for (let tentativa = 0; tentativa <= DELAYS_MS.length; tentativa++) {
     try {
-      const res = await fetch(url, { headers: { "User-Agent": userAgent } })
+      // timeout por chamada: uma API externa pendurada não pode consumir o orçamento inteiro da
+      // função (o AbortSignal derruba em 8s e cai pro retry/fallback)
+      const res = await fetch(url, { headers: { "User-Agent": userAgent }, signal: AbortSignal.timeout(8000) })
       // 404 = CNPJ bem formado mas não encontrado; 400 = dígito verificador inválido (BrasilAPI
       // valida o checksum do CNPJ) — os dois são falhas DEFINITIVAS, retry não muda o resultado
       if (res.ok || res.status === 404 || res.status === 400) return res
@@ -100,9 +107,37 @@ async function consultarUm(cnpjLimpo: string): Promise<ResultadoConsultaCnpj> {
       }
     }
 
-    // BrasilAPI indisponível mesmo após retries: fallback ReceitaWS (mesmo par de fontes da
-    // consulta unitária). ReceitaWS free tem limite de poucas requisições/minuto, então também
-    // leva retry com backoff maior antes de desistir.
+    // BrasilAPI indisponível mesmo após retries (aconteceu na prática: HTTP 500 em TODOS os
+    // CNPJs por horas): 2º da cadeia é a OpenCNPJ — gratuita, sem rate limit agressivo, com os
+    // mesmos dados de Simples/MEI. A ReceitaWS fica por último porque o plano público permite
+    // só ~3 consultas/minuto (inviável pra lote de fornecedores; serve de resgate pontual).
+    const open = await fetchComRetry(`https://api.opencnpj.org/${cnpjLimpo}`, "TaxHub/1.0")
+    if (open?.status === 404) {
+      return vazio(cnpjLimpo, "CNPJ não encontrado na Receita Federal")
+    }
+    if (open?.ok) {
+      const oc = await open.json()
+      // opcao_simples: "S" = optante hoje; "N" = optou e foi excluída (vem com data_opcao/
+      // data_exclusao); "" = NUNCA constou no cadastro do Simples — mesma semântica do `null`
+      // da BrasilAPI, ou seja, não optante (validado com CNPJs de regime conhecido: Pharmaplus
+      // e L Cardoso = "N" com datas; Brenntag/Quantiq — grandes, nunca Simples — = "")
+      return {
+        cnpj: cnpjLimpo,
+        cnpjFormatado: formatarCnpj(cnpjLimpo),
+        razaoSocial: oc.razao_social ?? null,
+        nomeFantasia: oc.nome_fantasia || null,
+        simplesNacional: oc.opcao_simples === "S",
+        dataOpcaoSimples: oc.data_opcao_simples && oc.data_opcao_simples !== "0000-00-00" ? oc.data_opcao_simples : null,
+        dataExclusaoSimples: oc.data_exclusao_simples && oc.data_exclusao_simples !== "0000-00-00" ? oc.data_exclusao_simples : null,
+        mei: oc.opcao_mei === "S",
+        situacaoCadastral: oc.situacao_cadastral ?? null,
+        uf: oc.uf ?? null,
+        municipio: oc.municipio ?? null,
+        porte: oc.porte_empresa ?? null,
+        erro: null,
+      }
+    }
+
     const fallback = await fetchComRetry(`https://receitaws.com.br/v1/cnpj/${cnpjLimpo}`, "TaxHub/1.0")
     if (!fallback || !fallback.ok) {
       return vazio(cnpjLimpo, "Não foi possível consultar agora — tente novamente em instantes")
@@ -120,10 +155,12 @@ async function consultarUm(cnpjLimpo: string): Promise<ResultadoConsultaCnpj> {
       cnpjFormatado: formatarCnpj(cnpjLimpo),
       razaoSocial: fb.nome ?? null,
       nomeFantasia: fb.fantasia || null,
-      simplesNacional: fb.simples === "Sim" ? true : fb.simples === "Não" ? false : null,
-      dataOpcaoSimples: fb.data_opcao_pelo_simples ?? null,
-      dataExclusaoSimples: null,
-      mei: fb.mei === "Sim" ? true : fb.mei === "Não" ? false : null,
+      // a ReceitaWS mudou o shape: "simples"/"simei" hoje são OBJETOS {optante: boolean}
+      // (o formato antigo era a string "Sim"/"Não" — aceita os dois)
+      simplesNacional: normalizarOptante(fb.simples),
+      dataOpcaoSimples: fb.simples?.data_opcao ?? fb.data_opcao_pelo_simples ?? null,
+      dataExclusaoSimples: fb.simples?.data_exclusao ?? null,
+      mei: normalizarOptante(fb.simei ?? fb.mei),
       situacaoCadastral: fb.situacao ?? null,
       uf: fb.uf ?? null,
       municipio: fb.municipio ?? null,
@@ -133,6 +170,15 @@ async function consultarUm(cnpjLimpo: string): Promise<ResultadoConsultaCnpj> {
   } catch (e) {
     return vazio(cnpjLimpo, e instanceof Error ? e.message : "Erro ao consultar CNPJ")
   }
+}
+
+// ReceitaWS: campo de optante veio historicamente como string "Sim"/"Não" e hoje vem como
+// objeto {optante: boolean} — normaliza os dois formatos (null = sem informação)
+function normalizarOptante(valor: unknown): boolean | null {
+  if (valor && typeof valor === "object" && "optante" in valor) return Boolean((valor as { optante?: boolean }).optante)
+  if (valor === "Sim") return true
+  if (valor === "Não") return false
+  return null
 }
 
 export async function POST(req: NextRequest) {
