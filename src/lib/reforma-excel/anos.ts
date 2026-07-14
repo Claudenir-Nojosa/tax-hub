@@ -215,7 +215,9 @@ function contextoDaAba(aba: AbaAno, premissas: PremissasReformaData) {
   const { aliqIbs, aliqCbs } = aliquotasEfetivasDoAno(p.cbs, p.ibsUF, p.ibsMUN, premissas.reducao60)
   const fatorReducaoIcmsIss = REDUCAO_ICMS_ISS[aba.anoPremissa] ?? 1
   const aliqIss = p.aliquotaISS * fatorReducaoIcmsIss
-  const aliqIssOriginal = p.aliquotaISS // cheia (2026), usada nas colunas ICMS/ISS ORIGINAL
+  // ORIGINAL = a alíquota NORMAL de 2026 (não a premissa do próprio ano da aba — o usuário pode
+  // ter editado anos futuros na tabela de premissas, e o ISS ORIGINAL deve ser sempre o de 2026)
+  const aliqIssOriginal = premissas.premissasPorAno[2026]?.aliquotaISS ?? p.aliquotaISS
   const pisCofinsZerado = aba.anoPremissa >= 2027
   const aliqIcmsPremissa = (premissas.aliquotaICMS ?? 0.225) * fatorReducaoIcmsIss
   return { aliqIss, aliqIssOriginal, aliqIbs, aliqCbs, pisCofinsZerado, aliqIcmsPremissa }

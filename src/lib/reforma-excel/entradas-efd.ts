@@ -4,26 +4,29 @@ import type { ResultadoConsultaCnpj } from "@/lib/consulta-simples-nacional"
 import type { PremissasReformaData } from "@/components/reforma/StepPremissasReforma"
 import { colLetra } from "./coluna-letra"
 
-// Aba "Entradas - EFD ICMS IPI" — crédito de IBS/CBS por fornecedor. A lógica exata (não é um
-// "percentual de crédito por ano" separado, como uma leitura apressada do pedido original sugeria
-// — é a MESMA alíquota IBS/CBS do ano, aplicada sobre a base da compra) foi confirmada célula a
-// célula no Excel-modelo (fórmulas reais da aba "Entradas - EFD ICMS IPI", linha de dado real):
+// Aba "Entradas - EFD ICMS IPI" — réplica coluna a coluna da planilha-original do usuário
+// (conferir.xlsx, aba "original"): dados nas colunas B..BV a partir da linha 8, tabela de
+// alíquotas IBS/CBS em AG1:AO4 (anos 2026-2033, alíquotas CHEIAS), título em B5 + SUBTOTAL dos
+// créditos em AG5:AR5, SUBTOTAL dos valores de documento em R6:W6 + banda de anos mesclada em
+// AG6:AR6, cabeçalho na linha 7. O bloco de créditos fica no MEIO da tabela (AD..AR): coluna
+// "Crédito IBS" vazia (AD — existe no original, sem dados), "Crédito CBS"/"Crédito IBS" com a
+// classificação do NCM (AE/AF) e 6 pares IBS/CBS (2027 e 2028, 2029..2033).
 //
-//   tipoCrédito = SE Regime≠"Regime Regular": "Não permitido"
-//                 SENÃO: VLOOKUP(NCM, 'Base IBS-CBS', coluna "Descrição Alíquota")
-//                        (ou "Cheio" se o NCM não estiver na base — IFERROR)
-//   créditoIBS(ano) = SE tipoCrédito="Cheio": base × (aliqIbsUF(ano)+aliqIbsMUN(ano))
-//                     SE tipoCrédito="Alíquota reduzida em 60%": base × (aliqIbsUF+aliqIbsMUN)(ano)×0,4
-//                     SE "Alíquota zero" ou "Não permitido": 0
-//   créditoCBS(ano) = idem, com aliqCBS(ano)
-//
-// Importante: a redução de 60% aqui é por CLASSIFICAÇÃO DO NCM (Base IBS-CBS), independente do
-// toggle "atividade com redução de 60%" do Passo 2 (que é sobre o DÉBITO das saídas da própria
-// empresa) — são dois mecanismos distintos que coincidem no caso da Art Farma mas não são o mesmo
-// campo. Por isso as alíquotas aqui são as CHEIAS da Premissa (sem o fator de redução do débito).
-// Sem crédito em 2026 (período de teste) — só a partir de 2027, igual ao modelo.
+// Fórmulas de crédito idênticas às do original (lidas célula a célula):
+//   IBS(ano) = SE(AE="Cheio";(AT-AU)*($col$3+$col$4);SE(AE="Alíquota reduzida em 60%";
+//              (AT-AU)*(($col$3+$col$4)*0,4);SE(AE="Alíquota zero";0;SE(AE="Não permitido";0;0))))
+//   CBS(ano) = idem com ($col$2)
+// onde col é a coluna do ano na tabela AG1:AO4 (2027 e 2028 usam a coluna de 2027) e (AT-AU) é
+// Vlr Item − Vlr Desconto Item. Ambas testam AE (Crédito CBS), como no original.
 
 const FONTE = "Calibri"
+const COR_BANDA = "FFDDEBF7" // azul claro da banda de anos e dos cabeçalhos de crédito
+const FMT_RS = '_-"R$" * #,##0.00_-;-"R$" * #,##0.00_-;_-"R$" * "-"??_-;_-@_-'
+const FMT_PA = "mm-dd-yy"
+const BORDA_FINA: Partial<ExcelJS.Borders> = {
+  top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" },
+}
+
 const ANOS_CREDITO: { label: string; anoPremissa: number }[] = [
   { label: "2027 e 2028", anoPremissa: 2027 },
   { label: "2029", anoPremissa: 2029 },
@@ -32,18 +35,10 @@ const ANOS_CREDITO: { label: string; anoPremissa: number }[] = [
   { label: "2032", anoPremissa: 2032 },
   { label: "2033", anoPremissa: 2033 },
 ]
+const ANOS_TABELA = [2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033]
 
 function f(formula: string, result: number | string): ExcelJS.CellFormulaValue {
   return { formula, result } as ExcelJS.CellFormulaValue
-}
-
-// Cores/formatos do estilo da planilha de referência (faixa azul do ano sobre pares IBS/CBS,
-// cabeçalhos Crédito CBS/IBS em azul claro, valores em formato contábil R$)
-const COR_BANDA_ANO = "FF5B9BD5"
-const COR_HEADER_CREDITO = "FFDDEBF7"
-const FMT_RS = '_-"R$" * #,##0.00_-;-"R$" * #,##0.00_-;_-"R$" * "-"??_-;_-@_-'
-const BORDA_FINA: Partial<ExcelJS.Borders> = {
-  top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" },
 }
 
 function celula(
@@ -52,7 +47,7 @@ function celula(
 ) {
   const cell = ws.getCell(ref)
   cell.value = valor
-  cell.font = { name: FONTE, size: opts?.size ?? 11, bold: opts?.bold ?? false }
+  if (opts?.bold) cell.font = { name: FONTE, size: opts?.size ?? 11, bold: true }
   if (opts?.numFmt) cell.numFmt = opts.numFmt
   if (opts?.fundo) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fundo } }
   if (opts?.centralizado) cell.alignment = { horizontal: "center", vertical: "middle" }
@@ -60,47 +55,144 @@ function celula(
   return cell
 }
 
-const HEADERS = [
-  "CNPJ", "PA", "Registros", "Código Participante", "CNPJ Participante", "Nome Participante",
-  "UF Fornecedor", "Regime IBS/CBS", "Número Documento", "Chave NF-e", "Data Documento",
-  "Vlr Documento", "Número Item", "Código Item", "Descrição Item", "NCM", "Vlr Item", "Qtde",
-  "CFOP", "Vlr Base Cálculo ICMS", "Alíquota ICMS", "Vlr ICMS", "Crédito CBS", "Crédito IBS",
-] as const
+// Colunas B..BW na ordem exata do original — key única (pra letraColunaEntrada) + label exibido.
+// "Crédito IBS" aparece DUAS vezes (AD vazia + AF com dados) e os pares de ano exibem só
+// "IBS"/"CBS" (o ano fica na banda mesclada da linha 6).
+interface ColunaEntrada { key: string; label: string }
+const COLUNAS: ColunaEntrada[] = [
+  { key: "CNPJ", label: "CNPJ" },
+  { key: "PA", label: "PA" },
+  { key: "Registros", label: "Registros" },
+  { key: "Indicador Emitente", label: "Indicador Emitente" },
+  { key: "Situação", label: "Situação" },
+  { key: "Código Participante", label: "Código Participante" },
+  { key: "CNPJ/CPF Participante", label: "CNPJ/CPF Participante" },
+  { key: "Regime IBS/CBS", label: "Regime IBS/CBS" },
+  { key: "Nome Participante", label: "Nome Participante" },
+  { key: "UF Origem/Destino", label: "UF Origem/Destino" },
+  { key: "Número Documento", label: "Número Documento" },
+  { key: "Série", label: "Série" },
+  { key: "Modelo", label: "Modelo" },
+  { key: "Chave NF-e", label: "Chave NF-e" },
+  { key: "Data Documento", label: "Data Documento" },
+  { key: "Data Entrada/Saída", label: "Data Entrada/Saída" },
+  { key: "Vlr Documento", label: "Vlr Documento" },
+  { key: "Vlr Desconto NF", label: "Vlr Desconto NF" },
+  { key: "Vlr Mercadoria", label: "Vlr Mercadoria" },
+  { key: "Vlr Frete", label: "Vlr Frete" },
+  { key: "Vlr Seguro", label: "Vlr Seguro" },
+  { key: "Vlr Outras DA", label: "Vlr Outras DA" },
+  { key: "Número Item", label: "Número Item" },
+  { key: "Código Item", label: "Código Item" },
+  { key: "Descrição Item", label: "Descrição Item" },
+  { key: "Tipo Item", label: "Tipo Item" },
+  { key: "Código Barra", label: "Código Barra" },
+  { key: "NCM", label: "NCM" },
+  { key: "Crédito IBS vazio", label: "Crédito IBS" }, // AD — existe no original, sem dados
+  { key: "Crédito CBS", label: "Crédito CBS" },
+  { key: "Crédito IBS", label: "Crédito IBS" },
+  ...ANOS_CREDITO.flatMap(({ label }) => [
+    { key: `IBS ${label}`, label: "IBS" },
+    { key: `CBS ${label}`, label: "CBS" },
+  ]),
+  { key: "Vlr Operação", label: "Vlr Operação" },
+  { key: "Vlr Item", label: "Vlr Item" },
+  { key: "Vlr Desconto Item", label: "Vlr Desconto Item" },
+  { key: "Qtde", label: "Qtde" },
+  { key: "Unidade Medida", label: "Unidade Medida" },
+  { key: "Indicador Movimento", label: "Indicador Movimento" },
+  { key: "Natureza Crédito", label: "Natureza Crédito" },
+  { key: "CFOP", label: "CFOP" },
+  { key: "Descrição CFOP", label: "Descrição CFOP" },
+  { key: "CST ICMS", label: "CST ICMS" },
+  { key: "Vlr Base Cálculo ICMS", label: "Vlr Base Cálculo ICMS" },
+  { key: "Vlr Redução Base ICMS", label: "Vlr Redução Base ICMS" },
+  { key: "Alíquota ICMS", label: "Alíquota ICMS" },
+  { key: "Vlr ICMS", label: "Vlr ICMS" },
+  { key: "Vlr Base Cálculo ICMS-ST", label: "Vlr Base Cálculo ICMS-ST" },
+  { key: "Alíquota ICMS-ST", label: "Alíquota ICMS-ST" },
+  { key: "Vlr ICMS-ST", label: "Vlr ICMS-ST" },
+  { key: "CST IPI", label: "CST IPI" },
+  { key: "Vlr Base Cálculo IPI", label: "Vlr Base Cálculo IPI" },
+  { key: "Alíquota IPI", label: "Alíquota IPI" },
+  { key: "Vlr IPI", label: "Vlr IPI" },
+  { key: "CST PIS", label: "CST PIS" },
+  { key: "Vlr Base Cálculo PIS", label: "Vlr Base Cálculo PIS" },
+  { key: "Alíquota PIS", label: "Alíquota PIS" },
+  { key: "Vlr PIS", label: "Vlr PIS" },
+  { key: "CST Cofins", label: "CST Cofins" },
+  { key: "Vlr Base Cálculo Cofins", label: "Vlr Base Cálculo Cofins" },
+  { key: "Alíquota Cofins", label: "Alíquota Cofins" },
+  { key: "Vlr Cofins", label: "Vlr Cofins" },
+  { key: "Conta Contábil", label: "Conta Contábil" },
+  { key: "", label: "" }, // BW — coluna final vazia, como no original
+]
 
-function creditColHeaders(): string[] {
-  const h: string[] = []
-  for (const { label } of ANOS_CREDITO) h.push(`Crédito IBS ${label}`, `Crédito CBS ${label}`)
-  return h
-}
-
-const TODOS_HEADERS = [...HEADERS, ...creditColHeaders()]
-const COL_INICIO = 3 // C
-const LINHA_TITULO = 1
-const LINHA_ANOS_CREDITO = 2 // rótulos dos 6 grupos de ano (2027 e 2028, 2029...2033), colunas D..I
-const LINHA_ALIQ_CBS = 3
-const LINHA_ALIQ_IBSUF = 4
-const LINHA_ALIQ_IBSMUN = 5
-const LINHA_SUBTOTAL = 6 // SUBTOTAL(9,...) em R$ sobre as colunas de crédito, como na referência
-const LINHA_BANDA_ANO = 7 // faixa azul com o ano, mesclada sobre cada par IBS/CBS
-const LINHA_HEADER = 8
-export const LINHA_DADOS_INICIO_ENTRADA = 9
-// margem generosa de linhas nas fórmulas cross-sheet (Análise Fornecedores, Fase 6) — mesmo
-// espírito de LINHA_FIM_RANGE_ANO em anos.ts
+const COL_INICIO = 2 // B — igual ao original
+const LINHA_TITULO = 5 // B5 "Entradas - EFD ICMS IPI" + SUBTOTAL dos créditos (AG5:AR5)
+const LINHA_SUBTOTAL_DOC = 6 // SUBTOTAL de Vlr Documento..Vlr Outras DA + banda de anos
+const LINHA_HEADER = 7
+export const LINHA_DADOS_INICIO_ENTRADA = 8
 export const LINHA_FIM_RANGE_ENTRADA = 200_000
 
-// Letra da coluna de um campo da aba Entradas — exportada pra Análise Fornecedores (Fase 6)
-// referenciar as mesmas colunas sem duplicar a lista de headers.
-export function letraColunaEntrada(nome: string): string {
-  const idx = TODOS_HEADERS.indexOf(nome)
-  if (idx === -1) throw new Error(`Coluna "${nome}" não existe no layout de Entradas`)
+export function letraColunaEntrada(key: string): string {
+  const idx = COLUNAS.findIndex((c) => c.key === key)
+  if (idx === -1) throw new Error(`Coluna "${key}" não existe no layout de Entradas`)
   return colLetra(COL_INICIO + idx)
 }
 const letraDe = letraColunaEntrada
 
-// Tabela de fornecedores (CNPJ → Regime), fora da área de dados principal — fonte do VLOOKUP da
-// coluna "Regime IBS/CBS". Colocada nas colunas AZ/BA pra não colidir com nada.
-const COL_FORN_CNPJ = "AZ"
-const COL_FORN_REGIME = "BA"
+// coluna da tabela de alíquotas (AG1:AO4) de um ano: AH=2026 ... AO=2033
+function colTabelaAno(ano: number): string {
+  return colLetra(COL_INICIO + COLUNAS.findIndex((c) => c.key === "IBS 2027 e 2028") + 1 + (ano - 2026))
+}
+
+// Descrições de CFOP de entrada — extraídas da planilha-original (conferir.xlsx)
+const CFOP_ENTRADA_DESCRICOES: Record<string, string> = {
+  "1101": "Compra para Industrialização ou prod rural",
+  "2101": "Compra para Industrialização ou prod rural",
+  "1102": "Compra para comercialização",
+  "2102": "Compra para comercialização",
+  "1116": "Compra para Industrialização ou prod rural originada de encomenda para recebimento futuro",
+  "2116": "Compra para Industrialização ou prod rural originada de encomenda para recebimento futuro",
+  "1122": "Compra para Industrialização em que a mercadoria foi remetida pelo fornecedor ao industrializador sem transitar pelo estabelecimento adquirente",
+  "2122": "Compra para Industrialização em que a mercadoria foi remetida pelo fornecedor ao industrializador sem transitar pelo estabelecimento adquirente",
+  "1128": "Compra para utilização na prestação de serviço sujeita ao ISSQN",
+  "2128": "Compra para utilização na prestação de serviço sujeita ao ISSQN",
+  "1551": "Compra de bem para o ativo imobilizado",
+  "2551": "Compra de bem para o ativo imobilizado",
+  "1556": "Compra de material para uso ou consumo",
+  "2556": "Compra de material para uso ou consumo",
+  "1653": "Compra de combustível ou lubrificante por consumidor ou usuário final",
+  "2653": "Compra de combustível ou lubrificante por consumidor ou usuário final",
+  "1910": "Entrada de bonificação, doação ou brinde",
+  "2910": "Entrada de bonificação, doação ou brinde",
+  "1911": "Entrada de amostra grátis",
+  "2911": "Entrada de amostra grátis",
+  "1922": "Lançamento efetuado a título de simples faturamento decorrente de compra para recebimento futuro",
+  "2922": "Lançamento efetuado a título de simples faturamento decorrente de compra para recebimento futuro",
+  "2916": "Retorno de mercadoria ou bem remetido para conserto ou reparo",
+  "1916": "Retorno de mercadoria ou bem remetido para conserto ou reparo",
+  "1949": "Outra entrada de mercadoria ou prestação de serviço não especificada",
+  "2949": "Outra entrada de mercadoria ou prestação de serviço não especificada",
+}
+
+function larguraColuna(label: string): number {
+  if (label === "") return 3
+  if (label === "Chave NF-e") return 46
+  if (label === "Nome Participante") return 30
+  if (label === "Descrição Item" || label === "Descrição CFOP" || label === "Natureza Crédito") return 34
+  if (label === "Registros" || label === "Tipo Item") return 24
+  if (["CNPJ", "CNPJ/CPF Participante"].includes(label)) return 17
+  if (["Regime IBS/CBS", "Indicador Emitente", "Código Participante", "Código Item", "Código Barra"].includes(label)) return 16
+  if (["PA", "Data Documento", "Data Entrada/Saída"].includes(label)) return 12
+  return 14
+}
+
+// tabela de fornecedores (CNPJ → Regime), fonte do VLOOKUP da coluna "Regime IBS/CBS" — fica em
+// BY/BZ, FORA do layout de dados (que agora vai até BW)
+const COL_FORN_CNPJ = "BY"
+const COL_FORN_REGIME = "BZ"
 const LINHA_FORN_INICIO = 2
 
 export function montarAbaEntradasEfd(
@@ -110,32 +202,33 @@ export function montarAbaEntradasEfd(
   premissas: PremissasReformaData
 ) {
   const ws = wb.addWorksheet("Entradas - EFD ICMS IPI", { views: [{ showGridLines: false }] })
-  // formato R$ das colunas de crédito no nível da COLUNA (não célula a célula) — memória
+  // formatos por COLUNA (PA como data, créditos em R$) — memória e consistência
   ws.columns = [
-    { width: 3 }, { width: 3 },
-    ...TODOS_HEADERS.map((nome) =>
-      nome.startsWith("Crédito IBS ") || nome.startsWith("Crédito CBS ")
-        ? { width: 14, style: { numFmt: FMT_RS } }
-        : { width: 14 }
-    ),
+    { width: 3 },
+    ...COLUNAS.map((c) => {
+      if (c.key === "PA") return { width: larguraColuna(c.label), style: { numFmt: FMT_PA } }
+      if (c.key.startsWith("IBS ") || c.key.startsWith("CBS ")) return { width: larguraColuna(c.label), style: { numFmt: FMT_RS } }
+      return { width: larguraColuna(c.label) }
+    }),
   ]
 
-  celula(ws, `C${LINHA_TITULO}`, "Entradas - EFD ICMS IPI", { bold: true, size: 12 })
+  // Tabela de alíquotas AG1:AO4 — anos 2026-2033 com as alíquotas CHEIAS da premissa (a redução
+  // por classificação do NCM entra na fórmula de crédito, não aqui)
+  const colRotulo = letraDe("IBS 2027 e 2028") // AG
+  celula(ws, `${colRotulo}1`, "IBS/CBS", { bold: true })
+  celula(ws, `${colRotulo}2`, "ALIQ. CBS", { bold: true })
+  celula(ws, `${colRotulo}3`, "ALIQ. IBS UF", { bold: true })
+  celula(ws, `${colRotulo}4`, "ALIQ. IBS MUN", { bold: true })
+  for (const ano of ANOS_TABELA) {
+    const p = premissas.premissasPorAno[ano]
+    const col = colTabelaAno(ano)
+    celula(ws, `${col}1`, ano, { bold: true, centralizado: true, numFmt: "General" })
+    celula(ws, `${col}2`, p.cbs, { numFmt: "0.00%" })
+    celula(ws, `${col}3`, p.ibsUF, { numFmt: "0.00%" })
+    celula(ws, `${col}4`, p.ibsMUN, { numFmt: "0.00%" })
+  }
 
-  // Tabela de alíquotas (cheias, sem o fator de redução do débito) por ano de crédito — 4 linhas
-  // bem definidas, sem overlap: rótulo do ano (2), CBS (3), IBS UF (4), IBS MUN (5)
-  celula(ws, `C${LINHA_ANOS_CREDITO}`, "Ano", { bold: true })
-  celula(ws, `C${LINHA_ALIQ_CBS}`, "ALIQ. CBS")
-  celula(ws, `C${LINHA_ALIQ_IBSUF}`, "ALIQ. IBS UF")
-  celula(ws, `C${LINHA_ALIQ_IBSMUN}`, "ALIQ. IBS MUN")
-  ANOS_CREDITO.forEach(({ label, anoPremissa }, i) => {
-    const p = premissas.premissasPorAno[anoPremissa]
-    const col = colLetra(4 + i) // D, E, F, G, H, I
-    celula(ws, `${col}${LINHA_ANOS_CREDITO}`, label, { bold: true })
-    celula(ws, `${col}${LINHA_ALIQ_CBS}`, p.cbs, { numFmt: "0.00%" })
-    celula(ws, `${col}${LINHA_ALIQ_IBSUF}`, p.ibsUF, { numFmt: "0.00%" })
-    celula(ws, `${col}${LINHA_ALIQ_IBSMUN}`, p.ibsMUN, { numFmt: "0.00%" })
-  })
+  celula(ws, "B5", "Entradas - EFD ICMS IPI", { bold: true })
 
   // Tabela de fornecedores → regime (fonte do VLOOKUP da coluna "Regime IBS/CBS")
   const cnpjsUnicos = Array.from(new Set(linhas.map((l) => l.cnpjFornecedor).filter(Boolean)))
@@ -150,100 +243,136 @@ export function montarAbaEntradasEfd(
   })
   const linhaFornFim = LINHA_FORN_INICIO + Math.max(cnpjsUnicos.length, 1) - 1
 
-  // Cabeçalho: colunas brutas em negrito simples; "Crédito CBS"/"Crédito IBS" (classificação do
-  // NCM) em azul claro; nos grupos de ano, faixa azul mesclada com o rótulo do ano em cima e
-  // subcabeçalhos "IBS"/"CBS" com borda — estilo da planilha de referência
-  TODOS_HEADERS.forEach((nome, i) => {
-    const ref = `${colLetra(COL_INICIO + i)}${LINHA_HEADER}`
-    if (nome === "Crédito CBS" || nome === "Crédito IBS") {
-      celula(ws, ref, nome, { bold: true, centralizado: true, fundo: COR_HEADER_CREDITO, borda: true })
-    } else if (nome.startsWith("Crédito IBS ")) {
-      celula(ws, ref, "IBS", { bold: true, centralizado: true, borda: true })
-    } else if (nome.startsWith("Crédito CBS ")) {
-      celula(ws, ref, "CBS", { bold: true, centralizado: true, borda: true })
-    } else {
-      celula(ws, ref, nome, { bold: true })
-    }
-  })
+  // Banda de anos (linha 6): rótulo mesclado sobre cada par IBS/CBS, azul claro
   for (const { label } of ANOS_CREDITO) {
-    const cIbs = letraColunaEntrada(`Crédito IBS ${label}`)
-    const cCbs = letraColunaEntrada(`Crédito CBS ${label}`)
-    ws.mergeCells(`${cIbs}${LINHA_BANDA_ANO}:${cCbs}${LINHA_BANDA_ANO}`)
-    celula(ws, `${cIbs}${LINHA_BANDA_ANO}`, label, { bold: true, centralizado: true, fundo: COR_BANDA_ANO, borda: true })
+    const cIbs = letraDe(`IBS ${label}`)
+    const cCbs = letraDe(`CBS ${label}`)
+    ws.mergeCells(`${cIbs}${LINHA_SUBTOTAL_DOC}:${cCbs}${LINHA_SUBTOTAL_DOC}`)
+    celula(ws, `${cIbs}${LINHA_SUBTOTAL_DOC}`, /^\d+$/.test(label) ? Number(label) : label, {
+      bold: true, centralizado: true, fundo: COR_BANDA, borda: true, numFmt: "General",
+    })
   }
 
-  const cCnpjPart = letraDe("CNPJ Participante"), cRegime = letraDe("Regime IBS/CBS"), cNcm = letraDe("NCM"),
-    cVlrItem = letraDe("Vlr Item"), cTipoCredito = letraDe("Crédito CBS"), cTipoCreditoIbs = letraDe("Crédito IBS")
+  // Cabeçalho (linha 7): negrito; azul claro de "Crédito CBS" (AE) até o último "CBS" (AR) —
+  // a coluna "Crédito IBS" vazia (AD) fica sem fundo, como no original
+  COLUNAS.forEach((c, i) => {
+    if (c.label === "") return
+    const ref = `${colLetra(COL_INICIO + i)}${LINHA_HEADER}`
+    const noBlocoCredito = c.key === "Crédito CBS" || c.key === "Crédito IBS" || c.key.startsWith("IBS ") || c.key.startsWith("CBS ")
+    if (noBlocoCredito) celula(ws, ref, c.label, { bold: true, centralizado: true, fundo: COR_BANDA, borda: true })
+    else celula(ws, ref, c.label, { bold: true })
+  })
 
-  // soma acumulada por coluna de crédito, pro SUBTOTAL da linha 6 (cache do resultado)
+  const cH = letraDe("CNPJ/CPF Participante"), cI = letraDe("Regime IBS/CBS"), cAC = letraDe("NCM"),
+    cAE = letraDe("Crédito CBS"), cAF = letraDe("Crédito IBS"),
+    cAT = letraDe("Vlr Item"), cAU = letraDe("Vlr Desconto Item")
+
+  // "YYYY-MM" → Date 1º do mês (PA como data, formato mm-dd-yy — igual ao original)
+  const paParaData = (pa: string): Date | string => {
+    const m = /^(\d{4})-(\d{2})$/.exec(pa)
+    return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1)) : pa
+  }
+
   const somasCredito: Record<string, number> = {}
-  for (const nome of creditColHeaders()) somasCredito[nome] = 0
+  for (const { label } of ANOS_CREDITO) {
+    somasCredito[`IBS ${label}`] = 0
+    somasCredito[`CBS ${label}`] = 0
+  }
+  const somasDoc: Record<string, number> = {
+    "Vlr Documento": 0, "Vlr Desconto NF": 0, "Vlr Mercadoria": 0, "Vlr Frete": 0, "Vlr Seguro": 0, "Vlr Outras DA": 0,
+  }
 
   linhas.forEach((l, i) => {
     const r = LINHA_DADOS_INICIO_ENTRADA + i
-    const raw = [
-      l.cnpj, l.pa, "C100/C170 - Documento - Nota Fiscal", l.codigoParticipante, l.cnpjFornecedor,
-      l.nomeFornecedor, l.ufFornecedor, "", l.numeroDocumento, l.chaveNFe, l.dataDocumento,
-      l.vlrDocumento, l.numeroItem, l.codigoItem, l.descricaoItem, l.ncm, l.vlrItem, l.qtde,
-      l.cfop, l.vlrBaseCalculoIcms, l.aliquotaIcms, l.vlrIcms, "",
+    // valores brutos na ordem de COLUNAS (null = célula vazia; fórmulas entram depois)
+    const raw: (string | number | Date | null)[] = [
+      l.cnpj, paParaData(l.pa), l.registros, l.indicadorEmitente, l.situacao || null,
+      l.codigoParticipante || null, l.cnpjFornecedor || l.cpfFornecedor || null,
+      null /* Regime IBS/CBS — fórmula */,
+      l.nomeFornecedor || null,
+      l.ufFornecedor ? `${l.ufFornecedor}/${l.ufPropria || l.ufFornecedor}` : null,
+      l.numeroDocumento || null, l.serie || null, l.modelo || null, l.chaveNFe || null,
+      l.dataDocumento || null, l.dataEntradaSaida || null,
+      l.vlrDocumento, l.vlrDescontoNF, l.vlrMercadoria, l.vlrFrete, l.vlrSeguro, l.vlrOutrasDA,
+      l.numeroItem || null, l.codigoItem || null, l.descricaoItem || null, l.tipoItem || null,
+      l.codigoBarra || null, l.ncm || null,
+      null /* Crédito IBS vazio (AD) */, null /* Crédito CBS — fórmula */, null /* Crédito IBS — fórmula */,
+      ...ANOS_CREDITO.flatMap(() => [null, null]) /* pares IBS/CBS — fórmulas */,
+      null /* Vlr Operação — vazio no original */,
+      l.vlrItem, l.vlrDescontoItem, l.qtde, l.unidadeMedida || null, l.indicadorMovimento || null,
+      l.naturezaCredito || null, l.cfop || null, CFOP_ENTRADA_DESCRICOES[l.cfop] ?? null,
+      l.cstIcms || null, l.vlrBaseCalculoIcms, null /* Vlr Redução Base ICMS — vazio */,
+      l.aliquotaIcms, l.vlrIcms, l.vlrBaseCalculoIcmsSt, l.aliquotaIcmsSt, l.vlrIcmsSt,
+      l.cstIpi || null, l.vlrBaseCalculoIpi, l.aliquotaIpi, l.vlrIpi,
+      l.cstPis || null, l.vlrBaseCalculoPis, l.aliquotaPis, l.vlrPis,
+      l.cstCofins || null, l.vlrBaseCalculoCofins, l.aliquotaCofins, l.vlrCofins,
+      l.contaContabil || null, null,
     ]
     raw.forEach((v, ci) => {
-      // sem font por célula (Calibri 11 é o padrão do Excel) — crítico pra memória
-      ws.getCell(r, COL_INICIO + ci).value = v as ExcelJS.CellValue
+      if (v === null) return
+      ws.getCell(r, COL_INICIO + ci).value = v
     })
 
     const classificacao = classificacoes[l.cnpjFornecedor]
     const regimeCalculado = classificacao?.erro ? "Não classificado" : classificacao?.simplesNacional ? "Simples Nacional" : "Regime Regular"
-    celula(ws, `${cRegime}${r}`, f(
-      `IFERROR(VLOOKUP(${cCnpjPart}${r},$${COL_FORN_CNPJ}$${LINHA_FORN_INICIO}:$${COL_FORN_REGIME}$${linhaFornFim},2,FALSE),"Não classificado")`,
+    celula(ws, `${cI}${r}`, f(
+      `IFERROR(VLOOKUP(${cH}${r},$${COL_FORN_CNPJ}$${LINHA_FORN_INICIO}:$${COL_FORN_REGIME}$${linhaFornFim},2,FALSE),"Não classificado")`,
       regimeCalculado
     ))
 
-    const tipoCreditoFormula = `IFERROR(IF(${cRegime}${r}="Regime Regular",VLOOKUP(${cNcm}${r},'Base IBS-CBS'!$H:$K,4,FALSE),"Não permitido"),"Cheio")`
+    const tipoCreditoFormula = `IFERROR(IF(${cI}${r}="Regime Regular",VLOOKUP(${cAC}${r},'Base IBS-CBS'!$H:$K,4,FALSE),"Não permitido"),"Cheio")`
     const naoRegular = regimeCalculado !== "Regime Regular"
-    // resultado default: "Cheio" quando Regime Regular (NCM não necessariamente na base — mesmo
-    // comportamento IFERROR do modelo); "Não permitido" quando Simples/não classificado.
-    // "Crédito CBS" e "Crédito IBS" mostram a mesma classificação (a base de NCM não distingue),
-    // como na planilha de referência — duas colunas, mesmo conteúdo.
-    celula(ws, `${cTipoCredito}${r}`, f(tipoCreditoFormula, naoRegular ? "Não permitido" : "Cheio"))
-    celula(ws, `${cTipoCreditoIbs}${r}`, f(`${cTipoCredito}${r}`, naoRegular ? "Não permitido" : "Cheio"))
+    const tipoCache = naoRegular ? "Não permitido" : "Cheio"
+    celula(ws, `${cAE}${r}`, f(tipoCreditoFormula, tipoCache))
+    celula(ws, `${cAF}${r}`, f(tipoCreditoFormula, tipoCache))
 
-    ANOS_CREDITO.forEach(({ anoPremissa }, gi) => {
+    const base = l.vlrItem - l.vlrDescontoItem
+    for (const { label, anoPremissa } of ANOS_CREDITO) {
       const p = premissas.premissasPorAno[anoPremissa]
-      const colAliq = colLetra(4 + gi)
-      const refCbs = `$${colAliq}$${LINHA_ALIQ_CBS}`
-      const refIbsUF = `$${colAliq}$${LINHA_ALIQ_IBSUF}`
-      const refIbsMUN = `$${colAliq}$${LINHA_ALIQ_IBSMUN}`
-      const cIbsCol = letraDe(`Crédito IBS ${ANOS_CREDITO[gi].label}`)
-      const cCbsCol = letraDe(`Crédito CBS ${ANOS_CREDITO[gi].label}`)
-
-      const aliqIbsAno = p.ibsUF + p.ibsMUN
-      const creditoIbs = naoRegular ? 0 : l.vlrItem * aliqIbsAno // "Cheio" é o default quando Regular
-      const creditoCbs = naoRegular ? 0 : l.vlrItem * p.cbs
-
+      const colT = colTabelaAno(anoPremissa)
+      const cIbsCol = letraDe(`IBS ${label}`)
+      const cCbsCol = letraDe(`CBS ${label}`)
+      const creditoIbs = naoRegular ? 0 : base * (p.ibsUF + p.ibsMUN)
+      const creditoCbs = naoRegular ? 0 : base * p.cbs
+      // fórmulas idênticas às do original (IFs aninhados, ambas testam AE)
       celula(ws, `${cIbsCol}${r}`, f(
-        `IF(${cTipoCreditoIbs}${r}="Cheio",${cVlrItem}${r}*(${refIbsUF}+${refIbsMUN}),IF(${cTipoCreditoIbs}${r}="Alíquota reduzida em 60%",${cVlrItem}${r}*((${refIbsUF}+${refIbsMUN})*0.4),0))`,
+        `IF(${cAE}${r}="Cheio",(${cAT}${r}-${cAU}${r})*($${colT}$3+$${colT}$4),IF(${cAE}${r}="Alíquota reduzida em 60%",(${cAT}${r}-${cAU}${r})*(($${colT}$3+$${colT}$4)*0.4),IF(${cAE}${r}="Alíquota zero",0,IF(${cAE}${r}="Não permitido",0,0))))`,
         creditoIbs
-      ), { numFmt: FMT_RS })
+      ))
       celula(ws, `${cCbsCol}${r}`, f(
-        `IF(${cTipoCredito}${r}="Cheio",${cVlrItem}${r}*${refCbs},IF(${cTipoCredito}${r}="Alíquota reduzida em 60%",${cVlrItem}${r}*(${refCbs}*0.4),0))`,
+        `IF(${cAE}${r}="Cheio",(${cAT}${r}-${cAU}${r})*($${colT}$2),IF(${cAE}${r}="Alíquota reduzida em 60%",(${cAT}${r}-${cAU}${r})*(($${colT}$2)*0.4),IF(${cAE}${r}="Alíquota zero",0,IF(${cAE}${r}="Não permitido",0,0))))`,
         creditoCbs
-      ), { numFmt: FMT_RS })
-      somasCredito[`Crédito IBS ${ANOS_CREDITO[gi].label}`] += creditoIbs
-      somasCredito[`Crédito CBS ${ANOS_CREDITO[gi].label}`] += creditoCbs
-    })
+      ))
+      somasCredito[`IBS ${label}`] += creditoIbs
+      somasCredito[`CBS ${label}`] += creditoCbs
+    }
+
+    somasDoc["Vlr Documento"] += l.vlrDocumento
+    somasDoc["Vlr Desconto NF"] += l.vlrDescontoNF
+    somasDoc["Vlr Mercadoria"] += l.vlrMercadoria
+    somasDoc["Vlr Frete"] += l.vlrFrete
+    somasDoc["Vlr Seguro"] += l.vlrSeguro
+    somasDoc["Vlr Outras DA"] += l.vlrOutrasDA
   })
 
-  // Linha 6: SUBTOTAL(9,...) em R$ sobre cada coluna de crédito (soma só o visível com filtro),
-  // logo acima da faixa azul dos anos — igual à planilha de referência
+  // SUBTOTAIS (como no original): créditos na linha 5 (R$), valores de documento na linha 6
   if (linhas.length > 0) {
     const ultimaLinha = LINHA_DADOS_INICIO_ENTRADA + linhas.length - 1
-    for (const nome of creditColHeaders()) {
-      const col = letraDe(nome)
+    for (const { label } of ANOS_CREDITO) {
+      for (const key of [`IBS ${label}`, `CBS ${label}`]) {
+        const col = letraDe(key)
+        celula(
+          ws, `${col}${LINHA_TITULO}`,
+          f(`SUBTOTAL(9,${col}${LINHA_DADOS_INICIO_ENTRADA}:${col}${ultimaLinha})`, somasCredito[key]),
+          { numFmt: FMT_RS }
+        )
+      }
+    }
+    for (const key of Object.keys(somasDoc)) {
+      const col = letraDe(key)
       celula(
-        ws, `${col}${LINHA_SUBTOTAL}`,
-        f(`SUBTOTAL(9,${col}${LINHA_DADOS_INICIO_ENTRADA}:${col}${ultimaLinha})`, somasCredito[nome]),
-        { bold: true, numFmt: FMT_RS }
+        ws, `${col}${LINHA_SUBTOTAL_DOC}`,
+        f(`SUBTOTAL(9,${col}${LINHA_DADOS_INICIO_ENTRADA}:${col}${ultimaLinha})`, somasDoc[key])
       )
     }
   }

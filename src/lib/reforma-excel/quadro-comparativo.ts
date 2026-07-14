@@ -125,9 +125,12 @@ export function montarAbaQuadroComparativo(
     const p = premissas.premissasPorAno[anoPremissa]
     const { aliqIbs, aliqCbs } = aliquotasEfetivasDoAno(p.cbs, p.ibsUF, p.ibsMUN, premissas.reducao60)
     const fatorIcmsIss = REDUCAO_ICMS_ISS[anoPremissa] ?? 1
-    // ICMS = premissa constante (mesma regra das abas de ano — o modelo não usa a alíquota do EFD)
+    // ICMS = premissa constante (mesma regra das abas de ano — o modelo não usa a alíquota do EFD);
+    // ISS ORIGINAL = sempre a alíquota normal de 2026, não a premissa do próprio ano
     aliqPorAno.set(ano, {
-      aliqIss: p.aliquotaISS * fatorIcmsIss, aliqIssOriginal: p.aliquotaISS, aliqIbs, aliqCbs,
+      aliqIss: p.aliquotaISS * fatorIcmsIss,
+      aliqIssOriginal: premissas.premissasPorAno[2026]?.aliquotaISS ?? p.aliquotaISS,
+      aliqIbs, aliqCbs,
       aliqIcms: (premissas.aliquotaICMS ?? 0.225) * fatorIcmsIss,
     })
   }
