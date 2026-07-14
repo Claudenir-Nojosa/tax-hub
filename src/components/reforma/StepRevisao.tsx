@@ -10,7 +10,7 @@ import type { LegislacaoData } from "./StepLegislacaoIA"
 import type { BaseNcmData } from "./StepBaseNcm"
 import type { SaidasEfdData } from "./StepSaidasEfd"
 import type { EntradasEfdData } from "./StepEntradasEfd"
-import { gerarExcelReforma } from "@/lib/reforma-excel/gerar-excel-reforma"
+import { gerarExcelReforma, type OpcoesGeracao } from "@/lib/reforma-excel/gerar-excel-reforma"
 import { parseBaseIbsCbsCustomizada } from "@/lib/reforma-base-ibs-cbs-custom"
 import type { LinhaBaseIbsCbs } from "@/lib/reforma-base-ibs-cbs"
 
@@ -52,7 +52,7 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
   // aparece em volumes bem maiores, como precaução.
   const volumeGrande = totalSaidas > 60000
 
-  const gerar = async () => {
+  const gerar = async (opcoes?: OpcoesGeracao) => {
     setGerando(true)
     setProgresso({ pct: 0, etapa: "Carregando base de NCM..." })
     try {
@@ -76,7 +76,8 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
           empresa, premissasReforma, legislacao, linhasSaidas, baseIbsCbs,
           linhasEntradas, classificacoesFornecedores: entradasEfd.classificacoes,
         },
-        (pct, etapa) => setProgresso({ pct, etapa })
+        (pct, etapa) => setProgresso({ pct, etapa }),
+        opcoes
       )
       setGerado(true)
       toast.success("Excel gerado com sucesso")
@@ -143,12 +144,21 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
         </div>
       )}
 
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-2">
         <Button variant="outline" onClick={onBack} disabled={gerando}>← Voltar</Button>
-        <Button onClick={gerar} disabled={gerando} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-          {gerando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : gerado ? <CheckCircle2 className="h-4 w-4 mr-2" /> : <FileDown className="h-4 w-4 mr-2" />}
-          {gerando ? "Gerando..." : gerado ? "Excel gerado — gerar novamente" : "Gerar Excel"}
-        </Button>
+        <div className="flex gap-2">
+          {/* Versão pro CLIENTE: sem fórmulas (valores sólidos), sem as abas internas (Base
+              IBS-CBS e Análise Fornecedores); os dropdowns do Quadro Comparativo e do Valor
+              Total NF-e continuam funcionais */}
+          <Button variant="outline" onClick={() => gerar({ modoCliente: true })} disabled={gerando}>
+            {gerando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
+            Gerar Excel do cliente (sem fórmulas)
+          </Button>
+          <Button onClick={() => gerar()} disabled={gerando} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            {gerando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : gerado ? <CheckCircle2 className="h-4 w-4 mr-2" /> : <FileDown className="h-4 w-4 mr-2" />}
+            {gerando ? "Gerando..." : gerado ? "Excel gerado — gerar novamente" : "Gerar Excel"}
+          </Button>
+        </div>
       </div>
     </div>
   )

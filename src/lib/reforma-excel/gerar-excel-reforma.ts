@@ -39,8 +39,97 @@ export interface DadosGeracaoExcel {
 
 export type ProgressoGeracao = (percentual: number, etapa: string) => void
 
+export interface OpcoesGeracao {
+  // Versão pra ENVIAR AO CLIENTE: só as abas Premissas, Legislações, anos (2026-2033), Valor
+  // Total NF-e, Quadro Comparativo e Entradas - EFD ICMS IPI; TODAS as fórmulas viram valores
+  // sólidos (pra não expor a metodologia de cálculo), EXCETO nas abas Quadro Comparativo e
+  // Valor Total NF-e — os dropdowns delas (Empresa/Documento/Ano) precisam continuar funcionais,
+  // e isso exige manter os SUMIFS/VLOOKUP que reagem à seleção (eles só somam colunas visíveis
+  // das outras abas, não revelam a cadeia de cálculo).
+  modoCliente?: boolean
+}
+
+// Abas que NÃO vão pro Excel do cliente
+const ABAS_REMOVER_CLIENTE = ["Base IBS-CBS", "Análise Fornecedores"]
+// Abas que mantêm as fórmulas no modo cliente (dropdowns funcionais)
+const ABAS_COM_FORMULA_CLIENTE = new Set(["Quadro Comparativo", "Valor Total NF-e"])
+
+// Remove as fórmulas de um XML de worksheet mantendo os valores em cache: <f>...</f> some e o
+// <v> (ou <is>) fica. Fórmula sem cache (o ExcelJS descarta resultado 0) vira <v>0</v> — senão a
+// célula ficaria vazia onde deveria mostrar "R$ -".
+function removerFormulasDoXml(xml: string): string {
+  return xml.replace(
+    /<c ([^>]*?)>(?:<f[^>]*>[^<]*<\/f>|<f[^>]*\/>)((?:<v>[^<]*<\/v>)|(?:<is>[\s\S]*?<\/is>))?<\/c>/g,
+    (_m, attrs: string, resto: string | undefined) => {
+      if (resto) return `<c ${attrs}>${resto}</c>`
+      if (/t="str"/.test(attrs)) return `<c ${attrs.replace(/\s*t="str"/, "")}/>`
+      return `<c ${attrs}><v>0</v></c>`
+    }
+  )
+}
+
+// Transforma o zip final na versão do cliente: tira fórmulas (exceto Quadro/Valor Total) e
+// remove as abas internas (Base IBS-CBS, Análise Fornecedores) com todas as suas partes.
+// (exportada só pra validação em script — o fluxo real passa por gerarExcelReforma)
+export async function transformarParaCliente(zip: JSZip, caminhos: Map<string, string>): Promise<void> {
+  // 1) fórmulas → valores nas abas mantidas (menos Quadro/Valor Total)
+  for (const [nome, caminho] of caminhos) {
+    if (ABAS_REMOVER_CLIENTE.includes(nome) || ABAS_COM_FORMULA_CLIENTE.has(nome)) continue
+    const arquivo = zip.file(caminho)
+    if (!arquivo) continue
+    const xml = await arquivo.async("string")
+    zip.file(caminho, new TextEncoder().encode(removerFormulasDoXml(xml)))
+  }
+
+  // 2) remove as abas internas: entrada no workbook.xml, relationship, arquivos da worksheet e
+  // partes dependentes (rels da sheet → drawing → rels do drawing → imagens)
+  let workbookXml = await zip.file("xl/workbook.xml")!.async("string")
+  let relsXml = await zip.file("xl/_rels/workbook.xml.rels")!.async("string")
+  let contentTypes = await zip.file("[Content_Types].xml")!.async("string")
+
+  for (const nome of ABAS_REMOVER_CLIENTE) {
+    const m = new RegExp(`<sheet[^>]*name="${nome}"[^>]*r:id="(rId\\d+)"[^>]*/>`).exec(workbookXml)
+    if (!m) continue
+    const rid = m[1]
+    workbookXml = workbookXml.replace(m[0], "")
+    const rel = new RegExp(`<Relationship[^>]*Id="${rid}"[^>]*/>`).exec(relsXml)
+    if (rel) relsXml = relsXml.replace(rel[0], "")
+    const caminho = caminhos.get(nome)
+    if (!caminho) continue
+
+    const paraRemover = [caminho]
+    const relsSheet = caminho.replace("worksheets/", "worksheets/_rels/") + ".rels"
+    const relsSheetArq = zip.file(relsSheet)
+    if (relsSheetArq) {
+      const relsSheetXml = await relsSheetArq.async("string")
+      paraRemover.push(relsSheet)
+      for (const t of relsSheetXml.matchAll(/Target="\.\.\/([^"]+)"/g)) {
+        const alvo = `xl/${t[1]}`
+        paraRemover.push(alvo)
+        const relsAlvo = alvo.replace(/([^/]+)$/, "_rels/$1.rels")
+        const relsAlvoArq = zip.file(relsAlvo)
+        if (relsAlvoArq) {
+          const relsAlvoXml = await relsAlvoArq.async("string")
+          paraRemover.push(relsAlvo)
+          for (const t2 of relsAlvoXml.matchAll(/Target="\.\.\/([^"]+)"/g)) paraRemover.push(`xl/${t2[1]}`)
+        }
+      }
+    }
+    for (const arq of paraRemover) {
+      zip.remove(arq)
+      contentTypes = contentTypes.replace(new RegExp(`<Override[^>]*PartName="/${arq.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*/>`), "")
+    }
+  }
+  // activeTab pode apontar pra uma aba removida — remove o atributo por segurança
+  workbookXml = workbookXml.replace(/\s*activeTab="\d+"/, "")
+
+  zip.file("xl/workbook.xml", new TextEncoder().encode(workbookXml))
+  zip.file("xl/_rels/workbook.xml.rels", new TextEncoder().encode(relsXml))
+  zip.file("[Content_Types].xml", new TextEncoder().encode(contentTypes))
+}
+
 // Localiza o arquivo XML de cada aba dentro do .xlsx (nome da aba → rId → caminho da worksheet)
-async function mapearCaminhosDasAbas(zip: JSZip): Promise<Map<string, string>> {
+export async function mapearCaminhosDasAbas(zip: JSZip): Promise<Map<string, string>> {
   const workbookXml = await zip.file("xl/workbook.xml")!.async("string")
   const relsXml = await zip.file("xl/_rels/workbook.xml.rels")!.async("string")
   const caminhoPorRid = new Map<string, string>()
@@ -55,7 +144,7 @@ async function mapearCaminhosDasAbas(zip: JSZip): Promise<Map<string, string>> {
   return caminhoPorNome
 }
 
-export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: ProgressoGeracao): Promise<void> {
+export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: ProgressoGeracao, opcoes?: OpcoesGeracao): Promise<void> {
   const wb = new ExcelJS.Workbook()
   wb.creator = "Tax Hub — Reforma Tributária"
   wb.created = new Date()
@@ -91,7 +180,7 @@ export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: P
   reportar("Valor Total NF-e", pesoOutras / 6)
   await yieldToEventLoop()
 
-  montarAbaQuadroComparativo(wb, dados.empresa, dados.linhasSaidas, dados.premissasReforma)
+  montarAbaQuadroComparativo(wb, dados.empresa, dados.linhasSaidas, dados.premissasReforma, dados.linhasEntradas, dados.classificacoesFornecedores, dados.baseIbsCbs)
   reportar("Quadro Comparativo", pesoOutras / 6)
   await yieldToEventLoop()
 
@@ -99,7 +188,7 @@ export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: P
   reportar("Base IBS-CBS", pesoOutras / 6)
   await yieldToEventLoop()
 
-  montarAbaEntradasEfd(wb, dados.linhasEntradas, dados.classificacoesFornecedores, dados.premissasReforma)
+  montarAbaEntradasEfd(wb, dados.linhasEntradas, dados.classificacoesFornecedores, dados.premissasReforma, dados.baseIbsCbs)
   await yieldToEventLoop()
   await montarAbaAnaliseFornecedores(wb, dados.empresa, dados.linhasEntradas, dados.classificacoesFornecedores)
   reportar("Entradas e Análise Fornecedores", pesoOutras / 6)
@@ -142,6 +231,12 @@ export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: P
     }
   }
 
+  if (opcoes?.modoCliente) {
+    onProgress?.(Math.min(99, Math.round((concluido / pesoTotal) * 100)), "Preparando versão do cliente (sem fórmulas)...")
+    await transformarParaCliente(zip, caminhos)
+    await yieldToEventLoop()
+  }
+
   const blobFinal = await zip.generateAsync(
     { type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 }, mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
     (meta) => {
@@ -156,7 +251,8 @@ export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: P
   const url = URL.createObjectURL(blobFinal)
   const a = document.createElement("a")
   a.href = url
-  const nomeArquivo = `Reforma Tributária - ${dados.empresa.razaoSocial || "Empresa"}`.replace(/[\\/:*?"<>|]/g, "").trim()
+  const prefixo = opcoes?.modoCliente ? "Reforma Tributária (Cliente)" : "Reforma Tributária"
+  const nomeArquivo = `${prefixo} - ${dados.empresa.razaoSocial || "Empresa"}`.replace(/[\\/:*?"<>|]/g, "").trim()
   a.download = `${nomeArquivo}.xlsx`
   a.click()
   URL.revokeObjectURL(url)

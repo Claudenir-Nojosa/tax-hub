@@ -1,8 +1,27 @@
 import ExcelJS from "exceljs"
 import type { LinhaEntradaEfd } from "@/lib/efd-icms-ipi-entradas-parser"
 import type { ResultadoConsultaCnpj } from "@/lib/consulta-simples-nacional"
+import type { LinhaBaseIbsCbs } from "@/lib/reforma-base-ibs-cbs"
 import type { PremissasReformaData } from "@/components/reforma/StepPremissasReforma"
 import { colLetra } from "./coluna-letra"
+
+// Fator de crédito pela classificação do NCM na Base IBS-CBS (mesma régua do VLOOKUP das
+// fórmulas): "Cheio" = 100%, "Alíquota reduzida em 60%" = 40%, zero/não permitido = 0.
+// NCM fora da base = "Cheio" (comportamento do IFERROR do modelo).
+export function fatorCreditoDoTipo(tipo: string): number {
+  if (tipo === "Cheio") return 1
+  if (tipo === "Alíquota reduzida em 60%") return 0.4
+  return 0
+}
+
+// Map NCM → Descrição Alíquota (primeira ocorrência vence, igual ao VLOOKUP)
+export function tipoCreditoPorNcm(baseIbsCbs: LinhaBaseIbsCbs[]): Map<string, string> {
+  const mapa = new Map<string, string>()
+  for (const l of baseIbsCbs) {
+    if (l.codigoNcm && !mapa.has(l.codigoNcm)) mapa.set(l.codigoNcm, l.descricaoAliquota)
+  }
+  return mapa
+}
 
 // Aba "Entradas - EFD ICMS IPI" — réplica coluna a coluna da planilha-original do usuário
 // (conferir.xlsx, aba "original"): dados nas colunas B..BV a partir da linha 8, tabela de
@@ -199,8 +218,10 @@ export function montarAbaEntradasEfd(
   wb: ExcelJS.Workbook,
   linhas: LinhaEntradaEfd[],
   classificacoes: Record<string, ResultadoConsultaCnpj>,
-  premissas: PremissasReformaData
+  premissas: PremissasReformaData,
+  baseIbsCbs: LinhaBaseIbsCbs[] = []
 ) {
+  const tipoPorNcm = tipoCreditoPorNcm(baseIbsCbs)
   const ws = wb.addWorksheet("Entradas - EFD ICMS IPI", { views: [{ showGridLines: false }] })
   // formatos por COLUNA (PA como data, créditos em R$) — memória e consistência
   ws.columns = [
@@ -322,7 +343,12 @@ export function montarAbaEntradasEfd(
 
     const tipoCreditoFormula = `IFERROR(IF(${cI}${r}="Regime Regular",VLOOKUP(${cAC}${r},'Base IBS-CBS'!$H:$K,4,FALSE),"Não permitido"),"Cheio")`
     const naoRegular = regimeCalculado !== "Regime Regular"
-    const tipoCache = naoRegular ? "Não permitido" : "Cheio"
+    // cache = MESMA régua do VLOOKUP: classificação do NCM na Base IBS-CBS (Cheio/reduzida
+    // 60%/zero/não permitido), "Cheio" quando o NCM não está na base — sem isso o valor
+    // congelado divergia do recalculado pelo Excel (e o Excel do cliente, sem fórmulas,
+    // congelava crédito superestimado)
+    const tipoCache = naoRegular ? "Não permitido" : (tipoPorNcm.get(l.ncm) ?? "Cheio")
+    const fatorCredito = naoRegular ? 0 : fatorCreditoDoTipo(tipoCache)
     celula(ws, `${cAE}${r}`, f(tipoCreditoFormula, tipoCache))
     celula(ws, `${cAF}${r}`, f(tipoCreditoFormula, tipoCache))
 
@@ -332,8 +358,8 @@ export function montarAbaEntradasEfd(
       const colT = colTabelaAno(anoPremissa)
       const cIbsCol = letraDe(`IBS ${label}`)
       const cCbsCol = letraDe(`CBS ${label}`)
-      const creditoIbs = naoRegular ? 0 : base * (p.ibsUF + p.ibsMUN)
-      const creditoCbs = naoRegular ? 0 : base * p.cbs
+      const creditoIbs = base * (p.ibsUF + p.ibsMUN) * fatorCredito
+      const creditoCbs = base * p.cbs * fatorCredito
       // fórmulas idênticas às do original (IFs aninhados, ambas testam AE)
       celula(ws, `${cIbsCol}${r}`, f(
         `IF(${cAE}${r}="Cheio",(${cAT}${r}-${cAU}${r})*($${colT}$3+$${colT}$4),IF(${cAE}${r}="Alíquota reduzida em 60%",(${cAT}${r}-${cAU}${r})*(($${colT}$3+$${colT}$4)*0.4),IF(${cAE}${r}="Alíquota zero",0,IF(${cAE}${r}="Não permitido",0,0))))`,
