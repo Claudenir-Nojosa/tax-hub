@@ -129,12 +129,19 @@ export function gerarTrilha(params: {
   config: TrilhaConfig
   topicos: Record<string, TopicoState>
   configCiclo: EstudoConfigCiclo
+  // matérias "graduadas" (100% concluídas na trilha) — não recebem teoria/questões novas,
+  // só continuam sendo revisadas pelas revisões espaçadas já agendadas anteriormente
+  materiasConcluidas?: string[]
 }): TrilhaMeta[] {
-  const { materias, config, topicos, configCiclo } = params
+  const { materias, config, topicos, configCiclo, materiasConcluidas } = params
   const orcamento = TRILHA_DISPONIBILIDADE_CONFIG[config.disponibilidade].minutosSemana
 
-  // filas de blocos por matéria, na ordem do edital
-  const ativas = materias.filter((m) => !config.puladas.includes(m.nome) && m.topicos.length > 0)
+  // filas de blocos por matéria, na ordem do edital — fonte de verdade de "matéria ativa" é o
+  // Ciclo de Estudos (configCiclo.materias[].incluir), não mais TrilhaConfig.puladas (deprecated)
+  const graduadas = new Set(materiasConcluidas ?? [])
+  const ativas = materias.filter(
+    (m) => (configCiclo.materias[m.nome]?.incluir ?? false) && !graduadas.has(m.nome) && m.topicos.length > 0
+  )
   const filas = new Map<string, Bloco[]>()
   for (const m of ativas) {
     const nivel = config.nivelPorMateria[m.nome] ?? "nunca"
@@ -354,8 +361,29 @@ export function projetarTermino(trilha: TrilhaEstudo): {
 
 // ─── Atualização incremental (tópicos novos no concurso) ─────────────────────
 
-// tópicos das matérias não-puladas que não aparecem em nenhuma atividade de questões da trilha
-export function topicosNaoCobertos(trilha: TrilhaEstudo, materias: MateriaBase[]): string[] {
+// matéria "graduada": todas as atividades de todas as metas dessa matéria estão concluídas —
+// calculado sempre em runtime (não persistido), pra nunca dessincronizar de uma reversão de
+// status (proximoStatus cicla de volta a "nao_iniciada")
+export function materiasConcluidasNaTrilha(trilha: TrilhaEstudo): string[] {
+  const porMateria = new Map<string, { total: number; concluidas: number }>()
+  for (const meta of trilha.metas) {
+    for (const a of meta.atividades) {
+      const acc = porMateria.get(a.materia) ?? { total: 0, concluidas: 0 }
+      acc.total++
+      if (a.status === "concluida") acc.concluidas++
+      porMateria.set(a.materia, acc)
+    }
+  }
+  return [...porMateria.entries()].filter(([, v]) => v.total > 0 && v.total === v.concluidas).map(([nome]) => nome)
+}
+
+// tópicos das matérias ativas no Ciclo (menos as já graduadas) que não aparecem em nenhuma
+// atividade de questões da trilha
+export function topicosNaoCobertos(
+  trilha: TrilhaEstudo,
+  materias: MateriaBase[],
+  configCiclo: EstudoConfigCiclo
+): string[] {
   const cobertos = new Set<string>()
   for (const meta of trilha.metas) {
     for (const a of meta.atividades) {
@@ -363,9 +391,11 @@ export function topicosNaoCobertos(trilha: TrilhaEstudo, materias: MateriaBase[]
       for (const t of a.topicos) cobertos.add(topicoKey(a.materia, t))
     }
   }
+  const graduadas = new Set(materiasConcluidasNaTrilha(trilha))
   const faltando: string[] = []
   for (const m of materias) {
-    if (trilha.config.puladas.includes(m.nome)) continue
+    if (!(configCiclo.materias[m.nome]?.incluir ?? false)) continue
+    if (graduadas.has(m.nome)) continue
     for (const t of m.topicos) {
       const k = topicoKey(m.nome, t)
       if (!cobertos.has(k)) faltando.push(k)
@@ -382,7 +412,7 @@ export function atualizarTrilha(
   topicos: Record<string, TopicoState>,
   configCiclo: EstudoConfigCiclo
 ): TrilhaEstudo {
-  const faltantes = new Set(topicosNaoCobertos(trilha, materias))
+  const faltantes = new Set(topicosNaoCobertos(trilha, materias, configCiclo))
   if (faltantes.size === 0) return trilha
 
   // recorta as matérias pros tópicos faltantes, preservando a ordem do edital
@@ -390,7 +420,8 @@ export function atualizarTrilha(
     .map((m) => ({ nome: m.nome, topicos: m.topicos.filter((t) => faltantes.has(topicoKey(m.nome, t))) }))
     .filter((m) => m.topicos.length > 0)
 
-  const novasMetas = gerarTrilha({ materias: materiasRecortadas, config: trilha.config, topicos, configCiclo })
+  const materiasConcluidas = materiasConcluidasNaTrilha(trilha)
+  const novasMetas = gerarTrilha({ materias: materiasRecortadas, config: trilha.config, topicos, configCiclo, materiasConcluidas })
   const offset = trilha.metas.length
   const renumeradas = novasMetas.map((meta) => ({
     ...meta,

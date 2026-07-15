@@ -328,11 +328,13 @@ export default function EstudoPage() {
               trilha={state.trilha}
               topicos={state.topicos}
               configCiclo={state.configCiclo}
-              materiasConcurso={concursoAtivo?.materias as MateriaBase[] | undefined}
+              materiasConcurso={concursoAtivo?.materias as MateriaConcurso[] | undefined}
               dataProva={concursoAtivo?.dataProva}
               concursoNome={concursoAtivo?.nome}
               onUpdateTrilha={updateTrilha}
               onUpdateTopicos={updateTopicos}
+              onUpdateConfigCiclo={updateConfigCiclo}
+              onIrParaCiclo={() => setActiveTab("ciclo")}
             />
           )}
 

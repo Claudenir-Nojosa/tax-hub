@@ -114,7 +114,10 @@ export interface TrilhaMeta {
 export interface TrilhaConfig {
   disponibilidade: TrilhaDisponibilidade;
   nivelPorMateria: Record<string, TrilhaNivelMateria>; // chave = nome da matéria
-  puladas: string[]; // matérias excluídas no wizard
+  /** @deprecated fonte de verdade de "matéria ativa" agora é EstudoConfigCiclo.materias[].incluir
+   * (Ciclo de Estudos). Mantido opcional só pra não quebrar trilhas antigas persistidas — não é
+   * mais lido pelo gerador nem escrito pelo wizard (ver docs/estudo-trilha.md). */
+  puladas?: string[];
 }
 
 export interface TrilhaEstudo {
@@ -189,6 +192,31 @@ export interface MateriaDef {
   prioridadeDefault: "Alta" | "Baixa";
   divisaoDefault: "A" | "B" | "C";
 }
+
+// Mapa estático de cor por "chave de cor" (o valor solto em MateriaConcurso.cor, escolhido no
+// seletor de cores do ConcursoModal — mesmas 16 chaves de CORES_DISPONIVEIS lá). Tailwind não
+// suporta classes montadas em runtime (`bg-${cor}-500` é purgado no build), então cada variante
+// tem que estar escrita literalmente aqui — mesmo padrão do COR_BORDER de EditalTab.tsx,
+// promovido pra cá pra ser reaproveitado também pela Trilha (resolverCorMateria em trilha-ui.ts).
+export const CORES_MATERIA: Record<string, { dot: string; badge: string; border: string }> = {
+  sky:     { dot: "bg-sky-500",     badge: "bg-sky-100 text-sky-700 dark:bg-sky-400/20 dark:text-sky-200",         border: "border-l-sky-500" },
+  blue:    { dot: "bg-blue-500",    badge: "bg-blue-100 text-blue-700 dark:bg-blue-400/20 dark:text-blue-200",       border: "border-l-blue-500" },
+  emerald: { dot: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-200", border: "border-l-emerald-500" },
+  violet:  { dot: "bg-violet-500",  badge: "bg-violet-100 text-violet-700 dark:bg-violet-400/20 dark:text-violet-200",   border: "border-l-violet-500" },
+  rose:    { dot: "bg-rose-500",    badge: "bg-rose-100 text-rose-700 dark:bg-rose-400/20 dark:text-rose-200",       border: "border-l-rose-500" },
+  amber:   { dot: "bg-amber-500",   badge: "bg-amber-100 text-amber-700 dark:bg-amber-400/20 dark:text-amber-200",     border: "border-l-amber-500" },
+  teal:    { dot: "bg-teal-500",    badge: "bg-teal-100 text-teal-700 dark:bg-teal-400/20 dark:text-teal-200",       border: "border-l-teal-500" },
+  indigo:  { dot: "bg-indigo-500",  badge: "bg-indigo-100 text-indigo-700 dark:bg-indigo-400/20 dark:text-indigo-200",   border: "border-l-indigo-500" },
+  pink:    { dot: "bg-pink-500",    badge: "bg-pink-100 text-pink-700 dark:bg-pink-400/20 dark:text-pink-200",       border: "border-l-pink-500" },
+  cyan:    { dot: "bg-cyan-500",    badge: "bg-cyan-100 text-cyan-700 dark:bg-cyan-400/20 dark:text-cyan-200",       border: "border-l-cyan-500" },
+  lime:    { dot: "bg-lime-500",    badge: "bg-lime-100 text-lime-700 dark:bg-lime-400/20 dark:text-lime-200",       border: "border-l-lime-500" },
+  orange:  { dot: "bg-orange-500",  badge: "bg-orange-100 text-orange-700 dark:bg-orange-400/20 dark:text-orange-200",   border: "border-l-orange-500" },
+  purple:  { dot: "bg-purple-500",  badge: "bg-purple-100 text-purple-700 dark:bg-purple-400/20 dark:text-purple-200",   border: "border-l-purple-500" },
+  red:     { dot: "bg-red-500",     badge: "bg-red-100 text-red-700 dark:bg-red-400/20 dark:text-red-200",         border: "border-l-red-500" },
+  green:   { dot: "bg-green-500",   badge: "bg-green-100 text-green-700 dark:bg-green-400/20 dark:text-green-200",     border: "border-l-green-500" },
+  yellow:  { dot: "bg-yellow-500",  badge: "bg-yellow-100 text-yellow-700 dark:bg-yellow-400/20 dark:text-yellow-200",   border: "border-l-yellow-500" },
+};
+export const COR_MATERIA_PADRAO = { dot: "bg-gray-400", badge: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300", border: "border-l-gray-400" };
 
 export interface NivelConfig {
   titulo: string;

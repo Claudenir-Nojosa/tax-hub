@@ -2,46 +2,37 @@
 
 import { useMemo, useState } from "react";
 import {
-  BookOpen, HelpCircle, RotateCcw, Lock, CheckCircle2, ChevronDown, Sparkles,
-  Signal, Route, RefreshCw, ArrowLeft, ArrowRight, PlusCircle, Target, CalendarClock, Trash2,
+  CheckCircle2, Sparkles,
+  Signal, Route, RefreshCw, ArrowLeft, ArrowRight, PlusCircle, Target, CalendarClock, Trash2, Settings2,
 } from "lucide-react";
 import {
   MATERIAS, topicoKey,
   TRILHA_DISPONIBILIDADE_CONFIG, TRILHA_NIVEL_CONFIG,
-  type EstudoConfigCiclo, type MateriaBase, type TopicoState,
-  type TrilhaAtividade, type TrilhaAtividadeStatus, type TrilhaConfig,
-  type TrilhaDisponibilidade, type TrilhaEstudo, type TrilhaMeta, type TrilhaNivelMateria, type Grupo,
+  type EstudoConfigCiclo, type MateriaConcurso, type MateriaDef, type TopicoState,
+  type TrilhaConfig,
+  type TrilhaDisponibilidade, type TrilhaEstudo, type TrilhaNivelMateria,
 } from "@/lib/estudo-data";
 import {
   gerarTrilha, estimarResumo, projetarTermino, atualizarTrilha, topicosNaoCobertos,
-  proximoStatus, metaAtualIndex,
+  proximoStatus, metaAtualIndex, materiasConcluidasNaTrilha,
 } from "@/lib/trilha-generator";
+import { fmtHoras, fmtData } from "./trilha/trilha-ui";
+import TrilhaPath from "./trilha/TrilhaPath";
+import MetaPainel from "./trilha/MetaPainel";
+import MateriaConcluidaBanner from "./trilha/MateriaConcluidaBanner";
 
 interface Props {
   trilha?: TrilhaEstudo;
   topicos: Record<string, TopicoState>;
   configCiclo: EstudoConfigCiclo;
-  materiasConcurso?: MateriaBase[];
+  materiasConcurso?: MateriaConcurso[];
   dataProva?: string;
   concursoNome?: string;
   onUpdateTrilha: (trilha: TrilhaEstudo | undefined) => void;
   onUpdateTopicos: (topicos: Record<string, TopicoState>) => void;
+  onUpdateConfigCiclo?: (config: EstudoConfigCiclo) => void;
+  onIrParaCiclo?: () => void;
 }
-
-// ─── Configs visuais ──────────────────────────────────────────────────────────
-
-const STATUS_CONFIG: Record<TrilhaAtividadeStatus, { label: string; classe: string }> = {
-  nao_iniciada: { label: "Não iniciada", classe: "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 border-gray-200 dark:border-gray-600" },
-  iniciada: { label: "Iniciada", classe: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-300 dark:border-blue-700" },
-  falta_acabar: { label: "Falta acabar", classe: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-300 dark:border-amber-700" },
-  concluida: { label: "Concluída", classe: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700" },
-};
-
-const TIPO_CONFIG = {
-  teoria: { label: "Teoria", Icon: BookOpen, cor: "text-blue-500" },
-  questoes: { label: "Questões", Icon: HelpCircle, cor: "text-violet-500" },
-  revisao: { label: "Revisão", Icon: RotateCcw, cor: "text-emerald-500" },
-} as const;
 
 const DISPONIBILIDADE_ICONE: Record<TrilhaDisponibilidade, string> = {
   easy: "text-sky-500", normal: "text-emerald-500", hard: "text-amber-500", hardcore: "text-orange-600",
@@ -49,33 +40,20 @@ const DISPONIBILIDADE_ICONE: Record<TrilhaDisponibilidade, string> = {
 
 const NIVEIS: TrilhaNivelMateria[] = ["nunca", "comecei", "sem_confianca", "arestas"];
 
-function fmtHoras(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h > 0 && m > 0) return `${h}h${m.toString().padStart(2, "0")}`;
-  if (h > 0) return `${h}h`;
-  return `${m}min`;
-}
-
-function fmtData(d: Date): string {
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-function corMateria(nome: string): string {
-  const def = MATERIAS.find((m) => m.nome === nome) as { corBadge?: string } | undefined;
-  return def?.corBadge ?? "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300";
-}
-
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export default function TrilhaTab({
   trilha, topicos, configCiclo, materiasConcurso, dataProva, concursoNome,
-  onUpdateTrilha, onUpdateTopicos,
+  onUpdateTrilha, onUpdateTopicos, onUpdateConfigCiclo, onIrParaCiclo,
 }: Props) {
-  const MATERIAS_ATIVAS: MateriaBase[] = materiasConcurso ?? MATERIAS;
+  const MATERIAS_ATIVAS: (MateriaDef | MateriaConcurso)[] = materiasConcurso ?? MATERIAS;
 
   const [modoWizard, setModoWizard] = useState(false);
   const emWizard = !trilha || modoWizard;
+
+  // matérias já 100% concluídas na trilha atual — usado pro wizard (Refazer não regenera
+  // conteúdo novo pra elas) e é vazio na primeiríssima geração (sem trilha anterior)
+  const materiasConcluidas = useMemo(() => (trilha ? materiasConcluidasNaTrilha(trilha) : []), [trilha]);
 
   return emWizard ? (
     <Wizard
@@ -85,6 +63,8 @@ export default function TrilhaTab({
       dataProva={dataProva}
       concursoNome={concursoNome}
       configAnterior={trilha?.config}
+      materiasConcluidas={materiasConcluidas}
+      onIrParaCiclo={onIrParaCiclo}
       onCancelar={trilha ? () => setModoWizard(false) : undefined}
       onGerar={(novaTrilha) => {
         onUpdateTrilha(novaTrilha);
@@ -101,6 +81,7 @@ export default function TrilhaTab({
       dataProva={dataProva}
       onUpdateTrilha={onUpdateTrilha}
       onUpdateTopicos={onUpdateTopicos}
+      onUpdateConfigCiclo={onUpdateConfigCiclo}
       onRefazer={() => setModoWizard(true)}
       onExcluir={() => onUpdateTrilha(undefined)}
     />
@@ -143,14 +124,17 @@ async function buscarOrientacoes(
 // ─── Wizard (3 passos, estilo Gurujá) ────────────────────────────────────────
 
 function Wizard({
-  materias, topicos, configCiclo, dataProva, concursoNome, configAnterior, onGerar, onCancelar,
+  materias, topicos, configCiclo, dataProva, concursoNome, configAnterior, materiasConcluidas,
+  onIrParaCiclo, onGerar, onCancelar,
 }: {
-  materias: MateriaBase[];
+  materias: (MateriaDef | MateriaConcurso)[];
   topicos: Record<string, TopicoState>;
   configCiclo: EstudoConfigCiclo;
   dataProva?: string;
   concursoNome?: string;
   configAnterior?: TrilhaConfig;
+  materiasConcluidas: string[];
+  onIrParaCiclo?: () => void;
   onGerar: (trilha: TrilhaEstudo) => void;
   onCancelar?: () => void;
 }) {
@@ -158,7 +142,6 @@ function Wizard({
   const [disponibilidade, setDisponibilidade] = useState<TrilhaDisponibilidade>(
     configAnterior?.disponibilidade ?? "normal"
   );
-  // pré-preenchimento: matéria 100% estudada no Edital → arestas; incluir=false no ciclo → pulada
   const [niveis, setNiveis] = useState<Record<string, TrilhaNivelMateria>>(() => {
     if (configAnterior) return { ...configAnterior.nivelPorMateria };
     const init: Record<string, TrilhaNivelMateria> = {};
@@ -168,26 +151,27 @@ function Wizard({
     }
     return init;
   });
-  const [puladas, setPuladas] = useState<Set<string>>(() => {
-    if (configAnterior) return new Set(configAnterior.puladas);
-    return new Set(materias.filter((m) => configCiclo.materias[m.nome]?.incluir === false).map((m) => m.nome));
-  });
 
-  const config: TrilhaConfig = useMemo(
-    () => ({ disponibilidade, nivelPorMateria: niveis, puladas: [...puladas] }),
-    [disponibilidade, niveis, puladas]
+  // fonte de verdade de "matéria ativa" é o Ciclo de Estudos — não existe mais uma lista própria
+  // de "puladas" no wizard da trilha (ver docs/estudo-trilha.md)
+  const graduadasSet = new Set(materiasConcluidas);
+  const totalNoCiclo = materias.filter((m) => configCiclo.materias[m.nome]?.incluir ?? false).length;
+  const materiasElegiveis = materias.filter(
+    (m) => (configCiclo.materias[m.nome]?.incluir ?? false) && !graduadasSet.has(m.nome)
   );
+
+  const config: TrilhaConfig = useMemo(() => ({ disponibilidade, nivelPorMateria: niveis }), [disponibilidade, niveis]);
 
   // passo 3: gera em memória (síncrono e rápido) pra mostrar o resumo antes de confirmar
   const preview = useMemo(() => {
     if (passo !== 3) return null;
     try {
-      const metas = gerarTrilha({ materias, config, topicos, configCiclo });
+      const metas = gerarTrilha({ materias, config, topicos, configCiclo, materiasConcluidas });
       return { metas, resumo: estimarResumo(metas, dataProva) };
     } catch {
       return null;
     }
-  }, [passo, materias, config, topicos, configCiclo, dataProva]);
+  }, [passo, materias, config, topicos, configCiclo, dataProva, materiasConcluidas]);
 
   const PASSOS = ["Disponibilidade", "Conhecimentos", "Conclusão"];
 
@@ -220,6 +204,31 @@ function Wizard({
           );
         })}
       </div>
+
+      {/* Faixa fixa: Ciclo é a fonte de verdade das matérias ativas */}
+      <div className="flex items-center justify-between gap-3 text-xs bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2">
+        <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+          <Settings2 className="h-3.5 w-3.5 text-gray-400" />
+          Matérias no Ciclo: <strong className="text-gray-700 dark:text-gray-200">{totalNoCiclo}</strong> incluída(s)
+          {graduadasSet.size > 0 && ` · ${graduadasSet.size} já concluída(s)`}
+        </span>
+        {onIrParaCiclo && (
+          <button type="button" onClick={onIrParaCiclo} className="shrink-0 text-blue-600 dark:text-blue-400 hover:underline font-medium">
+            Editar Ciclo →
+          </button>
+        )}
+      </div>
+
+      {materiasElegiveis.length === 0 && (
+        <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-800 dark:text-amber-300 flex flex-wrap items-center justify-between gap-3">
+          <span>Nenhuma matéria elegível no Ciclo de Estudos (todas fora ou já concluídas na trilha) — inclua ao menos uma pra gerar a trilha.</span>
+          {onIrParaCiclo && (
+            <button type="button" onClick={onIrParaCiclo} className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition-colors">
+              Ir para o Ciclo
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Passo 1 — Disponibilidade */}
       {passo === 1 && (
@@ -260,64 +269,41 @@ function Wizard({
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Em que nível você se encontra em cada matéria?</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            Isso define quanto de teoria e quantas questões a trilha vai propor por matéria. Matérias marcadas como
-            "pular" ficam fora da trilha.
+            Isso define quanto de teoria e quantas questões a trilha vai propor por matéria. Só entram matérias incluídas no
+            Ciclo de Estudos e ainda não concluídas na trilha.
           </p>
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="hidden md:grid grid-cols-[1fr_repeat(4,110px)_70px] gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-[11px] font-medium text-gray-500 dark:text-gray-400">
+            <div className="hidden md:grid grid-cols-[1fr_repeat(4,110px)] gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-[11px] font-medium text-gray-500 dark:text-gray-400">
               <span>Disciplina</span>
               {NIVEIS.map((n) => (
                 <span key={n} className="text-center leading-tight">{TRILHA_NIVEL_CONFIG[n].label}</span>
               ))}
-              <span className="text-center">Pular</span>
             </div>
-            {materias.map((m) => {
-              const pulada = puladas.has(m.nome);
-              return (
-                <div
-                  key={m.nome}
-                  className={`grid grid-cols-1 md:grid-cols-[1fr_repeat(4,110px)_70px] gap-2 px-4 py-2.5 border-b border-gray-50 dark:border-gray-700/50 items-center ${
-                    pulada ? "opacity-40" : ""
-                  }`}
-                >
-                  <span className="text-xs font-medium text-gray-800 dark:text-gray-200">{m.nome}</span>
-                  {NIVEIS.map((n) => (
-                    <div key={n} className="flex md:justify-center items-center gap-1.5">
-                      <button
-                        type="button"
-                        disabled={pulada}
-                        onClick={() => setNiveis((prev) => ({ ...prev, [m.nome]: n }))}
-                        title={TRILHA_NIVEL_CONFIG[n].label}
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                          niveis[m.nome] === n
-                            ? "border-emerald-500 bg-emerald-500"
-                            : "border-gray-300 dark:border-gray-600 hover:border-emerald-400"
-                        }`}
-                      >
-                        {niveis[m.nome] === n && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                      </button>
-                      <span className="md:hidden text-[11px] text-gray-500">{TRILHA_NIVEL_CONFIG[n].curto}</span>
-                    </div>
-                  ))}
-                  <div className="flex md:justify-center items-center gap-1.5">
-                    <input
-                      type="checkbox"
-                      checked={pulada}
-                      onChange={() =>
-                        setPuladas((prev) => {
-                          const nova = new Set(prev);
-                          if (nova.has(m.nome)) nova.delete(m.nome);
-                          else nova.add(m.nome);
-                          return nova;
-                        })
-                      }
-                      className="h-4 w-4 rounded border-gray-300 accent-emerald-600"
-                    />
-                    <span className="md:hidden text-[11px] text-gray-500">Pular matéria</span>
+            {materiasElegiveis.map((m) => (
+              <div
+                key={m.nome}
+                className="grid grid-cols-1 md:grid-cols-[1fr_repeat(4,110px)] gap-2 px-4 py-2.5 border-b border-gray-50 dark:border-gray-700/50 items-center"
+              >
+                <span className="text-xs font-medium text-gray-800 dark:text-gray-200">{m.nome}</span>
+                {NIVEIS.map((n) => (
+                  <div key={n} className="flex md:justify-center items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setNiveis((prev) => ({ ...prev, [m.nome]: n }))}
+                      title={TRILHA_NIVEL_CONFIG[n].label}
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                        niveis[m.nome] === n
+                          ? "border-emerald-500 bg-emerald-500"
+                          : "border-gray-300 dark:border-gray-600 hover:border-emerald-400"
+                      }`}
+                    >
+                      {niveis[m.nome] === n && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </button>
+                    <span className="md:hidden text-[11px] text-gray-500">{TRILHA_NIVEL_CONFIG[n].curto}</span>
                   </div>
-                </div>
-              );
-            })}
+                ))}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -327,7 +313,7 @@ function Wizard({
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Sua trilha está pronta pra nascer</h3>
           {!preview ? (
-            <p className="text-sm text-red-500">Não foi possível montar a trilha — verifique se há matérias não puladas.</p>
+            <p className="text-sm text-red-500">Não foi possível montar a trilha — verifique se há matérias incluídas no Ciclo de Estudos.</p>
           ) : (
             <div className="space-y-4">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -358,7 +344,7 @@ function Wizard({
                 </div>
               )}
               <p className="text-xs text-gray-400 dark:text-gray-500">
-                A trilha cobre 100% dos tópicos das matérias não puladas: teoria conforme seu nível, questões com
+                A trilha cobre 100% dos tópicos das matérias incluídas no Ciclo: teoria conforme seu nível, questões com
                 quantidade definida e 2 revisões espaçadas por bloco. Depois de gerar, a IA escreve uma orientação
                 pra cada meta.
               </p>
@@ -389,8 +375,9 @@ function Wizard({
           {passo < 3 ? (
             <button
               type="button"
+              disabled={materiasElegiveis.length === 0}
               onClick={() => setPasso((p) => (p + 1) as 2 | 3)}
-              className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+              className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-40"
             >
               Avançar <ArrowRight className="h-4 w-4" />
             </button>
@@ -416,26 +403,27 @@ function Wizard({
 // ─── Trilha ativa ────────────────────────────────────────────────────────────
 
 function TrilhaAtiva({
-  trilha, topicos, configCiclo, materias, dataProva, onUpdateTrilha, onUpdateTopicos, onRefazer, onExcluir,
+  trilha, topicos, configCiclo, materias, dataProva, onUpdateTrilha, onUpdateTopicos, onUpdateConfigCiclo, onRefazer, onExcluir,
 }: {
   trilha: TrilhaEstudo;
   topicos: Record<string, TopicoState>;
   configCiclo: EstudoConfigCiclo;
-  materias: MateriaBase[];
+  materias: (MateriaDef | MateriaConcurso)[];
   dataProva?: string;
   onUpdateTrilha: (t: TrilhaEstudo) => void;
   onUpdateTopicos: (t: Record<string, TopicoState>) => void;
+  onUpdateConfigCiclo?: (c: EstudoConfigCiclo) => void;
   onRefazer: () => void;
   onExcluir: () => void;
 }) {
-  const [expandida, setExpandida] = useState<number | null>(null); // metas concluídas expansíveis
+  const [metaSelecionada, setMetaSelecionada] = useState<number | null>(null);
   const idxAtual = metaAtualIndex(trilha.metas);
 
   const totalAtividades = trilha.metas.reduce((s, m) => s + m.atividades.length, 0);
   const concluidas = trilha.metas.reduce((s, m) => s + m.atividades.filter((a) => a.status === "concluida").length, 0);
   const percGeral = totalAtividades > 0 ? Math.round((concluidas / totalAtividades) * 100) : 0;
   const projecao = projetarTermino(trilha);
-  const naoCobertos = useMemo(() => topicosNaoCobertos(trilha, materias), [trilha, materias]);
+  const naoCobertos = useMemo(() => topicosNaoCobertos(trilha, materias, configCiclo), [trilha, materias, configCiclo]);
 
   const handleStatusClick = (metaNumero: number, atividadeId: string) => {
     const metas = trilha.metas.map((m) => {
@@ -475,6 +463,11 @@ function TrilhaAtiva({
   const handleAtualizar = () => {
     onUpdateTrilha(atualizarTrilha(trilha, materias, topicos, configCiclo));
   };
+
+  const idxSelecionada = metaSelecionada !== null ? trilha.metas.findIndex((m) => m.numero === metaSelecionada) : -1;
+  const metaObj = idxSelecionada === -1 ? null : trilha.metas[idxSelecionada];
+  const estadoSelecionada: "concluida" | "atual" | "futura" =
+    idxSelecionada === -1 ? "futura" : idxSelecionada < idxAtual ? "concluida" : idxSelecionada === idxAtual ? "atual" : "futura";
 
   return (
     <div className="space-y-5">
@@ -537,273 +530,31 @@ function TrilhaAtiva({
         </div>
       </div>
 
-      {/* Metas */}
-      <div className="space-y-2.5">
-        {trilha.metas.map((meta, idx) => {
-          const status: "concluida" | "atual" | "futura" =
-            idx < idxAtual ? "concluida" : idx === idxAtual ? "atual" : "futura";
-          const aberta = status === "atual" || expandida === meta.numero;
-          return (
-            <MetaCard
-              key={meta.numero}
-              meta={meta}
-              estado={status}
-              aberta={aberta}
-              onToggle={() =>
-                status === "concluida" ? setExpandida(expandida === meta.numero ? null : meta.numero) : undefined
-              }
-              onStatusClick={(atividadeId) => handleStatusClick(meta.numero, atividadeId)}
-              topicos={topicos}
-              onUpdateTopicos={onUpdateTopicos}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── Card de meta ────────────────────────────────────────────────────────────
-
-function MetaCard({
-  meta, estado, aberta, onToggle, onStatusClick, topicos, onUpdateTopicos,
-}: {
-  meta: TrilhaMeta;
-  estado: "concluida" | "atual" | "futura";
-  aberta: boolean;
-  onToggle: () => void;
-  onStatusClick: (atividadeId: string) => void;
-  topicos: Record<string, TopicoState>;
-  onUpdateTopicos: (t: Record<string, TopicoState>) => void;
-}) {
-  const materiasDaMeta = [...new Set(meta.atividades.map((a) => a.materia))];
-  const duracao = meta.atividades.reduce((s, a) => s + a.duracaoMin, 0);
-  const feitas = meta.atividades.filter((a) => a.status === "concluida").length;
-
-  return (
-    <div
-      className={`rounded-xl border overflow-hidden transition-all ${
-        estado === "atual"
-          ? "border-emerald-400 dark:border-emerald-600 bg-white dark:bg-gray-800 shadow-md"
-          : estado === "concluida"
-          ? "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60"
-          : "border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 opacity-70"
-      }`}
-    >
-      {/* Cabeçalho da meta */}
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={estado === "futura"}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left disabled:cursor-not-allowed"
-      >
-        <div
-          className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold ${
-            estado === "concluida"
-              ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400"
-              : estado === "atual"
-              ? "bg-emerald-600 text-white"
-              : "bg-gray-200 dark:bg-gray-700 text-gray-400"
-          }`}
-        >
-          {estado === "concluida" ? <CheckCircle2 className="h-4.5 w-4.5" /> : estado === "futura" ? <Lock className="h-4 w-4" /> : meta.numero}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-bold text-gray-900 dark:text-white">Meta {meta.numero}</span>
-            <span className="text-xs text-gray-400">
-              {meta.atividades.length} atividades · {fmtHoras(duracao)}
-              {estado !== "futura" && ` · ${feitas}/${meta.atividades.length} feitas`}
-            </span>
-          </div>
-          <div className="flex gap-1 mt-1 flex-wrap">
-            {materiasDaMeta.slice(0, 4).map((m) => (
-              <span key={m} className={`text-[10px] px-1.5 py-0.5 rounded ${corMateria(m)}`}>
-                {m.length > 28 ? m.slice(0, 28) + "…" : m}
-              </span>
-            ))}
-            {materiasDaMeta.length > 4 && <span className="text-[10px] text-gray-400">+{materiasDaMeta.length - 4}</span>}
-          </div>
-        </div>
-        {estado === "concluida" && (
-          <ChevronDown className={`h-4 w-4 text-gray-400 flex-shrink-0 transition-transform ${aberta ? "" : "-rotate-90"}`} />
-        )}
-      </button>
-
-      {/* Corpo */}
-      {aberta && estado !== "futura" && (
-        <div className="px-4 pb-4 space-y-2 border-t border-gray-100 dark:border-gray-700 pt-3">
-          {meta.orientacao && (
-            <div className="flex gap-2 rounded-lg bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 px-3 py-2">
-              <Sparkles className="h-4 w-4 text-violet-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-violet-700 dark:text-violet-300 leading-relaxed">{meta.orientacao}</p>
-            </div>
-          )}
-          {meta.atividades.map((a) => (
-            <AtividadeRow
-              key={a.id}
-              atividade={a}
-              somenteLeitura={estado === "concluida"}
-              onStatusClick={() => onStatusClick(a.id)}
-              topicos={topicos}
-              onUpdateTopicos={onUpdateTopicos}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Linha de atividade ──────────────────────────────────────────────────────
-
-function AtividadeRow({
-  atividade, somenteLeitura, onStatusClick, topicos, onUpdateTopicos,
-}: {
-  atividade: TrilhaAtividade;
-  somenteLeitura: boolean;
-  onStatusClick: () => void;
-  topicos: Record<string, TopicoState>;
-  onUpdateTopicos: (t: Record<string, TopicoState>) => void;
-}) {
-  const [formAberto, setFormAberto] = useState(false);
-  const cfg = TIPO_CONFIG[atividade.tipo];
-  const st = STATUS_CONFIG[atividade.status];
-
-  const rotulo =
-    atividade.tipo === "teoria"
-      ? atividade.teoriaRapida ? "Teoria — revisão rápida" : "Teoria"
-      : atividade.tipo === "questoes"
-      ? `${atividade.quantidadeQuestoes} questões`
-      : `Revisão ${atividade.numeroRevisao === 1 ? "(1ª — ±7 dias)" : "(2ª — ±30 dias)"}`;
-
-  return (
-    <div className="rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/40">
-      <div className="flex items-center gap-2.5 px-3 py-2">
-        <cfg.Icon className={`h-4 w-4 flex-shrink-0 ${cfg.cor}`} />
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-medium text-gray-800 dark:text-gray-200">
-            {rotulo} <span className="text-gray-400 font-normal">· {atividade.materia} · {fmtHoras(atividade.duracaoMin)}</span>
-          </div>
-          <div className="text-[11px] text-gray-400 truncate" title={atividade.topicos.join(" · ")}>
-            {atividade.topicos.join(" · ")}
-          </div>
-        </div>
-        {atividade.tipo === "questoes" && !somenteLeitura && (
-          <button
-            type="button"
-            onClick={() => setFormAberto((v) => !v)}
-            className="text-[11px] px-2 py-1 rounded-md bg-violet-100 dark:bg-violet-950/50 text-violet-600 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors flex-shrink-0"
-          >
-            Registrar resultado
-          </button>
-        )}
-        <button
-          type="button"
-          disabled={somenteLeitura}
-          onClick={onStatusClick}
-          title="Clique pra avançar o status"
-          className={`text-[11px] font-medium px-2.5 py-1 rounded-full border transition-all flex-shrink-0 ${st.classe} ${
-            somenteLeitura ? "cursor-default" : "hover:scale-105"
-          }`}
-        >
-          {st.label}
-        </button>
-      </div>
-      {formAberto && (
-        <RegistrarResultado
-          atividade={atividade}
-          topicos={topicos}
-          onUpdateTopicos={onUpdateTopicos}
-          onFechar={() => setFormAberto(false)}
+      {onUpdateConfigCiclo && (
+        <MateriaConcluidaBanner
+          trilha={trilha}
+          materiasAtivas={materias}
+          configCiclo={configCiclo}
+          onUpdateConfigCiclo={onUpdateConfigCiclo}
         />
       )}
-    </div>
-  );
-}
 
-// mini-form: soma acertos/erros no caderno (A-D) do tópico escolhido — mesmo shape do Edital,
-// então a média/XP existentes reagem sozinhos. Registrar NÃO muda o status (fica manual).
-function RegistrarResultado({
-  atividade, topicos, onUpdateTopicos, onFechar,
-}: {
-  atividade: TrilhaAtividade;
-  topicos: Record<string, TopicoState>;
-  onUpdateTopicos: (t: Record<string, TopicoState>) => void;
-  onFechar: () => void;
-}) {
-  const [topico, setTopico] = useState(atividade.topicos[0] ?? "");
-  const [grupo, setGrupo] = useState<Grupo>("A");
-  const [acertos, setAcertos] = useState("");
-  const [erros, setErros] = useState("");
-
-  const salvar = () => {
-    const a = parseInt(acertos) || 0;
-    const e = parseInt(erros) || 0;
-    if (a + e === 0 || !topico) return;
-    const k = topicoKey(atividade.materia, topico);
-    const atual = topicos[k] ?? {
-      estudado: false,
-      cadernos: { A: { acertos: 0, erros: 0 }, B: { acertos: 0, erros: 0 }, C: { acertos: 0, erros: 0 }, D: { acertos: 0, erros: 0 } },
-    };
-    onUpdateTopicos({
-      ...topicos,
-      [k]: {
-        ...atual,
-        cadernos: {
-          ...atual.cadernos,
-          [grupo]: { acertos: atual.cadernos[grupo].acertos + a, erros: atual.cadernos[grupo].erros + e },
-        },
-      },
-    });
-    onFechar();
-  };
-
-  return (
-    <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-gray-700 flex flex-wrap items-end gap-2">
-      <div className="flex-1 min-w-[160px]">
-        <label className="block text-[10px] text-gray-400 mb-0.5">Tópico</label>
-        <select
-          value={topico}
-          onChange={(e) => setTopico(e.target.value)}
-          className="w-full text-[11px] border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
-        >
-          {atividade.topicos.map((t) => (
-            <option key={t} value={t}>{t.length > 60 ? t.slice(0, 60) + "…" : t}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-[10px] text-gray-400 mb-0.5">Grupo</label>
-        <select
-          value={grupo}
-          onChange={(e) => setGrupo(e.target.value as Grupo)}
-          className="text-[11px] border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
-        >
-          {(["A", "B", "C", "D"] as Grupo[]).map((g) => <option key={g} value={g}>{g}</option>)}
-        </select>
-      </div>
-      <div>
-        <label className="block text-[10px] text-gray-400 mb-0.5">Acertos</label>
-        <input
-          type="number" min={0} value={acertos} onChange={(e) => setAcertos(e.target.value)}
-          className="w-16 text-[11px] border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
-        />
-      </div>
-      <div>
-        <label className="block text-[10px] text-gray-400 mb-0.5">Erros</label>
-        <input
-          type="number" min={0} value={erros} onChange={(e) => setErros(e.target.value)}
-          className="w-16 text-[11px] border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
-        />
-      </div>
-      <button
-        type="button"
-        onClick={salvar}
-        className="text-[11px] px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors"
-      >
-        Salvar no caderno
-      </button>
+      {/* Caminho estilo Duolingo — 1 nó por meta */}
+      <TrilhaPath
+        metas={trilha.metas}
+        idxAtual={idxAtual}
+        materiasAtivas={materias}
+        onSelectMeta={setMetaSelecionada}
+      />
+      <MetaPainel
+        meta={metaObj}
+        estado={estadoSelecionada}
+        aberto={metaSelecionada !== null && estadoSelecionada !== "futura"}
+        onClose={() => setMetaSelecionada(null)}
+        onStatusClick={(atividadeId) => metaSelecionada !== null && handleStatusClick(metaSelecionada, atividadeId)}
+        topicos={topicos}
+        onUpdateTopicos={onUpdateTopicos}
+      />
     </div>
   );
 }

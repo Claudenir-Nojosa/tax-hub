@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, HelpCircle, Target, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles, Gauge, Route, ArrowRight } from "lucide-react";
+import { BookOpen, HelpCircle, Target, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles, Gauge, Route, ArrowRight, Trophy } from "lucide-react";
 import {
   NIVEL_CONFIG,
   CONQUISTAS,
@@ -15,6 +15,7 @@ import {
   type MateriaBase,
   topicoKey,
 } from "@/lib/estudo-data";
+import { materiasConcluidasNaTrilha } from "@/lib/trilha-generator";
 
 interface Props {
   state: EstudoState;
@@ -52,6 +53,9 @@ function CardTrilha({ state, onIrParaTrilha }: { state: EstudoState; onIrParaTri
   const perc = Math.round((feitas / meta.atividades.length) * 100);
   const materias = [...new Set(meta.atividades.map((a) => a.materia))];
   const tudoConcluido = idx === -1;
+  // matéria(s) 100% concluída(s) na trilha — indicador leve; o banner completo com o picker de
+  // substituta mora na própria aba Trilha (MateriaConcluidaBanner)
+  const graduadas = materiasConcluidasNaTrilha(trilha);
 
   return (
     <button
@@ -82,6 +86,14 @@ function CardTrilha({ state, onIrParaTrilha }: { state: EstudoState; onIrParaTri
         ))}
         {materias.length > 3 && <span className="text-[10px] text-gray-400">+{materias.length - 3}</span>}
       </div>
+      {graduadas.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700 flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+          <Trophy className="h-3 w-3" />
+          {graduadas.length === 1
+            ? `${graduadas[0]} concluída — escolha a próxima no Ciclo`
+            : `${graduadas.length} matérias concluídas — escolha as próximas no Ciclo`}
+        </div>
+      )}
     </button>
   );
 }
