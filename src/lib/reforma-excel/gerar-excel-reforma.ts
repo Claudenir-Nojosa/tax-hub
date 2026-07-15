@@ -54,6 +54,87 @@ export interface OpcoesGeracao {
 
 // Abas que NÃO vão pro Excel do cliente
 const ABAS_REMOVER_CLIENTE = ["Base IBS-CBS", "Análise Fornecedores"]
+
+// ---------------------------------------------------------------------------------------------
+// Logo em todas as abas: a do cliente (enviada no Passo 1) ou, sem ela, a padrão do TaxHub.
+// Âncora por aba (coluna/linha 0-based do canto superior esquerdo) — o padrão A1 serve pras abas
+// largas (anos, Entradas, Quadro), mas as abas com título/filtros no topo-esquerdo ganham uma
+// âncora à direita do conteúdo pra logo não cobrir nada.
+const LOGO_TAXHUB_URL = "/icons/taxhub_logo_principal_claro_transparente.png"
+const ANCORA_LOGO: Record<string, { col: number; row: number }> = {
+  "Premissas": { col: 12, row: 0 },        // depois das colunas de ano (C..K)
+  "Legislações": { col: 3, row: 0 },       // depois da coluna C (largura 110)
+  "Valor Total NF-e": { col: 9, row: 0 },  // depois do bloco B..H
+  "Base IBS-CBS": { col: 16, row: 0 },     // depois da tabela C..O
+}
+
+// Dimensões de PNG (IHDR) ou JPEG (marcador SOF) direto dos bytes — funciona no navegador e no
+// Node, sem depender de Image()/DOM
+function dimensoesDaImagem(bytes: Uint8Array): { w: number; h: number } | null {
+  if (bytes.length > 24 && bytes[0] === 0x89 && bytes[1] === 0x50) {
+    const dv = new DataView(bytes.buffer, bytes.byteOffset)
+    return { w: dv.getUint32(16), h: dv.getUint32(20) }
+  }
+  if (bytes.length > 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    let i = 2
+    while (i + 9 < bytes.length) {
+      if (bytes[i] !== 0xff) { i++; continue }
+      const marker = bytes[i + 1]
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        const dv = new DataView(bytes.buffer, bytes.byteOffset)
+        return { w: dv.getUint16(i + 7), h: dv.getUint16(i + 5) }
+      }
+      i += 2 + ((bytes[i + 2] << 8) | bytes[i + 3])
+    }
+  }
+  return null
+}
+
+function bytesParaBase64(bytes: Uint8Array): string {
+  let bin = ""
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(bin)
+}
+
+async function obterLogo(logoDataUrl?: string | null): Promise<{ base64: string; extension: "png" | "jpeg"; width: number; height: number } | null> {
+  let bytes: Uint8Array
+  let extension: "png" | "jpeg"
+  let base64: string
+  if (logoDataUrl) {
+    const m = /^data:image\/(png|jpe?g);base64,(.+)$/.exec(logoDataUrl)
+    if (!m) return null
+    extension = m[1] === "png" ? "png" : "jpeg"
+    base64 = m[2]
+    const bin = atob(base64)
+    bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  } else {
+    const res = await fetch(LOGO_TAXHUB_URL)
+    if (!res.ok) return null
+    bytes = new Uint8Array(await res.arrayBuffer())
+    extension = "png"
+    base64 = bytesParaBase64(bytes)
+  }
+  // altura alvo ~50px (cabe nas linhas 1-3 sem empurrar nada); largura pela proporção, com teto
+  const dim = dimensoesDaImagem(bytes)
+  const proporcao = dim && dim.h > 0 ? dim.w / dim.h : 1.9
+  let height = 50
+  let width = Math.round(proporcao * height)
+  if (width > 150) { width = 150; height = Math.round(150 / proporcao) }
+  return { base64, extension, width, height }
+}
+
+// Insere a logo (do cliente ou a padrão do TaxHub) em todas as abas do workbook.
+// (exportada só pra validação em script — o fluxo real passa por gerarExcelReforma)
+export async function adicionarLogoNasAbas(wb: ExcelJS.Workbook, logoDataUrl?: string | null): Promise<void> {
+  const logo = await obterLogo(logoDataUrl)
+  if (!logo) return
+  const imgId = wb.addImage({ base64: logo.base64, extension: logo.extension })
+  for (const ws of wb.worksheets) {
+    const anc = ANCORA_LOGO[ws.name] ?? { col: 0, row: 0 }
+    ws.addImage(imgId, { tl: { col: anc.col + 0.15, row: anc.row + 0.15 }, ext: { width: logo.width, height: logo.height } })
+  }
+}
 // Abas que mantêm as fórmulas no modo cliente (dropdowns funcionais)
 const ABAS_COM_FORMULA_CLIENTE = new Set(["Quadro Comparativo", "Valor Total NF-e"])
 
@@ -90,6 +171,12 @@ export async function transformarParaCliente(zip: JSZip, caminhos: Map<string, s
   let relsXml = await zip.file("xl/_rels/workbook.xml.rels")!.async("string")
   let contentTypes = await zip.file("[Content_Types].xml")!.async("string")
 
+  // Mídias (xl/media/*) referenciadas pelos drawings das abas removidas NÃO podem ser apagadas
+  // às cegas: a LOGO é uma mídia única compartilhada pelos drawings de TODAS as abas — apagar
+  // junto quebraria as abas mantidas. Elas viram candidatas e só saem se, no fim, nenhum drawing
+  // remanescente as referenciar (o PNG do gráfico da Análise Fornecedores, p.ex., sai).
+  const midiaCandidata = new Set<string>()
+
   for (const nome of ABAS_REMOVER_CLIENTE) {
     const m = new RegExp(`<sheet[^>]*name="${nome}"[^>]*r:id="(rId\\d+)"[^>]*/>`).exec(workbookXml)
     if (!m) continue
@@ -114,13 +201,32 @@ export async function transformarParaCliente(zip: JSZip, caminhos: Map<string, s
         if (relsAlvoArq) {
           const relsAlvoXml = await relsAlvoArq.async("string")
           paraRemover.push(relsAlvo)
-          for (const t2 of relsAlvoXml.matchAll(/Target="\.\.\/([^"]+)"/g)) paraRemover.push(`xl/${t2[1]}`)
+          for (const t2 of relsAlvoXml.matchAll(/Target="\.\.\/([^"]+)"/g)) {
+            const alvo2 = `xl/${t2[1]}`
+            if (alvo2.startsWith("xl/media/")) midiaCandidata.add(alvo2)
+            else paraRemover.push(alvo2)
+          }
         }
       }
     }
     for (const arq of paraRemover) {
       zip.remove(arq)
       contentTypes = contentTypes.replace(new RegExp(`<Override[^>]*PartName="/${arq.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*/>`), "")
+    }
+  }
+
+  // remove só as mídias que nenhum drawing remanescente referencia
+  if (midiaCandidata.size > 0) {
+    const referenciadas = new Set<string>()
+    const relsDeDrawings = Object.keys(zip.files).filter((p) => /^xl\/drawings\/_rels\/.+\.rels$/.test(p))
+    for (const p of relsDeDrawings) {
+      const xmlRels = await zip.file(p)!.async("string")
+      for (const r of xmlRels.matchAll(/Target="\.\.\/([^"]+)"/g)) referenciadas.add(`xl/${r[1]}`)
+    }
+    for (const midia of midiaCandidata) {
+      if (referenciadas.has(midia)) continue
+      zip.remove(midia)
+      contentTypes = contentTypes.replace(new RegExp(`<Override[^>]*PartName="/${midia.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*/>`), "")
     }
   }
   // activeTab pode apontar pra uma aba removida — remove o atributo por segurança
@@ -195,6 +301,12 @@ export async function gerarExcelReforma(dados: DadosGeracaoExcel, onProgress?: P
   await yieldToEventLoop()
   await montarAbaAnaliseFornecedores(wb, dados.empresa, dados.linhasEntradas, dados.classificacoesFornecedores)
   reportar("Entradas e Análise Fornecedores", pesoOutras / 6)
+
+  // Logo em todas as abas — a do cliente (Passo 1) ou a padrão do TaxHub. Falha aqui (rede,
+  // arquivo inválido) não bloqueia a geração do Excel.
+  try {
+    await adicionarLogoNasAbas(wb, dados.empresa.logoDataUrl)
+  } catch { /* segue sem logo */ }
 
   const bufferBase = await wb.xlsx.writeBuffer()
   await yieldToEventLoop()

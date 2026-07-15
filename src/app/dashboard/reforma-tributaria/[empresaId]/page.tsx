@@ -40,6 +40,7 @@ const defaultEmpresa: EmpresaData = {
   cnaesSecundarios: [],
   faturamento: 0,
   estabelecimentosAdicionais: [],
+  logoDataUrl: null,
 }
 
 export default function EmpresaWizardPage() {
@@ -100,6 +101,7 @@ function EmpresaWizardInner() {
           cnaesSecundarios: data.parametrosExtra?.cnaesSecundarios ?? [],
           faturamento: data.faturamento,
           estabelecimentosAdicionais: data.parametrosExtra?.estabelecimentosAdicionais ?? [],
+          logoDataUrl: data.parametrosExtra?.logoDataUrl ?? null,
         })
         if (data.parametrosExtra?.premissasReforma) {
           setPremissasReforma(data.parametrosExtra.premissasReforma)
@@ -164,6 +166,7 @@ function EmpresaWizardInner() {
             premissasReforma,
             legislacao,
             nomeProjeto,
+            logoDataUrl: empresa.logoDataUrl ?? null,
           },
         }),
       })

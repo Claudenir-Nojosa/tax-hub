@@ -98,7 +98,9 @@ function larguraColuna(nome: string): number {
   if (["CST PIS", "CST Cofins", "Modelo", "Situação", "Série"].includes(nome)) return 9
   if (nome === "NCM") return 11
   if (nome === "Unidade Medida") return 11
-  return 14 // colunas de valor (Vlr *, e todas as CALC_HEADERS)
+  // colunas de valor (Vlr *, e todas as CALC_HEADERS): 19 comporta o SUBTOTAL da linha 6 em
+  // formato contábil na casa das dezenas de milhões — com 14, células viravam #####
+  return 19
 }
 
 // Colunas com SUBTOTAL(9,...) na linha 6 — conjunto EXATO do Excel-modelo (linha 6 da aba 2026;

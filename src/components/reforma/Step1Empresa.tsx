@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Loader2, Building2, Plus, X, Landmark } from "lucide-react"
+import { Search, Loader2, Building2, Plus, X, Landmark, ImagePlus } from "lucide-react"
 import { toast } from "sonner"
 
 export type CnaeInfo = {
@@ -40,6 +40,9 @@ export type EmpresaData = {
   cnaesSecundarios: CnaeInfo[]
   faturamento: number
   estabelecimentosAdicionais: EstabelecimentoData[]
+  // Logo da empresa (opcional, data URL PNG/JPG): aparece em todas as abas do Excel gerado.
+  // Sem logo, o Excel usa a logo padrão do TaxHub. Persiste em parametrosExtra (é pequena).
+  logoDataUrl?: string | null
 }
 
 const REGIMES = [
@@ -70,6 +73,24 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
   const [loading, setLoading] = useState(false)
   const [cnpjAdicionalInput, setCnpjAdicionalInput] = useState("")
   const [buscandoAdicional, setBuscandoAdicional] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
+  const carregarLogo = (file: File) => {
+    if (!/^image\/(png|jpe?g)$/.test(file.type)) {
+      toast.error("Envie a logo em PNG ou JPG")
+      return
+    }
+    if (file.size > 1024 * 1024) {
+      toast.error("A logo deve ter no máximo 1MB")
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      onChange({ ...data, logoDataUrl: String(reader.result) })
+      toast.success("Logo carregada")
+    }
+    reader.readAsDataURL(file)
+  }
 
   const adicionarEstabelecimento = async () => {
     const digits = cnpjAdicionalInput.replace(/\D/g, "")
@@ -247,6 +268,41 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Logo da empresa (opcional) */}
+      <div className="space-y-2">
+        <Label>A empresa possui logo?</Label>
+        <p className="text-xs text-gray-500">
+          Se tiver, envie aqui (PNG ou JPG, até 1MB) — ela aparece em todas as abas do Excel
+          gerado. Sem logo, usamos a logo padrão do TaxHub.
+        </p>
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/png,image/jpeg"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) carregarLogo(file)
+            e.target.value = ""
+          }}
+        />
+        {data.logoDataUrl ? (
+          <div className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-3 py-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={data.logoDataUrl} alt="Logo da empresa" className="h-10 max-w-[160px] object-contain" />
+            <span className="text-xs text-gray-500 flex-1">Logo da empresa carregada</span>
+            <Button variant="outline" size="sm" onClick={() => logoInputRef.current?.click()}>Trocar</Button>
+            <button onClick={() => onChange({ ...data, logoDataUrl: null })} className="text-gray-400 hover:text-red-500">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <Button variant="outline" onClick={() => logoInputRef.current?.click()}>
+            <ImagePlus className="h-4 w-4 mr-2" /> Enviar logo da empresa
+          </Button>
+        )}
       </div>
 
       {/* Filiais / grupo comercial */}

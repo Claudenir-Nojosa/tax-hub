@@ -90,7 +90,8 @@ export function montarAbaQuadroComparativo(
   ws.properties.tabColor = { argb: "FF000000" } // guia preta, como na referência
   ws.columns = [
     { width: 3 }, { width: 12 }, { width: 26 },
-    ...ANOS_COLUNA.map(() => ({ width: 14 })),
+    // 17: cabe "R$ 99.999.999,99" no formato contábil — com 14 o VALOR TOTAL (linha 17) virava #####
+    ...ANOS_COLUNA.map(() => ({ width: 17 })),
     { width: 3 }, { width: 18 },
   ]
   const colFim = String.fromCharCode(68 + ANOS_COLUNA.length - 1) // K (última coluna de ano)

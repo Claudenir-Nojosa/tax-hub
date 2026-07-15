@@ -62,11 +62,13 @@ function f(formula: string, result: number | string): ExcelJS.CellFormulaValue {
 
 function celula(
   ws: ExcelJS.Worksheet, ref: string, valor: ExcelJS.CellValue,
-  opts?: { bold?: boolean; numFmt?: string; size?: number; fundo?: string; centralizado?: boolean; borda?: boolean }
+  opts?: { bold?: boolean; numFmt?: string; size?: number; fundo?: string; centralizado?: boolean; borda?: boolean; corFonte?: string }
 ) {
   const cell = ws.getCell(ref)
   cell.value = valor
-  if (opts?.bold) cell.font = { name: FONTE, size: opts?.size ?? 11, bold: true }
+  if (opts?.bold || opts?.corFonte) {
+    cell.font = { name: FONTE, size: opts?.size ?? 11, bold: opts?.bold ?? false, color: opts?.corFonte ? { argb: opts.corFonte } : undefined }
+  }
   if (opts?.numFmt) cell.numFmt = opts.numFmt
   if (opts?.fundo) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: opts.fundo } }
   if (opts?.centralizado) cell.alignment = { horizontal: "center", vertical: "middle" }
@@ -223,30 +225,37 @@ export function montarAbaEntradasEfd(
 ) {
   const tipoPorNcm = tipoCreditoPorNcm(baseIbsCbs)
   const ws = wb.addWorksheet("Entradas - EFD ICMS IPI", { views: [{ showGridLines: false }] })
+  // Colunas R..W (Vlr Documento..Vlr Outras DA): formato contábil nas linhas E nos subtotais
+  // (linha 6), a pedido do usuário — o estilo de coluna cobre os dois
+  const COLS_DOC_RS = new Set(["Vlr Documento", "Vlr Desconto NF", "Vlr Mercadoria", "Vlr Frete", "Vlr Seguro", "Vlr Outras DA"])
   // formatos por COLUNA (PA como data, créditos em R$) — memória e consistência
   ws.columns = [
     { width: 3 },
     ...COLUNAS.map((c) => {
       if (c.key === "PA") return { width: larguraColuna(c.label), style: { numFmt: FMT_PA } }
       if (c.key.startsWith("IBS ") || c.key.startsWith("CBS ")) return { width: larguraColuna(c.label), style: { numFmt: FMT_RS } }
+      if (COLS_DOC_RS.has(c.key)) return { width: 18, style: { numFmt: FMT_RS } }
       return { width: larguraColuna(c.label) }
     }),
   ]
 
   // Tabela de alíquotas AG1:AO4 — anos 2026-2033 com as alíquotas CHEIAS da premissa (a redução
   // por classificação do NCM entra na fórmula de crédito, não aqui)
+  // Fonte BRANCA em toda a tabela (linhas 1-4): os valores continuam lá (as fórmulas de crédito
+  // apontam pra eles), mas ficam invisíveis pra quem abre a planilha — pedido do usuário
+  const BRANCO = "FFFFFFFF"
   const colRotulo = letraDe("IBS 2027 e 2028") // AG
-  celula(ws, `${colRotulo}1`, "IBS/CBS", { bold: true })
-  celula(ws, `${colRotulo}2`, "ALIQ. CBS", { bold: true })
-  celula(ws, `${colRotulo}3`, "ALIQ. IBS UF", { bold: true })
-  celula(ws, `${colRotulo}4`, "ALIQ. IBS MUN", { bold: true })
+  celula(ws, `${colRotulo}1`, "IBS/CBS", { bold: true, corFonte: BRANCO })
+  celula(ws, `${colRotulo}2`, "ALIQ. CBS", { bold: true, corFonte: BRANCO })
+  celula(ws, `${colRotulo}3`, "ALIQ. IBS UF", { bold: true, corFonte: BRANCO })
+  celula(ws, `${colRotulo}4`, "ALIQ. IBS MUN", { bold: true, corFonte: BRANCO })
   for (const ano of ANOS_TABELA) {
     const p = premissas.premissasPorAno[ano]
     const col = colTabelaAno(ano)
-    celula(ws, `${col}1`, ano, { bold: true, centralizado: true, numFmt: "General" })
-    celula(ws, `${col}2`, p.cbs, { numFmt: "0.00%" })
-    celula(ws, `${col}3`, p.ibsUF, { numFmt: "0.00%" })
-    celula(ws, `${col}4`, p.ibsMUN, { numFmt: "0.00%" })
+    celula(ws, `${col}1`, ano, { bold: true, centralizado: true, numFmt: "General", corFonte: BRANCO })
+    celula(ws, `${col}2`, p.cbs, { numFmt: "0.00%", corFonte: BRANCO })
+    celula(ws, `${col}3`, p.ibsUF, { numFmt: "0.00%", corFonte: BRANCO })
+    celula(ws, `${col}4`, p.ibsMUN, { numFmt: "0.00%", corFonte: BRANCO })
   }
 
   celula(ws, "B5", "Entradas - EFD ICMS IPI", { bold: true })

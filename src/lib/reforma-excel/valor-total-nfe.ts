@@ -67,7 +67,9 @@ export function montarAbaValorTotalNfe(
 ) {
   const ws = wb.addWorksheet("Valor Total NF-e", { views: [{ showGridLines: false }] })
   ws.properties.tabColor = { argb: "FF000000" } // guia preta, como na referência
-  ws.columns = [{ width: 2 }, ...Array(7).fill({ width: 22 })] // B..H
+  // 28: o maior rótulo ("BASE DE CÁLCULO DO ICMS SUBST.") e valores contábeis na casa dos
+  // milhões cabem sem cortar nenhuma célula
+  ws.columns = [{ width: 2 }, ...Array(7).fill({ width: 28 })] // B..H
 
   const layout = layoutListasPremissas(listaEstabelecimentos(empresa, linhasSaidas).length)
 
