@@ -302,3 +302,11 @@ Pontos-chave:
 - Entradas: botão "PDF executivo" no `ExportarProjetoDialog` (card, dados do IndexedDB) e "Exportar PDF" no `StepRevisao` (dados do wizard; exige empresa salva).
 - `PUT /api/reforma-tributaria/empresas/[id]` agora aceita `parametrosExtra` (merge feito no cliente com o objeto completo); os demais campos undefined são ignorados pelo Prisma. O wizard preserva os textos (`textosPdf` no state) ao regravar o parametrosExtra.
 - Validação: PDF real gerado no navegador via rota temporária (deletada) e lido de volta — 5 páginas conferidas (capa, tabelas, quadro paisagem com 8 anos, textos, rodapé paginado).
+
+## Polish do PDF executivo (task #89)
+
+- **Capitalização**: `nomeProprio()` em reforma-pdf.ts ("PHARMAPLUS LTDA" → "Pharmaplus LTDA") aplicada a razão social (capa e seção 1), nome fantasia, município e estabelecimentos adicionais; siglas societárias (LTDA/ME/EPP/EIRELI/SA/S.A./CIA) permanecem maiúsculas e preposições (de/da/do/e) minúsculas.
+- **Premissas com redução de 60%**: quando `premissas.reducao60`, a tabela de alíquotas mostra os valores EFETIVOS dos débitos (cheios × 0,4), cabeçalho "Alíquota (redução 60%)" — antes mostrava as cheias com só uma nota.
+- **Editor de texto rico**: os inputs de Legislações/Considerações do `ExportarPdfDialog` viraram `RichTextInput.tsx` (contentEditable + execCommand, toolbar negrito/itálico/sublinhado/lista). O HTML limitado (b/i/u/div/br/ul/li) fica salvo em parametrosExtra; texto puro antigo é convertido com `<br>` ao carregar. No PDF, `htmlParaBlocos()` + `escreverRico()` (reforma-pdf.ts) desenham palavra a palavra com fonte bold/italic/bolditalic, sublinhado via `doc.line`, bullets e quebra de página — jsPDF não renderiza HTML nativamente. Editor "vazio" (`<div><br></div>`) cai no texto padrão.
+- **Capa**: removido o rótulo "RELATÓRIO EXECUTIVO".
+- Validação: PDF real gerado no navegador (rota temporária deletada) e relido — nomes capitalizados, tabela reduzida (CBS 0,36%/3,48%...), negrito/itálico/sublinhado/listas renderizados nas duas seções, capa limpa.

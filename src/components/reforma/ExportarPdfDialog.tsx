@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import RichTextInput from "./RichTextInput"
 import { FileText, Loader2, ScrollText, MessageSquareText } from "lucide-react"
 import { toast } from "sonner"
 import { gerarPdfReforma } from "@/lib/reforma-pdf"
@@ -120,26 +120,24 @@ export default function ExportarPdfDialog({
             <Label className="flex items-center gap-1.5 text-xs">
               <ScrollText className="h-3.5 w-3.5 text-blue-500" /> Legislações aplicáveis
             </Label>
-            <Textarea
+            <RichTextInput
               value={legislacoes}
-              onChange={(e) => setLegislacoes(e.target.value)}
+              onChange={setLegislacoes}
               placeholder="Ex.: LC 214/2025, art. 133 — redução de 60% nas alíquotas de IBS/CBS para medicamentos..."
-              rows={5}
               disabled={gerando}
-              className="text-sm"
+              minHeightClass="min-h-28"
             />
           </div>
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5 text-xs">
               <MessageSquareText className="h-3.5 w-3.5 text-emerald-500" /> Considerações finais
             </Label>
-            <Textarea
+            <RichTextInput
               value={consideracoes}
-              onChange={(e) => setConsideracoes(e.target.value)}
+              onChange={setConsideracoes}
               placeholder="Explique o porquê dos valores: metodologia, comportamento dos tributos na transição, pontos de atenção para o cliente..."
-              rows={6}
               disabled={gerando}
-              className="text-sm"
+              minHeightClass="min-h-32"
             />
           </div>
 

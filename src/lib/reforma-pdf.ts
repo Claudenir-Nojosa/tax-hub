@@ -38,8 +38,98 @@ function formatCNPJ(cnpj: string) {
   return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
 }
 
+// "PHARMAPLUS LTDA" → "Pharmaplus LTDA": só a primeira letra de cada palavra maiúscula,
+// preservando siglas societárias e mantendo preposições em minúsculas
+const SIGLAS_EMPRESA = new Set(["LTDA", "LTDA.", "ME", "MEI", "EPP", "EIRELI", "SA", "S/A", "S.A.", "S.A", "CIA", "CIA."])
+const MINUSCULAS = new Set(["de", "da", "do", "das", "dos", "e"])
+function nomeProprio(texto: string): string {
+  if (!texto) return texto
+  return texto
+    .trim()
+    .split(/\s+/)
+    .map((palavra, i) => {
+      const upper = palavra.toUpperCase()
+      if (SIGLAS_EMPRESA.has(upper)) return upper
+      const lower = palavra.toLowerCase()
+      if (i > 0 && MINUSCULAS.has(lower)) return lower
+      return lower.charAt(0).toUpperCase() + lower.slice(1)
+    })
+    .join(" ")
+}
+
 const fmtRS = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
 const fmtPct = (v: number) => `${(v * 100).toFixed(2).replace(".", ",")}%`
+
+// ------------------------------------------------------------------------------------------
+// Texto rico (saída do editor do ExportarPdfDialog): o jsPDF não renderiza HTML, então o HTML
+// limitado do editor (b/strong, i/em, u, div/p/br, ul/ol/li) é convertido em blocos de "runs"
+// com estilo e desenhado palavra a palavra, com quebra de linha medida pela largura real.
+// Texto puro (sem tags, projetos antigos) continua funcionando: vira um bloco por parágrafo.
+
+type RunRico = { texto: string; b: boolean; i: boolean; u: boolean }
+type BlocoRico = { runs: RunRico[]; bullet: boolean }
+
+function htmlParaBlocos(html: string): BlocoRico[] {
+  const semTags = !/[<>]/.test(html)
+  if (semTags) {
+    return html
+      .split(/\n+/)
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((t) => ({ runs: [{ texto: t, b: false, i: false, u: false }], bullet: false }))
+  }
+  const dom = new DOMParser().parseFromString(html, "text/html")
+  const blocos: BlocoRico[] = []
+
+  const coletarRuns = (no: Node, st: { b: boolean; i: boolean; u: boolean }, runs: RunRico[]) => {
+    if (no.nodeType === Node.TEXT_NODE) {
+      const t = no.textContent ?? ""
+      if (t) runs.push({ texto: t, ...st })
+      return
+    }
+    if (!(no instanceof HTMLElement)) return
+    const tag = no.tagName.toLowerCase()
+    if (tag === "br") {
+      runs.push({ texto: "\n", b: false, i: false, u: false })
+      return
+    }
+    const st2 = {
+      b: st.b || tag === "b" || tag === "strong",
+      i: st.i || tag === "i" || tag === "em",
+      u: st.u || tag === "u",
+    }
+    no.childNodes.forEach((c) => coletarRuns(c, st2, runs))
+  }
+
+  // <br> vira separador: um bloco por linha, preservando o estilo de cada trecho
+  const empurrarBloco = (runs: RunRico[], bullet: boolean) => {
+    let atual: RunRico[] = []
+    const flush = () => {
+      if (atual.some((r) => r.texto.trim())) blocos.push({ runs: atual, bullet })
+      atual = []
+    }
+    for (const r of runs) {
+      if (r.texto === "\n") { flush(); continue }
+      atual.push(r)
+    }
+    flush()
+  }
+
+  dom.body.childNodes.forEach((no) => {
+    if (no instanceof HTMLElement && (no.tagName === "UL" || no.tagName === "OL")) {
+      no.querySelectorAll("li").forEach((li) => {
+        const runs: RunRico[] = []
+        coletarRuns(li, { b: false, i: false, u: false }, runs)
+        empurrarBloco(runs, true)
+      })
+      return
+    }
+    const runs: RunRico[] = []
+    coletarRuns(no, { b: false, i: false, u: false }, runs)
+    empurrarBloco(runs, false)
+  })
+  return blocos
+}
 
 // Logo (do cliente em data URL, ou a padrão do TaxHub) + proporção medida no navegador
 async function carregarLogo(logoDataUrl?: string | null): Promise<{ dataUrl: string; ratio: number } | null> {
@@ -92,9 +182,6 @@ export async function gerarPdfReforma(dados: DadosPdfReforma): Promise<void> {
     doc.addImage(logo.dataUrl, tipo, pageW / 2 - lw / 2, 59, lw, lh)
   }
   doc.setTextColor(255, 255, 255)
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(11)
-  doc.text("RELATÓRIO EXECUTIVO", pageW / 2, 118, { align: "center" })
   doc.setFont("helvetica", "bold")
   doc.setFontSize(24)
   doc.text(doc.splitTextToSize(nomeProjeto, pageW - 2 * margem), pageW / 2, 132, { align: "center" })
@@ -103,7 +190,7 @@ export async function gerarPdfReforma(dados: DadosPdfReforma): Promise<void> {
   doc.line(pageW / 2 - 28, 148, pageW / 2 + 28, 148)
   doc.setFont("helvetica", "normal")
   doc.setFontSize(13)
-  doc.text(dados.empresa.razaoSocial || "", pageW / 2, 160, { align: "center" })
+  doc.text(nomeProprio(dados.empresa.razaoSocial || ""), pageW / 2, 160, { align: "center" })
   doc.setFontSize(10)
   doc.setTextColor(200, 214, 235)
   doc.text(formatCNPJ(dados.empresa.cnpj), pageW / 2, 168, { align: "center" })
@@ -129,16 +216,55 @@ export async function gerarPdfReforma(dados: DadosPdfReforma): Promise<void> {
     return y + 10
   }
 
-  // texto longo com quebra de página automática
-  const escreverTexto = (texto: string, y: number): number => {
-    doc.setTextColor(...CINZA_TXT)
-    doc.setFont("helvetica", "normal")
+  // Texto rico (HTML do editor) com negrito/itálico/sublinhado/listas, quebra de linha medida
+  // palavra a palavra e quebra de página automática
+  const escreverRico = (html: string, y: number, fallback?: string): number => {
+    let blocos = htmlParaBlocos(html)
+    // editor "vazio" ainda produz HTML (<div><br></div>) — sem conteúdo real, usa o fallback
+    if (blocos.length === 0 && fallback) blocos = htmlParaBlocos(fallback)
+    const lh = 5.4
     doc.setFontSize(10.5)
-    const linhas: string[] = doc.splitTextToSize(texto, pageW - 2 * margem)
-    for (const linha of linhas) {
+    doc.setTextColor(...CINZA_TXT)
+    for (const bloco of blocos) {
+      const indent = bloco.bullet ? 5 : 0
+      const xIni = margem + indent
+      const xMax = pageW - margem
+      let x = xIni
+      let primeiraLinha = true
+      const novaLinha = () => {
+        y += lh
+        if (y > pageH - 22) { doc.addPage("a4", "portrait"); y = 24 }
+        x = xIni
+      }
       if (y > pageH - 22) { doc.addPage("a4", "portrait"); y = 24 }
-      doc.text(linha, margem, y)
-      y += 5.4
+      if (bloco.bullet) {
+        doc.setFont("helvetica", "normal")
+        doc.text("•", margem + 1, y)
+      }
+      for (const run of bloco.runs) {
+        const estilo = run.b && run.i ? "bolditalic" : run.b ? "bold" : run.i ? "italic" : "normal"
+        doc.setFont("helvetica", estilo)
+        // tokens preservando espaços, pra medir e desenhar palavra a palavra
+        for (const token of run.texto.split(/(\s+)/)) {
+          if (!token) continue
+          const ehEspaco = /^\s+$/.test(token)
+          const w = doc.getTextWidth(ehEspaco ? " " : token)
+          if (!ehEspaco && x + w > xMax && x > xIni) novaLinha()
+          if (ehEspaco) {
+            if (x > xIni) x += w // espaço no começo da linha é descartado
+            continue
+          }
+          doc.text(token, x, y)
+          if (run.u) {
+            doc.setDrawColor(...CINZA_TXT)
+            doc.setLineWidth(0.2)
+            doc.line(x, y + 0.7, x + w, y + 0.7)
+          }
+          x += w
+          primeiraLinha = false
+        }
+      }
+      if (!primeiraLinha || bloco.bullet) y += lh + 1.8 // espaçamento entre parágrafos
     }
     return y
   }
@@ -147,16 +273,16 @@ export async function gerarPdfReforma(dados: DadosPdfReforma): Promise<void> {
   doc.addPage("a4", "portrait")
   let y = tituloSecao("Dados da empresa", 24)
   const linhasEmpresa: [string, string][] = [
-    ["Razão social", dados.empresa.razaoSocial || "—"],
-    ...(dados.empresa.nomeFantasia ? [["Nome fantasia", dados.empresa.nomeFantasia] as [string, string]] : []),
+    ["Razão social", nomeProprio(dados.empresa.razaoSocial) || "—"],
+    ...(dados.empresa.nomeFantasia ? [["Nome fantasia", nomeProprio(dados.empresa.nomeFantasia)] as [string, string]] : []),
     ["CNPJ", formatCNPJ(dados.empresa.cnpj)],
-    ["UF / Município", [dados.empresa.uf, dados.empresa.municipio].filter(Boolean).join(" / ") || "—"],
+    ["UF / Município", [dados.empresa.uf, nomeProprio(dados.empresa.municipio)].filter(Boolean).join(" / ") || "—"],
     ["Regime tributário", REGIME_LABELS[dados.empresa.regime] ?? dados.empresa.regime],
     ...(dados.empresa.cnaePrincipal
       ? [["CNAE principal", `${dados.empresa.cnaePrincipalCodigo ? dados.empresa.cnaePrincipalCodigo + " — " : ""}${dados.empresa.cnaePrincipal}`] as [string, string]]
       : []),
     ...dados.empresa.estabelecimentosAdicionais.map(
-      (e, i) => [`Estabelecimento ${i + 2}`, `${e.razaoSocial} — ${formatCNPJ(e.cnpj)} (${REGIME_LABELS[e.regime] ?? e.regime})`] as [string, string]
+      (e, i) => [`Estabelecimento ${i + 2}`, `${nomeProprio(e.razaoSocial)} — ${formatCNPJ(e.cnpj)} (${REGIME_LABELS[e.regime] ?? e.regime})`] as [string, string]
     ),
   ]
   autoTable(doc, {
@@ -181,13 +307,18 @@ export async function gerarPdfReforma(dados: DadosPdfReforma): Promise<void> {
     styles: { font: "helvetica", fontSize: 8.5, halign: "center", cellPadding: 1.6, textColor: CINZA_TXT, lineColor: [200, 210, 225], lineWidth: 0.15 },
     headStyles: { fillColor: AZUL, textColor: [255, 255, 255], fontStyle: "bold" },
     columnStyles: { 0: { halign: "left", fontStyle: "bold", cellWidth: 34 } },
-    head: [["Alíquota", ...anos.map(String)]],
-    body: [
-      ["CBS", ...anos.map((a) => fmtPct(pDe(a).cbs))],
-      ["IBS Estadual", ...anos.map((a) => fmtPct(pDe(a).ibsUF))],
-      ["IBS Municipal", ...anos.map((a) => fmtPct(pDe(a).ibsMUN))],
-      ["TOTAL IBS + CBS", ...anos.map((a) => fmtPct(pDe(a).cbs + pDe(a).ibsUF + pDe(a).ibsMUN))],
-    ],
+    // com a redução de 60% ativa (LC 214/2025, art. 133), a tabela mostra as alíquotas
+    // EFETIVAMENTE aplicadas aos débitos do estudo (40% das cheias) — pedido do usuário
+    head: [[dados.premissas.reducao60 ? "Alíquota (redução 60%)" : "Alíquota", ...anos.map(String)]],
+    body: (() => {
+      const fator = dados.premissas.reducao60 ? 0.4 : 1
+      return [
+        ["CBS", ...anos.map((a) => fmtPct(pDe(a).cbs * fator))],
+        ["IBS Estadual", ...anos.map((a) => fmtPct(pDe(a).ibsUF * fator))],
+        ["IBS Municipal", ...anos.map((a) => fmtPct(pDe(a).ibsMUN * fator))],
+        ["TOTAL IBS + CBS", ...anos.map((a) => fmtPct((pDe(a).cbs + pDe(a).ibsUF + pDe(a).ibsMUN) * fator))],
+      ]
+    })(),
   })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   y = (doc as any).lastAutoTable.finalY + 5
@@ -230,7 +361,7 @@ export async function gerarPdfReforma(dados: DadosPdfReforma): Promise<void> {
   // ------------------------------------------------------------ LEGISLAÇÕES
   doc.addPage("a4", "portrait")
   y = tituloSecao("Legislações aplicáveis", 24)
-  y = escreverTexto(dados.textoLegislacoes.trim() || "Nenhum tratamento legislativo específico informado.", y)
+  y = escreverRico(dados.textoLegislacoes, y, "Nenhum tratamento legislativo específico informado.")
 
   // ------------------------------------------------- QUADRO COMPARATIVO (paisagem)
   doc.addPage("a4", "landscape")
@@ -285,7 +416,7 @@ export async function gerarPdfReforma(dados: DadosPdfReforma): Promise<void> {
   // ---------------------------------------------------- CONSIDERAÇÕES FINAIS
   doc.addPage("a4", "portrait")
   y = tituloSecao("Considerações finais", 24)
-  y = escreverTexto(dados.textoConsideracoes.trim() || "Sem considerações adicionais.", y)
+  y = escreverRico(dados.textoConsideracoes, y, "Sem considerações adicionais.")
 
   // ------------------------------------------------------------- RODAPÉ
   const total = doc.getNumberOfPages()
