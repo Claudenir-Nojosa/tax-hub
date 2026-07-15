@@ -7,9 +7,9 @@ import type { EstudoConfigCiclo, MateriaConcurso, MateriaDef, TrilhaEstudo } fro
 
 // Banner comemorativo: quando uma matéria fica 100% concluída na Trilha (todas as atividades de
 // todas as metas com status "concluida"), ela vira "só revisão" — as revisões espaçadas já
-// agendadas continuam rodando normalmente, mas a trilha para de gerar teoria/questões novas pra
-// ela (ver materiasConcluidas em gerarTrilha). Este banner avisa e deixa o usuário escolher uma
-// matéria do edital, ainda fora do Ciclo, pra entrar no lugar — o "ciclo mutável" pedido.
+// agendadas continuam rodando normalmente, mas a trilha para de gerar teoria nova pra ela (ver
+// materiasConcluidas em gerarTrilha). Este banner avisa e deixa o usuário escolher uma matéria
+// do edital, ainda fora do Ciclo, pra entrar no lugar — o "ciclo mutável" pedido.
 
 const CHAVE_DISMISS = "taxhub_trilha_banner_dismiss";
 
@@ -123,7 +123,7 @@ function CardGraduada({
             Você concluiu {nome}! 🎉
           </p>
           <p className="text-xs text-emerald-700/80 dark:text-emerald-300/70 mt-0.5">
-            Ela agora entra só em revisões espaçadas — sem teoria ou questões novas.
+            Ela agora entra só em revisões espaçadas — sem teoria nova.
             {candidatas.length > 0 && " Escolha uma nova matéria pra incluir no ciclo no lugar:"}
           </p>
         </div>

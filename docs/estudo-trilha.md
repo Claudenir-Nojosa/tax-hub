@@ -8,11 +8,21 @@ caminho mudar.
 ## 1. Visão geral
 
 A Trilha divide o edital em **metas** sequenciais (`TrilhaMeta`) — **PEQUENAS por design** (pedido
-explícito do usuário, que achou as metas antigas "absurdas de difíceis e grandes"): cada meta é
-OU um único bloco de poucos tópicos de UMA matéria (teoria quando aplicável + questões — "conclua
-esta matéria/tópico"), OU um grupinho de até 4 revisões vencidas — nunca as duas coisas juntas,
-nunca várias matérias na mesma meta. Uma trilha típica tem **dezenas a centenas de metas** (não
-mais ~15 megametas de até 45h cada). Metas NÃO valem mais "1 semana cada" — ver seção 1.1.
+explícito do usuário, que achou as metas antigas "absurdas de difíceis e grandes") e **SÓ DE
+ESTUDO** (outro pedido explícito: nenhuma atividade tipo "questoes" — praticar questões fica por
+conta do usuário fora da Trilha, registrando o resultado direto no Edital/Caderno de Erros). Cada
+meta é OU um único bloco de poucos tópicos de UMA matéria (teoria — "conclua esta
+matéria/tópico"), OU um grupinho de até 4 revisões vencidas — nunca as duas coisas juntas, nunca
+várias matérias na mesma meta. Uma trilha típica tem **dezenas a centenas de metas** (não mais
+~15 megametas de até 45h cada). Metas NÃO valem mais "1 semana cada" — ver seção 1.1.
+
+**Todo nível gera alguma teoria** (ninguém fica com "tarefa vazia"): `nunca` 90min/tópico,
+`comecei` 60min, `sem_confianca` 30min (marcado `teoriaRapida`), `arestas` 15min (marcado
+`teoriaRapida`) — inclusive tópicos já `estudado:true` no Edital, que viram `arestas`
+automaticamente e ganham uma revisão rápida em vez de zero atividade. `TrilhaAtividadeTipo` e o
+campo `quantidadeQuestoes` continuam existindo no tipo (`estudo-data.ts`) só por compatibilidade
+com trilhas antigas já persistidas que tenham atividades tipo `"questoes"` — o gerador NUNCA mais
+produz uma nova.
 
 A geração é **100% determinística** (`src/lib/trilha-generator.ts`, sem IA) — reprodutível e
 recalculável a qualquer momento; a IA só escreve a `orientacao` (1-2 frases) das metas de
@@ -49,7 +59,7 @@ combina com o visual: dá pra dizer literalmente "você está completando ~15 me
 
 ## 2. Ciclo de Estudos é a fonte de verdade das matérias ativas
 
-**Regra central**: a Trilha só gera conteúdo (teoria/questões) para matérias com
+**Regra central**: a Trilha só gera conteúdo (teoria) para matérias com
 `configCiclo.materias[nome].incluir === true` (editado em `CicloTab.tsx`). Não existe mais uma
 lista própria de "matérias puladas" da Trilha — `TrilhaConfig.puladas` é `@deprecated` (opcional,
 mantido só pra não quebrar trilhas antigas persistidas; não é mais lido pelo gerador nem escrito

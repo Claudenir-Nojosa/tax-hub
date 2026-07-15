@@ -71,7 +71,7 @@ const idxRev = new Map<string, { r1?: number; r2?: number }>();
 metas1.forEach((m, idx) => {
   for (const a of m.atividades) {
     const chave = `${a.materia}::${a.topicos[0]}`;
-    if (a.tipo === "questoes") idxEstudo.set(chave, idx);
+    if (a.tipo === "teoria") idxEstudo.set(chave, idx);
     if (a.tipo === "revisao") {
       const r = idxRev.get(chave) ?? {};
       if (a.numeroRevisao === 1) r.r1 = idx;
@@ -120,8 +120,14 @@ assert(JSON.stringify(metas1) === JSON.stringify(metas1b), "geração não é de
 console.log("2) tudo-arestas / Hardcore");
 const cfg2: TrilhaConfig = { disponibilidade: "hardcore", nivelPorMateria: nivelTodas("arestas") };
 const metas2 = gerarTrilha({ materias, config: cfg2, topicos: {}, configCiclo });
-assert(metas2.every((m) => m.atividades.every((a) => a.tipo !== "teoria")), "arestas gerou teoria");
-console.log(`  ${metas2.length} metas, zero teorias ✓`);
+// arestas gera teoria RÁPIDA (15min, teoriaRapida=true) — não mais zero teoria; e, como pedido do
+// usuário, NENHUM nível gera atividade tipo "questoes" (removida da Trilha por completo)
+assert(metas2.every((m) => m.atividades.every((a) => a.tipo !== "questoes")), "gerou atividade tipo questoes (não deveria mais existir)");
+assert(
+  metas2.every((m) => m.atividades.every((a) => a.tipo !== "teoria" || (a.teoriaRapida === true && a.duracaoMin <= 15 * a.topicos.length))),
+  "teoria de arestas não veio como revisão rápida (15min/tópico)"
+);
+console.log(`  ${metas2.length} metas, teoria só rápida (arestas), nenhuma atividade "questoes" ✓`);
 
 // ── Cenário 3: mix com matérias fora do Ciclo + tópicos pré-estudados ────────
 console.log("3) mix com matérias fora do Ciclo e pré-estudados");
@@ -150,15 +156,19 @@ assert(
   metas3.every((m) => m.atividades.every((a) => !foraDoCiclo.includes(a.materia))),
   "matéria fora do Ciclo apareceu na trilha"
 );
+// tópico pré-estudado vira "arestas" (nível efetivo) — ganha teoria RÁPIDA (15min), não a teoria
+// cheia do nível declarado (45min pro "comecei" usado neste cenário)
 for (const m of metas3) {
   for (const a of m.atividades) {
     if (a.tipo !== "teoria") continue;
     for (const t of a.topicos) {
-      assert(!preEstudados[topicoKey(a.materia, t)], `tópico pré-estudado ganhou teoria: ${t}`);
+      if (!preEstudados[topicoKey(a.materia, t)]) continue;
+      assert(a.teoriaRapida === true, `tópico pré-estudado não ganhou teoria rápida: ${t}`);
+      assert(a.duracaoMin <= 15 * a.topicos.length, `tópico pré-estudado ganhou teoria mais longa que o esperado: ${t} (${a.duracaoMin}min)`);
     }
   }
 }
-console.log(`  ${metas3.length} metas, puladas fora e pré-estudados sem teoria ✓`);
+console.log(`  ${metas3.length} metas, puladas fora e pré-estudados com teoria rápida ✓`);
 
 // ── Cenário 4: atualizarTrilha cobre tópico adicionado ───────────────────────
 console.log("4) atualizarTrilha");
@@ -239,6 +249,13 @@ assert(
   "topicosNaoCobertos sinalizou tópico de matéria já graduada como faltante"
 );
 console.log("  nenhum tópico da matéria graduada sinalizado como faltante ✓");
+
+// ── Cenário 8: nenhum cenário gera atividade tipo "questoes" ─────────────────
+console.log("8) sem atividades de questões em nenhum cenário");
+for (const [nome, metas] of [["1", metas1], ["2", metas2], ["3", metas3], ["6-regen", metas6regen]] as const) {
+  assert(metas.every((m) => m.atividades.every((a) => a.tipo !== "questoes")), `cenário ${nome} gerou atividade tipo "questoes"`);
+}
+console.log("  nenhuma atividade tipo questoes em nenhum cenário ✓");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 assert(proximoStatus("nao_iniciada") === "iniciada" && proximoStatus("concluida") === "nao_iniciada", "ciclo de status errado");

@@ -275,8 +275,8 @@ function Wizard({
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Em que nível você se encontra em cada matéria?</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            Isso define quanto de teoria e quantas questões a trilha vai propor por matéria. Só entram matérias incluídas no
-            Ciclo de Estudos e ainda não concluídas na trilha.
+            Isso define quanto de teoria a trilha vai propor por matéria (só tarefas de estudo — sem questões). Só entram
+            matérias incluídas no Ciclo de Estudos e ainda não concluídas na trilha.
           </p>
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="hidden md:grid grid-cols-[1fr_repeat(4,110px)] gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-[11px] font-medium text-gray-500 dark:text-gray-400">
@@ -351,7 +351,7 @@ function Wizard({
               )}
               <p className="text-xs text-gray-400 dark:text-gray-500">
                 A trilha cobre 100% dos tópicos das matérias incluídas no Ciclo, dividida em muitas metas PEQUENAS —
-                cada uma é só um bloco de tópicos de uma matéria (teoria conforme seu nível + questões) ou um
+                cada uma é só um bloco de tópicos de uma matéria (teoria conforme seu nível — sem questões) ou um
                 grupinho de revisões espaçadas. Depois de gerar, a IA escreve uma orientação pras metas de conteúdo
                 novo.
               </p>
@@ -518,7 +518,7 @@ function TrilhaAtiva({
             <button
               type="button"
               onClick={() => {
-                if (confirm("Refazer a trilha do zero? Tópicos com teoria já concluída não repetirão teoria (o Edital continua marcado), mas o progresso de questões/revisões da trilha atual será perdido.")) onRefazer();
+                if (confirm("Refazer a trilha do zero? Tópicos com teoria já concluída não repetirão teoria (o Edital continua marcado), mas o progresso de revisões da trilha atual será perdido.")) onRefazer();
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
             >

@@ -1,20 +1,23 @@
 // Gerador determinístico da Trilha de Estudos (plano guiado por metas, estilo Gurujá/Duolingo).
 // Cada META é PEQUENA e tem UM objetivo só: OU estudar um bloco de tópicos de UMA matéria
-// (teoria quando aplicável + questões), OU revisar um pequeno grupo de tópicos já vencidos —
-// nunca os dois nem várias matérias juntas. Isso é intencional (pedido do usuário): metas
-// grandes e pesadas desmotivam; muitas metas pequenas, cada uma "conclua esta matéria/tópico",
-// combinam com o visual de caminho (1 nó = 1 meta). Sem IA aqui de propósito: geração
-// instantânea, reprodutível e recalculável — a IA só escreve as `orientacao` das metas de
-// conteúdo novo depois (rota /api/estudo/trilha/orientacoes).
+// (teoria), OU revisar um pequeno grupo de tópicos já vencidos — nunca os dois nem várias
+// matérias juntas. Só tarefas de ESTUDO (teoria/revisão) — SEM tarefas de "questões" (pedido do
+// usuário: a Trilha não gera mais atividade tipo "questoes"; praticar questões fica a cargo do
+// próprio usuário fora da Trilha, e ele registra o resultado direto no Edital/Caderno de Erros).
+// Metas grandes e pesadas desmotivam; muitas metas pequenas, cada uma "conclua esta
+// matéria/tópico", combinam com o visual de caminho (1 nó = 1 meta). Sem IA aqui de propósito:
+// geração instantânea, reprodutível e recalculável — a IA só escreve as `orientacao` das metas
+// de conteúdo novo depois (rota /api/estudo/trilha/orientacoes).
 //
 // Regras numéricas (fechadas no plano aprovado):
 //   Por tópico, conforme nível EFETIVO da matéria (tópico já `estudado` no Edital ⇒ "arestas"):
-//     nunca          teoria 90min  · 10 questões (30min) · rev.1 12min · rev.2 8min
-//     comecei        teoria 90min  · 12 questões (36min) · rev.1 12min · rev.2 8min
-//     sem_confianca  teoria 40min  · 15 questões (45min) · rev.1 12min · rev.2 8min
-//     arestas        SEM teoria    · 20 questões (60min) · rev.1 12min · rev.2 8min
-//   Blocos (tópicos consecutivos na ordem do edital, de UMA matéria): com teoria fecha em
-//   3 tópicos OU ≥150min; só-questões fecha em 5 tópicos OU ≥120min. Cada bloco = 1 meta.
+//     nunca          teoria 90min (primeira leitura completa)
+//     comecei        teoria 60min (já começou, foca no que falta)
+//     sem_confianca  teoria 30min, revisão rápida (já terminou, só reforça)
+//     arestas        teoria 15min, revisão rápida (só bate o olho de novo)
+//   (todo nível tem alguma tarefa de teoria — nenhum tópico fica sem "task de estudo" nenhuma).
+//   Blocos (tópicos consecutivos na ordem do edital, de UMA matéria): fecha em 3 tópicos OU
+//   ≥150min de teoria acumulada. Cada bloco = 1 meta.
 //   Intercalação entre matérias: escolhida bloco a bloco por round-robin ponderado suave
 //   ("smooth weighted round-robin" — peso pesoCiclo(1|2) × fatorNivel, nunca 1.5 / comecei 1.3 /
 //   sem_confianca 1.0 / arestas 0.7), não mais agrupada dentro de uma mesma meta.
@@ -43,29 +46,27 @@ import {
 
 const NIVEL_PARAMS: Record<
   TrilhaNivelMateria,
-  { teoriaMin: number; questoes: number; fator: number }
+  { teoriaMin: number; teoriaRapida: boolean; fator: number }
 > = {
-  nunca: { teoriaMin: 90, questoes: 10, fator: 1.5 },
-  comecei: { teoriaMin: 90, questoes: 12, fator: 1.3 },
-  sem_confianca: { teoriaMin: 40, questoes: 15, fator: 1.0 },
-  arestas: { teoriaMin: 0, questoes: 20, fator: 0.7 },
+  nunca: { teoriaMin: 90, teoriaRapida: false, fator: 1.5 },
+  comecei: { teoriaMin: 60, teoriaRapida: false, fator: 1.3 },
+  sem_confianca: { teoriaMin: 30, teoriaRapida: true, fator: 1.0 },
+  arestas: { teoriaMin: 15, teoriaRapida: true, fator: 0.7 },
 }
 
-const MIN_POR_QUESTAO = 3
 const REV1_MIN = 12
 const REV2_MIN = 8
 const MAX_REVISOES_POR_META = 4 // teto de revisões agrupadas numa mesma meta (mantém a meta pequena)
 
 // ─── Estruturas internas ─────────────────────────────────────────────────────
 
-// bloco = unidade de estudo (teoria? + questões) sobre tópicos consecutivos de uma matéria
+// bloco = unidade de estudo (teoria) sobre tópicos consecutivos de uma matéria
 interface Bloco {
   materia: string
   topicos: string[]
   nivel: TrilhaNivelMateria // nível efetivo do bloco (tópicos já estudados viram "arestas")
-  teoriaMin: number // 0 = sem teoria
-  questoes: number
-  questoesMin: number
+  teoriaMin: number
+  teoriaRapida: boolean
 }
 
 interface RevisaoPendente {
@@ -77,7 +78,7 @@ interface RevisaoPendente {
 }
 
 function duracaoBloco(b: Bloco): number {
-  return b.teoriaMin + b.questoesMin
+  return b.teoriaMin
 }
 
 // ─── Montagem dos blocos por matéria ─────────────────────────────────────────
@@ -91,30 +92,24 @@ function montarBlocosDaMateria(
   let atual: Bloco | null = null
 
   for (const topico of materia.topicos) {
-    // nível efetivo: tópico já estudado no Edital não repete teoria (vira "arestas")
+    // nível efetivo: tópico já estudado no Edital vira "arestas" (só uma revisão rápida)
     const jaEstudado = topicosState[topicoKey(materia.nome, topico)]?.estudado === true
     const nivel: TrilhaNivelMateria = jaEstudado ? "arestas" : nivelDeclarado
     const p = NIVEL_PARAMS[nivel]
 
-    // quebra de bloco quando o nível efetivo muda (teoria e só-questões não se misturam)
+    // quebra de bloco quando o nível efetivo muda
     if (atual && atual.nivel !== nivel) {
       blocos.push(atual)
       atual = null
     }
     if (!atual) {
-      atual = { materia: materia.nome, topicos: [], nivel, teoriaMin: 0, questoes: 0, questoesMin: 0 }
+      atual = { materia: materia.nome, topicos: [], nivel, teoriaMin: 0, teoriaRapida: p.teoriaRapida }
     }
 
     atual.topicos.push(topico)
     atual.teoriaMin += p.teoriaMin
-    atual.questoes += p.questoes
-    atual.questoesMin += p.questoes * MIN_POR_QUESTAO
 
-    const comTeoria = p.teoriaMin > 0
-    const fechou = comTeoria
-      ? atual.topicos.length >= 3 || duracaoBloco(atual) >= 150
-      : atual.topicos.length >= 5 || atual.questoesMin >= 120
-    if (fechou) {
+    if (atual.topicos.length >= 3 || atual.teoriaMin >= 150) {
       blocos.push(atual)
       atual = null
     }
@@ -212,24 +207,13 @@ export function gerarTrilha(params: {
       if (materiaEscolhida) {
         const fila = filas.get(materiaEscolhida)!
         const bloco = fila.shift()!
-        if (bloco.teoriaMin > 0) {
-          atividades.push({
-            id: idAtividade(numero, "teoria", bloco.materia, bloco.topicos[0]),
-            tipo: "teoria",
-            materia: bloco.materia,
-            topicos: bloco.topicos,
-            duracaoMin: bloco.teoriaMin,
-            ...(bloco.nivel === "sem_confianca" ? { teoriaRapida: true } : {}),
-            status: "nao_iniciada",
-          })
-        }
         atividades.push({
-          id: idAtividade(numero, "questoes", bloco.materia, bloco.topicos[0]),
-          tipo: "questoes",
+          id: idAtividade(numero, "teoria", bloco.materia, bloco.topicos[0]),
+          tipo: "teoria",
           materia: bloco.materia,
           topicos: bloco.topicos,
-          duracaoMin: bloco.questoesMin,
-          quantidadeQuestoes: bloco.questoes,
+          duracaoMin: bloco.teoriaMin,
+          ...(bloco.teoriaRapida ? { teoriaRapida: true } : {}),
           status: "nao_iniciada",
         })
 
@@ -277,12 +261,12 @@ export function gerarTrilha(params: {
 }
 
 function topicosSemCobertura(metas: TrilhaMeta[], materias: MateriaBase[]): string[] {
-  const cobertos = { questoes: new Set<string>(), rev1: new Set<string>(), rev2: new Set<string>() }
+  const cobertos = { teoria: new Set<string>(), rev1: new Set<string>(), rev2: new Set<string>() }
   for (const meta of metas) {
     for (const a of meta.atividades) {
       for (const t of a.topicos) {
         const k = topicoKey(a.materia, t)
-        if (a.tipo === "questoes") cobertos.questoes.add(k)
+        if (a.tipo === "teoria") cobertos.teoria.add(k)
         if (a.tipo === "revisao" && a.numeroRevisao === 1) cobertos.rev1.add(k)
         if (a.tipo === "revisao" && a.numeroRevisao === 2) cobertos.rev2.add(k)
       }
@@ -292,7 +276,7 @@ function topicosSemCobertura(metas: TrilhaMeta[], materias: MateriaBase[]): stri
   for (const m of materias) {
     for (const t of m.topicos) {
       const k = topicoKey(m.nome, t)
-      if (!cobertos.questoes.has(k) || !cobertos.rev1.has(k) || !cobertos.rev2.has(k)) faltando.push(k)
+      if (!cobertos.teoria.has(k) || !cobertos.rev1.has(k) || !cobertos.rev2.has(k)) faltando.push(k)
     }
   }
   return faltando
@@ -376,7 +360,7 @@ export function materiasConcluidasNaTrilha(trilha: TrilhaEstudo): string[] {
 }
 
 // tópicos das matérias ativas no Ciclo (menos as já graduadas) que não aparecem em nenhuma
-// atividade de questões da trilha
+// atividade de teoria da trilha
 export function topicosNaoCobertos(
   trilha: TrilhaEstudo,
   materias: MateriaBase[],
@@ -385,7 +369,7 @@ export function topicosNaoCobertos(
   const cobertos = new Set<string>()
   for (const meta of trilha.metas) {
     for (const a of meta.atividades) {
-      if (a.tipo !== "questoes") continue
+      if (a.tipo !== "teoria") continue
       for (const t of a.topicos) cobertos.add(topicoKey(a.materia, t))
     }
   }
