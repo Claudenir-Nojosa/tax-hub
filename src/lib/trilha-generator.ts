@@ -1,22 +1,28 @@
-// Gerador determinístico da Trilha de Estudos (plano guiado por metas, estilo Gurujá).
-// Monta metas sequenciais que cobrem 100% do edital: cada tópico não-pulado aparece em
-// exatamente 1 bloco de estudo (teoria quando aplicável + questões) + 2 revisões espaçadas
-// (rev.1 na meta seguinte ≈ 7 dias, rev.2 quatro metas depois ≈ 30 dias, no ritmo de 1
-// meta/semana). Sem IA aqui de propósito: geração instantânea, reprodutível e recalculável —
-// a IA só escreve as `orientacao` das metas depois (rota /api/estudo/trilha/orientacoes).
+// Gerador determinístico da Trilha de Estudos (plano guiado por metas, estilo Gurujá/Duolingo).
+// Cada META é PEQUENA e tem UM objetivo só: OU estudar um bloco de tópicos de UMA matéria
+// (teoria quando aplicável + questões), OU revisar um pequeno grupo de tópicos já vencidos —
+// nunca os dois nem várias matérias juntas. Isso é intencional (pedido do usuário): metas
+// grandes e pesadas desmotivam; muitas metas pequenas, cada uma "conclua esta matéria/tópico",
+// combinam com o visual de caminho (1 nó = 1 meta). Sem IA aqui de propósito: geração
+// instantânea, reprodutível e recalculável — a IA só escreve as `orientacao` das metas de
+// conteúdo novo depois (rota /api/estudo/trilha/orientacoes).
 //
 // Regras numéricas (fechadas no plano aprovado):
-//   Orçamento da meta = minutosSemana da disponibilidade; fecha quando restante < 60 min.
 //   Por tópico, conforme nível EFETIVO da matéria (tópico já `estudado` no Edital ⇒ "arestas"):
 //     nunca          teoria 90min  · 10 questões (30min) · rev.1 12min · rev.2 8min
 //     comecei        teoria 90min  · 12 questões (36min) · rev.1 12min · rev.2 8min
 //     sem_confianca  teoria 40min  · 15 questões (45min) · rev.1 12min · rev.2 8min
 //     arestas        SEM teoria    · 20 questões (60min) · rev.1 12min · rev.2 8min
-//   Blocos (tópicos consecutivos na ordem do edital): com teoria fecha em 3 tópicos OU ≥150min;
-//   só-questões fecha em 5 tópicos OU ≥120min.
-//   Intercalação: w = pesoCiclo(1|2) × fatorNivel (nunca 1.5 / comecei 1.3 / sem_confianca 1.0 /
-//   arestas 0.7); round-robin por w desc, peso 2 ganha 2 turnos por rodada; máx 4 matérias/meta.
-//   Revisões vencidas entram ANTES de conteúdo novo, limitadas a 35% do orçamento da meta.
+//   Blocos (tópicos consecutivos na ordem do edital, de UMA matéria): com teoria fecha em
+//   3 tópicos OU ≥150min; só-questões fecha em 5 tópicos OU ≥120min. Cada bloco = 1 meta.
+//   Intercalação entre matérias: escolhida bloco a bloco por round-robin ponderado suave
+//   ("smooth weighted round-robin" — peso pesoCiclo(1|2) × fatorNivel, nunca 1.5 / comecei 1.3 /
+//   sem_confianca 1.0 / arestas 0.7), não mais agrupada dentro de uma mesma meta.
+//   Revisões vencidas viram metas próprias (até 4 por meta), separadas do conteúdo novo. O
+//   vencimento não é mais contado em "número de metas" (metas não valem mais 1 semana cada,
+//   já que agora são pequenas) — é contado em MINUTOS DE ESTUDO acumulados: rev.1 vence quando
+//   passam `minutosSemana` da disponibilidade desde o estudo (≈7 dias no ritmo escolhido), rev.2
+//   quando passam 4×minutosSemana (≈30 dias).
 
 import {
   topicoKey,
@@ -29,6 +35,7 @@ import {
   type TrilhaEstudo,
   type TrilhaMeta,
   type TrilhaAtividadeStatus,
+  type TrilhaDisponibilidade,
   type TrilhaNivelMateria,
 } from "./estudo-data"
 
@@ -47,9 +54,7 @@ const NIVEL_PARAMS: Record<
 const MIN_POR_QUESTAO = 3
 const REV1_MIN = 12
 const REV2_MIN = 8
-const ORCAMENTO_MINIMO_RESTANTE = 60 // fecha a meta quando sobra menos que isso
-const TETO_REVISAO = 0.35 // fração do orçamento da meta reservável a revisões vencidas
-const MAX_MATERIAS_POR_META = 4
+const MAX_REVISOES_POR_META = 4 // teto de revisões agrupadas numa mesma meta (mantém a meta pequena)
 
 // ─── Estruturas internas ─────────────────────────────────────────────────────
 
@@ -67,7 +72,7 @@ interface RevisaoPendente {
   materia: string
   topicos: string[]
   numeroRevisao: 1 | 2
-  venceNaMeta: number
+  venceEmMinuto: number // minutos de estudo acumulados a partir dos quais a revisão pode entrar numa meta
   duracaoMin: number
 }
 
@@ -149,130 +154,114 @@ export function gerarTrilha(params: {
     if (blocos.length > 0) filas.set(m.nome, blocos)
   }
 
-  // ordem de intercalação: w = pesoCiclo × fatorNivel, desc; desempate = ordem do edital.
-  // Matérias com peso 2 no ciclo ganham 2 turnos por rodada do round-robin.
-  const ordem = ativas
+  // rotação ponderada suave ("smooth weighted round-robin"): a cada bloco escolhido, soma o
+  // peso de cada matéria ativa ao seu crédito, pega a de maior crédito e desconta o peso total
+  // dela — dá exatamente a proporção certa (peso 2 aparece ~2x mais que peso 1) sem agrupar
+  // vários blocos consecutivos da mesma matéria numa única meta.
+  interface Rotacao { nome: string; peso: number; credito: number }
+  const rotacao: Rotacao[] = ativas
     .filter((m) => filas.has(m.nome))
-    .map((m, idx) => {
+    .map((m) => {
       const pesoCiclo = configCiclo.materias[m.nome]?.peso ?? 1
       const nivel = config.nivelPorMateria[m.nome] ?? "nunca"
-      return { nome: m.nome, w: pesoCiclo * NIVEL_PARAMS[nivel].fator, turnos: pesoCiclo >= 2 ? 2 : 1, idx }
+      return { nome: m.nome, peso: pesoCiclo * NIVEL_PARAMS[nivel].fator, credito: 0 }
     })
-    .sort((a, b) => b.w - a.w || a.idx - b.idx)
+
+  function proximaMateriaComBloco(): string | null {
+    const candidatas = rotacao.filter((r) => (filas.get(r.nome)?.length ?? 0) > 0)
+    if (candidatas.length === 0) return null
+    const pesoTotal = candidatas.reduce((s, r) => s + r.peso, 0)
+    for (const r of candidatas) r.credito += r.peso
+    candidatas.sort((a, b) => b.credito - a.credito || a.nome.localeCompare(b.nome))
+    const escolhida = candidatas[0]
+    escolhida.credito -= pesoTotal
+    return escolhida.nome
+  }
 
   const metas: TrilhaMeta[] = []
   const revisoesPendentes: RevisaoPendente[] = []
-  let cursor = 0 // posição no round-robin (persistente entre metas, pra rotação justa)
+  let minutosDecorridos = 0 // relógio de estudo acumulado — base do vencimento das revisões
 
   const totalBlocos = () => [...filas.values()].reduce((s, f) => s + f.length, 0)
 
   while (totalBlocos() > 0 || revisoesPendentes.length > 0) {
     const numero = metas.length + 1
-    const atividades: TrilhaAtividade[] = []
-    let restante = orcamento
+    let atividades: TrilhaAtividade[] = []
 
-    // 1) revisões vencidas primeiro (limitadas a 35% do orçamento; excedente adia sozinho)
-    let orcamentoRevisao = Math.round(orcamento * TETO_REVISAO)
+    // 1) meta de REVISÃO: se há revisões vencidas (relógio já passou do vencimento), a meta é
+    // só isso — pequena, focada, nunca misturada com conteúdo novo
     const vencidas = revisoesPendentes
-      .filter((r) => r.venceNaMeta <= numero)
-      .sort((a, b) => a.venceNaMeta - b.venceNaMeta)
-    for (const rev of vencidas) {
-      if (rev.duracaoMin > orcamentoRevisao || rev.duracaoMin > restante) continue
-      atividades.push({
+      .filter((r) => r.venceEmMinuto <= minutosDecorridos)
+      .sort((a, b) => a.venceEmMinuto - b.venceEmMinuto)
+      .slice(0, MAX_REVISOES_POR_META)
+    if (vencidas.length > 0) {
+      atividades = vencidas.map((rev) => ({
         id: idAtividade(numero, `revisao${rev.numeroRevisao}`, rev.materia, rev.topicos[0]),
-        tipo: "revisao",
+        tipo: "revisao" as const,
         materia: rev.materia,
         topicos: rev.topicos,
         duracaoMin: rev.duracaoMin,
         numeroRevisao: rev.numeroRevisao,
-        status: "nao_iniciada",
-      })
-      restante -= rev.duracaoMin
-      orcamentoRevisao -= rev.duracaoMin
-      revisoesPendentes.splice(revisoesPendentes.indexOf(rev), 1)
-    }
-
-    // 2) conteúdo novo via round-robin ponderado. A trava de variedade (máx. 4 matérias) conta
-    // só matérias de CONTEÚDO NOVO — revisões são curtas (8-12min) e podem tocar mais matérias
-    // sem quebrar o foco da semana.
-    const materiasNaMeta = new Set<string>()
-    let inseriuAlgo = true
-    while (restante >= ORCAMENTO_MINIMO_RESTANTE && totalBlocos() > 0 && inseriuAlgo) {
-      inseriuAlgo = false
-      for (let volta = 0; volta < ordem.length; volta++) {
-        const item = ordem[(cursor + volta) % ordem.length]
-        const fila = filas.get(item.nome)
-        if (!fila || fila.length === 0) continue
-
-        // trava de variedade: no máx. 4 matérias distintas por meta
-        if (!materiasNaMeta.has(item.nome) && materiasNaMeta.size >= MAX_MATERIAS_POR_META) continue
-
-        // insere até `turnos` blocos consecutivos da matéria
-        let inseriuDaMateria = false
-        for (let t = 0; t < item.turnos && fila.length > 0; t++) {
-          const bloco = fila[0]
-          if (duracaoBloco(bloco) > restante) break
-          fila.shift()
-
-          if (bloco.teoriaMin > 0) {
-            atividades.push({
-              id: idAtividade(numero, "teoria", bloco.materia, bloco.topicos[0]),
-              tipo: "teoria",
-              materia: bloco.materia,
-              topicos: bloco.topicos,
-              duracaoMin: bloco.teoriaMin,
-              ...(bloco.nivel === "sem_confianca" ? { teoriaRapida: true } : {}),
-              status: "nao_iniciada",
-            })
-          }
+        status: "nao_iniciada" as const,
+      }))
+      for (const rev of vencidas) revisoesPendentes.splice(revisoesPendentes.indexOf(rev), 1)
+    } else {
+      // 2) meta de CONTEÚDO: exatamente 1 bloco (poucos tópicos) de UMA matéria — "conclua esta
+      // matéria/tópico", nada de empacotar várias matérias na mesma meta
+      const materiaEscolhida = proximaMateriaComBloco()
+      if (materiaEscolhida) {
+        const fila = filas.get(materiaEscolhida)!
+        const bloco = fila.shift()!
+        if (bloco.teoriaMin > 0) {
           atividades.push({
-            id: idAtividade(numero, "questoes", bloco.materia, bloco.topicos[0]),
-            tipo: "questoes",
+            id: idAtividade(numero, "teoria", bloco.materia, bloco.topicos[0]),
+            tipo: "teoria",
             materia: bloco.materia,
             topicos: bloco.topicos,
-            duracaoMin: bloco.questoesMin,
-            quantidadeQuestoes: bloco.questoes,
+            duracaoMin: bloco.teoriaMin,
+            ...(bloco.nivel === "sem_confianca" ? { teoriaRapida: true } : {}),
             status: "nao_iniciada",
           })
-          restante -= duracaoBloco(bloco)
-          materiasNaMeta.add(bloco.materia)
-          inseriuDaMateria = true
-
-          // agenda as revisões espaçadas do bloco
-          revisoesPendentes.push(
-            { materia: bloco.materia, topicos: bloco.topicos, numeroRevisao: 1, venceNaMeta: numero + 1, duracaoMin: REV1_MIN },
-            { materia: bloco.materia, topicos: bloco.topicos, numeroRevisao: 2, venceNaMeta: numero + 4, duracaoMin: REV2_MIN }
-          )
         }
-        if (inseriuDaMateria) inseriuAlgo = true
-        if (restante < ORCAMENTO_MINIMO_RESTANTE) break
-      }
-      cursor = (cursor + 1) % Math.max(1, ordem.length)
-    }
-
-    // 3) rabo da trilha: sem conteúdo novo nem revisão vencida nesta meta. Agrupa TODAS as
-    // revisões do próximo vencimento numa única meta (encurta o espaçamento nominal em no
-    // máximo o gap até o vencimento — aceitável no final, e evita metas de 8 minutos).
-    if (atividades.length === 0 && revisoesPendentes.length > 0) {
-      const menorVencimento = Math.min(...revisoesPendentes.map((r) => r.venceNaMeta))
-      const grupo = revisoesPendentes.filter((r) => r.venceNaMeta === menorVencimento)
-      for (const rev of grupo) {
-        if (rev.duracaoMin > restante) break
-        revisoesPendentes.splice(revisoesPendentes.indexOf(rev), 1)
         atividades.push({
-          id: idAtividade(numero, `revisao${rev.numeroRevisao}`, rev.materia, rev.topicos[0]),
-          tipo: "revisao",
-          materia: rev.materia,
-          topicos: rev.topicos,
-          duracaoMin: rev.duracaoMin,
-          numeroRevisao: rev.numeroRevisao,
+          id: idAtividade(numero, "questoes", bloco.materia, bloco.topicos[0]),
+          tipo: "questoes",
+          materia: bloco.materia,
+          topicos: bloco.topicos,
+          duracaoMin: bloco.questoesMin,
+          quantidadeQuestoes: bloco.questoes,
           status: "nao_iniciada",
         })
-        restante -= rev.duracaoMin
+
+        // agenda as revisões espaçadas do bloco a partir do relógio de estudo NO FECHAMENTO
+        // desta meta (não do índice dela — metas não valem mais 1 semana cada)
+        const minutosNoFechamento = minutosDecorridos + duracaoBloco(bloco)
+        revisoesPendentes.push(
+          { materia: bloco.materia, topicos: bloco.topicos, numeroRevisao: 1, venceEmMinuto: minutosNoFechamento + orcamento, duracaoMin: REV1_MIN },
+          { materia: bloco.materia, topicos: bloco.topicos, numeroRevisao: 2, venceEmMinuto: minutosNoFechamento + 4 * orcamento, duracaoMin: REV2_MIN }
+        )
       }
+    }
+
+    // 3) rabo da trilha: nem revisão vencida nem bloco de conteúdo disponível, mas ainda há
+    // revisões pendentes no futuro — força as mais próximas do vencimento (evita loop infinito
+    // e evita deixar revisão pra trás só porque o relógio ainda não "virou")
+    if (atividades.length === 0 && revisoesPendentes.length > 0) {
+      const grupo = [...revisoesPendentes].sort((a, b) => a.venceEmMinuto - b.venceEmMinuto).slice(0, MAX_REVISOES_POR_META)
+      atividades = grupo.map((rev) => ({
+        id: idAtividade(numero, `revisao${rev.numeroRevisao}`, rev.materia, rev.topicos[0]),
+        tipo: "revisao" as const,
+        materia: rev.materia,
+        topicos: rev.topicos,
+        duracaoMin: rev.duracaoMin,
+        numeroRevisao: rev.numeroRevisao,
+        status: "nao_iniciada" as const,
+      }))
+      for (const rev of grupo) revisoesPendentes.splice(revisoesPendentes.indexOf(rev), 1)
     }
 
     if (atividades.length === 0) break // segurança contra loop infinito (não deve acontecer)
+    minutosDecorridos += atividades.reduce((s, a) => s + a.duracaoMin, 0)
     metas.push({ numero, atividades })
   }
 
@@ -313,6 +302,7 @@ function topicosSemCobertura(metas: TrilhaMeta[], materias: MateriaBase[]): stri
 
 export function estimarResumo(
   metas: TrilhaMeta[],
+  disponibilidade: TrilhaDisponibilidade,
   dataProva?: string
 ): {
   totalMetas: number
@@ -323,7 +313,10 @@ export function estimarResumo(
   cabeAteProva?: boolean
 } {
   const totalMinutos = metas.reduce((s, m) => s + m.atividades.reduce((a, x) => a + x.duracaoMin, 0), 0)
-  const semanasEstimadas = metas.length // ritmo livre: 1 meta ≈ 1 semana
+  // metas agora são pequenas (1 bloco ou poucas revisões) — não valem mais 1 semana cada. As
+  // semanas vêm do tempo total dividido pelo orçamento semanal da disponibilidade escolhida.
+  const orcamentoSemanal = TRILHA_DISPONIBILIDADE_CONFIG[disponibilidade].minutosSemana
+  const semanasEstimadas = Math.max(1, Math.ceil(totalMinutos / orcamentoSemanal))
   const dataProjetada = new Date()
   dataProjetada.setDate(dataProjetada.getDate() + semanasEstimadas * 7)
 
@@ -336,7 +329,8 @@ export function estimarResumo(
 }
 
 // ritmo real: metas concluídas ÷ semanas desde a criação; null enquanto não há meta concluída
-// (a UI mostra a estimativa inicial de 1 meta/semana nesse caso)
+// (a UI mostra a estimativa inicial baseada no tempo total ÷ disponibilidade nesse caso — ver
+// estimarResumo — já que metas pequenas não valem mais 1 semana cada)
 export function projetarTermino(trilha: TrilhaEstudo): {
   metasConcluidas: number
   ritmoMetasPorSemana: number | null
@@ -349,8 +343,12 @@ export function projetarTermino(trilha: TrilhaEstudo): {
     (Date.now() - new Date(trilha.criadaEm).getTime()) / (7 * 86_400_000)
   )
   if (concluidas === 0) {
+    // sem dado real de ritmo ainda: estima pelas semanas totais da trilha (tempo ÷ disponibilidade)
+    const totalMinutos = trilha.metas.reduce((s, m) => s + m.atividades.reduce((a, x) => a + x.duracaoMin, 0), 0)
+    const orcamentoSemanal = TRILHA_DISPONIBILIDADE_CONFIG[trilha.config.disponibilidade].minutosSemana
+    const semanasEstimadas = Math.max(1, Math.ceil(totalMinutos / orcamentoSemanal))
     const d = new Date()
-    d.setDate(d.getDate() + restantes * 7)
+    d.setDate(d.getDate() + semanasEstimadas * 7)
     return { metasConcluidas: 0, ritmoMetasPorSemana: null, dataProjetada: restantes > 0 ? d : null }
   }
   const ritmo = concluidas / semanasDecorridas

@@ -7,16 +7,45 @@ caminho mudar.
 
 ## 1. Visão geral
 
-A Trilha divide o edital em **metas** sequenciais (`TrilhaMeta`, ≈1 semana cada), cada uma com
-atividades de teoria, questões e revisão espaçada (rev.1 ≈7 dias, rev.2 ≈30 dias). A geração é
-**100% determinística** (`src/lib/trilha-generator.ts`, sem IA) — reprodutível e recalculável a
-qualquer momento; a IA só escreve a `orientacao` (1-2 frases) de cada meta depois, via
-`POST /api/estudo/trilha/orientacoes`, com graceful degradation se falhar.
+A Trilha divide o edital em **metas** sequenciais (`TrilhaMeta`) — **PEQUENAS por design** (pedido
+explícito do usuário, que achou as metas antigas "absurdas de difíceis e grandes"): cada meta é
+OU um único bloco de poucos tópicos de UMA matéria (teoria quando aplicável + questões — "conclua
+esta matéria/tópico"), OU um grupinho de até 4 revisões vencidas — nunca as duas coisas juntas,
+nunca várias matérias na mesma meta. Uma trilha típica tem **dezenas a centenas de metas** (não
+mais ~15 megametas de até 45h cada). Metas NÃO valem mais "1 semana cada" — ver seção 1.1.
+
+A geração é **100% determinística** (`src/lib/trilha-generator.ts`, sem IA) — reprodutível e
+recalculável a qualquer momento; a IA só escreve a `orientacao` (1-2 frases) das metas de
+**conteúdo novo** (metas só-de-revisão não recebem, pra não gastar chamada à toa e não estourar o
+limite de 120 metas por request da rota) via `POST /api/estudo/trilha/orientacoes`, com graceful
+degradation se falhar.
 
 No visual (`TrilhaTab.tsx` + `src/components/estudo/trilha/*`), **1 nó do caminho = 1
 `TrilhaMeta`**: `TrilhaPath.tsx` desenha um caminho sinuoso (posição de cada nó e a curva de fundo
 vêm da MESMA função seno — nunca desalinham, e são responsivos sem medir DOM); clicar num nó não
 bloqueado abre `MetaPainel.tsx` (Dialog) com as atividades daquela meta.
+
+### 1.1 Espaçamento de revisão por MINUTOS DE ESTUDO (não mais por índice de meta)
+
+Como as metas deixaram de ter tamanho fixo (~1 semana), o vencimento de uma revisão não pode mais
+ser "daqui a N metas" — isso viraria uma medida de tempo completamente arbitrária dependendo de
+quantos blocos pequenos existirem entre elas. Em vez disso, o gerador mantém um relógio interno
+`minutosDecorridos` (soma da duração de todas as metas já montadas): ao fechar um bloco de
+conteúdo, agenda `rev.1` para quando o relógio passar de `minutosNoFechamento + minutosSemana` da
+disponibilidade escolhida (≈7 dias no ritmo assumido) e `rev.2` para `+4×minutosSemana` (≈30
+dias). A cada iteração do loop principal, revisões cujo `venceEmMinuto` já foi atingido pelo
+relógio viram a PRÓXIMA meta (grupo de até 4, a mais antiga primeiro) — misturadas naturalmente
+com as metas de conteúdo ao longo do caminho. No "rabo" da trilha (sem mais conteúdo novo pra
+manter o relógio andando), as revisões pendentes mais próximas do vencimento são forçadas mesmo
+sem ele ter sido atingido — mesma exceção documentada no gerador original, só que agora medida em
+minutos, não em metas.
+
+`estimarResumo()`/`projetarTermino()` foram ajustados junto: `semanasEstimadas` (e a projeção de
+término antes de qualquer meta concluída) vêm de `totalMinutos ÷ minutosSemana`, não mais de
+`metas.length` — se ainda usassem contagem de metas, uma trilha de 145 metas pequenas "estimaria"
+145 semanas (quase 3 anos!) em vez das ~10 semanas reais. O ritmo REAL pós-primeira-conclusão
+(`ritmoMetasPorSemana`) continua em "metas concluídas por semana" — isso é intencional e
+combina com o visual: dá pra dizer literalmente "você está completando ~15 metas por semana".
 
 ## 2. Ciclo de Estudos é a fonte de verdade das matérias ativas
 

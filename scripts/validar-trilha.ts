@@ -34,56 +34,83 @@ function nivelTodas(nivel: TrilhaNivelMateria): Record<string, TrilhaNivelMateri
 console.log("1) tudo-nunca / Normal");
 const cfg1: TrilhaConfig = { disponibilidade: "normal", nivelPorMateria: nivelTodas("nunca") };
 const metas1 = gerarTrilha({ materias, config: cfg1, topicos: {}, configCiclo });
-const resumo1 = estimarResumo(metas1, "2026-08-01");
+const resumo1 = estimarResumo(metas1, "normal", "2026-08-01");
 console.log(`  ${resumo1.totalMetas} metas · ${Math.round(resumo1.totalMinutos / 60)}h totais · cabe até a prova: ${resumo1.cabeAteProva}`);
 
-// orçamento por meta (±10%, exceto metas finais de revisão)
+// metas agora são PEQUENAS por design (pedido do usuário): 1 bloco de UMA matéria (conteúdo) OU
+// um grupo pequeno de revisões — nunca as duas coisas juntas, nunca várias matérias de conteúdo
+// novo na mesma meta. Teto generoso (bloco com teoria: até 3 tópicos × 90min + questões ≈
+// 400min; revisão agrupada: até 4 × 12min).
 const ORCAMENTO = 1890;
-const metasSoRevisao = new Set<number>();
 metas1.forEach((m) => {
   const soRevisao = m.atividades.every((a) => a.tipo === "revisao");
-  if (soRevisao) metasSoRevisao.add(m.numero);
   const minutos = m.atividades.reduce((s, a) => s + a.duracaoMin, 0);
-  if (!soRevisao) assert(minutos <= ORCAMENTO * 1.1, `meta ${m.numero} estourou orçamento: ${minutos}min`);
-  // trava de variedade vale pra CONTEÚDO NOVO (teoria/questões); revisões passam livres
-  const nMateriasNovas = new Set(m.atividades.filter((a) => a.tipo !== "revisao").map((a) => a.materia)).size;
-  assert(nMateriasNovas <= 4, `meta ${m.numero} tem ${nMateriasNovas} matérias de conteúdo novo (>4)`);
+  if (soRevisao) {
+    const REV1_MIN = 12; // espelha a constante interna do gerador (não exportada)
+    assert(minutos <= 4 * REV1_MIN, `meta ${m.numero} de revisão maior que o esperado: ${minutos}min`);
+  } else {
+    assert(minutos <= 400, `meta ${m.numero} de conteúdo estourou o teto de bloco: ${minutos}min (bem acima do orçamento semanal de ${ORCAMENTO})`);
+    const materiasContudoNovo = new Set(m.atividades.filter((a) => a.tipo !== "revisao").map((a) => a.materia));
+    assert(materiasContudoNovo.size === 1, `meta ${m.numero} de conteúdo tem ${materiasContudoNovo.size} matérias (esperado exatamente 1)`);
+  }
 });
 
-// revisões: rev1 ≥ meta de estudo + 1; rev2 ≥ meta de estudo + 4
-const metaEstudo = new Map<string, number>();
-const metaRev = new Map<string, { r1?: number; r2?: number }>();
-for (const m of metas1) {
+// espaçamento das revisões agora é por MINUTOS DE ESTUDO acumulados (não mais "índice de meta +
+// N", já que metas deixaram de valer 1 semana cada): rev1 só pode entrar numa meta depois que o
+// relógio passar ORCAMENTO minutos desde o fechamento do bloco estudado; rev2, 4×ORCAMENTO.
+const minutosAcumulados: number[] = []; // minutosAcumulados[i] = minutos decorridos APÓS a meta i (0-based)
+{
+  let acc = 0;
+  for (const m of metas1) {
+    acc += m.atividades.reduce((s, a) => s + a.duracaoMin, 0);
+    minutosAcumulados.push(acc);
+  }
+}
+const idxEstudo = new Map<string, number>();
+const idxRev = new Map<string, { r1?: number; r2?: number }>();
+metas1.forEach((m, idx) => {
   for (const a of m.atividades) {
     const chave = `${a.materia}::${a.topicos[0]}`;
-    if (a.tipo === "questoes") metaEstudo.set(chave, m.numero);
+    if (a.tipo === "questoes") idxEstudo.set(chave, idx);
     if (a.tipo === "revisao") {
-      const r = metaRev.get(chave) ?? {};
-      if (a.numeroRevisao === 1) r.r1 = m.numero;
-      else r.r2 = m.numero;
-      metaRev.set(chave, r);
+      const r = idxRev.get(chave) ?? {};
+      if (a.numeroRevisao === 1) r.r1 = idx;
+      else r.r2 = idx;
+      idxRev.set(chave, r);
+    }
+  }
+});
+// "rabo da trilha": depois da última meta de CONTEÚDO, não há mais nada fazendo o relógio andar
+// além das próprias revisões pendentes — o gerador antecipa o vencimento pra não deixar revisão
+// pra trás (mesmo comportamento documentado no gerador antigo). Metas nessa faixa ficam isentas
+// da checagem estrita de ORCAMENTO min de gap.
+const ultimoIdxConteudo = metas1.reduce((max, m, idx) => (m.atividades.some((a) => a.tipo !== "revisao") ? idx : max), -1);
+let gapRev1Total = 0, nRev1 = 0, noRabo = 0;
+for (const [chave, idxEst] of idxEstudo) {
+  const r = idxRev.get(chave);
+  assert(!!r?.r1 && !!r?.r2, `bloco ${chave} sem as 2 revisões`);
+  const minutoDoEstudo = minutosAcumulados[idxEst];
+  if (r?.r1 !== undefined) {
+    const relogioAntesDoRev1 = r.r1 === 0 ? 0 : minutosAcumulados[r.r1 - 1];
+    const gap = relogioAntesDoRev1 - minutoDoEstudo;
+    if (r.r1 > ultimoIdxConteudo) {
+      noRabo++; // rabo: só garante que não veio antes do próprio estudo
+      assert(gap >= 0, `rev1 de ${chave} (no rabo) veio antes do estudo (gap ${gap}min)`);
+    } else {
+      assert(gap >= ORCAMENTO, `rev1 de ${chave} entrou antes de completar ~1 semana de estudo (gap ${gap}min, esperado ≥${ORCAMENTO})`);
+    }
+    gapRev1Total += gap;
+    nRev1++;
+  }
+  if (r?.r2 !== undefined) {
+    assert(r.r2! > r.r1!, `rev2 de ${chave} veio antes ou junto do rev1 (rev1 idx ${r.r1}, rev2 idx ${r.r2})`);
+    if (r.r2 <= ultimoIdxConteudo) {
+      const relogioAntesDoRev2 = r.r2 === 0 ? 0 : minutosAcumulados[r.r2 - 1];
+      assert(relogioAntesDoRev2 - minutoDoEstudo >= 4 * ORCAMENTO, `rev2 de ${chave} entrou antes de completar ~4 semanas de estudo (gap ${relogioAntesDoRev2 - minutoDoEstudo}min, esperado ≥${4 * ORCAMENTO})`);
     }
   }
 }
-let rev1Exata = 0, rev1Total = 0;
-for (const [chave, est] of metaEstudo) {
-  const r = metaRev.get(chave);
-  assert(!!r?.r1 && !!r?.r2, `bloco ${chave} sem as 2 revisões`);
-  if (r?.r1) {
-    assert(r.r1 >= est + 1, `rev1 de ${chave} veio antes de N+1 (estudo ${est}, rev ${r.r1})`);
-    rev1Total++;
-    if (r.r1 === est + 1) rev1Exata++;
-  }
-  // rev2 respeita N+4, exceto no rabo da trilha (metas só-de-revisão agrupam por vencimento)
-  if (r?.r2) {
-    assert(
-      r.r2 >= est + 4 || metasSoRevisao.has(r.r2),
-      `rev2 de ${chave} veio antes de N+4 fora do rabo (estudo ${est}, rev ${r.r2})`
-    );
-    assert(r.r2 >= est + 2, `rev2 de ${chave} cedo demais mesmo pro rabo (estudo ${est}, rev ${r.r2})`);
-  }
-}
-console.log(`  rev1 exatamente em N+1: ${rev1Exata}/${rev1Total}`);
+console.log(`  gap médio até rev1: ${Math.round(gapRev1Total / nRev1)}min (orçamento semanal: ${ORCAMENTO}min) — ${nRev1} blocos, ${noRabo} no rabo da trilha`);
 
 // determinismo
 const metas1b = gerarTrilha({ materias, config: cfg1, topicos: {}, configCiclo });

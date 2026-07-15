@@ -97,7 +97,13 @@ async function buscarOrientacoes(
   onUpdateTrilha: (t: TrilhaEstudo) => void
 ) {
   try {
-    const resumo = trilha.metas.map((m) => ({
+    // só metas de CONTEÚDO NOVO precisam de orientação tática — metas só-de-revisão são pequenas
+    // e óbvias ("revise isso de novo"), não vale a pena gastar chamada de IA nelas. Isso também
+    // mantém o volume de metas bem abaixo do limite de 120 da rota mesmo em trilhas com centenas
+    // de metas (edital grande = muitas metas pequenas, por design).
+    const metasDeConteudo = trilha.metas.filter((m) => m.atividades.some((a) => a.tipo !== "revisao")).slice(0, 120);
+    if (metasDeConteudo.length === 0) return;
+    const resumo = metasDeConteudo.map((m) => ({
       numero: m.numero,
       materias: [...new Set(m.atividades.map((a) => a.materia))],
       nTopicos: new Set(m.atividades.flatMap((a) => a.topicos.map((t) => `${a.materia}|${t}`))).size,
@@ -167,11 +173,11 @@ function Wizard({
     if (passo !== 3) return null;
     try {
       const metas = gerarTrilha({ materias, config, topicos, configCiclo, materiasConcluidas });
-      return { metas, resumo: estimarResumo(metas, dataProva) };
+      return { metas, resumo: estimarResumo(metas, disponibilidade, dataProva) };
     } catch {
       return null;
     }
-  }, [passo, materias, config, topicos, configCiclo, dataProva, materiasConcluidas]);
+  }, [passo, materias, config, topicos, configCiclo, dataProva, materiasConcluidas, disponibilidade]);
 
   const PASSOS = ["Disponibilidade", "Conhecimentos", "Conclusão"];
 
@@ -339,14 +345,15 @@ function Wizard({
                   }`}
                 >
                   {preview.resumo.cabeAteProva
-                    ? `No ritmo de 1 meta por semana você conclui o edital antes da prova (faltam ${preview.resumo.diasAteProva} dias). 🎯`
-                    : `No ritmo de 1 meta por semana a trilha passa da data da prova (faltam ${preview.resumo.diasAteProva} dias). Considere subir a disponibilidade — ou conte com acelerar concluindo mais de uma meta por semana.`}
+                    ? `Na sua disponibilidade, você conclui o edital em ${preview.resumo.semanasEstimadas} semana(s) — antes da prova (faltam ${preview.resumo.diasAteProva} dias). 🎯`
+                    : `Na sua disponibilidade, a trilha leva ${preview.resumo.semanasEstimadas} semana(s) e passa da data da prova (faltam ${preview.resumo.diasAteProva} dias). Considere subir a disponibilidade.`}
                 </div>
               )}
               <p className="text-xs text-gray-400 dark:text-gray-500">
-                A trilha cobre 100% dos tópicos das matérias incluídas no Ciclo: teoria conforme seu nível, questões com
-                quantidade definida e 2 revisões espaçadas por bloco. Depois de gerar, a IA escreve uma orientação
-                pra cada meta.
+                A trilha cobre 100% dos tópicos das matérias incluídas no Ciclo, dividida em muitas metas PEQUENAS —
+                cada uma é só um bloco de tópicos de uma matéria (teoria conforme seu nível + questões) ou um
+                grupinho de revisões espaçadas. Depois de gerar, a IA escreve uma orientação pras metas de conteúdo
+                novo.
               </p>
             </div>
           )}
@@ -424,6 +431,15 @@ function TrilhaAtiva({
   const percGeral = totalAtividades > 0 ? Math.round((concluidas / totalAtividades) * 100) : 0;
   const projecao = projetarTermino(trilha);
   const naoCobertos = useMemo(() => topicosNaoCobertos(trilha, materias, configCiclo), [trilha, materias, configCiclo]);
+  // ritmo ESPERADO (antes de haver metas concluídas pra calcular o ritmo real): metas são
+  // pequenas agora, então "1 meta/semana" não vale mais — deriva quantas metas cabem por semana
+  // na disponibilidade escolhida, a partir do tamanho médio real das metas desta trilha
+  const metasPorSemanaEsperado = useMemo(() => {
+    const totalMinutos = trilha.metas.reduce((s, m) => s + m.atividades.reduce((a, x) => a + x.duracaoMin, 0), 0);
+    const orcamentoSemanal = TRILHA_DISPONIBILIDADE_CONFIG[trilha.config.disponibilidade].minutosSemana;
+    const semanas = Math.max(1, Math.ceil(totalMinutos / orcamentoSemanal));
+    return Math.max(1, Math.round(trilha.metas.length / semanas));
+  }, [trilha]);
 
   const handleStatusClick = (metaNumero: number, atividadeId: string) => {
     const metas = trilha.metas.map((m) => {
@@ -482,7 +498,7 @@ function TrilhaAtiva({
                 Meta {trilha.metas[idxAtual]?.numero ?? "-"} de {trilha.metas.length} ·{" "}
                 {projecao.ritmoMetasPorSemana !== null
                   ? `seu ritmo: ${projecao.ritmoMetasPorSemana} meta(s)/semana`
-                  : "ritmo estimado: 1 meta/semana"}
+                  : `ritmo estimado: ~${metasPorSemanaEsperado} meta(s)/semana`}
                 {projecao.dataProjetada && ` · término ~${fmtData(projecao.dataProjetada)}`}
                 {dataProva && ` · prova ${fmtData(new Date(dataProva))}`}
               </div>
