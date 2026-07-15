@@ -76,6 +76,93 @@ const CAMPO_PARA_COLUNA_ANO: Record<string, string> = {
   vlrPisCofins: "VLR PIS + COFINS", icms: "ICMS", iss: "ISS", cbs: "CBS", ibs: "IBS",
 }
 
+// ---------------------------------------------------------------------------------------------
+// Cálculo puro do Quadro Comparativo — fonte única de verdade dos números, usada tanto pelos
+// caches das fórmulas do Excel (montarAbaQuadroComparativo) quanto pelo PDF executivo
+// (src/lib/reforma-pdf.ts). Mesmas regras das abas: PIS/COFINS zera a partir de 2027, ICMS/ISS
+// com o cronograma de redução, débito com redução 60% (se ativa), crédito com a classificação
+// do NCM e sem crédito em 2026, VALOR TOTAL usa o SALDO de CBS/IBS (não o débito).
+
+export const ANOS_QUADRO = ANOS_COLUNA
+
+export interface QuadroComparativoAno {
+  pisCofins: number
+  icms: number
+  iss: number
+  debitoCbs: number
+  debitoIbs: number
+  creditoCbs: number
+  creditoIbs: number
+  saldoCbs: number
+  saldoIbs: number
+  total: number
+  impactoPct: number | null // variação vs 2026; null no próprio 2026
+}
+
+export function calcularQuadroComparativo(
+  linhasSaidas: LinhaSaidaEfd[],
+  premissas: PremissasReformaData,
+  linhasEntradas: LinhaEntradaEfd[] = [],
+  classificacoesFornecedores: Record<string, ResultadoConsultaCnpj> = {},
+  baseIbsCbs: LinhaBaseIbsCbs[] = []
+): Record<number, QuadroComparativoAno> {
+  const tipoPorNcm = tipoCreditoPorNcm(baseIbsCbs)
+  const resultado: Record<number, QuadroComparativoAno> = {}
+
+  for (const ano of ANOS_COLUNA) {
+    const anoPremissa = ano === 2028 ? 2027 : ano
+    const p = premissas.premissasPorAno[anoPremissa]
+    const { aliqIbs, aliqCbs } = aliquotasEfetivasDoAno(p.cbs, p.ibsUF, p.ibsMUN, premissas.reducao60)
+    const fatorIcmsIss = REDUCAO_ICMS_ISS[anoPremissa] ?? 1
+    // ICMS = premissa constante (mesma regra das abas de ano — o modelo não usa a alíquota do
+    // EFD); ISS ORIGINAL = sempre a alíquota normal de 2026, não a premissa do próprio ano
+    const aliqIss = p.aliquotaISS * fatorIcmsIss
+    const aliqIssOriginal = premissas.premissasPorAno[2026]?.aliquotaISS ?? p.aliquotaISS
+    const aliqIcms = (premissas.aliquotaICMS ?? 0.225) * fatorIcmsIss
+    const zerarPisCofins = ano >= 2027
+
+    let pisCofins = 0, icms = 0, iss = 0, debitoCbs = 0, debitoIbs = 0
+    for (const l of linhasSaidas) {
+      const aliqIcmsLinha = l.documento === "Nota Fiscal de Mercadoria (DANFE)" ? aliqIcms : 0
+      const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha, zerarPisCofins, aliqIssOriginal)
+      pisCofins += c.vlrPisCofins
+      icms += c.icms
+      iss += c.iss
+      debitoCbs += c.cbs
+      debitoIbs += c.ibs
+    }
+
+    // Créditos (entradas): alíquotas CHEIAS da premissa do par (sem redução 60% do débito),
+    // fornecedor Simples Nacional/não classificado não gera crédito. Sem crédito em 2026.
+    let creditoCbs = 0, creditoIbs = 0
+    if (ano !== 2026) {
+      for (const l of linhasEntradas) {
+        const c = classificacoesFornecedores[l.cnpjFornecedor]
+        const naoRegular = !c || Boolean(c.erro) || Boolean(c.simplesNacional)
+        if (naoRegular) continue
+        const fator = fatorCreditoDoTipo(tipoPorNcm.get(l.ncm) ?? "Cheio")
+        if (fator === 0) continue
+        const base = (l.vlrItem - l.vlrDescontoItem) * fator
+        creditoCbs += base * p.cbs
+        creditoIbs += base * (p.ibsUF + p.ibsMUN)
+      }
+    }
+
+    const saldoCbs = debitoCbs - creditoCbs
+    const saldoIbs = debitoIbs - creditoIbs
+    // 2026: só PIS/COFINS + ICMS + ISS (CBS/IBS são alíquota-teste)
+    const total = ano === 2026 ? pisCofins + icms + iss : pisCofins + icms + iss + saldoCbs + saldoIbs
+    resultado[ano] = { pisCofins, icms, iss, debitoCbs, debitoIbs, creditoCbs, creditoIbs, saldoCbs, saldoIbs, total, impactoPct: null }
+  }
+
+  const total2026 = resultado[2026].total
+  for (const ano of ANOS_COLUNA) {
+    if (ano === 2026) continue
+    resultado[ano].impactoPct = total2026 !== 0 ? resultado[ano].total / total2026 - 1 : 0
+  }
+  return resultado
+}
+
 export function montarAbaQuadroComparativo(
   wb: ExcelJS.Workbook,
   empresa: EmpresaData,
@@ -85,7 +172,6 @@ export function montarAbaQuadroComparativo(
   classificacoesFornecedores: Record<string, ResultadoConsultaCnpj> = {},
   baseIbsCbs: LinhaBaseIbsCbs[] = []
 ) {
-  const tipoPorNcm = tipoCreditoPorNcm(baseIbsCbs)
   const ws = wb.addWorksheet("Quadro Comparativo", { views: [{ showGridLines: false }] })
   ws.properties.tabColor = { argb: "FF000000" } // guia preta, como na referência
   ws.columns = [
@@ -133,70 +219,12 @@ export function montarAbaQuadroComparativo(
   const l2 = LINHA_FIM_RANGE_ANO
   const cCnpj = letraColunaAno("CNPJ")
 
-  // premissas por ano da coluna (2027/2028 usam a mesma, ver Premissas) — pré-computadas uma vez,
-  // já com a redução de ICMS/ISS 2029-2033 aplicada (mesmo cronograma usado em anos.ts)
-  const aliqPorAno = new Map<number, { aliqIss: number; aliqIssOriginal: number; aliqIbs: number; aliqCbs: number; aliqIcms: number }>()
-  for (const ano of ANOS_COLUNA) {
-    const anoPremissa = ano === 2028 ? 2027 : ano
-    const p = premissas.premissasPorAno[anoPremissa]
-    const { aliqIbs, aliqCbs } = aliquotasEfetivasDoAno(p.cbs, p.ibsUF, p.ibsMUN, premissas.reducao60)
-    const fatorIcmsIss = REDUCAO_ICMS_ISS[anoPremissa] ?? 1
-    // ICMS = premissa constante (mesma regra das abas de ano — o modelo não usa a alíquota do EFD);
-    // ISS ORIGINAL = sempre a alíquota normal de 2026, não a premissa do próprio ano
-    aliqPorAno.set(ano, {
-      aliqIss: p.aliquotaISS * fatorIcmsIss,
-      aliqIssOriginal: premissas.premissasPorAno[2026]?.aliquotaISS ?? p.aliquotaISS,
-      aliqIbs, aliqCbs,
-      aliqIcms: (premissas.aliquotaICMS ?? 0.225) * fatorIcmsIss,
-    })
-  }
-
-  // Uma única passada por linha por ano (não por tributo×ano) — calcularCamposAno já devolve os
-  // 5 campos de uma vez. PIS/COFINS zera a partir de 2027 (a CBS substitui), igual às abas de ano.
-  const somasPorAno = new Map<number, Record<string, number>>()
-  for (const ano of ANOS_COLUNA) {
-    const { aliqIss, aliqIssOriginal, aliqIbs, aliqCbs, aliqIcms } = aliqPorAno.get(ano)!
-    const zerarPisCofins = ano >= 2027
-    const somas: Record<string, number> = { vlrPisCofins: 0, icms: 0, iss: 0, cbs: 0, ibs: 0 }
-    for (const l of linhasSaidas) {
-      const aliqIcmsLinha = l.documento === "Nota Fiscal de Mercadoria (DANFE)" ? aliqIcms : 0
-      const c = calcularCamposAno(l, aliqIss, aliqIbs, aliqCbs, aliqIcmsLinha, zerarPisCofins, aliqIssOriginal)
-      somas.vlrPisCofins += c.vlrPisCofins
-      somas.icms += c.icms
-      somas.iss += c.iss
-      somas.cbs += c.cbs
-      somas.ibs += c.ibs
-    }
-    somasPorAno.set(ano, somas)
-  }
-
-  // Créditos de IBS/CBS por ano (entradas) — mesma regra da aba Entradas: base = Vlr Item −
-  // Desconto, alíquotas CHEIAS da premissa do par (sem a redução de 60% do débito), fornecedor
-  // Simples Nacional/não classificado não gera crédito, "Cheio" é o default do Regime Regular.
-  // Sem crédito em 2026 (período de teste).
-  const creditoPorAno = new Map<number, { cbs: number; ibs: number }>()
-  for (const ano of ANOS_COLUNA) {
-    if (ano === 2026) {
-      creditoPorAno.set(ano, { cbs: 0, ibs: 0 })
-      continue
-    }
-    const anoPremissa = ano === 2028 ? 2027 : ano
-    const p = premissas.premissasPorAno[anoPremissa]
-    let cbs = 0
-    let ibs = 0
-    for (const l of linhasEntradas) {
-      const c = classificacoesFornecedores[l.cnpjFornecedor]
-      const naoRegular = !c || Boolean(c.erro) || Boolean(c.simplesNacional)
-      if (naoRegular) continue
-      // mesma régua da aba Entradas: classificação do NCM (Cheio/reduzida 60%/zero/não permitido)
-      const fator = fatorCreditoDoTipo(tipoPorNcm.get(l.ncm) ?? "Cheio")
-      if (fator === 0) continue
-      const base = (l.vlrItem - l.vlrDescontoItem) * fator
-      cbs += base * p.cbs
-      ibs += base * (p.ibsUF + p.ibsMUN)
-    }
-    creditoPorAno.set(ano, { cbs, ibs })
-  }
+  // Números do quadro — fonte única de verdade (também usada pelo PDF executivo)
+  const quadro = calcularQuadroComparativo(linhasSaidas, premissas, linhasEntradas, classificacoesFornecedores, baseIbsCbs)
+  const somaDebito = (ano: number, campo: "cbs" | "ibs") => (campo === "cbs" ? quadro[ano].debitoCbs : quadro[ano].debitoIbs)
+  const somaCredito = (ano: number, campo: "cbs" | "ibs") => (campo === "cbs" ? quadro[ano].creditoCbs : quadro[ano].creditoIbs)
+  const somaTributo = (ano: number, campo: keyof CamposCalculadosAno) =>
+    campo === "vlrPisCofins" ? quadro[ano].pisCofins : campo === "icms" ? quadro[ano].icms : quadro[ano].iss
 
   // Linhas PIS/COFINS, ICMS, ISS
   LINHAS_TRIBUTO.forEach((linha, li) => {
@@ -209,7 +237,7 @@ export function montarAbaQuadroComparativo(
       const rangeCnpj = `'${aba}'!$${cCnpj}$${l1}:$${cCnpj}$${l2}`
       celula(
         ws, `${String.fromCharCode(68 + ci)}${r}`,
-        f(`IF($D$${LINHA_EMPRESA}="Todos",SUM(${rangeValor}),SUMIFS(${rangeValor},${rangeCnpj},$M$${LINHA_EMPRESA}))`, somasPorAno.get(ano)![linha.campo]),
+        f(`IF($D$${LINHA_EMPRESA}="Todos",SUM(${rangeValor}),SUMIFS(${rangeValor},${rangeCnpj},$M$${LINHA_EMPRESA}))`, somaTributo(ano, linha.campo)),
         { numFmt: FMT_RS }
       )
     })
@@ -229,7 +257,7 @@ export function montarAbaQuadroComparativo(
       const rangeCnpj = `'${aba}'!$${cCnpj}$${l1}:$${cCnpj}$${l2}`
       celula(
         ws, `${String.fromCharCode(68 + ci)}${r}`,
-        f(`IF($D$${LINHA_EMPRESA}="Todos",SUM(${rangeValor}),SUMIFS(${rangeValor},${rangeCnpj},$M$${LINHA_EMPRESA}))`, somasPorAno.get(ano)![campo]),
+        f(`IF($D$${LINHA_EMPRESA}="Todos",SUM(${rangeValor}),SUMIFS(${rangeValor},${rangeCnpj},$M$${LINHA_EMPRESA}))`, somaDebito(ano, campo)),
         { numFmt: FMT_RS, fundo: COR_DEBITO, corFonte: ano === 2026 ? COR_FONTE_TESTE : undefined }
       )
     })
@@ -254,7 +282,7 @@ export function montarAbaQuadroComparativo(
       const cValor = letraColunaEntrada(`${campo.toUpperCase()} ${parCreditoDoAno(ano)}`)
       const rangeValor = `'Entradas - EFD ICMS IPI'!$${cValor}$${e1}:$${cValor}$${e2}`
       const rangeCnpj = `'Entradas - EFD ICMS IPI'!$${cCnpjEntrada}$${e1}:$${cCnpjEntrada}$${e2}`
-      const cache = creditoPorAno.get(ano)![campo]
+      const cache = somaCredito(ano, campo)
       celula(
         ws, `${col}${r}`,
         f(`IF($D$${LINHA_EMPRESA}="Todos",SUM(${rangeValor}),SUMIFS(${rangeValor},${rangeCnpj},$M$${LINHA_EMPRESA}))`, cache),
@@ -273,7 +301,7 @@ export function montarAbaQuadroComparativo(
     celula(ws, `C${r}`, `${campo.toUpperCase()} (Não cumulativo)`, { bold: true })
     ANOS_COLUNA.forEach((ano, ci) => {
       const col = String.fromCharCode(68 + ci)
-      const saldo = somasPorAno.get(ano)![campo] - creditoPorAno.get(ano)![campo]
+      const saldo = campo === "cbs" ? quadro[ano].saldoCbs : quadro[ano].saldoIbs
       celula(
         ws, `${col}${r}`,
         f(`${col}${rDeb}-${col}${rCred}`, saldo),
@@ -287,13 +315,7 @@ export function montarAbaQuadroComparativo(
   // não o débito — pedido do usuário).
   celula(ws, `C${LINHA_TOTAL}`, "VALOR TOTAL", { bold: true, fundo: COR_BANDA_CINZA })
   ws.getCell(`C${LINHA_TOTAL}`).alignment = { horizontal: "right" }
-  const totalDoAno = (ano: number) => {
-    const somas = somasPorAno.get(ano)!
-    const credito = creditoPorAno.get(ano)!
-    return ano === 2026
-      ? somas.vlrPisCofins + somas.icms + somas.iss
-      : somas.vlrPisCofins + somas.icms + somas.iss + (somas.cbs - credito.cbs) + (somas.ibs - credito.ibs)
-  }
+  const totalDoAno = (ano: number) => quadro[ano].total
   ANOS_COLUNA.forEach((ano, ci) => {
     const col = String.fromCharCode(68 + ci)
     const formula = ano === 2026
@@ -304,15 +326,13 @@ export function montarAbaQuadroComparativo(
 
   // IMPACTO CARGA TRIBUTÁRIA (banda azul clara): variação percentual vs 2026; 2026 mostra "-"
   celula(ws, `C${LINHA_IMPACTO}`, "IMPACTO CARGA TRIBUTÁRIA", { bold: true, fundo: COR_BANDA_AZUL })
-  const total2026 = totalDoAno(2026)
   ANOS_COLUNA.forEach((ano, ci) => {
     const col = String.fromCharCode(68 + ci)
     if (ano === 2026) {
       celula(ws, `${col}${LINHA_IMPACTO}`, "-", { bold: true, fundo: COR_BANDA_AZUL, centralizado: true })
       return
     }
-    const totalAno = totalDoAno(ano)
-    const impacto = total2026 !== 0 ? totalAno / total2026 - 1 : 0
+    const impacto = quadro[ano].impactoPct ?? 0
     celula(
       ws, `${col}${LINHA_IMPACTO}`,
       f(`IFERROR(${col}${LINHA_TOTAL}/$D$${LINHA_TOTAL}-1,0)`, impacto),

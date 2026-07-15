@@ -291,3 +291,14 @@ Validação com dados reais (27.577 saídas / 4.833 entradas) + Excel real via C
 `ExportarProjetoDialog` (novo): aberto direto do card, carrega o estudo do IndexedDB e mostra resumo (itens de saída/entrada, fornecedores classificados, última atualização) + dois botões de geração — **Excel completo** e **Excel do cliente** — com barra de progresso, usando o MESMO `gerarExcelReforma` do wizard (premissas/legislação/nome do projeto/logo vêm do `parametrosExtra`; base NCM padrão via API ou a customizada salva). Sem dados locais (outro navegador), mostra estado vazio orientando a abrir o projeto.
 
 Validação: tsc limpo; página de preview temporária (rota pública, deletada depois) confirmou no navegador real o render dos dois estados do card e o dialog completo (stats corretos com IndexedDB semeado, botões, link Editar projeto). A geração em si reusa o pipeline já validado com dados reais nas tasks #84/#86.
+
+## PDF executivo com textos editáveis (task #88)
+
+Novo export em PDF (100% no navegador, jspdf + jspdf-autotable via import dinâmico, padrão do Planejador) com: capa azul-marinho com a logo (do cliente ou TaxHub), dados da empresa, premissas (tabelas de alíquotas IBS/CBS e cronograma ICMS/ISS), **Legislações** e **Considerações finais** — estes dois são TEXTOS DO USUÁRIO, escritos num dialog (`ExportarPdfDialog.tsx`) e SALVOS em `parametrosExtra.pdfLegislacoes`/`pdfConsideracoes` ANTES da geração (pedido explícito) — e o quadro comparativo em página paisagem (linhas de débito salmão/crédito verde/total/impacto, 2026 em cinza).
+
+Pontos-chave:
+- **`calcularQuadroComparativo()`** extraída de `quadro-comparativo.ts` como função pura — fonte única dos números do quadro, usada pelos caches do Excel E pelo PDF. Refactor validado com dados reais: idêntico à lógica anterior campo a campo em todos os anos (tolerância 1e-9).
+- `src/lib/reforma-pdf.ts` (`gerarPdfReforma`) — dimensões da logo via Image() (só roda no browser); atenção: a helvetica do jsPDF não tem o glifo "−" (menos tipográfico) — vira aspas e desalinha a linha; usar texto ASCII.
+- Entradas: botão "PDF executivo" no `ExportarProjetoDialog` (card, dados do IndexedDB) e "Exportar PDF" no `StepRevisao` (dados do wizard; exige empresa salva).
+- `PUT /api/reforma-tributaria/empresas/[id]` agora aceita `parametrosExtra` (merge feito no cliente com o objeto completo); os demais campos undefined são ignorados pelo Prisma. O wizard preserva os textos (`textosPdf` no state) ao regravar o parametrosExtra.
+- Validação: PDF real gerado no navegador via rota temporária (deletada) e lido de volta — 5 páginas conferidas (capa, tabelas, quadro paisagem com 8 anos, textos, rodapé paginado).

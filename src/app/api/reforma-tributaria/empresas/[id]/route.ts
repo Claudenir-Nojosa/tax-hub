@@ -71,6 +71,9 @@ export async function PUT(
       temFCBF: body.temFCBF,
       fcbfPercentual: body.fcbfPercentual,
       fcbfBaseCalculo: body.fcbfBaseCalculo,
+      // atualização parcial: os campos acima chegam undefined (e o Prisma os ignora) quando o
+      // cliente só quer mexer no parametrosExtra — ex.: textos do PDF executivo
+      ...(body.parametrosExtra !== undefined && { parametrosExtra: body.parametrosExtra }),
     },
   })
 

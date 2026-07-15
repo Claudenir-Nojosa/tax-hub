@@ -29,6 +29,9 @@ export type EmpresaReformaResumo = {
     estabelecimentosAdicionais?: EstabelecimentoData[]
     premissasReforma?: PremissasReformaData
     legislacao?: LegislacaoData
+    // textos do PDF executivo, salvos antes da geração (ExportarPdfDialog)
+    pdfLegislacoes?: string
+    pdfConsideracoes?: string
   } | null
 }
 

@@ -71,6 +71,9 @@ function EmpresaWizardInner() {
   const [saidasEfd, setSaidasEfd] = useState<SaidasEfdData>(defaultSaidasEfd())
   const [entradasEfd, setEntradasEfd] = useState<EntradasEfdData>(defaultEntradasEfd())
   const [nomeProjeto, setNomeProjeto] = useState("")
+  // textos do PDF executivo (salvos pelo ExportarPdfDialog) — preservados aqui pra não serem
+  // apagados quando o wizard regrava o parametrosExtra inteiro
+  const [textosPdf, setTextosPdf] = useState<{ pdfLegislacoes?: string; pdfConsideracoes?: string }>({})
   const [savedEmpresaId, setSavedEmpresaId] = useState<string | null>(empresaId)
   const [saving, setSaving] = useState(false)
   // evita que o auto-save dispare durante a restauração inicial dos dados do IndexedDB
@@ -112,6 +115,10 @@ function EmpresaWizardInner() {
         if (typeof data.parametrosExtra?.nomeProjeto === "string") {
           setNomeProjeto(data.parametrosExtra.nomeProjeto)
         }
+        setTextosPdf({
+          pdfLegislacoes: data.parametrosExtra?.pdfLegislacoes,
+          pdfConsideracoes: data.parametrosExtra?.pdfConsideracoes,
+        })
         try {
           const salvo = await carregarProjetoWizard(empresaId)
           if (salvo) {
@@ -167,6 +174,7 @@ function EmpresaWizardInner() {
             legislacao,
             nomeProjeto,
             logoDataUrl: empresa.logoDataUrl ?? null,
+            ...textosPdf,
           },
         }),
       })
@@ -278,6 +286,18 @@ function EmpresaWizardInner() {
             entradasEfd={entradasEfd}
             nomeProjeto={nomeProjeto}
             onNomeProjetoChange={setNomeProjeto}
+            empresaId={savedEmpresaId}
+            parametrosExtraAtual={{
+              cnaePrincipalCodigo: empresa.cnaePrincipalCodigo,
+              cnaesSecundarios: empresa.cnaesSecundarios,
+              estabelecimentosAdicionais: empresa.estabelecimentosAdicionais,
+              premissasReforma,
+              legislacao,
+              nomeProjeto,
+              logoDataUrl: empresa.logoDataUrl ?? null,
+              ...textosPdf,
+            }}
+            onTextosPdfSalvos={setTextosPdf}
             onBack={() => setStep(5)}
           />
         ) : null}

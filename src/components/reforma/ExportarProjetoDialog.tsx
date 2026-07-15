@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button"
 import {
   FileSpreadsheet, FileDown, Loader2, FolderOpen, ArrowUpFromLine, ArrowDownToLine,
-  Users, CalendarClock, ShieldCheck, Sparkles,
+  Users, CalendarClock, ShieldCheck, Sparkles, FileText,
 } from "lucide-react"
 import { toast } from "sonner"
 import { carregarProjetoWizard, type ProjetoWizardSalvo } from "@/lib/reforma-wizard-store"
@@ -14,6 +14,7 @@ import { gerarExcelReforma, type OpcoesGeracao } from "@/lib/reforma-excel/gerar
 import { parseBaseIbsCbsCustomizada } from "@/lib/reforma-base-ibs-cbs-custom"
 import { defaultPremissasReforma } from "@/components/reforma/StepPremissasReforma"
 import { defaultLegislacao } from "@/components/reforma/StepLegislacaoIA"
+import ExportarPdfDialog, { type DadosPesadosPdf } from "./ExportarPdfDialog"
 import type { EmpresaData } from "@/components/reforma/Step1Empresa"
 import type { LinhaBaseIbsCbs } from "@/lib/reforma-base-ibs-cbs"
 import type { EmpresaReformaResumo } from "./EmpresaCard"
@@ -53,6 +54,10 @@ export default function ExportarProjetoDialog({ empresa, open, onOpenChange }: P
   const [projeto, setProjeto] = useState<ProjetoWizardSalvo | null>(null)
   const [gerando, setGerando] = useState<null | "completo" | "cliente">(null)
   const [progresso, setProgresso] = useState<{ pct: number; etapa: string } | null>(null)
+  const [pdfAberto, setPdfAberto] = useState(false)
+  // textos do PDF salvos nesta sessão do dialog — mantém o pré-preenchimento atualizado sem
+  // esperar a listagem refazer o fetch
+  const [textosPdf, setTextosPdf] = useState<{ pdfLegislacoes?: string; pdfConsideracoes?: string }>({})
 
   useEffect(() => {
     if (!open) return
@@ -69,40 +74,53 @@ export default function ExportarProjetoDialog({ empresa, open, onOpenChange }: P
   const totalEntradas = projeto?.entradasEfd.arquivos.reduce((s, a) => s + a.linhas.length, 0) ?? 0
   const totalFornecedores = projeto ? Object.keys(projeto.entradasEfd.classificacoes).length : 0
 
+  const resolverBaseIbsCbs = async (p: ProjetoWizardSalvo): Promise<LinhaBaseIbsCbs[]> => {
+    if (p.baseNcm.usarPadrao || !p.baseNcm.arquivoCustomBuffer) {
+      const res = await fetch("/api/reforma-tributaria/base-ibs-cbs")
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? "Falha ao carregar a base padrão de NCM")
+      return json.linhas
+    }
+    return parseBaseIbsCbsCustomizada(p.baseNcm.arquivoCustomBuffer)
+  }
+
+  const dadosEmpresa = (): EmpresaData => ({
+    cnpj: empresa.cnpj,
+    razaoSocial: empresa.razaoSocial,
+    nomeFantasia: empresa.nomeFantasia ?? "",
+    regime: empresa.regime,
+    simplesNacional: empresa.simplesNacional,
+    uf: empresa.uf,
+    municipio: empresa.municipio ?? "",
+    cnaePrincipal: empresa.cnaePrincipal ?? "",
+    cnaePrincipalCodigo: extra.cnaePrincipalCodigo ?? "",
+    cnaesSecundarios: extra.cnaesSecundarios ?? [],
+    faturamento: 0,
+    estabelecimentosAdicionais: extra.estabelecimentosAdicionais ?? [],
+    logoDataUrl: extra.logoDataUrl ?? null,
+  })
+
+  // dados pesados para o PDF (mesma resolução de base NCM do Excel)
+  const obterDadosPdf = async (): Promise<DadosPesadosPdf> => {
+    if (!projeto) throw new Error("Dados do estudo não estão neste navegador")
+    return {
+      linhasSaidas: projeto.saidasEfd.arquivos.flatMap((a) => a.linhas),
+      linhasEntradas: projeto.entradasEfd.arquivos.flatMap((a) => a.linhas),
+      classificacoes: projeto.entradasEfd.classificacoes,
+      baseIbsCbs: await resolverBaseIbsCbs(projeto),
+    }
+  }
+
   const exportar = async (modo: "completo" | "cliente") => {
     if (!projeto) return
     setGerando(modo)
     setProgresso({ pct: 0, etapa: "Carregando base de NCM..." })
     try {
-      let baseIbsCbs: LinhaBaseIbsCbs[]
-      if (projeto.baseNcm.usarPadrao || !projeto.baseNcm.arquivoCustomBuffer) {
-        const res = await fetch("/api/reforma-tributaria/base-ibs-cbs")
-        const json = await res.json()
-        if (!res.ok) throw new Error(json.error ?? "Falha ao carregar a base padrão de NCM")
-        baseIbsCbs = json.linhas
-      } else {
-        baseIbsCbs = await parseBaseIbsCbsCustomizada(projeto.baseNcm.arquivoCustomBuffer)
-      }
-
-      const dadosEmpresa: EmpresaData = {
-        cnpj: empresa.cnpj,
-        razaoSocial: empresa.razaoSocial,
-        nomeFantasia: empresa.nomeFantasia ?? "",
-        regime: empresa.regime,
-        simplesNacional: empresa.simplesNacional,
-        uf: empresa.uf,
-        municipio: empresa.municipio ?? "",
-        cnaePrincipal: empresa.cnaePrincipal ?? "",
-        cnaePrincipalCodigo: extra.cnaePrincipalCodigo ?? "",
-        cnaesSecundarios: extra.cnaesSecundarios ?? [],
-        faturamento: 0,
-        estabelecimentosAdicionais: extra.estabelecimentosAdicionais ?? [],
-        logoDataUrl: extra.logoDataUrl ?? null,
-      }
+      const baseIbsCbs = await resolverBaseIbsCbs(projeto)
       const opcoes: OpcoesGeracao | undefined = modo === "cliente" ? { modoCliente: true } : undefined
       await gerarExcelReforma(
         {
-          empresa: dadosEmpresa,
+          empresa: dadosEmpresa(),
           premissasReforma: extra.premissasReforma ?? defaultPremissasReforma(),
           legislacao: extra.legislacao ?? defaultLegislacao(),
           linhasSaidas: projeto.saidasEfd.arquivos.flatMap((a) => a.linhas),
@@ -215,6 +233,21 @@ export default function ExportarProjetoDialog({ empresa, open, onOpenChange }: P
                     </p>
                   </div>
                 </button>
+                <button
+                  onClick={() => setPdfAberto(true)}
+                  disabled={gerando !== null}
+                  className="w-full group rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-950/60 transition-colors px-4 py-3 flex items-center gap-3 text-left"
+                >
+                  <div className="h-9 w-9 rounded-lg bg-rose-500/10 flex items-center justify-center shrink-0">
+                    <FileText className="h-5 w-5 text-rose-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-rose-900 dark:text-rose-300">PDF executivo</p>
+                    <p className="text-[11px] text-rose-700/70 dark:text-rose-400/60">
+                      Empresa, premissas, legislações, quadro comparativo e considerações
+                    </p>
+                  </div>
+                </button>
               </div>
             )}
 
@@ -232,6 +265,19 @@ export default function ExportarProjetoDialog({ empresa, open, onOpenChange }: P
           </div>
         )}
       </DialogContent>
+
+      <ExportarPdfDialog
+        open={pdfAberto}
+        onOpenChange={setPdfAberto}
+        empresaId={empresa.id}
+        empresa={dadosEmpresa()}
+        nomeProjeto={nomeProjeto}
+        premissas={extra.premissasReforma ?? defaultPremissasReforma()}
+        parametrosExtraAtual={{ ...extra, ...textosPdf }}
+        textoLegislacoesInicial={extra.legislacao?.notaManual}
+        obterDados={obterDadosPdf}
+        onTextosSalvos={setTextosPdf}
+      />
     </Dialog>
   )
 }

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, FileDown, CheckCircle2, Building2, Percent, ScrollText, Database, ArrowDownToLine, ArrowUpFromLine, AlertTriangle } from "lucide-react"
+import { Loader2, FileDown, CheckCircle2, Building2, Percent, ScrollText, Database, ArrowDownToLine, ArrowUpFromLine, AlertTriangle, FileText } from "lucide-react"
 import { toast } from "sonner"
 import type { EmpresaData } from "./Step1Empresa"
 import type { PremissasReformaData } from "./StepPremissasReforma"
@@ -15,6 +15,7 @@ import type { EntradasEfdData } from "./StepEntradasEfd"
 import { gerarExcelReforma, type OpcoesGeracao } from "@/lib/reforma-excel/gerar-excel-reforma"
 import { parseBaseIbsCbsCustomizada } from "@/lib/reforma-base-ibs-cbs-custom"
 import type { LinhaBaseIbsCbs } from "@/lib/reforma-base-ibs-cbs"
+import ExportarPdfDialog, { type DadosPesadosPdf } from "./ExportarPdfDialog"
 
 // Passo 7 (final) do wizard: resumo de tudo que foi coletado nos passos anteriores + botão para
 // gerar o Excel de entrega. Todas as 14 abas planejadas já são geradas (ver
@@ -29,6 +30,11 @@ interface Props {
   entradasEfd: EntradasEfdData
   nomeProjeto: string
   onNomeProjetoChange: (nome: string) => void
+  // PDF executivo: id da empresa salva (PUT dos textos), parametrosExtra completo atual (o PUT
+  // manda mesclado) e callback pro wizard reter os textos salvos nas próximas gravações
+  empresaId: string | null
+  parametrosExtraAtual: Record<string, unknown>
+  onTextosPdfSalvos: (t: { pdfLegislacoes: string; pdfConsideracoes: string }) => void
   onBack: () => void
 }
 
@@ -44,10 +50,11 @@ function LinhaResumo({ icon: Icon, titulo, valor }: { icon: React.ElementType; t
   )
 }
 
-export default function StepRevisao({ empresa, premissasReforma, legislacao, baseNcm, saidasEfd, entradasEfd, nomeProjeto, onNomeProjetoChange, onBack }: Props) {
+export default function StepRevisao({ empresa, premissasReforma, legislacao, baseNcm, saidasEfd, entradasEfd, nomeProjeto, onNomeProjetoChange, empresaId, parametrosExtraAtual, onTextosPdfSalvos, onBack }: Props) {
   const [gerando, setGerando] = useState(false)
   const [gerado, setGerado] = useState(false)
   const [progresso, setProgresso] = useState<{ pct: number; etapa: string } | null>(null)
+  const [pdfAberto, setPdfAberto] = useState(false)
 
   const totalSaidas = saidasEfd.arquivos.reduce((s, a) => s + a.linhas.length, 0)
   const totalEntradas = entradasEfd.arquivos.reduce((s, a) => s + a.linhas.length, 0)
@@ -56,24 +63,31 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
   // aparece em volumes bem maiores, como precaução.
   const volumeGrande = totalSaidas > 60000
 
+  const resolverBaseIbsCbs = async (): Promise<LinhaBaseIbsCbs[]> => {
+    if (baseNcm.usarPadrao) {
+      const res = await fetch("/api/reforma-tributaria/base-ibs-cbs")
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? "Falha ao carregar a base padrão de NCM")
+      return json.linhas
+    }
+    if (baseNcm.arquivoCustomBuffer) return parseBaseIbsCbsCustomizada(baseNcm.arquivoCustomBuffer)
+    throw new Error("Nenhuma base de NCM disponível — volte ao Passo 4")
+  }
+
+  // dados pesados pro PDF executivo — direto do estado do wizard
+  const obterDadosPdf = async (): Promise<DadosPesadosPdf> => ({
+    linhasSaidas: saidasEfd.arquivos.flatMap((a) => a.linhas),
+    linhasEntradas: entradasEfd.arquivos.flatMap((a) => a.linhas),
+    classificacoes: entradasEfd.classificacoes,
+    baseIbsCbs: await resolverBaseIbsCbs(),
+  })
+
   const gerar = async (opcoes?: OpcoesGeracao) => {
     setGerando(true)
     setProgresso({ pct: 0, etapa: "Carregando base de NCM..." })
     try {
       const linhasSaidas = saidasEfd.arquivos.flatMap((a) => a.linhas)
-
-      let baseIbsCbs: LinhaBaseIbsCbs[]
-      if (baseNcm.usarPadrao) {
-        const res = await fetch("/api/reforma-tributaria/base-ibs-cbs")
-        const json = await res.json()
-        if (!res.ok) throw new Error(json.error ?? "Falha ao carregar a base padrão de NCM")
-        baseIbsCbs = json.linhas
-      } else if (baseNcm.arquivoCustomBuffer) {
-        baseIbsCbs = await parseBaseIbsCbsCustomizada(baseNcm.arquivoCustomBuffer)
-      } else {
-        throw new Error("Nenhuma base de NCM disponível — volte ao Passo 4")
-      }
-
+      const baseIbsCbs = await resolverBaseIbsCbs()
       const linhasEntradas = entradasEfd.arquivos.flatMap((a) => a.linhas)
       await gerarExcelReforma(
         {
@@ -164,7 +178,16 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
 
       <div className="flex justify-between items-center gap-2">
         <Button variant="outline" onClick={onBack} disabled={gerando}>← Voltar</Button>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-end">
+          {/* PDF executivo: abre o dialog de textos (legislações/considerações), salva e gera */}
+          <Button
+            variant="outline"
+            onClick={() => setPdfAberto(true)}
+            disabled={gerando || !empresaId}
+            title={!empresaId ? "Salve a empresa (Passo 1) antes de gerar o PDF" : undefined}
+          >
+            <FileText className="h-4 w-4 mr-2 text-rose-500" /> Exportar PDF
+          </Button>
           {/* Versão pro CLIENTE: sem fórmulas (valores sólidos), sem as abas internas (Base
               IBS-CBS e Análise Fornecedores); os dropdowns do Quadro Comparativo e do Valor
               Total NF-e continuam funcionais */}
@@ -178,6 +201,21 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
           </Button>
         </div>
       </div>
+
+      {empresaId && (
+        <ExportarPdfDialog
+          open={pdfAberto}
+          onOpenChange={setPdfAberto}
+          empresaId={empresaId}
+          empresa={empresa}
+          nomeProjeto={nomeProjeto}
+          premissas={premissasReforma}
+          parametrosExtraAtual={parametrosExtraAtual}
+          textoLegislacoesInicial={legislacao.notaManual}
+          obterDados={obterDadosPdf}
+          onTextosSalvos={onTextosPdfSalvos}
+        />
+      )}
     </div>
   )
 }
