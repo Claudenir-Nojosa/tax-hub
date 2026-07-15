@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import RichTextInput from "./RichTextInput"
-import { FileText, Loader2, ScrollText, MessageSquareText } from "lucide-react"
+import { FileText, Loader2, ScrollText, MessageSquareText, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { gerarPdfReforma } from "@/lib/reforma-pdf"
 import { calcularQuadroComparativo } from "@/lib/reforma-excel/quadro-comparativo"
@@ -50,7 +50,60 @@ export default function ExportarPdfDialog({
   const [legislacoes, setLegislacoes] = useState("")
   const [consideracoes, setConsideracoes] = useState("")
   const [gerando, setGerando] = useState(false)
+  const [gerandoIA, setGerandoIA] = useState(false)
   const [etapa, setEtapa] = useState("")
+
+  // Preenche os dois textos com a IA (persona de especialista em reforma tributária), usando o
+  // contexto real do estudo: CNAE, redução 60%, achados do Passo 3 e os números do quadro
+  // comparativo/fornecedores. O usuário revisa e edita no editor antes de salvar/gerar.
+  const preencherComIA = async () => {
+    setGerandoIA(true)
+    try {
+      let estatisticas: Record<string, number> = {}
+      try {
+        const dados = await obterDados()
+        const quadro = calcularQuadroComparativo(
+          dados.linhasSaidas, premissas, dados.linhasEntradas, dados.classificacoes, dados.baseIbsCbs
+        )
+        const cls = Object.values(dados.classificacoes)
+        estatisticas = {
+          totalFornecedores: cls.length,
+          pctFornecedoresRegimeRegular: cls.length > 0 ? cls.filter((c) => !c.simplesNacional && !c.erro).length / cls.length : 0,
+          total2026: quadro[2026].total,
+          total2033: quadro[2033].total,
+          impacto2033Pct: quadro[2033].impactoPct ?? 0,
+          creditoTotal2033: quadro[2033].creditoCbs + quadro[2033].creditoIbs,
+        }
+      } catch {
+        // sem os dados pesados (outro navegador) a IA ainda redige — só sem os números do estudo
+      }
+      const achadosPasso3 = (parametrosExtraAtual.legislacao as { achados?: unknown } | undefined)?.achados
+      const res = await fetch("/api/reforma-tributaria/textos-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          razaoSocial: empresa.razaoSocial,
+          cnaePrincipal: empresa.cnaePrincipal,
+          cnaePrincipalCodigo: empresa.cnaePrincipalCodigo,
+          cnaesSecundarios: empresa.cnaesSecundarios,
+          regime: empresa.regime,
+          uf: empresa.uf,
+          reducao60: premissas.reducao60,
+          achadosPasso3: Array.isArray(achadosPasso3) ? achadosPasso3 : [],
+          estatisticas,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? "Falha ao redigir os textos com IA")
+      setLegislacoes(String(json.legislacoes))
+      setConsideracoes(String(json.consideracoes))
+      toast.success("Textos redigidos pela IA — revise e ajuste antes de gerar o PDF")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao redigir com IA")
+    } finally {
+      setGerandoIA(false)
+    }
+  }
 
   // Pré-preenche ao abrir: texto salvo > nota manual do Passo 3 > vazio
   useEffect(() => {
@@ -102,7 +155,7 @@ export default function ExportarPdfDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !gerando && onOpenChange(v)}>
+    <Dialog open={open} onOpenChange={(v) => !gerando && !gerandoIA && onOpenChange(v)}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -116,6 +169,25 @@ export default function ExportarPdfDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          <button
+            onClick={preencherComIA}
+            disabled={gerando || gerandoIA}
+            className="w-full rounded-xl border border-violet-200 dark:border-violet-900 bg-violet-50 dark:bg-violet-950/30 hover:bg-violet-100 dark:hover:bg-violet-950/60 transition-colors px-4 py-2.5 flex items-center gap-3 text-left disabled:opacity-60"
+          >
+            <div className="h-8 w-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+              {gerandoIA ? <Loader2 className="h-4 w-4 text-violet-500 animate-spin" /> : <Sparkles className="h-4 w-4 text-violet-500" />}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-violet-900 dark:text-violet-300">
+                {gerandoIA ? "Redigindo com IA..." : "Preencher com IA"}
+              </p>
+              <p className="text-[11px] text-violet-700/70 dark:text-violet-400/60">
+                Especialista em reforma tributária redige as duas seções com base no CNAE, nas
+                premissas e nos números do estudo — você revisa antes de gerar
+              </p>
+            </div>
+          </button>
+
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5 text-xs">
               <ScrollText className="h-3.5 w-3.5 text-blue-500" /> Legislações aplicáveis
@@ -124,7 +196,7 @@ export default function ExportarPdfDialog({
               value={legislacoes}
               onChange={setLegislacoes}
               placeholder="Ex.: LC 214/2025, art. 133 — redução de 60% nas alíquotas de IBS/CBS para medicamentos..."
-              disabled={gerando}
+              disabled={gerando || gerandoIA}
               minHeightClass="min-h-28"
             />
           </div>
@@ -136,14 +208,14 @@ export default function ExportarPdfDialog({
               value={consideracoes}
               onChange={setConsideracoes}
               placeholder="Explique o porquê dos valores: metodologia, comportamento dos tributos na transição, pontos de atenção para o cliente..."
-              disabled={gerando}
+              disabled={gerando || gerandoIA}
               minHeightClass="min-h-32"
             />
           </div>
 
           <Button
             onClick={salvarEGerar}
-            disabled={gerando}
+            disabled={gerando || gerandoIA}
             className="w-full bg-rose-600 hover:bg-rose-700 text-white"
           >
             {gerando ? (
