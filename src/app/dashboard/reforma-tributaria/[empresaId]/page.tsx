@@ -1,9 +1,10 @@
 "use client"
 
 import { Suspense, useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
-import { Scale, ChevronRight } from "lucide-react"
+import { Scale, ChevronRight, ArrowLeft } from "lucide-react"
 import { carregarProjetoWizard, salvarProjetoWizard } from "@/lib/reforma-wizard-store"
 import Step1Empresa, { type EmpresaData } from "@/components/reforma/Step1Empresa"
 import StepPremissasReforma, {
@@ -215,6 +216,13 @@ function EmpresaWizardInner() {
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
       <div className="flex items-center gap-2 mb-6">
+        <Link
+          href="/dashboard/reforma-tributaria"
+          className="shrink-0 h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-500/10 transition-colors"
+          title="Voltar para a listagem"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Link>
         <Scale className="h-5 w-5 text-blue-500" />
         <h1 className="text-xl font-bold text-gray-900 dark:text-white">
           {isNova ? "Nova Empresa" : empresa.razaoSocial || "Empresa"}

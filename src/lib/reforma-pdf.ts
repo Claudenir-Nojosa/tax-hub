@@ -216,8 +216,10 @@ export async function gerarPdfReforma(dados: DadosPdfReforma): Promise<void> {
     return y + 10
   }
 
-  // Texto rico (HTML do editor) com negrito/itálico/sublinhado/listas, quebra de linha medida
-  // palavra a palavra e quebra de página automática
+  // Texto rico (HTML do editor) com negrito/itálico/sublinhado/listas, quebra de página
+  // automática e parágrafos JUSTIFICADOS: as linhas são montadas primeiro (palavra a palavra,
+  // com a largura real de cada estilo) e o espaço que sobra é distribuído igualmente entre as
+  // palavras — exceto na última linha de cada parágrafo, que fica alinhada à esquerda.
   const escreverRico = (html: string, y: number, fallback?: string): number => {
     let blocos = htmlParaBlocos(html)
     // editor "vazio" ainda produz HTML (<div><br></div>) — sem conteúdo real, usa o fallback
@@ -225,46 +227,71 @@ export async function gerarPdfReforma(dados: DadosPdfReforma): Promise<void> {
     const lh = 5.4
     doc.setFontSize(10.5)
     doc.setTextColor(...CINZA_TXT)
+
+    type Palavra = { texto: string; estilo: string; u: boolean; w: number; wEspaco: number }
     for (const bloco of blocos) {
       const indent = bloco.bullet ? 5 : 0
-      const xIni = margem + indent
-      const xMax = pageW - margem
-      let x = xIni
-      let primeiraLinha = true
-      const novaLinha = () => {
-        y += lh
-        if (y > pageH - 22) { doc.addPage("a4", "portrait"); y = 24 }
-        x = xIni
-      }
-      if (y > pageH - 22) { doc.addPage("a4", "portrait"); y = 24 }
-      if (bloco.bullet) {
-        doc.setFont("helvetica", "normal")
-        doc.text("•", margem + 1, y)
-      }
+      const largura = pageW - margem - indent - margem
+
+      // 1) tokeniza o bloco em palavras com estilo e largura
+      const palavras: Palavra[] = []
       for (const run of bloco.runs) {
         const estilo = run.b && run.i ? "bolditalic" : run.b ? "bold" : run.i ? "italic" : "normal"
         doc.setFont("helvetica", estilo)
-        // tokens preservando espaços, pra medir e desenhar palavra a palavra
-        for (const token of run.texto.split(/(\s+)/)) {
+        const wEspaco = doc.getTextWidth(" ")
+        for (const token of run.texto.split(/\s+/)) {
           if (!token) continue
-          const ehEspaco = /^\s+$/.test(token)
-          const w = doc.getTextWidth(ehEspaco ? " " : token)
-          if (!ehEspaco && x + w > xMax && x > xIni) novaLinha()
-          if (ehEspaco) {
-            if (x > xIni) x += w // espaço no começo da linha é descartado
-            continue
-          }
-          doc.text(token, x, y)
-          if (run.u) {
-            doc.setDrawColor(...CINZA_TXT)
-            doc.setLineWidth(0.2)
-            doc.line(x, y + 0.7, x + w, y + 0.7)
-          }
-          x += w
-          primeiraLinha = false
+          palavras.push({ texto: token, estilo, u: run.u, w: doc.getTextWidth(token), wEspaco })
         }
       }
-      if (!primeiraLinha || bloco.bullet) y += lh + 1.8 // espaçamento entre parágrafos
+      if (palavras.length === 0) continue
+
+      // 2) monta as linhas (greedy)
+      const linhas: Palavra[][] = []
+      let atual: Palavra[] = []
+      let wAtual = 0
+      for (const p of palavras) {
+        const wComEspaco = atual.length > 0 ? p.wEspaco + p.w : p.w
+        if (atual.length > 0 && wAtual + wComEspaco > largura) {
+          linhas.push(atual)
+          atual = [p]
+          wAtual = p.w
+        } else {
+          atual.push(p)
+          wAtual += wComEspaco
+        }
+      }
+      if (atual.length > 0) linhas.push(atual)
+
+      // 3) desenha, justificando todas as linhas menos a última
+      linhas.forEach((linha, li) => {
+        if (y > pageH - 22) { doc.addPage("a4", "portrait"); y = 24 }
+        if (li === 0 && bloco.bullet) {
+          doc.setFont("helvetica", "normal")
+          doc.text("•", margem + 1, y)
+        }
+        const somaPalavras = linha.reduce((s, p) => s + p.w, 0)
+        const somaEspacos = linha.slice(1).reduce((s, p) => s + p.wEspaco, 0)
+        const ultimaLinha = li === linhas.length - 1
+        const sobra = largura - somaPalavras - somaEspacos
+        // justifica só quando há mais de uma palavra e a sobra é razoável (evita "buracos" em
+        // linhas curtas antes de quebra forçada)
+        const extraPorEspaco = !ultimaLinha && linha.length > 1 && sobra > 0 ? sobra / (linha.length - 1) : 0
+        let x = margem + indent
+        linha.forEach((p, pi) => {
+          if (pi > 0) x += p.wEspaco + extraPorEspaco
+          doc.setFont("helvetica", p.estilo)
+          doc.text(p.texto, x, y)
+          if (p.u) {
+            doc.setDrawColor(...CINZA_TXT)
+            doc.setLineWidth(0.2)
+            doc.line(x, y + 0.7, x + p.w, y + 0.7)
+          }
+          x += p.w
+        })
+        y += lh
+      })
+      y += 1.8 // espaçamento entre parágrafos
     }
     return y
   }
