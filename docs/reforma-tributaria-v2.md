@@ -283,3 +283,11 @@ Validação: `tsc --noEmit` limpo, páginas compilam no dev server, roundtrip In
 **Larguras**: Quadro Comparativo colunas de ano 14→17 (linha 17 VALOR TOTAL virava #####), Valor Total NF-e colunas B..H 22→28 (rótulo "BASE DE CÁLCULO DO ICMS SUBST."), abas de ano colunas de valor 14→19 (subtotais contábeis na casa dos milhões).
 
 Validação com dados reais (27.577 saídas / 4.833 entradas) + Excel real via COM: interno 14 abas em 52s, cliente 12 abas em 20s, AG1 com fonte 16777215 (branco), R6/R8 em contábil R$ renderizando sem #####, D17 do Quadro e B11 do Valor Total exibindo o valor completo, 1 Shape (logo) por aba nos dois arquivos, `xl/media/image1.png` (logo) preservada no cliente com 12 drawings.
+
+## Card redesenhado + exportação rápida na listagem (task #87)
+
+`EmpresaCard` reconstruído (visual profissional): filete superior em gradiente azul→esmeralda, avatar com a logo da empresa (ou ícone), chips de CNPJ/UF/regime, bloco do projeto com o nome e um indicador assíncrono de dados locais ("Estudo salvo neste navegador" via IndexedDB / "Sem dados de EFD neste navegador"), lixeira que aparece no hover, e duas ações: **Exportar Excel** (abre o dialog) e **Abrir projeto**. O tipo `EmpresaReformaResumo` (exportado do card) descreve a empresa como vem da listagem, incluindo `parametrosExtra` completo.
+
+`ExportarProjetoDialog` (novo): aberto direto do card, carrega o estudo do IndexedDB e mostra resumo (itens de saída/entrada, fornecedores classificados, última atualização) + dois botões de geração — **Excel completo** e **Excel do cliente** — com barra de progresso, usando o MESMO `gerarExcelReforma` do wizard (premissas/legislação/nome do projeto/logo vêm do `parametrosExtra`; base NCM padrão via API ou a customizada salva). Sem dados locais (outro navegador), mostra estado vazio orientando a abrir o projeto.
+
+Validação: tsc limpo; página de preview temporária (rota pública, deletada depois) confirmou no navegador real o render dos dois estados do card e o dialog completo (stats corretos com IndexedDB semeado, botões, link Editar projeto). A geração em si reusa o pipeline já validado com dados reais nas tasks #84/#86.

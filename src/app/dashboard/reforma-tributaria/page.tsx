@@ -4,21 +4,11 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Plus, Scale, Loader2 } from "lucide-react"
-import EmpresaCard from "@/components/reforma/EmpresaCard"
+import EmpresaCard, { type EmpresaReformaResumo } from "@/components/reforma/EmpresaCard"
 import { toast } from "sonner"
 import { removerProjetoWizard } from "@/lib/reforma-wizard-store"
 
-type Empresa = {
-  id: string
-  cnpj: string
-  razaoSocial: string
-  nomeFantasia: string | null
-  regime: string
-  simplesNacional: boolean
-  uf: string
-  parametrosExtra?: { nomeProjeto?: string } | null
-  simulacoes: { createdAt: string; resultados: unknown }[]
-}
+type Empresa = EmpresaReformaResumo
 
 export default function ReformaTributariaPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
