@@ -2,8 +2,13 @@
 
 Aba "Professora" em `/dashboard/estudo`: sabatina ORAL com uma professora IA por matéria (voz
 feminina, conversa em tempo real — ela ouve, pergunta, corrige quando o aluno erra e elogia
-quando acerta). Sessão puramente de treino: **nada é salvo no progresso**. Atualize este arquivo
-se mudar o fluxo de conexão, a persona ou os limites de custo.
+quando acerta). A sabatina é **específica pros tópicos escolhidos** (pedido do usuário): entre o
+card da matéria e a sessão há uma tela de seleção de tópicos (checkboxes, atalhos
+"Todos"/"Só os estudados"/"Limpar", badge "estudado" por tópico) — a professora recebe SÓ essa
+lista e é instruída a perguntar exclusivamente sobre ela, aprofundando (conceito, exceções,
+pegadinhas de prova, casos práticos) quando a lista é curta. Sessão puramente de treino: **nada é
+salvo no progresso**. Atualize este arquivo se mudar o fluxo de conexão, a persona ou os limites
+de custo.
 
 ## 1. Arquitetura — por que WebRTC direto
 
@@ -18,7 +23,9 @@ ProfessoraTab (browser)                        Vercel                          O
 O servidor só minta o token (<1s, sem `maxDuration`): **o áudio nunca passa pelo Vercel** — zero
 risco de timeout de função e zero custo de banda. A persona (instruções da sabatina) é montada
 **no servidor** a partir de `{materiaNome, topicos, concursoNome?, topicosEstudados?}` — o client
-nunca envia instruções prontas (evita prompt injection via payload).
+nunca envia instruções prontas (evita prompt injection via payload). `topicos` é a lista
+ESCOLHIDA na tela de seleção (não o edital inteiro); `topicosEstudados` (priorização) só é
+enviado quando o aluno seleciona a matéria completa — numa seleção específica seria ruído.
 
 "1 IA por matéria" = 1 persona por matéria: nome feminino fixo por matéria SEFAZ-CE
 (`PROFESSORAS` em `src/lib/professora-data.ts` — ex.: Direito Tributário → Helena, Contabilidade
