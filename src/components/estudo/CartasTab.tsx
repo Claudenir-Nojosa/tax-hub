@@ -356,6 +356,10 @@ function FormCriarCarta({
   const [frente, setFrente] = useState(cartaParaEditar?.frente ?? "");
   const [verso, setVerso] = useState(cartaParaEditar?.verso ?? "");
   const [gabarito, setGabarito] = useState<"verdadeiro" | "falso">(cartaParaEditar?.gabarito ?? "verdadeiro");
+  // criação em sequência: o form NÃO fecha ao criar — matéria/tópico/tipo ficam mantidos pra
+  // próxima carta (pedido do usuário: antes resetava tudo e ele re-selecionava a cada carta)
+  const [salvasAgora, setSalvasAgora] = useState(0);
+  const [flashSalva, setFlashSalva] = useState(false);
 
   const topicosDisponiveis = useMemo(
     () => MATERIAS.find((m) => m.nome === materia)?.topicos ?? [],
@@ -387,6 +391,13 @@ function FormCriarCarta({
           gabarito: tipo === "armadilha" ? gabarito : undefined,
         })
       );
+      // limpa só o conteúdo da carta — matéria, tópico e tipo ficam pra próxima
+      setFrente("");
+      setVerso("");
+      setGabarito("verdadeiro");
+      setSalvasAgora((n) => n + 1);
+      setFlashSalva(true);
+      setTimeout(() => setFlashSalva(false), 1800);
     }
   }
 
@@ -530,8 +541,25 @@ function FormCriarCarta({
         disabled={!podesSalvar}
         className="w-full bg-[#007cca] hover:bg-[#006bb0] disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-sm transition-all"
       >
-        {cartaParaEditar ? "Salvar Alterações" : "Criar Carta"}
+        {cartaParaEditar ? "Salvar Alterações" : salvasAgora > 0 ? "Criar Outra Carta" : "Criar Carta"}
       </button>
+
+      {!cartaParaEditar && (flashSalva || salvasAgora > 0) && (
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <span className={`text-xs transition-opacity ${flashSalva ? "text-emerald-600 dark:text-emerald-400 opacity-100" : "text-gray-400 opacity-70"}`}>
+            {flashSalva
+              ? "✓ Carta criada! Matéria e tópico mantidos pra próxima."
+              : `${salvasAgora} carta${salvasAgora !== 1 ? "s" : ""} criada${salvasAgora !== 1 ? "s" : ""} nesta sessão.`}
+          </span>
+          <button
+            type="button"
+            onClick={onCancelar}
+            className="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline underline-offset-2 transition-colors flex-shrink-0"
+          >
+            Concluir e voltar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -962,7 +990,8 @@ export default function CartasTab({
 
   function handleSalvarCarta(carta: Carta) {
     onChange([carta, ...cartas]);
-    setView("home");
+    // NÃO volta pra home: o FormCriarCarta fica aberto com matéria/tópico/tipo mantidos, pra
+    // criar várias cartas em sequência sem re-selecionar tudo (sair = seta ou "Concluir e voltar")
   }
 
   function handleSalvarEdicao(cartaAtualizada: Carta) {
