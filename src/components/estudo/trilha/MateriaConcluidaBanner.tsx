@@ -6,8 +6,7 @@ import { materiasConcluidasNaTrilha } from "@/lib/trilha-generator";
 import type { EstudoConfigCiclo, MateriaConcurso, MateriaDef, TrilhaEstudo } from "@/lib/estudo-data";
 
 // Banner comemorativo: quando uma matéria fica 100% concluída na Trilha (todas as atividades de
-// todas as metas com status "concluida"), ela vira "só revisão" — as revisões espaçadas já
-// agendadas continuam rodando normalmente, mas a trilha para de gerar teoria nova pra ela (ver
+// todas as metas com status "concluida"), a trilha para de gerar teoria nova pra ela (ver
 // materiasConcluidas em gerarTrilha). Este banner avisa e deixa o usuário escolher uma matéria
 // do edital, ainda fora do Ciclo, pra entrar no lugar — o "ciclo mutável" pedido.
 
@@ -123,7 +122,7 @@ function CardGraduada({
             Você concluiu {nome}! 🎉
           </p>
           <p className="text-xs text-emerald-700/80 dark:text-emerald-300/70 mt-0.5">
-            Ela agora entra só em revisões espaçadas — sem teoria nova.
+            Ela não recebe mais teoria nova.
             {candidatas.length > 0 && " Escolha uma nova matéria pra incluir no ciclo no lugar:"}
           </p>
         </div>

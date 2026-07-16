@@ -9,20 +9,23 @@ caminho mudar.
 
 A Trilha divide o edital em **metas** sequenciais (`TrilhaMeta`) — **PEQUENAS por design** (pedido
 explícito do usuário, que achou as metas antigas "absurdas de difíceis e grandes") e **SÓ DE
-ESTUDO** (outro pedido explícito: nenhuma atividade tipo "questoes" — praticar questões fica por
-conta do usuário fora da Trilha, registrando o resultado direto no Edital/Caderno de Erros). Cada
-meta é OU um único bloco de poucos tópicos de UMA matéria (teoria — "conclua esta
-matéria/tópico"), OU um grupinho de até 4 revisões vencidas — nunca as duas coisas juntas, nunca
-várias matérias na mesma meta. Uma trilha típica tem **dezenas a centenas de metas** (não mais
-~15 megametas de até 45h cada). Metas NÃO valem mais "1 semana cada" — ver seção 1.1.
+TÓPICOS NOVOS** (pedido explícito: nada de "questoes" — praticar questões fica por conta do
+usuário fora da Trilha, registrando o resultado direto no Edital/Caderno de Erros — e nada de
+revisão espaçada: a Trilha existe só pra levar o usuário do zero ao "estudei" em cada tópico ainda
+não marcado `estudado:true` no Edital). Cada meta é exatamente **1 bloco de poucos tópicos NOVOS
+de UMA matéria** (teoria — "conclua esta matéria/tópico") — nunca mistura matérias na mesma meta,
+nunca inclui tópico já estudado. Uma trilha típica tem **dezenas a centenas de metas** (não mais
+~15 megametas de até 45h cada). Metas NÃO valem mais "1 semana cada" — `estimarResumo()`/
+`projetarTermino()` usam `totalMinutos ÷ minutosSemana` da disponibilidade escolhida (não
+`metas.length`) pra projetar a data de término.
 
-**Todo nível gera alguma teoria** (ninguém fica com "tarefa vazia"): `nunca` 90min/tópico,
-`comecei` 60min, `sem_confianca` 30min (marcado `teoriaRapida`), `arestas` 15min (marcado
-`teoriaRapida`) — inclusive tópicos já `estudado:true` no Edital, que viram `arestas`
-automaticamente e ganham uma revisão rápida em vez de zero atividade. `TrilhaAtividadeTipo` e o
-campo `quantidadeQuestoes` continuam existindo no tipo (`estudo-data.ts`) só por compatibilidade
-com trilhas antigas já persistidas que tenham atividades tipo `"questoes"` — o gerador NUNCA mais
-produz uma nova.
+**Todo nível gera alguma teoria pros tópicos ainda não estudados** (ninguém fica com "tarefa
+vazia"): `nunca` 90min/tópico, `comecei` 60min, `sem_confianca` 30min (marcado `teoriaRapida`),
+`arestas` 15min (marcado `teoriaRapida`). Tópicos já `estudado:true` no Edital são **excluídos por
+completo da trilha** — não entram em bloco nenhum, não geram nenhuma atividade. `TrilhaAtividadeTipo`
+mantém `"questoes"` e `"revisao"` no tipo (`estudo-data.ts`), e `numeroRevisao`/`quantidadeQuestoes`
+continuam como campos opcionais, só por compatibilidade com trilhas antigas já persistidas que
+tenham essas atividades — o gerador NUNCA mais produz nenhuma das duas.
 
 A geração é **100% determinística** (`src/lib/trilha-generator.ts`, sem IA) — reprodutível e
 recalculável a qualquer momento; a IA só escreve a `orientacao` (1-2 frases) das metas de
@@ -35,27 +38,9 @@ No visual (`TrilhaTab.tsx` + `src/components/estudo/trilha/*`), **1 nó do camin
 vêm da MESMA função seno — nunca desalinham, e são responsivos sem medir DOM); clicar num nó não
 bloqueado abre `MetaPainel.tsx` (Dialog) com as atividades daquela meta.
 
-### 1.1 Espaçamento de revisão por MINUTOS DE ESTUDO (não mais por índice de meta)
-
-Como as metas deixaram de ter tamanho fixo (~1 semana), o vencimento de uma revisão não pode mais
-ser "daqui a N metas" — isso viraria uma medida de tempo completamente arbitrária dependendo de
-quantos blocos pequenos existirem entre elas. Em vez disso, o gerador mantém um relógio interno
-`minutosDecorridos` (soma da duração de todas as metas já montadas): ao fechar um bloco de
-conteúdo, agenda `rev.1` para quando o relógio passar de `minutosNoFechamento + minutosSemana` da
-disponibilidade escolhida (≈7 dias no ritmo assumido) e `rev.2` para `+4×minutosSemana` (≈30
-dias). A cada iteração do loop principal, revisões cujo `venceEmMinuto` já foi atingido pelo
-relógio viram a PRÓXIMA meta (grupo de até 4, a mais antiga primeiro) — misturadas naturalmente
-com as metas de conteúdo ao longo do caminho. No "rabo" da trilha (sem mais conteúdo novo pra
-manter o relógio andando), as revisões pendentes mais próximas do vencimento são forçadas mesmo
-sem ele ter sido atingido — mesma exceção documentada no gerador original, só que agora medida em
-minutos, não em metas.
-
-`estimarResumo()`/`projetarTermino()` foram ajustados junto: `semanasEstimadas` (e a projeção de
-término antes de qualquer meta concluída) vêm de `totalMinutos ÷ minutosSemana`, não mais de
-`metas.length` — se ainda usassem contagem de metas, uma trilha de 145 metas pequenas "estimaria"
-145 semanas (quase 3 anos!) em vez das ~10 semanas reais. O ritmo REAL pós-primeira-conclusão
-(`ritmoMetasPorSemana`) continua em "metas concluídas por semana" — isso é intencional e
-combina com o visual: dá pra dizer literalmente "você está completando ~15 metas por semana".
+O ritmo REAL pós-primeira-conclusão (`ritmoMetasPorSemana`, em `projetarTermino()`) é medido em
+"metas concluídas por semana" — combina com o visual: dá pra dizer literalmente "você está
+completando ~15 metas por semana".
 
 ## 2. Ciclo de Estudos é a fonte de verdade das matérias ativas
 
@@ -75,9 +60,9 @@ ela é considerada **graduada** — calculado em runtime por
 reversão de status via `proximoStatus`, que cicla de volta a `nao_iniciada`).
 
 Efeitos de uma matéria graduada:
-- `gerarTrilha({..., materiasConcluidas})` para de incluí-la em `ativas` — nenhuma teoria/questão
-  nova é gerada pra ela numa regeneração (Refazer) ou atualização incremental. As revisões
-  espaçadas já agendadas continuam existindo normalmente (já estão concluídas, por definição).
+- `gerarTrilha({..., materiasConcluidas})` para de incluí-la em `ativas` — nenhuma atividade nova
+  é gerada pra ela numa regeneração (Refazer) ou atualização incremental. Como a Trilha não tem
+  revisão, uma matéria graduada simplesmente some da trilha regerada.
 - `topicosNaoCobertos`/`atualizarTrilha` também ignoram os tópicos dela — não voltam a aparecer
   como "faltantes" só porque a matéria terminou.
 - `MateriaConcluidaBanner.tsx` (renderizado no topo da Trilha ativa) mostra um card comemorativo
@@ -142,10 +127,12 @@ persistido.
 
 ## 8. Verificação
 
-`npx tsx scripts/validar-trilha.ts` — 7 cenários determinísticos: geração básica (nunca/arestas),
-matérias fora do Ciclo, `atualizarTrilha` cobrindo tópicos novos, Ciclo como fonte de verdade
-(cenário 5), matéria graduada sem conteúdo novo (cenário 6), `topicosNaoCobertos` ignorando
-matéria graduada (cenário 7). Validação visual: sem test runner no projeto — testar manualmente
+`npx tsx scripts/validar-trilha.ts` — 8 cenários determinísticos: geração básica (nunca/arestas,
+1 meta = 1 bloco de 1 matéria), matérias fora do Ciclo e tópicos pré-estudados excluídos por
+completo, `atualizarTrilha` cobrindo tópicos novos, Ciclo como fonte de verdade (cenário 5),
+matéria graduada sem conteúdo novo (cenário 6), `topicosNaoCobertos` ignorando matéria graduada
+(cenário 7), nenhum cenário gera atividade tipo `"questoes"` ou `"revisao"` (cenário 8). Validação
+visual: sem test runner no projeto — testar manualmente
 navegando `/dashboard/estudo` → aba Trilha (wizard sem coluna "Pular" e com a faixa do Ciclo;
 caminho com nós bloqueados/atual/concluídos; abrir o painel de uma meta e ciclar status; forçar
 uma matéria 100% concluída e conferir o banner + fluxo "Adicionar ao Ciclo" disparando "Atualizar

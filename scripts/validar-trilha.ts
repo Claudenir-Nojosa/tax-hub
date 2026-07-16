@@ -37,80 +37,15 @@ const metas1 = gerarTrilha({ materias, config: cfg1, topicos: {}, configCiclo })
 const resumo1 = estimarResumo(metas1, "normal", "2026-08-01");
 console.log(`  ${resumo1.totalMetas} metas · ${Math.round(resumo1.totalMinutos / 60)}h totais · cabe até a prova: ${resumo1.cabeAteProva}`);
 
-// metas agora são PEQUENAS por design (pedido do usuário): 1 bloco de UMA matéria (conteúdo) OU
-// um grupo pequeno de revisões — nunca as duas coisas juntas, nunca várias matérias de conteúdo
-// novo na mesma meta. Teto generoso (bloco com teoria: até 3 tópicos × 90min + questões ≈
-// 400min; revisão agrupada: até 4 × 12min).
-const ORCAMENTO = 1890;
+// metas agora são PEQUENAS por design (pedido do usuário) e SÓ DE CONTEÚDO NOVO: cada meta é
+// exatamente 1 bloco de teoria de UMA matéria, sem revisão, sem questões, sem misturar matérias.
 metas1.forEach((m) => {
-  const soRevisao = m.atividades.every((a) => a.tipo === "revisao");
-  const minutos = m.atividades.reduce((s, a) => s + a.duracaoMin, 0);
-  if (soRevisao) {
-    const REV1_MIN = 12; // espelha a constante interna do gerador (não exportada)
-    assert(minutos <= 4 * REV1_MIN, `meta ${m.numero} de revisão maior que o esperado: ${minutos}min`);
-  } else {
-    assert(minutos <= 400, `meta ${m.numero} de conteúdo estourou o teto de bloco: ${minutos}min (bem acima do orçamento semanal de ${ORCAMENTO})`);
-    const materiasContudoNovo = new Set(m.atividades.filter((a) => a.tipo !== "revisao").map((a) => a.materia));
-    assert(materiasContudoNovo.size === 1, `meta ${m.numero} de conteúdo tem ${materiasContudoNovo.size} matérias (esperado exatamente 1)`);
-  }
+  assert(m.atividades.length === 1, `meta ${m.numero} deveria ter exatamente 1 atividade, tem ${m.atividades.length}`);
+  const a = m.atividades[0];
+  assert(a.tipo === "teoria", `meta ${m.numero} tem atividade tipo "${a.tipo}" (esperado só "teoria")`);
+  const minutos = m.atividades.reduce((s, x) => s + x.duracaoMin, 0);
+  assert(minutos <= 400, `meta ${m.numero} estourou o teto de bloco: ${minutos}min`);
 });
-
-// espaçamento das revisões agora é por MINUTOS DE ESTUDO acumulados (não mais "índice de meta +
-// N", já que metas deixaram de valer 1 semana cada): rev1 só pode entrar numa meta depois que o
-// relógio passar ORCAMENTO minutos desde o fechamento do bloco estudado; rev2, 4×ORCAMENTO.
-const minutosAcumulados: number[] = []; // minutosAcumulados[i] = minutos decorridos APÓS a meta i (0-based)
-{
-  let acc = 0;
-  for (const m of metas1) {
-    acc += m.atividades.reduce((s, a) => s + a.duracaoMin, 0);
-    minutosAcumulados.push(acc);
-  }
-}
-const idxEstudo = new Map<string, number>();
-const idxRev = new Map<string, { r1?: number; r2?: number }>();
-metas1.forEach((m, idx) => {
-  for (const a of m.atividades) {
-    const chave = `${a.materia}::${a.topicos[0]}`;
-    if (a.tipo === "teoria") idxEstudo.set(chave, idx);
-    if (a.tipo === "revisao") {
-      const r = idxRev.get(chave) ?? {};
-      if (a.numeroRevisao === 1) r.r1 = idx;
-      else r.r2 = idx;
-      idxRev.set(chave, r);
-    }
-  }
-});
-// "rabo da trilha": depois da última meta de CONTEÚDO, não há mais nada fazendo o relógio andar
-// além das próprias revisões pendentes — o gerador antecipa o vencimento pra não deixar revisão
-// pra trás (mesmo comportamento documentado no gerador antigo). Metas nessa faixa ficam isentas
-// da checagem estrita de ORCAMENTO min de gap.
-const ultimoIdxConteudo = metas1.reduce((max, m, idx) => (m.atividades.some((a) => a.tipo !== "revisao") ? idx : max), -1);
-let gapRev1Total = 0, nRev1 = 0, noRabo = 0;
-for (const [chave, idxEst] of idxEstudo) {
-  const r = idxRev.get(chave);
-  assert(!!r?.r1 && !!r?.r2, `bloco ${chave} sem as 2 revisões`);
-  const minutoDoEstudo = minutosAcumulados[idxEst];
-  if (r?.r1 !== undefined) {
-    const relogioAntesDoRev1 = r.r1 === 0 ? 0 : minutosAcumulados[r.r1 - 1];
-    const gap = relogioAntesDoRev1 - minutoDoEstudo;
-    if (r.r1 > ultimoIdxConteudo) {
-      noRabo++; // rabo: só garante que não veio antes do próprio estudo
-      assert(gap >= 0, `rev1 de ${chave} (no rabo) veio antes do estudo (gap ${gap}min)`);
-    } else {
-      assert(gap >= ORCAMENTO, `rev1 de ${chave} entrou antes de completar ~1 semana de estudo (gap ${gap}min, esperado ≥${ORCAMENTO})`);
-    }
-    gapRev1Total += gap;
-    nRev1++;
-  }
-  if (r?.r2 !== undefined) {
-    assert(r.r2! > r.r1!, `rev2 de ${chave} veio antes ou junto do rev1 (rev1 idx ${r.r1}, rev2 idx ${r.r2})`);
-    if (r.r2 <= ultimoIdxConteudo) {
-      const relogioAntesDoRev2 = r.r2 === 0 ? 0 : minutosAcumulados[r.r2 - 1];
-      assert(relogioAntesDoRev2 - minutoDoEstudo >= 4 * ORCAMENTO, `rev2 de ${chave} entrou antes de completar ~4 semanas de estudo (gap ${relogioAntesDoRev2 - minutoDoEstudo}min, esperado ≥${4 * ORCAMENTO})`);
-    }
-  }
-}
-console.log(`  gap médio até rev1: ${Math.round(gapRev1Total / nRev1)}min (orçamento semanal: ${ORCAMENTO}min) — ${nRev1} blocos, ${noRabo} no rabo da trilha`);
 
 // determinismo
 const metas1b = gerarTrilha({ materias, config: cfg1, topicos: {}, configCiclo });
@@ -125,7 +60,7 @@ const metas2 = gerarTrilha({ materias, config: cfg2, topicos: {}, configCiclo })
 assert(metas2.every((m) => m.atividades.every((a) => a.tipo !== "questoes")), "gerou atividade tipo questoes (não deveria mais existir)");
 assert(
   metas2.every((m) => m.atividades.every((a) => a.tipo !== "teoria" || (a.teoriaRapida === true && a.duracaoMin <= 15 * a.topicos.length))),
-  "teoria de arestas não veio como revisão rápida (15min/tópico)"
+  "teoria de arestas não veio rápida (15min/tópico)"
 );
 console.log(`  ${metas2.length} metas, teoria só rápida (arestas), nenhuma atividade "questoes" ✓`);
 
@@ -156,19 +91,14 @@ assert(
   metas3.every((m) => m.atividades.every((a) => !foraDoCiclo.includes(a.materia))),
   "matéria fora do Ciclo apareceu na trilha"
 );
-// tópico pré-estudado vira "arestas" (nível efetivo) — ganha teoria RÁPIDA (15min), não a teoria
-// cheia do nível declarado (45min pro "comecei" usado neste cenário)
-for (const m of metas3) {
-  for (const a of m.atividades) {
-    if (a.tipo !== "teoria") continue;
-    for (const t of a.topicos) {
-      if (!preEstudados[topicoKey(a.materia, t)]) continue;
-      assert(a.teoriaRapida === true, `tópico pré-estudado não ganhou teoria rápida: ${t}`);
-      assert(a.duracaoMin <= 15 * a.topicos.length, `tópico pré-estudado ganhou teoria mais longa que o esperado: ${t} (${a.duracaoMin}min)`);
-    }
-  }
-}
-console.log(`  ${metas3.length} metas, puladas fora e pré-estudados com teoria rápida ✓`);
+// tópico já marcado estudado:true no Edital é EXCLUÍDO por completo da trilha — não é "tópico
+// novo", não deve aparecer em nenhuma atividade (nem como teoria rápida)
+const chavesPreEstudadas = new Set(Object.keys(preEstudados));
+const apareceramPreEstudados = metas3.some((m) =>
+  m.atividades.some((a) => a.topicos.some((t) => chavesPreEstudadas.has(topicoKey(a.materia, t))))
+);
+assert(!apareceramPreEstudados, "tópico pré-estudado apareceu na trilha (deveria ficar de fora por completo)");
+console.log(`  ${metas3.length} metas, matérias fora do Ciclo e pré-estudados de fora ✓`);
 
 // ── Cenário 4: atualizarTrilha cobre tópico adicionado ───────────────────────
 console.log("4) atualizarTrilha");
@@ -181,10 +111,10 @@ const configCiclo4: EstudoConfigCiclo = {
 const materiasMenos = materias.map((m, i) => (i === 0 ? { ...m, topicos: m.topicos.slice(0, -2) } : m));
 const metas4 = gerarTrilha({ materias: materiasMenos, config: cfg1, topicos: {}, configCiclo: configCiclo4 });
 const trilha4: TrilhaEstudo = { config: cfg1, metas: metas4, criadaEm: new Date().toISOString(), versao: 1 };
-const faltando = topicosNaoCobertos(trilha4, materias, configCiclo4);
+const faltando = topicosNaoCobertos(trilha4, materias, configCiclo4, {});
 assert(faltando.length === 2, `esperava 2 tópicos não cobertos, achou ${faltando.length}`);
 const trilha4b = atualizarTrilha(trilha4, materias, {}, configCiclo4);
-assert(topicosNaoCobertos(trilha4b, materias, configCiclo4).length === 0, "atualizarTrilha não cobriu os novos tópicos");
+assert(topicosNaoCobertos(trilha4b, materias, configCiclo4, {}).length === 0, "atualizarTrilha não cobriu os novos tópicos");
 assert(trilha4b.versao === 2, "versao não incrementou");
 assert(trilha4b.metas.length > metas4.length, "não anexou metas novas");
 const numeros = trilha4b.metas.map((m) => m.numero);
@@ -230,32 +160,34 @@ const trilha6: TrilhaEstudo = { config: { disponibilidade: "normal", nivelPorMat
 const graduadas6 = materiasConcluidasNaTrilha(trilha6);
 assert(graduadas6.includes(materiaGrad), "materiasConcluidasNaTrilha não detectou a matéria graduada");
 assert(!graduadas6.includes(materias[0].nome), "materiasConcluidasNaTrilha detectou matéria não-graduada");
-// gera de novo (ex.: "Refazer") passando materiasConcluidas — não deve ter teoria/questões novas
+// gera de novo (ex.: "Refazer") passando materiasConcluidas — a matéria graduada não deve
+// aparecer NA TRILHA REGERADA de jeito nenhum (sem revisão pra "segurar" ela mais)
 const metas6regen = gerarTrilha({
   materias, config: { disponibilidade: "normal", nivelPorMateria: nivelTodas("nunca") }, topicos: {}, configCiclo,
   materiasConcluidas: graduadas6,
 });
 assert(
-  metas6regen.every((m) => m.atividades.every((a) => a.materia !== materiaGrad || a.tipo === "revisao")),
-  "matéria graduada recebeu teoria/questões novas na regeração"
+  metas6regen.every((m) => m.atividades.every((a) => a.materia !== materiaGrad)),
+  "matéria graduada recebeu conteúdo novo na regeração"
 );
 console.log("  matéria graduada detectada e sem conteúdo novo na regeração ✓");
 
 // ── Cenário 7: topicosNaoCobertos não sinaliza tópicos de matéria graduada ───
 console.log("7) topicosNaoCobertos ignora matéria graduada");
-const faltando7 = topicosNaoCobertos(trilha6, materias, configCiclo);
+const faltando7 = topicosNaoCobertos(trilha6, materias, configCiclo, {});
 assert(
   !faltando7.some((k) => k.startsWith(`${materiaGrad}||`)),
   "topicosNaoCobertos sinalizou tópico de matéria já graduada como faltante"
 );
 console.log("  nenhum tópico da matéria graduada sinalizado como faltante ✓");
 
-// ── Cenário 8: nenhum cenário gera atividade tipo "questoes" ─────────────────
-console.log("8) sem atividades de questões em nenhum cenário");
+// ── Cenário 8: nenhum cenário gera atividade tipo "questoes" ou "revisao" ────
+console.log("8) sem atividades de questões ou revisão em nenhum cenário");
 for (const [nome, metas] of [["1", metas1], ["2", metas2], ["3", metas3], ["6-regen", metas6regen]] as const) {
   assert(metas.every((m) => m.atividades.every((a) => a.tipo !== "questoes")), `cenário ${nome} gerou atividade tipo "questoes"`);
+  assert(metas.every((m) => m.atividades.every((a) => a.tipo !== "revisao")), `cenário ${nome} gerou atividade tipo "revisao"`);
 }
-console.log("  nenhuma atividade tipo questoes em nenhum cenário ✓");
+console.log("  nenhuma atividade tipo questoes/revisao em nenhum cenário ✓");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 assert(proximoStatus("nao_iniciada") === "iniciada" && proximoStatus("concluida") === "nao_iniciada", "ciclo de status errado");

@@ -97,18 +97,14 @@ async function buscarOrientacoes(
   onUpdateTrilha: (t: TrilhaEstudo) => void
 ) {
   try {
-    // só metas de CONTEÚDO NOVO precisam de orientação tática — metas só-de-revisão são pequenas
-    // e óbvias ("revise isso de novo"), não vale a pena gastar chamada de IA nelas. Isso também
-    // mantém o volume de metas bem abaixo do limite de 120 da rota mesmo em trilhas com centenas
-    // de metas (edital grande = muitas metas pequenas, por design).
-    const metasDeConteudo = trilha.metas.filter((m) => m.atividades.some((a) => a.tipo !== "revisao")).slice(0, 120);
+    // limite de 120 metas por request da rota (edital grande = muitas metas pequenas, por design)
+    const metasDeConteudo = trilha.metas.slice(0, 120);
     if (metasDeConteudo.length === 0) return;
     const resumo = metasDeConteudo.map((m) => ({
       numero: m.numero,
       materias: [...new Set(m.atividades.map((a) => a.materia))],
       nTopicos: new Set(m.atividades.flatMap((a) => a.topicos.map((t) => `${a.materia}|${t}`))).size,
       temTeoria: m.atividades.some((a) => a.tipo === "teoria"),
-      temRevisao: m.atividades.some((a) => a.tipo === "revisao"),
     }));
     const res = await fetch("/api/estudo/trilha/orientacoes", {
       method: "POST",
@@ -275,8 +271,8 @@ function Wizard({
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Em que nível você se encontra em cada matéria?</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            Isso define quanto de teoria a trilha vai propor por matéria (só tarefas de estudo — sem questões). Só entram
-            matérias incluídas no Ciclo de Estudos e ainda não concluídas na trilha.
+            Isso define quanto de teoria a trilha vai propor por matéria (só tópicos ainda não estudados — sem questões,
+            sem revisão). Só entram matérias incluídas no Ciclo de Estudos e ainda não concluídas na trilha.
           </p>
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="hidden md:grid grid-cols-[1fr_repeat(4,110px)] gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-[11px] font-medium text-gray-500 dark:text-gray-400">
@@ -350,10 +346,9 @@ function Wizard({
                 </div>
               )}
               <p className="text-xs text-gray-400 dark:text-gray-500">
-                A trilha cobre 100% dos tópicos das matérias incluídas no Ciclo, dividida em muitas metas PEQUENAS —
-                cada uma é só um bloco de tópicos de uma matéria (teoria conforme seu nível — sem questões) ou um
-                grupinho de revisões espaçadas. Depois de gerar, a IA escreve uma orientação pras metas de conteúdo
-                novo.
+                A trilha cobre os tópicos ainda não estudados das matérias incluídas no Ciclo, dividida em muitas
+                metas PEQUENAS — cada uma é só um bloco de tópicos novos de uma matéria (teoria conforme seu nível —
+                sem questões, sem revisão). Depois de gerar, a IA escreve uma orientação por meta.
               </p>
             </div>
           )}
@@ -430,7 +425,7 @@ function TrilhaAtiva({
   const concluidas = trilha.metas.reduce((s, m) => s + m.atividades.filter((a) => a.status === "concluida").length, 0);
   const percGeral = totalAtividades > 0 ? Math.round((concluidas / totalAtividades) * 100) : 0;
   const projecao = projetarTermino(trilha);
-  const naoCobertos = useMemo(() => topicosNaoCobertos(trilha, materias, configCiclo), [trilha, materias, configCiclo]);
+  const naoCobertos = useMemo(() => topicosNaoCobertos(trilha, materias, configCiclo, topicos), [trilha, materias, configCiclo, topicos]);
   // ritmo ESPERADO (antes de haver metas concluídas pra calcular o ritmo real): metas são
   // pequenas agora, então "1 meta/semana" não vale mais — deriva quantas metas cabem por semana
   // na disponibilidade escolhida, a partir do tamanho médio real das metas desta trilha
@@ -518,7 +513,7 @@ function TrilhaAtiva({
             <button
               type="button"
               onClick={() => {
-                if (confirm("Refazer a trilha do zero? Tópicos com teoria já concluída não repetirão teoria (o Edital continua marcado), mas o progresso de revisões da trilha atual será perdido.")) onRefazer();
+                if (confirm("Refazer a trilha do zero? Tópicos com teoria já concluída não repetirão teoria (o Edital continua marcado), mas o progresso de atividades da trilha atual será perdido.")) onRefazer();
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
             >

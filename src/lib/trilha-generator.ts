@@ -1,31 +1,26 @@
 // Gerador determinístico da Trilha de Estudos (plano guiado por metas, estilo Gurujá/Duolingo).
-// Cada META é PEQUENA e tem UM objetivo só: OU estudar um bloco de tópicos de UMA matéria
-// (teoria), OU revisar um pequeno grupo de tópicos já vencidos — nunca os dois nem várias
-// matérias juntas. Só tarefas de ESTUDO (teoria/revisão) — SEM tarefas de "questões" (pedido do
-// usuário: a Trilha não gera mais atividade tipo "questoes"; praticar questões fica a cargo do
-// próprio usuário fora da Trilha, e ele registra o resultado direto no Edital/Caderno de Erros).
-// Metas grandes e pesadas desmotivam; muitas metas pequenas, cada uma "conclua esta
-// matéria/tópico", combinam com o visual de caminho (1 nó = 1 meta). Sem IA aqui de propósito:
+// Cada META é PEQUENA e tem UM objetivo só: estudar um bloco de tópicos NOVOS (ainda não
+// estudados) de UMA matéria. Só isso — SEM tarefas de "questões" e SEM revisão espaçada (pedido
+// explícito do usuário: a Trilha é só pra tópicos novos; tópicos já marcados `estudado:true` no
+// Edital ficam de fora da trilha por completo, e não há mais rev.1/rev.2 agendadas — praticar
+// questões e revisar fica a cargo do próprio usuário fora da Trilha). Metas grandes e pesadas
+// desmotivam; muitas metas pequenas, cada uma "conclua esta matéria/tópico", combinam com o
+// visual de caminho (1 nó = 1 meta = 1 bloco de teoria de 1 matéria). Sem IA aqui de propósito:
 // geração instantânea, reprodutível e recalculável — a IA só escreve as `orientacao` das metas
-// de conteúdo novo depois (rota /api/estudo/trilha/orientacoes).
+// depois (rota /api/estudo/trilha/orientacoes).
 //
 // Regras numéricas (fechadas no plano aprovado):
-//   Por tópico, conforme nível EFETIVO da matéria (tópico já `estudado` no Edital ⇒ "arestas"):
+//   Por tópico, conforme nível declarado da matéria (tópico já `estudado` no Edital ⇒ EXCLUÍDO,
+//   não entra em bloco nenhum — não é "tópico novo"):
 //     nunca          teoria 90min (primeira leitura completa)
 //     comecei        teoria 60min (já começou, foca no que falta)
-//     sem_confianca  teoria 30min, revisão rápida (já terminou, só reforça)
-//     arestas        teoria 15min, revisão rápida (só bate o olho de novo)
-//   (todo nível tem alguma tarefa de teoria — nenhum tópico fica sem "task de estudo" nenhuma).
-//   Blocos (tópicos consecutivos na ordem do edital, de UMA matéria): fecha em 3 tópicos OU
-//   ≥150min de teoria acumulada. Cada bloco = 1 meta.
+//     sem_confianca  teoria 30min, rápida (já terminou, só reforça)
+//     arestas        teoria 15min, rápida (só bate o olho de novo)
+//   Blocos (tópicos consecutivos e ainda-não-estudados, na ordem do edital, de UMA matéria):
+//   fecha em 3 tópicos OU ≥150min de teoria acumulada. Cada bloco = 1 meta = 1 atividade.
 //   Intercalação entre matérias: escolhida bloco a bloco por round-robin ponderado suave
 //   ("smooth weighted round-robin" — peso pesoCiclo(1|2) × fatorNivel, nunca 1.5 / comecei 1.3 /
-//   sem_confianca 1.0 / arestas 0.7), não mais agrupada dentro de uma mesma meta.
-//   Revisões vencidas viram metas próprias (até 4 por meta), separadas do conteúdo novo. O
-//   vencimento não é mais contado em "número de metas" (metas não valem mais 1 semana cada,
-//   já que agora são pequenas) — é contado em MINUTOS DE ESTUDO acumulados: rev.1 vence quando
-//   passam `minutosSemana` da disponibilidade desde o estudo (≈7 dias no ritmo escolhido), rev.2
-//   quando passam 4×minutosSemana (≈30 dias).
+//   sem_confianca 1.0 / arestas 0.7).
 
 import {
   topicoKey,
@@ -54,58 +49,37 @@ const NIVEL_PARAMS: Record<
   arestas: { teoriaMin: 15, teoriaRapida: true, fator: 0.7 },
 }
 
-const REV1_MIN = 12
-const REV2_MIN = 8
-const MAX_REVISOES_POR_META = 4 // teto de revisões agrupadas numa mesma meta (mantém a meta pequena)
-
 // ─── Estruturas internas ─────────────────────────────────────────────────────
 
-// bloco = unidade de estudo (teoria) sobre tópicos consecutivos de uma matéria
+// bloco = unidade de estudo (teoria) sobre tópicos consecutivos AINDA NÃO ESTUDADOS de uma matéria
 interface Bloco {
   materia: string
   topicos: string[]
-  nivel: TrilhaNivelMateria // nível efetivo do bloco (tópicos já estudados viram "arestas")
   teoriaMin: number
   teoriaRapida: boolean
 }
 
-interface RevisaoPendente {
-  materia: string
-  topicos: string[]
-  numeroRevisao: 1 | 2
-  venceEmMinuto: number // minutos de estudo acumulados a partir dos quais a revisão pode entrar numa meta
-  duracaoMin: number
-}
-
-function duracaoBloco(b: Bloco): number {
-  return b.teoriaMin
-}
-
 // ─── Montagem dos blocos por matéria ─────────────────────────────────────────
 
+// tópicos já marcados `estudado:true` no Edital são PULADOS (não entram em bloco nenhum) — a
+// Trilha só estuda o que ainda não foi estudado. O nível declarado (nunca/comecei/sem_confianca/
+// arestas) vale igual pra todos os tópicos restantes da matéria — não muda mais por tópico.
 function montarBlocosDaMateria(
   materia: MateriaBase,
   nivelDeclarado: TrilhaNivelMateria,
   topicosState: Record<string, TopicoState>
 ): Bloco[] {
+  const p = NIVEL_PARAMS[nivelDeclarado]
   const blocos: Bloco[] = []
   let atual: Bloco | null = null
 
   for (const topico of materia.topicos) {
-    // nível efetivo: tópico já estudado no Edital vira "arestas" (só uma revisão rápida)
     const jaEstudado = topicosState[topicoKey(materia.nome, topico)]?.estudado === true
-    const nivel: TrilhaNivelMateria = jaEstudado ? "arestas" : nivelDeclarado
-    const p = NIVEL_PARAMS[nivel]
+    if (jaEstudado) continue // já estudado — não é "tópico novo", fica fora da trilha
 
-    // quebra de bloco quando o nível efetivo muda
-    if (atual && atual.nivel !== nivel) {
-      blocos.push(atual)
-      atual = null
-    }
     if (!atual) {
-      atual = { materia: materia.nome, topicos: [], nivel, teoriaMin: 0, teoriaRapida: p.teoriaRapida }
+      atual = { materia: materia.nome, topicos: [], teoriaMin: 0, teoriaRapida: p.teoriaRapida }
     }
-
     atual.topicos.push(topico)
     atual.teoriaMin += p.teoriaMin
 
@@ -129,12 +103,10 @@ export function gerarTrilha(params: {
   config: TrilhaConfig
   topicos: Record<string, TopicoState>
   configCiclo: EstudoConfigCiclo
-  // matérias "graduadas" (100% concluídas na trilha) — não recebem teoria/questões novas,
-  // só continuam sendo revisadas pelas revisões espaçadas já agendadas anteriormente
+  // matérias "graduadas" (100% concluídas na trilha) — não recebem teoria nova numa regeneração
   materiasConcluidas?: string[]
 }): TrilhaMeta[] {
   const { materias, config, topicos, configCiclo, materiasConcluidas } = params
-  const orcamento = TRILHA_DISPONIBILIDADE_CONFIG[config.disponibilidade].minutosSemana
 
   // filas de blocos por matéria, na ordem do edital — fonte de verdade de "matéria ativa" é o
   // Ciclo de Estudos (configCiclo.materias[].incluir), não mais TrilhaConfig.puladas (deprecated)
@@ -173,86 +145,33 @@ export function gerarTrilha(params: {
     return escolhida.nome
   }
 
+  // cada meta = exatamente 1 bloco (1 atividade de teoria, 1 matéria) — sem revisão, sem
+  // questões, sem "rabo": quando as filas esvaziam, a trilha acaba
   const metas: TrilhaMeta[] = []
-  const revisoesPendentes: RevisaoPendente[] = []
-  let minutosDecorridos = 0 // relógio de estudo acumulado — base do vencimento das revisões
-
   const totalBlocos = () => [...filas.values()].reduce((s, f) => s + f.length, 0)
 
-  while (totalBlocos() > 0 || revisoesPendentes.length > 0) {
+  while (totalBlocos() > 0) {
     const numero = metas.length + 1
-    let atividades: TrilhaAtividade[] = []
-
-    // 1) meta de REVISÃO: se há revisões vencidas (relógio já passou do vencimento), a meta é
-    // só isso — pequena, focada, nunca misturada com conteúdo novo
-    const vencidas = revisoesPendentes
-      .filter((r) => r.venceEmMinuto <= minutosDecorridos)
-      .sort((a, b) => a.venceEmMinuto - b.venceEmMinuto)
-      .slice(0, MAX_REVISOES_POR_META)
-    if (vencidas.length > 0) {
-      atividades = vencidas.map((rev) => ({
-        id: idAtividade(numero, `revisao${rev.numeroRevisao}`, rev.materia, rev.topicos[0]),
-        tipo: "revisao" as const,
-        materia: rev.materia,
-        topicos: rev.topicos,
-        duracaoMin: rev.duracaoMin,
-        numeroRevisao: rev.numeroRevisao,
-        status: "nao_iniciada" as const,
-      }))
-      for (const rev of vencidas) revisoesPendentes.splice(revisoesPendentes.indexOf(rev), 1)
-    } else {
-      // 2) meta de CONTEÚDO: exatamente 1 bloco (poucos tópicos) de UMA matéria — "conclua esta
-      // matéria/tópico", nada de empacotar várias matérias na mesma meta
-      const materiaEscolhida = proximaMateriaComBloco()
-      if (materiaEscolhida) {
-        const fila = filas.get(materiaEscolhida)!
-        const bloco = fila.shift()!
-        atividades.push({
-          id: idAtividade(numero, "teoria", bloco.materia, bloco.topicos[0]),
-          tipo: "teoria",
-          materia: bloco.materia,
-          topicos: bloco.topicos,
-          duracaoMin: bloco.teoriaMin,
-          ...(bloco.teoriaRapida ? { teoriaRapida: true } : {}),
-          status: "nao_iniciada",
-        })
-
-        // agenda as revisões espaçadas do bloco a partir do relógio de estudo NO FECHAMENTO
-        // desta meta (não do índice dela — metas não valem mais 1 semana cada)
-        const minutosNoFechamento = minutosDecorridos + duracaoBloco(bloco)
-        revisoesPendentes.push(
-          { materia: bloco.materia, topicos: bloco.topicos, numeroRevisao: 1, venceEmMinuto: minutosNoFechamento + orcamento, duracaoMin: REV1_MIN },
-          { materia: bloco.materia, topicos: bloco.topicos, numeroRevisao: 2, venceEmMinuto: minutosNoFechamento + 4 * orcamento, duracaoMin: REV2_MIN }
-        )
-      }
+    const materiaEscolhida = proximaMateriaComBloco()
+    if (!materiaEscolhida) break
+    const fila = filas.get(materiaEscolhida)!
+    const bloco = fila.shift()!
+    const atividade: TrilhaAtividade = {
+      id: idAtividade(numero, "teoria", bloco.materia, bloco.topicos[0]),
+      tipo: "teoria",
+      materia: bloco.materia,
+      topicos: bloco.topicos,
+      duracaoMin: bloco.teoriaMin,
+      ...(bloco.teoriaRapida ? { teoriaRapida: true } : {}),
+      status: "nao_iniciada",
     }
-
-    // 3) rabo da trilha: nem revisão vencida nem bloco de conteúdo disponível, mas ainda há
-    // revisões pendentes no futuro — força as mais próximas do vencimento (evita loop infinito
-    // e evita deixar revisão pra trás só porque o relógio ainda não "virou")
-    if (atividades.length === 0 && revisoesPendentes.length > 0) {
-      const grupo = [...revisoesPendentes].sort((a, b) => a.venceEmMinuto - b.venceEmMinuto).slice(0, MAX_REVISOES_POR_META)
-      atividades = grupo.map((rev) => ({
-        id: idAtividade(numero, `revisao${rev.numeroRevisao}`, rev.materia, rev.topicos[0]),
-        tipo: "revisao" as const,
-        materia: rev.materia,
-        topicos: rev.topicos,
-        duracaoMin: rev.duracaoMin,
-        numeroRevisao: rev.numeroRevisao,
-        status: "nao_iniciada" as const,
-      }))
-      for (const rev of grupo) revisoesPendentes.splice(revisoesPendentes.indexOf(rev), 1)
-    }
-
-    if (atividades.length === 0) break // segurança contra loop infinito (não deve acontecer)
-    minutosDecorridos += atividades.reduce((s, a) => s + a.duracaoMin, 0)
-    metas.push({ numero, atividades })
+    metas.push({ numero, atividades: [atividade] })
   }
 
-  // invariante de cobertura: todo tópico não-pulado aparece em questões + rev.1 + rev.2 (e a
-  // teoria quando o nível pede). Erro aqui é bug do gerador — melhor estourar cedo que gerar
-  // trilha furada.
-  const faltantes = topicosSemCobertura(metas, ativas)
+  // invariante de cobertura: todo tópico ainda-não-estudado das matérias ativas aparece em
+  // exatamente 1 atividade de teoria. Erro aqui é bug do gerador — melhor estourar cedo que
+  // gerar trilha furada.
+  const faltantes = topicosSemCobertura(metas, ativas, topicos)
   if (faltantes.length > 0) {
     throw new Error(`trilha-generator: ${faltantes.length} tópico(s) sem cobertura — ex.: ${faltantes[0]}`)
   }
@@ -260,23 +179,21 @@ export function gerarTrilha(params: {
   return metas
 }
 
-function topicosSemCobertura(metas: TrilhaMeta[], materias: MateriaBase[]): string[] {
-  const cobertos = { teoria: new Set<string>(), rev1: new Set<string>(), rev2: new Set<string>() }
+// só cobra cobertura de tópicos que NÃO estão marcados estudado:true no Edital — esses ficam
+// intencionalmente fora da trilha (não são "tópicos novos")
+function topicosSemCobertura(metas: TrilhaMeta[], materias: MateriaBase[], topicosState: Record<string, TopicoState>): string[] {
+  const cobertos = new Set<string>()
   for (const meta of metas) {
     for (const a of meta.atividades) {
-      for (const t of a.topicos) {
-        const k = topicoKey(a.materia, t)
-        if (a.tipo === "teoria") cobertos.teoria.add(k)
-        if (a.tipo === "revisao" && a.numeroRevisao === 1) cobertos.rev1.add(k)
-        if (a.tipo === "revisao" && a.numeroRevisao === 2) cobertos.rev2.add(k)
-      }
+      for (const t of a.topicos) cobertos.add(topicoKey(a.materia, t))
     }
   }
   const faltando: string[] = []
   for (const m of materias) {
     for (const t of m.topicos) {
       const k = topicoKey(m.nome, t)
-      if (!cobertos.teoria.has(k) || !cobertos.rev1.has(k) || !cobertos.rev2.has(k)) faltando.push(k)
+      if (topicosState[k]?.estudado === true) continue
+      if (!cobertos.has(k)) faltando.push(k)
     }
   }
   return faltando
@@ -359,12 +276,14 @@ export function materiasConcluidasNaTrilha(trilha: TrilhaEstudo): string[] {
   return [...porMateria.entries()].filter(([, v]) => v.total > 0 && v.total === v.concluidas).map(([nome]) => nome)
 }
 
-// tópicos das matérias ativas no Ciclo (menos as já graduadas) que não aparecem em nenhuma
-// atividade de teoria da trilha
+// tópicos das matérias ativas no Ciclo (menos as já graduadas, e menos os já marcados
+// estudado:true no Edital — esses ficam intencionalmente fora da trilha) que não aparecem em
+// nenhuma atividade de teoria da trilha
 export function topicosNaoCobertos(
   trilha: TrilhaEstudo,
   materias: MateriaBase[],
-  configCiclo: EstudoConfigCiclo
+  configCiclo: EstudoConfigCiclo,
+  topicosState: Record<string, TopicoState>
 ): string[] {
   const cobertos = new Set<string>()
   for (const meta of trilha.metas) {
@@ -380,6 +299,7 @@ export function topicosNaoCobertos(
     if (graduadas.has(m.nome)) continue
     for (const t of m.topicos) {
       const k = topicoKey(m.nome, t)
+      if (topicosState[k]?.estudado === true) continue
       if (!cobertos.has(k)) faltando.push(k)
     }
   }
@@ -394,7 +314,7 @@ export function atualizarTrilha(
   topicos: Record<string, TopicoState>,
   configCiclo: EstudoConfigCiclo
 ): TrilhaEstudo {
-  const faltantes = new Set(topicosNaoCobertos(trilha, materias, configCiclo))
+  const faltantes = new Set(topicosNaoCobertos(trilha, materias, configCiclo, topicos))
   if (faltantes.size === 0) return trilha
 
   // recorta as matérias pros tópicos faltantes, preservando a ordem do edital
