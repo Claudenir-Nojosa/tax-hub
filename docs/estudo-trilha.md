@@ -7,36 +7,43 @@ caminho mudar.
 
 ## 1. Visão geral
 
-A Trilha divide o edital em **metas** sequenciais (`TrilhaMeta`) — **PEQUENAS por design** (pedido
-explícito do usuário, que achou as metas antigas "absurdas de difíceis e grandes") e **SÓ DE
-TÓPICOS NOVOS** (pedido explícito: nada de "questoes" — praticar questões fica por conta do
-usuário fora da Trilha, registrando o resultado direto no Edital/Caderno de Erros — e nada de
-revisão espaçada: a Trilha existe só pra levar o usuário do zero ao "estudei" em cada tópico ainda
-não marcado `estudado:true` no Edital). Cada meta é exatamente **1 bloco de poucos tópicos NOVOS
-de UMA matéria** (teoria — "conclua esta matéria/tópico") — nunca mistura matérias na mesma meta,
-nunca inclui tópico já estudado. Uma trilha típica tem **dezenas a centenas de metas** (não mais
-~15 megametas de até 45h cada). Metas NÃO valem mais "1 semana cada" — `estimarResumo()`/
-`projetarTermino()` usam `totalMinutos ÷ minutosSemana` da disponibilidade escolhida (não
-`metas.length`) pra projetar a data de término.
+A Trilha divide o edital em **metas** sequenciais (`TrilhaMeta`). Regras fechadas por pedidos
+explícitos do usuário, em ordem: metas pequenas (achou as antigas "absurdas de difíceis e
+grandes"), sem "questoes" (praticar fica por conta do usuário fora da Trilha, registrando direto
+no Edital/Caderno de Erros), sem revisão espaçada, e — forma final — **cada meta é EXATAMENTE UM
+TÓPICO de UMA matéria, sem objetivo de duração**: a meta é literalmente "conclua a teoria do
+tópico X". Tópicos já `estudado:true` no Edital são **excluídos por completo** — a Trilha só
+cobre tópicos novos. Uma trilha típica tem **centenas de metas** (1 por tópico não estudado das
+matérias no Ciclo).
 
-**Todo nível gera alguma teoria pros tópicos ainda não estudados** (ninguém fica com "tarefa
-vazia"): `nunca` 90min/tópico, `comecei` 60min, `sem_confianca` 30min (marcado `teoriaRapida`),
-`arestas` 15min (marcado `teoriaRapida`). Tópicos já `estudado:true` no Edital são **excluídos por
-completo da trilha** — não entram em bloco nenhum, não geram nenhuma atividade. `TrilhaAtividadeTipo`
-mantém `"questoes"` e `"revisao"` no tipo (`estudo-data.ts`), e `numeroRevisao`/`quantidadeQuestoes`
-continuam como campos opcionais, só por compatibilidade com trilhas antigas já persistidas que
-tenham essas atividades — o gerador NUNCA mais produz nenhuma das duas.
+**`duracaoMin` ainda existe e é preenchida por nível** (`nunca` 90min/tópico, `comecei` 60min,
+`sem_confianca` 30min `teoriaRapida`, `arestas` 15min `teoriaRapida`), mas é **estimativa interna
+pra projeções apenas** — `estimarResumo()`/`projetarTermino()` usam `totalMinutos ÷ minutosSemana`
+da disponibilidade escolhida pra responder "cabe até a prova?" e "término ~data". A UI **nunca
+mostra duração como objetivo da meta** (nem no painel da meta, nem no caminho, nem no passo 3 do
+wizard, que mostra "Tópicos a estudar"/"Matérias" em vez de "Carga total"). O nível declarado
+também pesa na intercalação (fator do round-robin). `TrilhaAtividadeTipo` mantém `"questoes"` e
+`"revisao"` no tipo (`estudo-data.ts`), e `numeroRevisao`/`quantidadeQuestoes` continuam como
+campos opcionais, só por compatibilidade com trilhas antigas já persistidas — o gerador NUNCA
+mais produz nenhuma das duas, e `TrilhaAtividade.topicos` segue sendo array (sempre com 1 item
+nas trilhas novas) pelo mesmo motivo.
 
 A geração é **100% determinística** (`src/lib/trilha-generator.ts`, sem IA) — reprodutível e
-recalculável a qualquer momento; a IA só escreve a `orientacao` (1-2 frases) das metas de
-**conteúdo novo** (metas só-de-revisão não recebem, pra não gastar chamada à toa e não estourar o
-limite de 120 metas por request da rota) via `POST /api/estudo/trilha/orientacoes`, com graceful
+recalculável a qualquer momento; a IA só escreve a `orientacao` (1-2 frases) das primeiras 120
+metas (limite por request da rota) via `POST /api/estudo/trilha/orientacoes`, com graceful
 degradation se falhar.
 
 No visual (`TrilhaTab.tsx` + `src/components/estudo/trilha/*`), **1 nó do caminho = 1
-`TrilhaMeta`**: `TrilhaPath.tsx` desenha um caminho sinuoso (posição de cada nó e a curva de fundo
-vêm da MESMA função seno — nunca desalinham, e são responsivos sem medir DOM); clicar num nó não
-bloqueado abre `MetaPainel.tsx` (Dialog) com as atividades daquela meta.
+`TrilhaMeta` = 1 tópico**: `TrilhaPath.tsx` desenha um caminho sinuoso (posição de cada nó e a
+curva de fundo vêm da MESMA função seno — nunca desalinham, e são responsivos sem medir DOM). Cada
+nó é **colorido pela cor da matéria** (`resolverCorMateria`), com efeito 3D de botão (inset shadow
+no rodapé, estilo Duolingo — funciona com qualquer cor sem precisar da variante escura), e mostra
+**badge da matéria + nome do tópico** logo abaixo — o caminho conta a história inteira sem abrir
+nada. Estados: concluído = check, atual = estrela + ring + balão "Você está aqui" quicando
+(framer-motion), futuro = cadeado cinza. O trecho já percorrido da curva é pintado de verde sólido
+por cima do pontilhado. Clicar num nó não bloqueado abre `MetaPainel.tsx` (Dialog) com a frase
+"Conclua a teoria de: {tópico}" e o botão de status — sem duração. O progresso do header é contado
+em **tópicos concluídos** (metas 100% concluídas), não em minutos.
 
 O ritmo REAL pós-primeira-conclusão (`ritmoMetasPorSemana`, em `projetarTermino()`) é medido em
 "metas concluídas por semana" — combina com o visual: dá pra dizer literalmente "você está
@@ -128,8 +135,9 @@ persistido.
 ## 8. Verificação
 
 `npx tsx scripts/validar-trilha.ts` — 8 cenários determinísticos: geração básica (nunca/arestas,
-1 meta = 1 bloco de 1 matéria), matérias fora do Ciclo e tópicos pré-estudados excluídos por
-completo, `atualizarTrilha` cobrindo tópicos novos, Ciclo como fonte de verdade (cenário 5),
+1 meta = exatamente 1 tópico de 1 matéria, total de metas = total de tópicos ativos), matérias
+fora do Ciclo e tópicos pré-estudados excluídos por completo, `atualizarTrilha` cobrindo tópicos
+novos, Ciclo como fonte de verdade (cenário 5),
 matéria graduada sem conteúdo novo (cenário 6), `topicosNaoCobertos` ignorando matéria graduada
 (cenário 7), nenhum cenário gera atividade tipo `"questoes"` ou `"revisao"` (cenário 8). Validação
 visual: sem test runner no projeto — testar manualmente

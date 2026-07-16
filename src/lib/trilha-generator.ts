@@ -1,24 +1,21 @@
-// Gerador determinístico da Trilha de Estudos (plano guiado por metas, estilo Gurujá/Duolingo).
-// Cada META é PEQUENA e tem UM objetivo só: estudar um bloco de tópicos NOVOS (ainda não
-// estudados) de UMA matéria. Só isso — SEM tarefas de "questões" e SEM revisão espaçada (pedido
-// explícito do usuário: a Trilha é só pra tópicos novos; tópicos já marcados `estudado:true` no
-// Edital ficam de fora da trilha por completo, e não há mais rev.1/rev.2 agendadas — praticar
-// questões e revisar fica a cargo do próprio usuário fora da Trilha). Metas grandes e pesadas
-// desmotivam; muitas metas pequenas, cada uma "conclua esta matéria/tópico", combinam com o
-// visual de caminho (1 nó = 1 meta = 1 bloco de teoria de 1 matéria). Sem IA aqui de propósito:
-// geração instantânea, reprodutível e recalculável — a IA só escreve as `orientacao` das metas
-// depois (rota /api/estudo/trilha/orientacoes).
+// Gerador determinístico da Trilha de Estudos (plano guiado por metas, estilo Duolingo).
+// Cada META é UM ÚNICO TÓPICO de UMA matéria: "conclua a teoria do tópico X". Só isso — SEM
+// tarefas de "questões", SEM revisão espaçada e SEM objetivo de duração exibido (pedidos
+// explícitos do usuário: a Trilha é só pra tópicos novos, tópicos já marcados `estudado:true`
+// no Edital ficam de fora por completo, e a meta não cobra tempo — cobra CONCLUIR o tópico).
+// Metas grandes e pesadas desmotivam; muitas metas mínimas, uma por tópico, combinam com o
+// visual de caminho (1 nó = 1 meta = 1 tópico). Sem IA aqui de propósito: geração instantânea,
+// reprodutível e recalculável — a IA só escreve as `orientacao` das metas depois (rota
+// /api/estudo/trilha/orientacoes).
 //
-// Regras numéricas (fechadas no plano aprovado):
-//   Por tópico, conforme nível declarado da matéria (tópico já `estudado` no Edital ⇒ EXCLUÍDO,
-//   não entra em bloco nenhum — não é "tópico novo"):
-//     nunca          teoria 90min (primeira leitura completa)
-//     comecei        teoria 60min (já começou, foca no que falta)
-//     sem_confianca  teoria 30min, rápida (já terminou, só reforça)
-//     arestas        teoria 15min, rápida (só bate o olho de novo)
-//   Blocos (tópicos consecutivos e ainda-não-estudados, na ordem do edital, de UMA matéria):
-//   fecha em 3 tópicos OU ≥150min de teoria acumulada. Cada bloco = 1 meta = 1 atividade.
-//   Intercalação entre matérias: escolhida bloco a bloco por round-robin ponderado suave
+// `duracaoMin` continua preenchida por tópico conforme o nível declarado da matéria, mas é
+// SÓ uma estimativa interna pra projeções (estimarResumo/projetarTermino — "cabe até a prova?",
+// "término ~data") — a UI NÃO mostra duração como objetivo da meta:
+//     nunca          90min (primeira leitura completa)
+//     comecei        60min (já começou, foca no que falta)
+//     sem_confianca  30min, rápida (já terminou, só reforça)
+//     arestas        15min, rápida (só bate o olho de novo)
+//   Intercalação entre matérias: escolhida tópico a tópico por round-robin ponderado suave
 //   ("smooth weighted round-robin" — peso pesoCiclo(1|2) × fatorNivel, nunca 1.5 / comecei 1.3 /
 //   sem_confianca 1.0 / arestas 0.7).
 
@@ -51,7 +48,9 @@ const NIVEL_PARAMS: Record<
 
 // ─── Estruturas internas ─────────────────────────────────────────────────────
 
-// bloco = unidade de estudo (teoria) sobre tópicos consecutivos AINDA NÃO ESTUDADOS de uma matéria
+// bloco = UM tópico AINDA NÃO ESTUDADO de uma matéria (1 bloco = 1 meta = 1 atividade de teoria).
+// `topicos` continua sendo array só porque TrilhaAtividade.topicos é array (compat com trilhas
+// antigas persistidas que agrupavam até 3 tópicos) — aqui sempre tem exatamente 1 item.
 interface Bloco {
   materia: string
   topicos: string[]
@@ -71,24 +70,12 @@ function montarBlocosDaMateria(
 ): Bloco[] {
   const p = NIVEL_PARAMS[nivelDeclarado]
   const blocos: Bloco[] = []
-  let atual: Bloco | null = null
 
   for (const topico of materia.topicos) {
     const jaEstudado = topicosState[topicoKey(materia.nome, topico)]?.estudado === true
     if (jaEstudado) continue // já estudado — não é "tópico novo", fica fora da trilha
-
-    if (!atual) {
-      atual = { materia: materia.nome, topicos: [], teoriaMin: 0, teoriaRapida: p.teoriaRapida }
-    }
-    atual.topicos.push(topico)
-    atual.teoriaMin += p.teoriaMin
-
-    if (atual.topicos.length >= 3 || atual.teoriaMin >= 150) {
-      blocos.push(atual)
-      atual = null
-    }
+    blocos.push({ materia: materia.nome, topicos: [topico], teoriaMin: p.teoriaMin, teoriaRapida: p.teoriaRapida })
   }
-  if (atual) blocos.push(atual)
   return blocos
 }
 
@@ -145,8 +132,8 @@ export function gerarTrilha(params: {
     return escolhida.nome
   }
 
-  // cada meta = exatamente 1 bloco (1 atividade de teoria, 1 matéria) — sem revisão, sem
-  // questões, sem "rabo": quando as filas esvaziam, a trilha acaba
+  // cada meta = exatamente 1 tópico (1 atividade de teoria, 1 matéria) — sem revisão, sem
+  // questões: quando as filas esvaziam, a trilha acaba
   const metas: TrilhaMeta[] = []
   const totalBlocos = () => [...filas.values()].reduce((s, f) => s + f.length, 0)
 

@@ -16,7 +16,7 @@ import {
   gerarTrilha, estimarResumo, projetarTermino, atualizarTrilha, topicosNaoCobertos,
   proximoStatus, metaAtualIndex, materiasConcluidasNaTrilha,
 } from "@/lib/trilha-generator";
-import { fmtHoras, fmtData } from "./trilha/trilha-ui";
+import { fmtData } from "./trilha/trilha-ui";
 import TrilhaPath from "./trilha/TrilhaPath";
 import MetaPainel from "./trilha/MetaPainel";
 import MateriaConcluidaBanner from "./trilha/MateriaConcluidaBanner";
@@ -271,8 +271,9 @@ function Wizard({
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Em que nível você se encontra em cada matéria?</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            Isso define quanto de teoria a trilha vai propor por matéria (só tópicos ainda não estudados — sem questões,
-            sem revisão). Só entram matérias incluídas no Ciclo de Estudos e ainda não concluídas na trilha.
+            Isso ajuda a ordenar a trilha (matérias que você domina menos aparecem com mais frequência) e a estimar a
+            data de término. Só entram matérias incluídas no Ciclo de Estudos e ainda não concluídas na trilha — e só
+            tópicos ainda não estudados.
           </p>
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="hidden md:grid grid-cols-[1fr_repeat(4,110px)] gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-[11px] font-medium text-gray-500 dark:text-gray-400">
@@ -320,8 +321,8 @@ function Wizard({
             <div className="space-y-4">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {[
-                  { label: "Metas", valor: String(preview.resumo.totalMetas), Icon: Target },
-                  { label: "Carga total", valor: fmtHoras(preview.resumo.totalMinutos), Icon: CalendarClock },
+                  { label: "Tópicos a estudar", valor: String(preview.resumo.totalMetas), Icon: Target },
+                  { label: "Matérias", valor: String(new Set(preview.metas.flatMap((m) => m.atividades.map((a) => a.materia))).size), Icon: CalendarClock },
                   { label: "Duração estimada", valor: `${preview.resumo.semanasEstimadas} semanas`, Icon: Route },
                   { label: "Término projetado", valor: fmtData(preview.resumo.dataProjetada), Icon: Sparkles },
                 ].map((c) => (
@@ -346,9 +347,9 @@ function Wizard({
                 </div>
               )}
               <p className="text-xs text-gray-400 dark:text-gray-500">
-                A trilha cobre os tópicos ainda não estudados das matérias incluídas no Ciclo, dividida em muitas
-                metas PEQUENAS — cada uma é só um bloco de tópicos novos de uma matéria (teoria conforme seu nível —
-                sem questões, sem revisão). Depois de gerar, a IA escreve uma orientação por meta.
+                A trilha cobre os tópicos ainda não estudados das matérias incluídas no Ciclo — cada meta é UM único
+                tópico de UMA matéria: &quot;conclua a teoria do tópico X&quot;. Sem questões, sem revisão, sem meta de
+                tempo. Depois de gerar, a IA escreve uma orientação por meta.
               </p>
             </div>
           )}
@@ -421,9 +422,9 @@ function TrilhaAtiva({
   const [metaSelecionada, setMetaSelecionada] = useState<number | null>(null);
   const idxAtual = metaAtualIndex(trilha.metas);
 
-  const totalAtividades = trilha.metas.reduce((s, m) => s + m.atividades.length, 0);
-  const concluidas = trilha.metas.reduce((s, m) => s + m.atividades.filter((a) => a.status === "concluida").length, 0);
-  const percGeral = totalAtividades > 0 ? Math.round((concluidas / totalAtividades) * 100) : 0;
+  // 1 meta = 1 tópico — o progresso é contado em METAS concluídas (não em minutos/atividades)
+  const metasConcluidas = trilha.metas.filter((m) => m.atividades.every((a) => a.status === "concluida")).length;
+  const percGeral = trilha.metas.length > 0 ? Math.round((metasConcluidas / trilha.metas.length) * 100) : 0;
   const projecao = projetarTermino(trilha);
   const naoCobertos = useMemo(() => topicosNaoCobertos(trilha, materias, configCiclo, topicos), [trilha, materias, configCiclo, topicos]);
   // ritmo ESPERADO (antes de haver metas concluídas pra calcular o ritmo real): metas são
@@ -536,7 +537,7 @@ function TrilhaAtiva({
           <div className="bg-white rounded-full h-2.5 transition-all duration-500" style={{ width: `${percGeral}%` }} />
         </div>
         <div className="flex justify-between mt-1 text-xs text-emerald-100">
-          <span>{concluidas}/{totalAtividades} atividades</span>
+          <span>{metasConcluidas}/{trilha.metas.length} tópicos concluídos</span>
           <span>{percGeral}%</span>
         </div>
       </div>

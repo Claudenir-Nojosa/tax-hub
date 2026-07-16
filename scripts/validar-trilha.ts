@@ -37,15 +37,16 @@ const metas1 = gerarTrilha({ materias, config: cfg1, topicos: {}, configCiclo })
 const resumo1 = estimarResumo(metas1, "normal", "2026-08-01");
 console.log(`  ${resumo1.totalMetas} metas · ${Math.round(resumo1.totalMinutos / 60)}h totais · cabe até a prova: ${resumo1.cabeAteProva}`);
 
-// metas agora são PEQUENAS por design (pedido do usuário) e SÓ DE CONTEÚDO NOVO: cada meta é
-// exatamente 1 bloco de teoria de UMA matéria, sem revisão, sem questões, sem misturar matérias.
+// metas agora são MÍNIMAS por design (pedido do usuário): cada meta é exatamente 1 TÓPICO de
+// UMA matéria ("conclua a teoria do tópico X") — sem revisão, sem questões, sem agrupar tópicos.
 metas1.forEach((m) => {
   assert(m.atividades.length === 1, `meta ${m.numero} deveria ter exatamente 1 atividade, tem ${m.atividades.length}`);
   const a = m.atividades[0];
   assert(a.tipo === "teoria", `meta ${m.numero} tem atividade tipo "${a.tipo}" (esperado só "teoria")`);
-  const minutos = m.atividades.reduce((s, x) => s + x.duracaoMin, 0);
-  assert(minutos <= 400, `meta ${m.numero} estourou o teto de bloco: ${minutos}min`);
+  assert(a.topicos.length === 1, `meta ${m.numero} tem ${a.topicos.length} tópicos (esperado exatamente 1)`);
 });
+assert(metas1.length === materias.filter((m) => configCiclo.materias[m.nome]?.incluir).reduce((s, m) => s + m.topicos.length, 0),
+  "total de metas deveria ser igual ao total de tópicos das matérias incluídas no Ciclo");
 
 // determinismo
 const metas1b = gerarTrilha({ materias, config: cfg1, topicos: {}, configCiclo });

@@ -7,13 +7,14 @@ import {
   topicoKey,
   type Grupo, type TopicoState, type TrilhaAtividade, type TrilhaMeta,
 } from "@/lib/estudo-data";
-import { STATUS_CONFIG, TIPO_CONFIG, fmtHoras } from "./trilha-ui";
+import { STATUS_CONFIG, TIPO_CONFIG } from "./trilha-ui";
 
-// Painel de atividades de UMA meta (1 nó do TrilhaPath) — extraído de TrilhaTab.tsx (era
-// MetaCard/AtividadeRow/RegistrarResultado, hoje viram o conteúdo de um Dialog). Mantém os
-// mesmos efeitos colaterais: status cycling e "Registrar resultado" gravam direto no caderno de
-// tópicos do Edital, via callbacks recebidos do componente pai (TrilhaTab), que é quem detém a
-// lógica de negócio (marcar tópico como estudado ao concluir teoria etc).
+// Painel de UMA meta (1 nó do TrilhaPath = 1 tópico). SEM objetivo de duração (pedido do
+// usuário: a meta é só "conclua a teoria do tópico X" — duracaoMin existe no dado, mas é
+// estimativa interna pra projeções, nunca exibida aqui). Mantém os mesmos efeitos colaterais:
+// status cycling e "Registrar resultado" gravam direto no caderno de tópicos do Edital, via
+// callbacks recebidos do componente pai (TrilhaTab), que é quem detém a lógica de negócio
+// (marcar tópico como estudado ao concluir teoria etc).
 
 interface Props {
   meta: TrilhaMeta | null;
@@ -27,9 +28,8 @@ interface Props {
 
 export default function MetaPainel({ meta, estado, aberto, onClose, onStatusClick, topicos, onUpdateTopicos }: Props) {
   if (!meta) return null;
-  const duracao = meta.atividades.reduce((s, a) => s + a.duracaoMin, 0);
-  const feitas = meta.atividades.filter((a) => a.status === "concluida").length;
   const somenteLeitura = estado === "concluida";
+  const materias = [...new Set(meta.atividades.map((a) => a.materia))];
 
   return (
     <Dialog open={aberto} onOpenChange={(v) => !v && onClose()}>
@@ -39,9 +39,7 @@ export default function MetaPainel({ meta, estado, aberto, onClose, onStatusClic
             {estado === "concluida" && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
             Meta {meta.numero}
           </DialogTitle>
-          <DialogDescription>
-            {meta.atividades.length} atividades · {fmtHoras(duracao)} · {feitas}/{meta.atividades.length} feitas
-          </DialogDescription>
+          <DialogDescription>{materias.join(" · ")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
@@ -82,22 +80,25 @@ function AtividadeRow({
   const cfg = TIPO_CONFIG[atividade.tipo];
   const st = STATUS_CONFIG[atividade.status];
 
+  // teoria (o único tipo gerado hoje) vira a frase-objetivo da meta; "questoes"/"revisao" só
+  // existem em trilhas antigas persistidas — mantidos por compatibilidade de renderização
   const rotulo =
     atividade.tipo === "teoria"
-      ? atividade.teoriaRapida ? "Teoria — revisão rápida" : "Teoria"
+      ? "Conclua a teoria de:"
       : atividade.tipo === "questoes"
       ? `${atividade.quantidadeQuestoes} questões`
       : `Revisão ${atividade.numeroRevisao === 1 ? "(1ª — ±7 dias)" : "(2ª — ±30 dias)"}`;
 
   return (
     <div className="rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/40">
-      <div className="flex items-center gap-2.5 px-3 py-2">
+      <div className="flex items-center gap-2.5 px-3 py-2.5">
         <cfg.Icon className={`h-4 w-4 flex-shrink-0 ${cfg.cor}`} />
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-medium text-gray-800 dark:text-gray-200">
-            {rotulo} <span className="text-gray-400 font-normal">· {atividade.materia} · {fmtHoras(atividade.duracaoMin)}</span>
+          <div className="text-[11px] text-gray-400">
+            {rotulo}
+            {atividade.tipo !== "teoria" && <span className="font-normal"> · {atividade.materia}</span>}
           </div>
-          <div className="text-[11px] text-gray-400 truncate" title={atividade.topicos.join(" · ")}>
+          <div className="text-sm font-medium text-gray-800 dark:text-gray-200 leading-snug" title={atividade.topicos.join(" · ")}>
             {atividade.topicos.join(" · ")}
           </div>
         </div>
