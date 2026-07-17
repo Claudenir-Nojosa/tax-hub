@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  BookOpen, CheckCircle2, ChevronDown, Clock, FileUp, Library, Pencil, Plus, Trash2, X,
+  ArrowLeft, BookOpen, CheckCircle2, ChevronDown, Clock, FileUp, Library, Pause, Pencil, Play, Plus, Trash2, X,
 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   MATERIAS, calcularPagPorHora,
   type AtividadeCalendario, type MateriaConcurso, type MateriaDef, type PdfEstudo,
@@ -15,8 +14,10 @@ import {
 import { resolverCorMateria, fmtHoras } from "./trilha/trilha-ui";
 
 // Biblioteca de PDFs (ex.: aulas do Estratégia): anexe o ARQUIVO e leia dentro do próprio site
-// (leitor embutido via visualizador nativo do navegador), com progresso "parei na pág. X",
-// % lido e ETA calculada com o páginas/hora histórico do Timer (calcularPagPorHora).
+// num leitor FULLSCREEN limpo (só o PDF + barra fina com "parei na pág." e cronômetro), com
+// progresso "parei na pág. X", % lido e ETA calculada com o páginas/hora histórico do Timer
+// (calcularPagPorHora). O cronômetro do leitor conta sozinho e, ao fechar (sessão ≥1 min), salva
+// uma atividade de Estudo no calendário da matéria/tópico do PDF via onRegistrarSessao.
 // O arquivo fica no IndexedDB DESTE navegador (pdf-storage.ts — Vercel não aceita upload >4,5MB);
 // os metadados/progresso sincronizam normalmente via EstudoState. Em outro dispositivo a entrada
 // aparece com o botão "Anexar" pra reanexar o arquivo local.
@@ -26,6 +27,7 @@ interface Props {
   calendario: Record<string, AtividadeCalendario[]>;
   onChange: (pdfs: PdfEstudo[]) => void;
   materiasConcurso?: MateriaConcurso[];
+  onRegistrarSessao?: (minutos: number, materia: string, topico: string | undefined, paginas: number | undefined, descricao: string) => void;
 }
 
 function novoId(): string {
@@ -37,7 +39,7 @@ function fmtEta(paginasRestantes: number, pagPorHora: number | null): string | n
   return fmtHoras(Math.round((paginasRestantes / pagPorHora) * 60));
 }
 
-export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConcurso }: Props) {
+export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConcurso, onRegistrarSessao }: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
     materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
 
@@ -274,35 +276,141 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
         })
       )}
 
-      {/* leitor embutido: visualizador nativo do navegador dentro de um Dialog, abrindo direto
-          na página onde o usuário parou (#page=N funciona no viewer do Chrome/Edge) */}
-      <Dialog open={lendo !== null} onOpenChange={(v) => !v && fecharLeitor()}>
-        <DialogContent className="max-w-5xl w-[96vw] h-[90vh] flex flex-col p-3 sm:p-4 gap-2">
-          <DialogHeader className="flex-shrink-0">
-            <DialogTitle className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm pr-8">
-              <span className="truncate">{lendo?.nome}</span>
-              {lendo && (
-                <span className="flex items-center gap-1.5 text-xs font-normal text-gray-500 dark:text-gray-400">
-                  Parei na pág.
-                  <InputPaginaLeitor
-                    key={lendo.id}
-                    pdf={pdfs.find((p) => p.id === lendo.id) ?? lendo}
-                    onCommit={(pag) => atualizarPagina(lendo.id, pag)}
-                  />
-                  de {lendo.totalPaginas}
-                </span>
-              )}
-            </DialogTitle>
-          </DialogHeader>
-          {urlLeitura && lendo && (
-            <iframe
-              src={`${urlLeitura}#page=${Math.max(1, Math.min(lendo.paginaAtual || 1, lendo.totalPaginas))}`}
-              title={lendo.nome}
-              className="flex-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* leitor FULLSCREEN limpo: só o PDF (visualizador nativo do navegador) + barra fina no
+          topo com "parei na pág." e o cronômetro da sessão */}
+      {lendo && urlLeitura && (
+        <LeitorPdf
+          pdf={pdfs.find((p) => p.id === lendo.id) ?? lendo}
+          url={urlLeitura}
+          onAtualizarPagina={(pag) => atualizarPagina(lendo.id, pag)}
+          onRegistrarSessao={onRegistrarSessao}
+          onFechar={fecharLeitor}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Leitor fullscreen ───────────────────────────────────────────────────────
+
+function fmtCrono(segundos: number): string {
+  const h = Math.floor(segundos / 3600);
+  const m = Math.floor((segundos % 3600) / 60);
+  const s = segundos % 60;
+  return h > 0
+    ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+    : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function LeitorPdf({
+  pdf, url, onAtualizarPagina, onRegistrarSessao, onFechar,
+}: {
+  pdf: PdfEstudo;
+  url: string;
+  onAtualizarPagina: (pagina: number) => void;
+  onRegistrarSessao?: (minutos: number, materia: string, topico: string | undefined, paginas: number | undefined, descricao: string) => void;
+  onFechar: () => void;
+}) {
+  // cronômetro: conta sozinho desde a abertura; pausável. Ao fechar com ≥1 min, a sessão vira
+  // atividade de Estudo no calendário da matéria/tópico do PDF (páginas = delta do "parei na pág.")
+  const [segundos, setSegundos] = useState(0);
+  const [pausado, setPausado] = useState(false);
+  const segundosRef = useRef(0);
+  const paginaInicialRef = useRef(pdf.paginaAtual);
+  const pdfRef = useRef(pdf);
+  pdfRef.current = pdf;
+
+  useEffect(() => {
+    if (pausado) return;
+    const interval = setInterval(() => {
+      segundosRef.current += 1;
+      setSegundos(segundosRef.current);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [pausado]);
+
+  const encerrarSessao = () => {
+    const minutos = Math.round(segundosRef.current / 60);
+    if (minutos >= 1 && onRegistrarSessao) {
+      const p = pdfRef.current;
+      const paginasLidas = p.paginaAtual - paginaInicialRef.current;
+      onRegistrarSessao(
+        minutos,
+        p.materia,
+        p.topicos?.[0],
+        paginasLidas > 0 ? paginasLidas : undefined,
+        `Leitura: ${p.nome}`
+      );
+    }
+    onFechar();
+  };
+  const encerrarRef = useRef(encerrarSessao);
+  encerrarRef.current = encerrarSessao;
+
+  // Esc fecha (registrando a sessão) + trava o scroll do body enquanto o leitor está aberto
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") encerrarRef.current(); };
+    document.addEventListener("keydown", onKey);
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflowAnterior;
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-gray-950 flex flex-col">
+      {/* barra fina: voltar · nome · parei na pág. · cronômetro */}
+      <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-4 h-12 flex-shrink-0 bg-gray-900 text-white">
+        <button
+          type="button"
+          onClick={encerrarSessao}
+          title="Fechar o leitor (a sessão do cronômetro é salva na matéria/tópico)"
+          className="h-8 w-8 rounded-md flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium truncate">{pdf.nome}</div>
+          <div className="text-[10px] text-gray-400 truncate">{pdf.materia}{pdf.topicos?.[0] ? ` · ${pdf.topicos[0]}` : ""}</div>
+        </div>
+
+        <label className="hidden sm:block text-[11px] text-gray-400 flex-shrink-0">Parei na pág.</label>
+        <InputPaginaLeitor
+          key={pdf.id}
+          pdf={pdf}
+          onCommit={onAtualizarPagina}
+        />
+        <span className="hidden sm:block text-[11px] text-gray-400 flex-shrink-0">de {pdf.totalPaginas}</span>
+
+        <div
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg flex-shrink-0 font-mono text-sm ${
+            pausado ? "bg-amber-500/20 text-amber-300" : "bg-emerald-500/15 text-emerald-300"
+          }`}
+          title="Cronômetro da sessão — salvo automaticamente nesta matéria/tópico ao fechar"
+        >
+          <Clock className="h-3.5 w-3.5" />
+          {fmtCrono(segundos)}
+        </div>
+        <button
+          type="button"
+          onClick={() => setPausado((v) => !v)}
+          title={pausado ? "Retomar cronômetro" : "Pausar cronômetro"}
+          className="h-8 w-8 rounded-md flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+        >
+          {pausado ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+        </button>
+      </div>
+
+      {/* o PDF em si — ocupa TODO o resto da tela, sem borda nem padding. A página do #page= é
+          a DO MOMENTO DA ABERTURA (ref): usar pdf.paginaAtual ao vivo recarregaria o iframe a
+          cada commit do "parei na pág.", jogando o leitor de volta pro topo */}
+      <iframe
+        src={`${url}#page=${Math.max(1, Math.min(paginaInicialRef.current || 1, pdf.totalPaginas))}`}
+        title={pdf.nome}
+        className="flex-1 w-full border-0"
+      />
     </div>
   );
 }
@@ -326,7 +434,7 @@ function InputPaginaLeitor({ pdf, onCommit }: { pdf: PdfEstudo; onCommit: (pag: 
       onChange={(e) => setValor(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-      className="w-16 text-xs border border-gray-200 dark:border-gray-600 rounded-md px-1.5 py-0.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:border-sky-500"
+      className="w-16 text-xs border border-gray-600 rounded-md px-1.5 py-1 bg-gray-800 text-gray-100 focus:outline-none focus:border-sky-500 flex-shrink-0"
     />
   );
 }

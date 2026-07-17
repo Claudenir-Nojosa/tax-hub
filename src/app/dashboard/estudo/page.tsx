@@ -333,6 +333,11 @@ export default function EstudoPage() {
               calendario={state.calendario}
               onChange={updatePdfs}
               materiasConcurso={concursoAtivo?.materias as MateriaConcurso[] | undefined}
+              // cronômetro do leitor: a sessão de leitura vira atividade de Estudo no calendário
+              // da matéria/tópico do PDF (mesmo fluxo do TimerEstudo — alimenta streak e pág/h)
+              onRegistrarSessao={(minutos, materia, topico, paginas, descricao) =>
+                handleTimerSalvar(minutos, "estudo", descricao, undefined, materia, topico, paginas)
+              }
             />
           )}
 
