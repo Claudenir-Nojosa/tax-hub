@@ -9,13 +9,26 @@ import {
   type TopicoState,
   type Grupo,
   type MateriaConcurso,
+  type PdfEstudo,
 } from "@/lib/estudo-data";
-import { ChevronDown, ChevronRight, Search, CheckSquare, Square } from "lucide-react";
+import { ChevronDown, ChevronRight, Search, CheckSquare, Square, BookOpen } from "lucide-react";
 
 interface Props {
   topicos: Record<string, TopicoState>;
   onUpdate: (topicos: Record<string, TopicoState>) => void;
   materiasConcurso?: MateriaConcurso[]; // se passado, usa em vez de MATERIAS hardcoded
+  pdfs?: PdfEstudo[]; // Biblioteca: mostra % lido dos PDFs que cobrem cada tópico (opcional)
+}
+
+// % de leitura dos PDFs da Biblioteca que cobrem este tópico (média ponderada pelo total de
+// páginas de cada PDF); null quando nenhum PDF cobre o tópico — aí o chip nem renderiza
+function percLeituraTopico(pdfs: PdfEstudo[], materia: string, topico: string): number | null {
+  const cobrem = pdfs.filter((p) => p.materia === materia && p.topicos?.includes(topico));
+  if (cobrem.length === 0) return null;
+  const total = cobrem.reduce((s, p) => s + p.totalPaginas, 0);
+  if (total === 0) return null;
+  const lidas = cobrem.reduce((s, p) => s + Math.min(p.paginaAtual, p.totalPaginas), 0);
+  return Math.round((lidas / total) * 100);
 }
 
 function CadernoInput({
@@ -68,7 +81,7 @@ const COR_BORDER: Record<string, string> = {
   yellow: "border-l-yellow-500",
 };
 
-export default function EditalTab({ topicos, onUpdate, materiasConcurso }: Props) {
+export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = [] }: Props) {
   const materiasAtivas = materiasConcurso
     ? materiasConcurso.map(m => ({ ...m, corBorder: COR_BORDER[m.cor] ?? "border-l-gray-400" }))
     : MATERIAS;
@@ -215,6 +228,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso }: Props
                     const key = topicoKey(m.nome, t);
                     const estado = topicos[key];
                     const media = calcularMedia(estado.cadernos);
+                    const percPdf = percLeituraTopico(pdfs, m.nome, t);
                     return (
                       <div
                         key={t}
@@ -227,9 +241,23 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso }: Props
                           {idx + 1}
                         </span>
 
-                        {/* Nome do tópico */}
+                        {/* Nome do tópico (+ % de leitura dos PDFs da Biblioteca que o cobrem) */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">{t}</p>
+                          <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+                            {t}
+                            {percPdf !== null && (
+                              <span
+                                title="Leitura dos PDFs da Biblioteca que cobrem este tópico"
+                                className={`ml-1.5 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full align-middle ${
+                                  percPdf >= 100
+                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                                    : "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+                                }`}
+                              >
+                                <BookOpen className="h-2.5 w-2.5" /> {percPdf}%
+                              </span>
+                            )}
+                          </p>
                         </div>
 
                         {/* Estudado */}

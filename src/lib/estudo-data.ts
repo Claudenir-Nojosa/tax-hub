@@ -154,6 +154,32 @@ export interface EstudoState {
   streak: number;
   semanasOK: number;
   trilha?: TrilhaEstudo; // ausente = usuário ainda não gerou a trilha (aba mostra o wizard)
+  pdfs: PdfEstudo[];
+}
+
+// --- Biblioteca de PDFs ---
+
+// PDF de estudo (ex.: aulas do Estratégia) — SÓ metadados + progresso de leitura; o arquivo em
+// si nunca é enviado (continua no leitor do usuário — sem custo de storage, sem copyright).
+export interface PdfEstudo {
+  id: string;
+  nome: string; // ex.: "Aula 05 — ICMS: fato gerador"
+  materia: string;
+  topicos?: string[]; // tópicos do edital cobertos (opcional, multi)
+  totalPaginas: number;
+  paginaAtual: number; // 0..totalPaginas — "parei na página X" (= páginas lidas)
+  criadoEm: string;
+  atualizadoEm?: string;
+}
+
+// média histórica de páginas/hora das sessões do calendário que registraram páginas (campo
+// `paginas` do TimerEstudo/CalendarioTab); null sem dados — compartilhado entre o KPI do
+// Dashboard e o ETA da Biblioteca de PDFs
+export function calcularPagPorHora(calendario: Record<string, AtividadeCalendario[]>): number | null {
+  const sessoes = Object.values(calendario).flat().filter((a) => (a.paginas ?? 0) > 0);
+  const totalPaginas = sessoes.reduce((s, a) => s + (a.paginas ?? 0), 0);
+  const minutos = sessoes.reduce((s, a) => s + a.duracao, 0);
+  return minutos > 0 ? totalPaginas / (minutos / 60) : null;
 }
 
 // --- Tipos de Concurso ---
@@ -1050,4 +1076,5 @@ export const DEFAULT_ESTUDO_STATE: EstudoState = {
   configCiclo: buildDefaultConfigCiclo(),
   streak: 0,
   semanasOK: 0,
+  pdfs: [],
 };

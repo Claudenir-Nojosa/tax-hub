@@ -19,8 +19,9 @@ import {
   type Grupo,
   type Carta,
   type TrilhaEstudo,
+  type PdfEstudo,
 } from "@/lib/estudo-data";
-import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, GraduationCap } from "lucide-react";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, GraduationCap, Library } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
 
@@ -35,17 +36,19 @@ const ResumosTab = dynamic(() => import("@/components/estudo/ResumosTab"), { ssr
 const TrilhaTab = dynamic(() => import("@/components/estudo/TrilhaTab"), { ssr: false });
 // ssr:false é essencial aqui: o componente usa WebRTC/getUserMedia (APIs só de browser)
 const ProfessoraTab = dynamic(() => import("@/components/estudo/ProfessoraTab"), { ssr: false });
+const BibliotecaTab = dynamic(() => import("@/components/estudo/BibliotecaTab"), { ssr: false });
 const TimerEstudo = dynamic(() => import("@/components/estudo/TimerEstudo"), { ssr: false });
 const CompararEditaisTab = dynamic(() => import("@/components/estudo/CompararEditaisTab"), { ssr: false });
 
 const storageKey = (concursoId: string | null) =>
   concursoId ? `taxhub_estudo_c_${concursoId}` : "taxhub_estudo_v1";
 
-type Tab = "dashboard" | "edital" | "ciclo" | "trilha" | "calendario" | "caderno" | "relatorios" | "cartas" | "resumos" | "professora" | "comparar";
+type Tab = "dashboard" | "edital" | "biblioteca" | "ciclo" | "trilha" | "calendario" | "caderno" | "relatorios" | "cartas" | "resumos" | "professora" | "comparar";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "edital", label: "Edital", icon: BookOpen },
+  { id: "biblioteca", label: "Biblioteca", icon: Library },
   { id: "ciclo", label: "Ciclo de Estudos", icon: RotateCcw },
   { id: "trilha", label: "Trilha", icon: Route },
   { id: "calendario", label: "Calendário", icon: CalendarDays },
@@ -65,6 +68,7 @@ function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {
     // (não existe default; metas/atividades são geradas de uma vez pelo trilha-generator)
     trilha: parsed.trilha,
     cartas: parsed.cartas ?? [],
+    pdfs: parsed.pdfs ?? [],
     topicos: {
       ...DEFAULT_ESTUDO_STATE.topicos,
       ...(parsed.topicos ?? {}),
@@ -180,6 +184,10 @@ export default function EstudoPage() {
 
   const updateTrilha = useCallback((trilha: TrilhaEstudo | undefined) => {
     setState((prev) => ({ ...prev, trilha }));
+  }, []);
+
+  const updatePdfs = useCallback((pdfs: PdfEstudo[]) => {
+    setState((prev) => ({ ...prev, pdfs }));
   }, []);
 
   const handleTimerSalvar = useCallback(
@@ -314,6 +322,16 @@ export default function EstudoPage() {
             <EditalTab
               topicos={state.topicos}
               onUpdate={updateTopicos}
+              materiasConcurso={concursoAtivo?.materias as MateriaConcurso[] | undefined}
+              pdfs={state.pdfs}
+            />
+          )}
+
+          {activeTab === "biblioteca" && (
+            <BibliotecaTab
+              pdfs={state.pdfs}
+              calendario={state.calendario}
+              onChange={updatePdfs}
               materiasConcurso={concursoAtivo?.materias as MateriaConcurso[] | undefined}
             />
           )}

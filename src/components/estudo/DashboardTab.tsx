@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, HelpCircle, Target, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles, Gauge, Route, ArrowRight, Trophy } from "lucide-react";
+import { BookOpen, HelpCircle, Target, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles, Gauge, Route, ArrowRight, Trophy, Library } from "lucide-react";
 import {
   NIVEL_CONFIG,
   CONQUISTAS,
@@ -8,6 +8,7 @@ import {
   calcularXP,
   calcularNivel,
   calcularStreakDias,
+  calcularPagPorHora,
   dateKeyLocal,
   type EstudoState,
   type TopicoState,
@@ -257,11 +258,15 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
   const percAcertos = totalQuestoes > 0 ? Math.round((totalAcertosCaderno / totalQuestoes) * 100) : 0;
 
   // Páginas por hora: só sessões que registraram páginas entram na conta (senão sessões sem
-  // páginas diluiriam a velocidade real de leitura)
-  const sessoesComPaginas = Object.values(state.calendario).flat().filter((a) => (a.paginas ?? 0) > 0);
-  const totalPaginas = sessoesComPaginas.reduce((s, a) => s + (a.paginas ?? 0), 0);
-  const minutosComPaginas = sessoesComPaginas.reduce((s, a) => s + a.duracao, 0);
-  const pagPorHora = minutosComPaginas > 0 ? totalPaginas / (minutosComPaginas / 60) : null;
+  // páginas diluiriam a velocidade real de leitura) — helper compartilhado com a Biblioteca
+  const pagPorHora = calcularPagPorHora(state.calendario);
+  const totalPaginas = Object.values(state.calendario).flat().reduce((s, a) => s + (a.paginas ?? 0), 0);
+
+  // Biblioteca de PDFs: % geral de leitura (KPI só aparece quando há PDFs cadastrados)
+  const pdfs = state.pdfs ?? [];
+  const pdfTotalPag = pdfs.reduce((s, p) => s + p.totalPaginas, 0);
+  const pdfLidasPag = pdfs.reduce((s, p) => s + Math.min(p.paginaAtual, p.totalPaginas), 0);
+  const percPdfs = pdfTotalPag > 0 ? Math.round((pdfLidasPag / pdfTotalPag) * 100) : 0;
 
   const NivelIcon = nivelConfig.icone;
 
@@ -323,6 +328,16 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
             color: "text-cyan-600 dark:text-cyan-400",
             bg: "bg-cyan-50 dark:bg-cyan-950/30",
           },
+          ...(pdfs.length > 0
+            ? [{
+                label: "Leitura PDFs",
+                value: `${percPdfs}%` as string | number,
+                sub: `${pdfLidasPag.toLocaleString("pt-BR")}/${pdfTotalPag.toLocaleString("pt-BR")} páginas` as string | null,
+                Icon: Library,
+                color: "text-sky-600 dark:text-sky-400",
+                bg: "bg-sky-50 dark:bg-sky-950/30",
+              }]
+            : []),
         ].map((s) => (
           <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center shadow-sm">
             <div className={`flex items-center justify-center w-9 h-9 rounded-lg mx-auto mb-2 ${s.bg}`}>
