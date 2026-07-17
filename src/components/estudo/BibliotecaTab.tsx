@@ -1,17 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import {
-  ArrowLeft, BookOpen, CheckCircle2, ChevronDown, Clock, FileUp, Library, Pause, Pencil, Play, Plus, Trash2, X,
+  ArrowLeft, BookOpen, CheckCircle2, ChevronDown, Clock, FileUp, Library, Loader2, Pause, Pencil, Play, Plus, Sparkles, Trash2, X,
 } from "lucide-react";
 import {
   MATERIAS, calcularPagPorHora,
-  type AtividadeCalendario, type MateriaConcurso, type MateriaDef, type PdfEstudo,
+  type AtividadeCalendario, type Carta, type MateriaConcurso, type MateriaDef, type PdfEstudo,
 } from "@/lib/estudo-data";
 import {
   salvarArquivoPdf, obterArquivoPdf, excluirArquivoPdf, listarIdsComArquivo, contarPaginasPdf,
 } from "@/lib/pdf-storage";
 import { resolverCorMateria, fmtHoras } from "./trilha/trilha-ui";
+
+// pdf.js só carrega quando o leitor abre (bundle pesado — não entra no load da aba)
+const VisorPdf = dynamic(() => import("./biblioteca/VisorPdf"), { ssr: false });
 
 // Biblioteca de PDFs (ex.: aulas do Estratégia): anexe o ARQUIVO e leia dentro do próprio site
 // num leitor FULLSCREEN limpo (só o PDF + barra fina com "parei na pág." e cronômetro), com
@@ -28,6 +32,8 @@ interface Props {
   onChange: (pdfs: PdfEstudo[]) => void;
   materiasConcurso?: MateriaConcurso[];
   onRegistrarSessao?: (minutos: number, materia: string, topico: string | undefined, paginas: number | undefined, descricao: string) => void;
+  // grifo → cartão: cartas geradas pela IA a partir do trecho selecionado no leitor
+  onAdicionarCartas?: (cartas: Carta[]) => void;
 }
 
 function novoId(): string {
@@ -39,7 +45,7 @@ function fmtEta(paginasRestantes: number, pagPorHora: number | null): string | n
   return fmtHoras(Math.round((paginasRestantes / pagPorHora) * 60));
 }
 
-export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConcurso, onRegistrarSessao }: Props) {
+export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConcurso, onRegistrarSessao, onAdicionarCartas }: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
     materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
 
@@ -48,7 +54,7 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
   // presença do ARQUIVO é por-dispositivo (IndexedDB) — carregada na montagem, nunca persistida
   const [idsComArquivo, setIdsComArquivo] = useState<Set<string>>(new Set());
   const [lendo, setLendo] = useState<PdfEstudo | null>(null);
-  const [urlLeitura, setUrlLeitura] = useState<string | null>(null);
+  const [blobLeitura, setBlobLeitura] = useState<Blob | null>(null);
 
   useEffect(() => {
     listarIdsComArquivo().then(setIdsComArquivo).catch(() => { /* IndexedDB indisponível — botões de leitura somem */ });
@@ -140,13 +146,12 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
       });
       return;
     }
-    setUrlLeitura(URL.createObjectURL(blob));
+    setBlobLeitura(blob);
     setLendo(pdf);
   };
 
   const fecharLeitor = () => {
-    if (urlLeitura) URL.revokeObjectURL(urlLeitura);
-    setUrlLeitura(null);
+    setBlobLeitura(null);
     setLendo(null);
   };
 
@@ -276,14 +281,15 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
         })
       )}
 
-      {/* leitor FULLSCREEN limpo: só o PDF (visualizador nativo do navegador) + barra fina no
-          topo com "parei na pág." e o cronômetro da sessão */}
-      {lendo && urlLeitura && (
+      {/* leitor FULLSCREEN limpo: só o PDF (pdf.js com texto selecionável — grifar cria cartão)
+          + barra fina no topo com "parei na pág." e o cronômetro da sessão */}
+      {lendo && blobLeitura && (
         <LeitorPdf
           pdf={pdfs.find((p) => p.id === lendo.id) ?? lendo}
-          url={urlLeitura}
+          blob={blobLeitura}
           onAtualizarPagina={(pag) => atualizarPagina(lendo.id, pag)}
           onRegistrarSessao={onRegistrarSessao}
+          onAdicionarCartas={onAdicionarCartas}
           onFechar={fecharLeitor}
         />
       )}
@@ -303,12 +309,13 @@ function fmtCrono(segundos: number): string {
 }
 
 function LeitorPdf({
-  pdf, url, onAtualizarPagina, onRegistrarSessao, onFechar,
+  pdf, blob, onAtualizarPagina, onRegistrarSessao, onAdicionarCartas, onFechar,
 }: {
   pdf: PdfEstudo;
-  url: string;
+  blob: Blob;
   onAtualizarPagina: (pagina: number) => void;
   onRegistrarSessao?: (minutos: number, materia: string, topico: string | undefined, paginas: number | undefined, descricao: string) => void;
+  onAdicionarCartas?: (cartas: Carta[]) => void;
   onFechar: () => void;
 }) {
   // cronômetro: conta sozinho desde a abertura; pausável. Ao fechar com ≥1 min, a sessão vira
@@ -319,6 +326,63 @@ function LeitorPdf({
   const paginaInicialRef = useRef(pdf.paginaAtual);
   const pdfRef = useRef(pdf);
   pdfRef.current = pdf;
+
+  // grifo → cartão: seleção de texto na camada do pdf.js vira botão flutuante "Criar cartão"
+  const [paginaVisivel, setPaginaVisivel] = useState(Math.max(1, pdf.paginaAtual || 1));
+  const [grifo, setGrifo] = useState<{ texto: string; x: number; y: number } | null>(null);
+  const [gerandoCarta, setGerandoCarta] = useState(false);
+  const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
+  const visorWrapRef = useRef<HTMLDivElement>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSelecao = () => {
+    // pequeno atraso: o mouseup dispara antes de a seleção estabilizar
+    setTimeout(() => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) { setGrifo(null); return; }
+      const texto = sel.toString().replace(/\s+/g, " ").trim();
+      const noAncora = sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode?.parentElement;
+      if (texto.length < 20 || !noAncora || !visorWrapRef.current?.contains(noAncora)) { setGrifo(null); return; }
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      setGrifo({ texto, x: rect.left + rect.width / 2, y: rect.top });
+    }, 10);
+  };
+
+  const mostrarToast = (ok: boolean, msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ ok, msg });
+    toastTimerRef.current = setTimeout(() => setToast(null), 4500);
+  };
+
+  const criarCartaDoGrifo = async () => {
+    if (!grifo || !onAdicionarCartas || gerandoCarta) return;
+    const trecho = grifo.texto;
+    setGrifo(null);
+    window.getSelection()?.removeAllRanges();
+    setGerandoCarta(true);
+    try {
+      const p = pdfRef.current;
+      const res = await fetch("/api/ai/cartas/grifo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trecho, materia: p.materia, topico: p.topicos?.[0], nomePdf: p.nome }),
+      });
+      if (!res.ok) {
+        const d = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(d.error || `Erro ${res.status}`);
+      }
+      const { cartas } = (await res.json()) as { cartas: Carta[] };
+      onAdicionarCartas(cartas);
+      mostrarToast(
+        true,
+        `${cartas.length} cartão${cartas.length !== 1 ? "s" : ""} criado${cartas.length !== 1 ? "s" : ""} em ${p.materia}${p.topicos?.[0] ? ` · ${p.topicos[0]}` : ""}`
+      );
+    } catch (e) {
+      mostrarToast(false, e instanceof Error ? e.message : "Erro ao criar o cartão.");
+    } finally {
+      setGerandoCarta(false);
+    }
+  };
 
   useEffect(() => {
     if (pausado) return;
@@ -376,9 +440,18 @@ function LeitorPdf({
           <div className="text-[10px] text-gray-400 truncate">{pdf.materia}{pdf.topicos?.[0] ? ` · ${pdf.topicos[0]}` : ""}</div>
         </div>
 
+        <button
+          type="button"
+          onClick={() => onAtualizarPagina(paginaVisivel)}
+          title={`Marcar que você parou na página visível (${paginaVisivel})`}
+          className="hidden sm:flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-white/5 text-gray-300 hover:bg-white/15 transition-colors flex-shrink-0"
+        >
+          pág. {paginaVisivel} · Parei aqui
+        </button>
+
         <label className="hidden sm:block text-[11px] text-gray-400 flex-shrink-0">Parei na pág.</label>
         <InputPaginaLeitor
-          key={pdf.id}
+          key={`${pdf.id}:${pdf.paginaAtual}`}
           pdf={pdf}
           onCommit={onAtualizarPagina}
         />
@@ -403,14 +476,50 @@ function LeitorPdf({
         </button>
       </div>
 
-      {/* o PDF em si — ocupa TODO o resto da tela, sem borda nem padding. A página do #page= é
-          a DO MOMENTO DA ABERTURA (ref): usar pdf.paginaAtual ao vivo recarregaria o iframe a
-          cada commit do "parei na pág.", jogando o leitor de volta pro topo */}
-      <iframe
-        src={`${url}#page=${Math.max(1, Math.min(paginaInicialRef.current || 1, pdf.totalPaginas))}`}
-        title={pdf.nome}
-        className="flex-1 w-full border-0"
-      />
+      {/* o PDF em si (pdf.js com camada de texto) — ocupa TODO o resto da tela. A página inicial
+          é a DO MOMENTO DA ABERTURA (ref), pra não pular o scroll a cada commit do progresso */}
+      <div
+        ref={visorWrapRef}
+        onMouseUp={handleSelecao}
+        className="flex-1 flex flex-col min-h-0 relative"
+      >
+        <VisorPdf
+          blob={blob}
+          paginaInicial={Math.max(1, Math.min(paginaInicialRef.current || 1, pdf.totalPaginas))}
+          onPaginaVisivel={setPaginaVisivel}
+        />
+      </div>
+
+      {/* botão flutuante do grifo: aparece sobre o trecho selecionado */}
+      {grifo && onAdicionarCartas && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault() /* não deixa o mousedown desfazer a seleção */}
+          onClick={criarCartaDoGrifo}
+          style={{ left: grifo.x, top: Math.max(56, grifo.y - 44) }}
+          className="fixed z-[110] -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium shadow-xl transition-colors"
+        >
+          <Sparkles className="h-3.5 w-3.5" /> Criar cartão
+        </button>
+      )}
+
+      {/* status da geração + toast de resultado */}
+      {gerandoCarta && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-2 px-4 py-2 rounded-full bg-gray-900 border border-gray-700 text-gray-200 text-xs shadow-xl">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-400" /> Criando cartão do trecho grifado…
+        </div>
+      )}
+      {toast && !gerandoCarta && (
+        <div
+          className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-2 px-4 py-2 rounded-full text-xs shadow-xl border ${
+            toast.ok
+              ? "bg-emerald-950 border-emerald-700 text-emerald-200"
+              : "bg-red-950 border-red-700 text-red-200"
+          }`}
+        >
+          {toast.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />} {toast.msg}
+        </div>
+      )}
     </div>
   );
 }

@@ -190,6 +190,11 @@ export default function EstudoPage() {
     setState((prev) => ({ ...prev, pdfs }));
   }, []);
 
+  // cartas geradas pelo grifo no leitor de PDF — prepend no baralho (mesma ordem do CartasTab)
+  const adicionarCartas = useCallback((novas: Carta[]) => {
+    setState((prev) => ({ ...prev, cartas: [...novas, ...prev.cartas] }));
+  }, []);
+
   const handleTimerSalvar = useCallback(
     (duracao: number, tipo: AtividadeTipo, descricao: string, grupo?: Grupo, materia?: string, topico?: string, paginas?: number) => {
       const today = dateKeyLocal();
@@ -338,6 +343,7 @@ export default function EstudoPage() {
               onRegistrarSessao={(minutos, materia, topico, paginas, descricao) =>
                 handleTimerSalvar(minutos, "estudo", descricao, undefined, materia, topico, paginas)
               }
+              onAdicionarCartas={adicionarCartas}
             />
           )}
 
