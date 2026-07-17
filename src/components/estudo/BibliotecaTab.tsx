@@ -1,20 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  BookOpen, CheckCircle2, ChevronDown, Clock, Library, Pencil, Plus, Trash2, X,
+  BookOpen, CheckCircle2, ChevronDown, Clock, FileUp, Library, Pencil, Plus, Trash2, X,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   MATERIAS, calcularPagPorHora,
   type AtividadeCalendario, type MateriaConcurso, type MateriaDef, type PdfEstudo,
 } from "@/lib/estudo-data";
+import {
+  salvarArquivoPdf, obterArquivoPdf, excluirArquivoPdf, listarIdsComArquivo, contarPaginasPdf,
+} from "@/lib/pdf-storage";
 import { resolverCorMateria, fmtHoras } from "./trilha/trilha-ui";
 
-// Biblioteca de PDFs (ex.: aulas do Estratégia): cadastro por matéria/tópico com total de
-// páginas e progresso "parei na pág. X" — % lido, barra e ETA calculada com o páginas/hora
-// histórico do Timer (calcularPagPorHora). SÓ metadados: o arquivo nunca é enviado.
-// Evoluções anotadas (fora do escopo v1): auto-incrementar paginaAtual ao salvar o Timer com
-// matéria + páginas (ambíguo qual PDF); upload/armazenamento do arquivo em si.
+// Biblioteca de PDFs (ex.: aulas do Estratégia): anexe o ARQUIVO e leia dentro do próprio site
+// (leitor embutido via visualizador nativo do navegador), com progresso "parei na pág. X",
+// % lido e ETA calculada com o páginas/hora histórico do Timer (calcularPagPorHora).
+// O arquivo fica no IndexedDB DESTE navegador (pdf-storage.ts — Vercel não aceita upload >4,5MB);
+// os metadados/progresso sincronizam normalmente via EstudoState. Em outro dispositivo a entrada
+// aparece com o botão "Anexar" pra reanexar o arquivo local.
 
 interface Props {
   pdfs: PdfEstudo[];
@@ -38,6 +43,14 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
 
   const [formAberto, setFormAberto] = useState(false);
   const [editando, setEditando] = useState<PdfEstudo | null>(null);
+  // presença do ARQUIVO é por-dispositivo (IndexedDB) — carregada na montagem, nunca persistida
+  const [idsComArquivo, setIdsComArquivo] = useState<Set<string>>(new Set());
+  const [lendo, setLendo] = useState<PdfEstudo | null>(null);
+  const [urlLeitura, setUrlLeitura] = useState<string | null>(null);
+
+  useEffect(() => {
+    listarIdsComArquivo().then(setIdsComArquivo).catch(() => { /* IndexedDB indisponível — botões de leitura somem */ });
+  }, []);
 
   const pagPorHora = useMemo(() => calcularPagPorHora(calendario), [calendario]);
 
@@ -73,7 +86,15 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
       }));
   }, [pdfs, materiasAtivas]);
 
-  const salvarPdf = (pdf: PdfEstudo) => {
+  const salvarPdf = async (pdf: PdfEstudo, arquivo?: File) => {
+    if (arquivo) {
+      try {
+        await salvarArquivoPdf(pdf.id, arquivo, arquivo.name);
+        setIdsComArquivo((prev) => new Set(prev).add(pdf.id));
+      } catch {
+        alert("Não consegui salvar o arquivo no navegador — o PDF foi cadastrado só com os dados.");
+      }
+    }
     if (editando) {
       onChange(pdfs.map((p) => (p.id === pdf.id ? pdf : p)));
       setEditando(null);
@@ -82,6 +103,49 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
       onChange([pdf, ...pdfs]);
       // form fica aberto com a matéria mantida (mesma lição das Cartas) — só fecha no X
     }
+  };
+
+  // anexar/reanexar arquivo numa entrada já existente (ex.: cadastrada em outro dispositivo)
+  const anexarEm = async (pdf: PdfEstudo, arquivo: File) => {
+    try {
+      await salvarArquivoPdf(pdf.id, arquivo, arquivo.name);
+      setIdsComArquivo((prev) => new Set(prev).add(pdf.id));
+    } catch {
+      alert("Não consegui salvar o arquivo no navegador.");
+      return;
+    }
+    // se o total de páginas detectado divergir do cadastrado, corrige pelo arquivo real
+    const paginas = await contarPaginasPdf(arquivo);
+    if (paginas !== null && paginas !== pdf.totalPaginas) {
+      onChange(
+        pdfs.map((p) =>
+          p.id === pdf.id
+            ? { ...p, totalPaginas: paginas, paginaAtual: Math.min(p.paginaAtual, paginas), atualizadoEm: new Date().toISOString() }
+            : p
+        )
+      );
+    }
+  };
+
+  const abrirLeitor = async (pdf: PdfEstudo) => {
+    const blob = await obterArquivoPdf(pdf.id).catch(() => null);
+    if (!blob) {
+      alert("Arquivo não encontrado neste navegador — use \"Anexar\" pra reanexar o PDF.");
+      setIdsComArquivo((prev) => {
+        const nova = new Set(prev);
+        nova.delete(pdf.id);
+        return nova;
+      });
+      return;
+    }
+    setUrlLeitura(URL.createObjectURL(blob));
+    setLendo(pdf);
+  };
+
+  const fecharLeitor = () => {
+    if (urlLeitura) URL.revokeObjectURL(urlLeitura);
+    setUrlLeitura(null);
+    setLendo(null);
   };
 
   const atualizarPagina = (id: string, pagina: number) => {
@@ -95,8 +159,14 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
   };
 
   const excluir = (p: PdfEstudo) => {
-    if (!confirm(`Excluir "${p.nome}" da biblioteca? O progresso de leitura dele some.`)) return;
+    if (!confirm(`Excluir "${p.nome}" da biblioteca? O arquivo salvo neste navegador e o progresso de leitura somem.`)) return;
     onChange(pdfs.filter((x) => x.id !== p.id));
+    excluirArquivoPdf(p.id).catch(() => { /* arquivo órfão fica no IndexedDB — inofensivo */ });
+    setIdsComArquivo((prev) => {
+      const nova = new Set(prev);
+      nova.delete(p.id);
+      return nova;
+    });
   };
 
   return (
@@ -110,7 +180,7 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
               <div className="text-lg font-bold">Biblioteca de PDFs</div>
               <div className="text-xs text-sky-100">
                 {pdfs.length === 0
-                  ? "Cadastre seus PDFs (Estratégia etc.) e acompanhe até onde leu em cada um."
+                  ? "Anexe seus PDFs (Estratégia etc.), leia aqui dentro e acompanhe até onde chegou."
                   : `${pdfs.length} PDF${pdfs.length !== 1 ? "s" : ""} · ${paginasLidas.toLocaleString("pt-BR")}/${totalPaginas.toLocaleString("pt-BR")} páginas lidas` +
                     (etaTotal
                       ? ` · faltam ~${etaTotal} de leitura no seu ritmo de ${Math.round(pagPorHora!)} pág/h`
@@ -126,7 +196,7 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
             className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors self-start sm:self-auto"
           >
             {formAberto && !editando ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-            {formAberto && !editando ? "Fechar" : "Cadastrar PDF"}
+            {formAberto && !editando ? "Fechar" : "Adicionar PDF"}
           </button>
         </div>
         {pdfs.length > 0 && (
@@ -155,17 +225,17 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
       {pdfs.length === 0 && !formAberto ? (
         <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-10 text-center">
           <BookOpen className="h-8 w-8 mx-auto mb-3 text-sky-400" />
-          <p className="text-sm text-gray-600 dark:text-gray-300 font-medium mb-1">Nenhum PDF cadastrado ainda.</p>
+          <p className="text-sm text-gray-600 dark:text-gray-300 font-medium mb-1">Nenhum PDF na biblioteca ainda.</p>
           <p className="text-xs text-gray-400 dark:text-gray-500 max-w-md mx-auto mb-4">
-            Cadastre as aulas em PDF que você estuda (nome, matéria e total de páginas) e marque até
-            onde leu — a biblioteca mostra o % de cada uma e estima quanto tempo de leitura falta.
+            Anexe as aulas em PDF que você estuda: elas ficam salvas neste navegador, você lê aqui
+            dentro do site e a biblioteca acompanha o % lido e quanto tempo de leitura falta.
           </p>
           <button
             type="button"
             onClick={() => setFormAberto(true)}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition-colors"
           >
-            <Plus className="h-3.5 w-3.5" /> Cadastrar primeiro PDF
+            <Plus className="h-3.5 w-3.5" /> Adicionar primeiro PDF
           </button>
         </div>
       ) : (
@@ -188,7 +258,10 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
                   <PdfRow
                     key={p.id}
                     pdf={p}
+                    temArquivo={idsComArquivo.has(p.id)}
                     pagPorHora={pagPorHora}
+                    onLer={() => abrirLeitor(p)}
+                    onAnexar={(arq) => anexarEm(p, arq)}
                     onAtualizarPagina={(pag) => atualizarPagina(p.id, pag)}
                     onConcluir={() => atualizarPagina(p.id, p.totalPaginas)}
                     onEditar={() => { setEditando(p); setFormAberto(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
@@ -200,23 +273,81 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
           );
         })
       )}
+
+      {/* leitor embutido: visualizador nativo do navegador dentro de um Dialog, abrindo direto
+          na página onde o usuário parou (#page=N funciona no viewer do Chrome/Edge) */}
+      <Dialog open={lendo !== null} onOpenChange={(v) => !v && fecharLeitor()}>
+        <DialogContent className="max-w-5xl w-[96vw] h-[90vh] flex flex-col p-3 sm:p-4 gap-2">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm pr-8">
+              <span className="truncate">{lendo?.nome}</span>
+              {lendo && (
+                <span className="flex items-center gap-1.5 text-xs font-normal text-gray-500 dark:text-gray-400">
+                  Parei na pág.
+                  <InputPaginaLeitor
+                    key={lendo.id}
+                    pdf={pdfs.find((p) => p.id === lendo.id) ?? lendo}
+                    onCommit={(pag) => atualizarPagina(lendo.id, pag)}
+                  />
+                  de {lendo.totalPaginas}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {urlLeitura && lendo && (
+            <iframe
+              src={`${urlLeitura}#page=${Math.max(1, Math.min(lendo.paginaAtual || 1, lendo.totalPaginas))}`}
+              title={lendo.nome}
+              className="flex-1 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+// input de página do leitor — separado pra ter estado local sem re-render do iframe a cada tecla
+function InputPaginaLeitor({ pdf, onCommit }: { pdf: PdfEstudo; onCommit: (pag: number) => void }) {
+  const [valor, setValor] = useState(String(pdf.paginaAtual));
+  const commit = () => {
+    const n = parseInt(valor);
+    if (!Number.isFinite(n)) { setValor(String(pdf.paginaAtual)); return; }
+    const clamp = Math.max(0, Math.min(n, pdf.totalPaginas));
+    setValor(String(clamp));
+    if (clamp !== pdf.paginaAtual) onCommit(clamp);
+  };
+  return (
+    <input
+      type="number"
+      min={0}
+      max={pdf.totalPaginas}
+      value={valor}
+      onChange={(e) => setValor(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+      className="w-16 text-xs border border-gray-200 dark:border-gray-600 rounded-md px-1.5 py-0.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:border-sky-500"
+    />
   );
 }
 
 // ─── Linha de PDF ────────────────────────────────────────────────────────────
 
 function PdfRow({
-  pdf, pagPorHora, onAtualizarPagina, onConcluir, onEditar, onExcluir,
+  pdf, temArquivo, pagPorHora, onLer, onAnexar, onAtualizarPagina, onConcluir, onEditar, onExcluir,
 }: {
   pdf: PdfEstudo;
+  temArquivo: boolean;
   pagPorHora: number | null;
+  onLer: () => void;
+  onAnexar: (arquivo: File) => void;
   onAtualizarPagina: (pagina: number) => void;
   onConcluir: () => void;
   onEditar: () => void;
   onExcluir: () => void;
 }) {
   const [paginaInput, setPaginaInput] = useState(String(pdf.paginaAtual));
+  const anexoRef = useRef<HTMLInputElement>(null);
   const perc = pdf.totalPaginas > 0 ? Math.round((Math.min(pdf.paginaAtual, pdf.totalPaginas) / pdf.totalPaginas) * 100) : 0;
   const concluido = pdf.paginaAtual >= pdf.totalPaginas;
   const eta = fmtEta(pdf.totalPaginas - pdf.paginaAtual, pagPorHora);
@@ -252,6 +383,37 @@ function PdfRow({
           )}
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
+          {temArquivo ? (
+            <button
+              type="button"
+              onClick={onLer}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition-colors"
+            >
+              <BookOpen className="h-3.5 w-3.5" /> Ler PDF
+            </button>
+          ) : (
+            <>
+              <input
+                ref={anexoRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onAnexar(f);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => anexoRef.current?.click()}
+                title="O arquivo não está neste navegador — anexe o PDF pra ler aqui dentro"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-300 dark:border-sky-700 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30 text-xs font-medium transition-colors"
+              >
+                <FileUp className="h-3.5 w-3.5" /> Anexar
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={onEditar}
@@ -323,48 +485,70 @@ function FormPdf({
 }: {
   materiasAtivas: (MateriaDef | MateriaConcurso)[];
   pdfParaEditar?: PdfEstudo;
-  onSalvar: (pdf: PdfEstudo) => void;
+  onSalvar: (pdf: PdfEstudo, arquivo?: File) => void | Promise<void>;
   onFechar: () => void;
 }) {
   const [nome, setNome] = useState(pdfParaEditar?.nome ?? "");
   const [materia, setMateria] = useState(pdfParaEditar?.materia ?? materiasAtivas[0]?.nome ?? "");
   const [topicosSel, setTopicosSel] = useState<Set<string>>(new Set(pdfParaEditar?.topicos ?? []));
   const [totalPaginas, setTotalPaginas] = useState(pdfParaEditar ? String(pdfParaEditar.totalPaginas) : "");
+  const [paginasDetectadas, setPaginasDetectadas] = useState(false);
+  const [arquivo, setArquivo] = useState<File | null>(null);
   const [mostrarTopicos, setMostrarTopicos] = useState((pdfParaEditar?.topicos?.length ?? 0) > 0);
   const [salvasAgora, setSalvasAgora] = useState(0);
   const [flash, setFlash] = useState(false);
+  const arquivoRef = useRef<HTMLInputElement>(null);
 
   const topicosDaMateria = materiasAtivas.find((m) => m.nome === materia)?.topicos ?? [];
   const paginasNum = parseInt(totalPaginas);
   const podeSalvar = nome.trim() !== "" && materia !== "" && Number.isFinite(paginasNum) && paginasNum >= 1;
 
-  const salvar = () => {
+  const handleArquivo = async (f: File) => {
+    setArquivo(f);
+    if (nome.trim() === "") setNome(f.name.replace(/\.pdf$/i, ""));
+    // conta as páginas do arquivo real — se conseguir, o campo vira automático
+    const paginas = await contarPaginasPdf(f);
+    if (paginas !== null) {
+      setTotalPaginas(String(paginas));
+      setPaginasDetectadas(true);
+    }
+  };
+
+  const salvar = async () => {
     if (!podeSalvar) return;
     const topicos = [...topicosSel].filter((t) => topicosDaMateria.includes(t));
     if (pdfParaEditar) {
-      onSalvar({
-        ...pdfParaEditar,
-        nome: nome.trim(),
-        materia,
-        topicos: topicos.length > 0 ? topicos : undefined,
-        totalPaginas: paginasNum,
-        paginaAtual: Math.min(pdfParaEditar.paginaAtual, paginasNum),
-        atualizadoEm: new Date().toISOString(),
-      });
+      await onSalvar(
+        {
+          ...pdfParaEditar,
+          nome: nome.trim(),
+          materia,
+          topicos: topicos.length > 0 ? topicos : undefined,
+          totalPaginas: paginasNum,
+          paginaAtual: Math.min(pdfParaEditar.paginaAtual, paginasNum),
+          atualizadoEm: new Date().toISOString(),
+        },
+        arquivo ?? undefined
+      );
     } else {
-      onSalvar({
-        id: novoId(),
-        nome: nome.trim(),
-        materia,
-        topicos: topicos.length > 0 ? topicos : undefined,
-        totalPaginas: paginasNum,
-        paginaAtual: 0,
-        criadoEm: new Date().toISOString(),
-      });
+      await onSalvar(
+        {
+          id: novoId(),
+          nome: nome.trim(),
+          materia,
+          topicos: topicos.length > 0 ? topicos : undefined,
+          totalPaginas: paginasNum,
+          paginaAtual: 0,
+          criadoEm: new Date().toISOString(),
+        },
+        arquivo ?? undefined
+      );
       // matéria fica mantida pro próximo PDF (cadastro em sequência); limpa o resto
       setNome("");
       setTotalPaginas("");
       setTopicosSel(new Set());
+      setArquivo(null);
+      setPaginasDetectadas(false);
       setSalvasAgora((n) => n + 1);
       setFlash(true);
       setTimeout(() => setFlash(false), 1800);
@@ -375,7 +559,7 @@ function FormPdf({
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-          {pdfParaEditar ? "Editar PDF" : "Cadastrar PDF"}
+          {pdfParaEditar ? "Editar PDF" : "Adicionar PDF"}
         </h3>
         <button
           type="button"
@@ -385,6 +569,40 @@ function FormPdf({
           <X className="h-4 w-4" />
         </button>
       </div>
+
+      {/* anexo do arquivo — o coração do fluxo: nome e total de páginas saem dele sozinhos */}
+      <input
+        ref={arquivoRef}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) handleArquivo(f);
+          e.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => arquivoRef.current?.click()}
+        className={`w-full mb-3 rounded-xl border-2 border-dashed px-4 py-4 text-center transition-colors ${
+          arquivo
+            ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/20"
+            : "border-sky-300 dark:border-sky-800 hover:border-sky-500 bg-sky-50/50 dark:bg-sky-950/10"
+        }`}
+      >
+        <FileUp className={`h-5 w-5 mx-auto mb-1 ${arquivo ? "text-emerald-500" : "text-sky-500"}`} />
+        <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
+          {arquivo
+            ? `✓ ${arquivo.name} (${(arquivo.size / 1024 / 1024).toFixed(1)} MB)`
+            : pdfParaEditar
+            ? "Anexar/substituir o arquivo PDF (opcional)"
+            : "Clique pra escolher o arquivo PDF"}
+        </div>
+        <div className="text-[10px] text-gray-400 mt-0.5">
+          {arquivo ? "Clique pra trocar" : "O arquivo fica salvo neste navegador — você lê aqui dentro do site"}
+        </div>
+      </button>
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_240px_110px] gap-3 mb-3">
         <div>
@@ -408,12 +626,14 @@ function FormPdf({
           </select>
         </div>
         <div>
-          <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400 block mb-1">Total de págs.</label>
+          <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400 block mb-1">
+            Total de págs.{paginasDetectadas && <span className="text-emerald-500"> ✓ auto</span>}
+          </label>
           <input
             type="number"
             min={1}
             value={totalPaginas}
-            onChange={(e) => setTotalPaginas(e.target.value)}
+            onChange={(e) => { setTotalPaginas(e.target.value); setPaginasDetectadas(false); }}
             placeholder="120"
             className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-sky-500"
           />
@@ -467,11 +687,11 @@ function FormPdf({
           disabled={!podeSalvar}
           className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {pdfParaEditar ? "Salvar alterações" : salvasAgora > 0 ? "Cadastrar outro PDF" : "Cadastrar PDF"}
+          {pdfParaEditar ? "Salvar alterações" : salvasAgora > 0 ? "Adicionar outro PDF" : "Adicionar PDF"}
         </button>
         {!pdfParaEditar && (flash || salvasAgora > 0) && (
           <span className={`text-xs transition-opacity ${flash ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 opacity-70"}`}>
-            {flash ? "✓ PDF adicionado! Matéria mantida pro próximo." : `${salvasAgora} PDF${salvasAgora !== 1 ? "s" : ""} cadastrado${salvasAgora !== 1 ? "s" : ""} agora.`}
+            {flash ? "✓ PDF adicionado! Matéria mantida pro próximo." : `${salvasAgora} PDF${salvasAgora !== 1 ? "s" : ""} adicionado${salvasAgora !== 1 ? "s" : ""} agora.`}
           </span>
         )}
       </div>
