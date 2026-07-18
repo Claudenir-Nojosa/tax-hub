@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
-  ArrowLeft, BookOpen, CheckCircle2, ChevronDown, Clock, FileUp, Library, Loader2, Pause, Pencil, Play, Plus, Sparkles, Trash2, X,
+  ArrowLeft, BookOpen, CheckCircle2, ChevronDown, Clock, FileUp, Gem, Library, Pause, Pencil, Play, Plus, Swords, Trash2, X, Zap,
 } from "lucide-react";
 import {
-  MATERIAS, calcularPagPorHora,
-  type AtividadeCalendario, type Carta, type MateriaConcurso, type MateriaDef, type PdfEstudo,
+  MATERIAS, calcularPagPorHora, dateKeyLocal,
+  type AtividadeCalendario, type Carta, type MateriaConcurso, type MateriaDef, type PdfEstudo, type TipoCarta,
 } from "@/lib/estudo-data";
 import {
   salvarArquivoPdf, obterArquivoPdf, excluirArquivoPdf, listarIdsComArquivo, contarPaginasPdf,
@@ -32,8 +32,39 @@ interface Props {
   onChange: (pdfs: PdfEstudo[]) => void;
   materiasConcurso?: MateriaConcurso[];
   onRegistrarSessao?: (minutos: number, materia: string, topico: string | undefined, paginas: number | undefined, descricao: string) => void;
-  // grifo → cartão: cartas geradas pela IA a partir do trecho selecionado no leitor
+  // grifo → cartão: ao selecionar um trecho no leitor, o usuário escolhe o tipo e preenche o
+  // cartão manualmente (sem IA), já travado na matéria/tópico do PDF
   onAdicionarCartas?: (cartas: Carta[]) => void;
+}
+
+// mesma config visual das cartas em CartasTab.tsx, reduzida aos 3 tipos que o grifo oferece
+// (sem "boss", que só existe como escalada de Monstro dentro da sessão de revisão)
+const TIPO_GRIFO_CONFIG: Record<"monstro" | "armadilha" | "tesouro", { label: string; Icon: typeof Swords }> = {
+  monstro: { label: "Monstro", Icon: Swords },
+  armadilha: { label: "V ou F", Icon: Zap },
+  tesouro: { label: "Tesouro", Icon: Gem },
+};
+
+function novaCartaManual(dados: {
+  tipo: TipoCarta; materia: string; topico?: string; frente: string; verso: string; gabarito?: "verdadeiro" | "falso";
+}): Carta {
+  const hoje = dateKeyLocal();
+  return {
+    id: `manual_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    tipo: dados.tipo,
+    materia: dados.materia,
+    topico: dados.topico,
+    frente: dados.frente.trim(),
+    verso: dados.verso.trim(),
+    gabarito: dados.tipo === "armadilha" ? dados.gabarito : undefined,
+    intervalo: 0,
+    facilidade: 2.5,
+    repeticoes: 0,
+    proximaRevisao: hoje,
+    criada: hoje,
+    acertos: 0,
+    erros: 0,
+  };
 }
 
 function novoId(): string {
@@ -327,61 +358,46 @@ function LeitorPdf({
   const pdfRef = useRef(pdf);
   pdfRef.current = pdf;
 
-  // grifo → cartão: seleção de texto na camada do pdf.js vira botão flutuante "Criar cartão"
+  // grifo → cartão MANUAL: seleção de texto na camada do pdf.js vira uma barrinha flutuante
+  // perguntando o tipo (Monstro / V ou F / Tesouro); escolhido o tipo, abre o formulário já
+  // travado na matéria/tópico do PDF, com o trecho grifado pré-preenchido pra editar — sem IA.
   const [paginaVisivel, setPaginaVisivel] = useState(Math.max(1, pdf.paginaAtual || 1));
   const [grifo, setGrifo] = useState<{ texto: string; x: number; y: number } | null>(null);
-  const [gerandoCarta, setGerandoCarta] = useState(false);
-  const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [cartaForm, setCartaForm] = useState<{ tipo: TipoCarta; texto: string } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const visorWrapRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSelecao = () => {
+    if (cartaForm) return; // formulário aberto — não reagir a seleção dentro dele
     // pequeno atraso: o mouseup dispara antes de a seleção estabilizar
     setTimeout(() => {
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) { setGrifo(null); return; }
       const texto = sel.toString().replace(/\s+/g, " ").trim();
       const noAncora = sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode?.parentElement;
-      if (texto.length < 20 || !noAncora || !visorWrapRef.current?.contains(noAncora)) { setGrifo(null); return; }
+      if (texto.length < 5 || !noAncora || !visorWrapRef.current?.contains(noAncora)) { setGrifo(null); return; }
       const rect = sel.getRangeAt(0).getBoundingClientRect();
       setGrifo({ texto, x: rect.left + rect.width / 2, y: rect.top });
     }, 10);
   };
 
-  const mostrarToast = (ok: boolean, msg: string) => {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToast({ ok, msg });
-    toastTimerRef.current = setTimeout(() => setToast(null), 4500);
-  };
-
-  const criarCartaDoGrifo = async () => {
-    if (!grifo || !onAdicionarCartas || gerandoCarta) return;
-    const trecho = grifo.texto;
+  const escolherTipo = (tipo: TipoCarta) => {
+    if (!grifo) return;
+    setCartaForm({ tipo, texto: grifo.texto });
     setGrifo(null);
     window.getSelection()?.removeAllRanges();
-    setGerandoCarta(true);
-    try {
-      const p = pdfRef.current;
-      const res = await fetch("/api/ai/cartas/grifo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trecho, materia: p.materia, topico: p.topicos?.[0], nomePdf: p.nome }),
-      });
-      if (!res.ok) {
-        const d = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(d.error || `Erro ${res.status}`);
-      }
-      const { cartas } = (await res.json()) as { cartas: Carta[] };
-      onAdicionarCartas(cartas);
-      mostrarToast(
-        true,
-        `${cartas.length} cartão${cartas.length !== 1 ? "s" : ""} criado${cartas.length !== 1 ? "s" : ""} em ${p.materia}${p.topicos?.[0] ? ` · ${p.topicos[0]}` : ""}`
-      );
-    } catch (e) {
-      mostrarToast(false, e instanceof Error ? e.message : "Erro ao criar o cartão.");
-    } finally {
-      setGerandoCarta(false);
-    }
+  };
+
+  const salvarCartaManual = (frente: string, verso: string, gabarito?: "verdadeiro" | "falso") => {
+    if (!cartaForm || !onAdicionarCartas) return;
+    const p = pdfRef.current;
+    const carta = novaCartaManual({ tipo: cartaForm.tipo, materia: p.materia, topico: p.topicos?.[0], frente, verso, gabarito });
+    onAdicionarCartas([carta]);
+    setCartaForm(null);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(`✓ Cartão criado em ${p.materia}${p.topicos?.[0] ? ` · ${p.topicos[0]}` : ""}`);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   };
 
   useEffect(() => {
@@ -490,36 +506,154 @@ function LeitorPdf({
         />
       </div>
 
-      {/* botão flutuante do grifo: aparece sobre o trecho selecionado */}
-      {grifo && onAdicionarCartas && (
-        <button
-          type="button"
+      {/* barrinha flutuante do grifo: pergunta o TIPO do cartão (sem IA) — aparece sobre o trecho */}
+      {grifo && !cartaForm && onAdicionarCartas && (
+        <div
           onMouseDown={(e) => e.preventDefault() /* não deixa o mousedown desfazer a seleção */}
-          onClick={criarCartaDoGrifo}
-          style={{ left: grifo.x, top: Math.max(56, grifo.y - 44) }}
-          className="fixed z-[110] -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium shadow-xl transition-colors"
+          style={{ left: grifo.x, top: Math.max(56, grifo.y - 46) }}
+          className="fixed z-[110] -translate-x-1/2 flex items-center gap-1 bg-gray-900 border border-gray-700 rounded-full p-1 shadow-xl"
         >
-          <Sparkles className="h-3.5 w-3.5" /> Criar cartão
-        </button>
+          <span className="text-[10px] text-gray-400 pl-2 pr-0.5 whitespace-nowrap">Criar cartão:</span>
+          {(Object.entries(TIPO_GRIFO_CONFIG) as [TipoCarta, typeof TIPO_GRIFO_CONFIG.monstro][]).map(([tipo, cfg]) => (
+            <button
+              key={tipo}
+              type="button"
+              onClick={() => escolherTipo(tipo)}
+              title={cfg.label}
+              className="flex items-center gap-1 px-2 py-1 rounded-full text-gray-200 hover:bg-white/10 text-[11px] font-medium transition-colors whitespace-nowrap"
+            >
+              <cfg.Icon className="h-3 w-3" /> {cfg.label}
+            </button>
+          ))}
+        </div>
       )}
 
-      {/* status da geração + toast de resultado */}
-      {gerandoCarta && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-2 px-4 py-2 rounded-full bg-gray-900 border border-gray-700 text-gray-200 text-xs shadow-xl">
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-400" /> Criando cartão do trecho grifado…
+      {/* formulário manual do cartão — já travado na matéria/tópico do PDF, trecho grifado
+          pré-preenchido conforme o tipo escolhido, tudo editável antes de salvar */}
+      {cartaForm && (
+        <GrifoCardForm
+          tipo={cartaForm.tipo}
+          textoGrifado={cartaForm.texto}
+          materia={pdf.materia}
+          topico={pdf.topicos?.[0]}
+          onSalvar={salvarCartaManual}
+          onCancelar={() => setCartaForm(null)}
+        />
+      )}
+
+      {/* toast de confirmação */}
+      {toast && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-2 px-4 py-2 rounded-full text-xs shadow-xl border bg-emerald-950 border-emerald-700 text-emerald-200">
+          <CheckCircle2 className="h-3.5 w-3.5" /> {toast}
         </div>
       )}
-      {toast && !gerandoCarta && (
-        <div
-          className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-2 px-4 py-2 rounded-full text-xs shadow-xl border ${
-            toast.ok
-              ? "bg-emerald-950 border-emerald-700 text-emerald-200"
-              : "bg-red-950 border-red-700 text-red-200"
-          }`}
-        >
-          {toast.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />} {toast.msg}
+    </div>
+  );
+}
+
+// ─── Formulário manual do cartão (grifo → cartão, sem IA) ────────────────────
+
+function GrifoCardForm({
+  tipo, textoGrifado, materia, topico, onSalvar, onCancelar,
+}: {
+  tipo: TipoCarta;
+  textoGrifado: string;
+  materia: string;
+  topico?: string;
+  onSalvar: (frente: string, verso: string, gabarito?: "verdadeiro" | "falso") => void;
+  onCancelar: () => void;
+}) {
+  // pré-preenchimento por tipo: o trecho grifado entra no campo que já corresponde a ele —
+  // "monstro" vira a resposta (o usuário escreve a pergunta), "armadilha" vira a própria
+  // afirmação a julgar, "tesouro" entra nos dois (o usuário edita o frente pra colocar o ___)
+  const [frente, setFrente] = useState(tipo === "monstro" ? "" : textoGrifado);
+  const [verso, setVerso] = useState(tipo === "armadilha" ? "" : textoGrifado);
+  const [gabarito, setGabarito] = useState<"verdadeiro" | "falso">("verdadeiro");
+
+  const cfg = TIPO_GRIFO_CONFIG[tipo as "monstro" | "armadilha" | "tesouro"];
+  const frenteLabel = tipo === "monstro" ? "Pergunta" : tipo === "armadilha" ? "Afirmação (Verdadeiro ou Falso?)" : "Texto com lacuna (use ___ pra indicar)";
+  const versoLabel = tipo === "monstro" ? "Resposta" : tipo === "armadilha" ? "Explicação" : "Texto completo";
+  const podeSalvar = frente.trim() !== "" && verso.trim() !== "";
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4" onClick={onCancelar}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg p-4 space-y-3 max-h-[85vh] overflow-y-auto"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold text-white">
+            <cfg.Icon className="h-4 w-4 text-sky-400" /> Novo cartão {cfg.label}
+          </div>
+          <button type="button" onClick={onCancelar} className="h-7 w-7 rounded-md flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
         </div>
-      )}
+
+        <div className="text-[11px] text-sky-300 bg-sky-950/40 border border-sky-800/60 rounded-lg px-2.5 py-1.5">
+          {materia}{topico ? ` · ${topico}` : ""}
+        </div>
+
+        <div>
+          <label className="text-[11px] font-medium text-gray-400 block mb-1">{frenteLabel}</label>
+          <textarea
+            value={frente}
+            onChange={(e) => setFrente(e.target.value)}
+            rows={3}
+            autoFocus={tipo === "monstro"}
+            className="w-full text-sm border border-gray-700 rounded-lg px-3 py-2 bg-gray-800 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-sky-500 resize-none"
+          />
+        </div>
+
+        {tipo === "armadilha" && (
+          <div>
+            <label className="text-[11px] font-medium text-gray-400 block mb-1.5">Gabarito</label>
+            <div className="flex gap-2">
+              {(["verdadeiro", "falso"] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setGabarito(g)}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all ${
+                    gabarito === g
+                      ? g === "verdadeiro"
+                        ? "border-emerald-500 bg-emerald-950/40 text-emerald-300"
+                        : "border-red-500 bg-red-950/40 text-red-300"
+                      : "border-gray-700 text-gray-500"
+                  }`}
+                >
+                  {g === "verdadeiro" ? "✓ Verdadeiro" : "✗ Falso"}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="text-[11px] font-medium text-gray-400 block mb-1">{versoLabel}</label>
+          <textarea
+            value={verso}
+            onChange={(e) => setVerso(e.target.value)}
+            rows={4}
+            autoFocus={tipo === "armadilha"}
+            className="w-full text-sm border border-gray-700 rounded-lg px-3 py-2 bg-gray-800 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-sky-500 resize-none"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => onSalvar(frente, verso, gabarito)}
+            disabled={!podeSalvar}
+            className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Criar cartão
+          </button>
+          <button type="button" onClick={onCancelar} className="px-4 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 text-xs font-medium transition-colors">
+            Cancelar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
