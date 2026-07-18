@@ -32,14 +32,14 @@ interface Props {
   onChange: (pdfs: PdfEstudo[]) => void;
   materiasConcurso?: MateriaConcurso[];
   onRegistrarSessao?: (minutos: number, materia: string, topico: string | undefined, paginas: number | undefined, descricao: string) => void;
-  // grifo → cartão: ao selecionar um trecho no leitor, o usuário escolhe o tipo e preenche o
-  // cartão manualmente (sem IA), já travado na matéria/tópico do PDF
+  // criar cartão: botões na barra do leitor (ao lado de "Parei aqui") abrem o formulário do tipo
+  // escolhido; o usuário preenche manualmente (sem IA), já travado na matéria/tópico do PDF
   onAdicionarCartas?: (cartas: Carta[]) => void;
 }
 
-// mesma config visual das cartas em CartasTab.tsx, reduzida aos 3 tipos que o grifo oferece
+// mesma config visual das cartas em CartasTab.tsx, reduzida aos 3 tipos que o leitor oferece
 // (sem "boss", que só existe como escalada de Monstro dentro da sessão de revisão)
-const TIPO_GRIFO_CONFIG: Record<"monstro" | "armadilha" | "tesouro", { label: string; Icon: typeof Swords }> = {
+const TIPO_CARTAO_CONFIG: Record<"monstro" | "armadilha" | "tesouro", { label: string; Icon: typeof Swords }> = {
   monstro: { label: "Monstro", Icon: Swords },
   armadilha: { label: "V ou F", Icon: Zap },
   tesouro: { label: "Tesouro", Icon: Gem },
@@ -322,8 +322,8 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
         })
       )}
 
-      {/* leitor FULLSCREEN limpo: só o PDF (pdf.js com texto selecionável — grifar cria cartão)
-          + barra fina no topo com "parei na pág." e o cronômetro da sessão */}
+      {/* leitor FULLSCREEN limpo: só o PDF (pdf.js) + barra fina no topo com "parei na pág.",
+          botões de criar cartão e o cronômetro da sessão */}
       {lendo && blobLeitura && (
         <LeitorPdf
           pdf={pdfs.find((p) => p.id === lendo.id) ?? lendo}
@@ -368,41 +368,19 @@ function LeitorPdf({
   const pdfRef = useRef(pdf);
   pdfRef.current = pdf;
 
-  // grifo → cartão MANUAL: seleção de texto na camada do pdf.js vira uma barrinha flutuante
-  // perguntando o tipo (Monstro / V ou F / Tesouro); escolhido o tipo, abre o formulário já
-  // travado na matéria/tópico do PDF, com o trecho grifado pré-preenchido pra editar — sem IA.
+  // cartão MANUAL sem grifo: botões na barra (ao lado de "Parei aqui") abrem o formulário do
+  // tipo escolhido (Monstro / V ou F / Tesouro) direto, já travado na matéria/tópico do PDF —
+  // sem precisar selecionar texto nem sair da página do PDF (o formulário fica por cima, o PDF
+  // continua visível atrás).
   const [paginaVisivel, setPaginaVisivel] = useState(Math.max(1, pdf.paginaAtual || 1));
-  const [grifo, setGrifo] = useState<{ texto: string; x: number; y: number } | null>(null);
-  const [cartaForm, setCartaForm] = useState<{ tipo: TipoCarta; texto: string } | null>(null);
+  const [cartaForm, setCartaForm] = useState<TipoCarta | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const visorWrapRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleSelecao = () => {
-    if (cartaForm) return; // formulário aberto — não reagir a seleção dentro dele
-    // pequeno atraso: o mouseup dispara antes de a seleção estabilizar
-    setTimeout(() => {
-      const sel = window.getSelection();
-      if (!sel || sel.isCollapsed || sel.rangeCount === 0) { setGrifo(null); return; }
-      const texto = sel.toString().replace(/\s+/g, " ").trim();
-      const noAncora = sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode?.parentElement;
-      if (texto.length < 5 || !noAncora || !visorWrapRef.current?.contains(noAncora)) { setGrifo(null); return; }
-      const rect = sel.getRangeAt(0).getBoundingClientRect();
-      setGrifo({ texto, x: rect.left + rect.width / 2, y: rect.top });
-    }, 10);
-  };
-
-  const escolherTipo = (tipo: TipoCarta) => {
-    if (!grifo) return;
-    setCartaForm({ tipo, texto: grifo.texto });
-    setGrifo(null);
-    window.getSelection()?.removeAllRanges();
-  };
 
   const salvarCartaManual = (frente: string, verso: string, gabarito?: "verdadeiro" | "falso") => {
     if (!cartaForm || !onAdicionarCartas) return;
     const p = pdfRef.current;
-    const carta = novaCartaManual({ tipo: cartaForm.tipo, materia: p.materia, topico: p.topicos?.[0], frente, verso, gabarito });
+    const carta = novaCartaManual({ tipo: cartaForm, materia: p.materia, topico: p.topicos?.[0], frente, verso, gabarito });
     onAdicionarCartas([carta]);
     setCartaForm(null);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -475,6 +453,24 @@ function LeitorPdf({
           pág. {paginaVisivel} · Parei aqui
         </button>
 
+        {/* botões de criar cartão — direto na barra, sem precisar selecionar texto nem sair da
+            página do PDF: clicou, abre o formulário (por cima do PDF, que continua visível) */}
+        {onAdicionarCartas && (
+          <div className="flex items-center gap-0.5 flex-shrink-0 border-l border-white/10 pl-1.5 ml-0.5">
+            {(Object.entries(TIPO_CARTAO_CONFIG) as [TipoCarta, typeof TIPO_CARTAO_CONFIG.monstro][]).map(([tipo, cfg]) => (
+              <button
+                key={tipo}
+                type="button"
+                onClick={() => setCartaForm(tipo)}
+                title={`Criar cartão ${cfg.label}`}
+                className="h-8 w-8 rounded-md flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <cfg.Icon className="h-4 w-4" />
+              </button>
+            ))}
+          </div>
+        )}
+
         <label className="hidden sm:block text-[11px] text-gray-400 flex-shrink-0">Parei na pág.</label>
         <InputPaginaLeitor
           key={`${pdf.id}:${pdf.paginaAtual}`}
@@ -504,11 +500,7 @@ function LeitorPdf({
 
       {/* o PDF em si (pdf.js com camada de texto) — ocupa TODO o resto da tela. A página inicial
           é a DO MOMENTO DA ABERTURA (ref), pra não pular o scroll a cada commit do progresso */}
-      <div
-        ref={visorWrapRef}
-        onMouseUp={handleSelecao}
-        className="flex-1 flex flex-col min-h-0 relative"
-      >
+      <div className="flex-1 flex flex-col min-h-0 relative">
         <VisorPdf
           blob={blob}
           paginaInicial={Math.max(1, Math.min(paginaInicialRef.current || 1, pdf.totalPaginas))}
@@ -516,34 +508,11 @@ function LeitorPdf({
         />
       </div>
 
-      {/* barrinha flutuante do grifo: pergunta o TIPO do cartão (sem IA) — aparece sobre o trecho */}
-      {grifo && !cartaForm && onAdicionarCartas && (
-        <div
-          onMouseDown={(e) => e.preventDefault() /* não deixa o mousedown desfazer a seleção */}
-          style={{ left: grifo.x, top: Math.max(56, grifo.y - 46) }}
-          className="fixed z-[110] -translate-x-1/2 flex items-center gap-1 bg-gray-900 border border-gray-700 rounded-full p-1 shadow-xl"
-        >
-          <span className="text-[10px] text-gray-400 pl-2 pr-0.5 whitespace-nowrap">Criar cartão:</span>
-          {(Object.entries(TIPO_GRIFO_CONFIG) as [TipoCarta, typeof TIPO_GRIFO_CONFIG.monstro][]).map(([tipo, cfg]) => (
-            <button
-              key={tipo}
-              type="button"
-              onClick={() => escolherTipo(tipo)}
-              title={cfg.label}
-              className="flex items-center gap-1 px-2 py-1 rounded-full text-gray-200 hover:bg-white/10 text-[11px] font-medium transition-colors whitespace-nowrap"
-            >
-              <cfg.Icon className="h-3 w-3" /> {cfg.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* formulário manual do cartão — já travado na matéria/tópico do PDF, trecho grifado
-          pré-preenchido conforme o tipo escolhido, tudo editável antes de salvar */}
+      {/* formulário manual do cartão — já travado na matéria/tópico do PDF, aberto pelos botões
+          da barra; fica por cima do PDF, que continua visível atrás (não navega pra outra tela) */}
       {cartaForm && (
-        <GrifoCardForm
-          tipo={cartaForm.tipo}
-          textoGrifado={cartaForm.texto}
+        <NovoCartaoForm
+          tipo={cartaForm}
           materia={pdf.materia}
           topico={pdf.topicos?.[0]}
           onSalvar={salvarCartaManual}
@@ -561,26 +530,22 @@ function LeitorPdf({
   );
 }
 
-// ─── Formulário manual do cartão (grifo → cartão, sem IA) ────────────────────
+// ─── Formulário manual do cartão (sem IA, sem grifo — preenchido do zero) ────
 
-function GrifoCardForm({
-  tipo, textoGrifado, materia, topico, onSalvar, onCancelar,
+function NovoCartaoForm({
+  tipo, materia, topico, onSalvar, onCancelar,
 }: {
   tipo: TipoCarta;
-  textoGrifado: string;
   materia: string;
   topico?: string;
   onSalvar: (frente: string, verso: string, gabarito?: "verdadeiro" | "falso") => void;
   onCancelar: () => void;
 }) {
-  // pré-preenchimento por tipo: o trecho grifado entra no campo que já corresponde a ele —
-  // "monstro" vira a resposta (o usuário escreve a pergunta), "armadilha" vira a própria
-  // afirmação a julgar, "tesouro" entra nos dois (o usuário edita o frente pra colocar o ___)
-  const [frente, setFrente] = useState(tipo === "monstro" ? "" : textoGrifado);
-  const [verso, setVerso] = useState(tipo === "armadilha" ? "" : textoGrifado);
+  const [frente, setFrente] = useState("");
+  const [verso, setVerso] = useState("");
   const [gabarito, setGabarito] = useState<"verdadeiro" | "falso">("verdadeiro");
 
-  const cfg = TIPO_GRIFO_CONFIG[tipo as "monstro" | "armadilha" | "tesouro"];
+  const cfg = TIPO_CARTAO_CONFIG[tipo as "monstro" | "armadilha" | "tesouro"];
   const frenteLabel = tipo === "monstro" ? "Pergunta" : tipo === "armadilha" ? "Afirmação (Verdadeiro ou Falso?)" : "Texto com lacuna (use ___ pra indicar)";
   const versoLabel = tipo === "monstro" ? "Resposta" : tipo === "armadilha" ? "Explicação" : "Texto completo";
   const podeSalvar = frente.trim() !== "" && verso.trim() !== "";

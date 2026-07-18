@@ -41,8 +41,10 @@ Excluir: DELETE /api/estudo/biblioteca/{id}/arquivo
 ## 2. Leitor de PDF próprio (pdf.js)
 
 `src/components/estudo/biblioteca/VisorPdf.tsx` — **não** usa o viewer nativo do navegador
-(iframe): o nativo não expõe seleção de texto pro site, e sem isso não dá pra grifar. Cada
-página vira `canvas` + uma camada de texto transparente selecionável (`TextLayer` do pdf.js).
+(iframe): não dá o mesmo controle de zoom/virtualização que PDFs de 100+ páginas precisam. Cada
+página vira `canvas` + uma camada de texto transparente selecionável (`TextLayer` do pdf.js) —
+seleção útil pra ler/copiar, mas a criação de cartão hoje é por botões na barra (seção 4), não
+depende dela.
 
 - **Virtualização por CÁLCULO DE SCROLL** (janela ±1200px), não `IntersectionObserver` — em abas
   ocultas/sem foco o compositor pode nunca disparar esses callbacks nem `requestAnimationFrame`;
@@ -70,15 +72,19 @@ Estudo no calendário da **matéria/tópico do PDF** via `onRegistrarSessao` (re
 sem código novo de persistência). Páginas da sessão = delta do "parei na pág." entre abrir e
 fechar.
 
-## 4. Grifo → cartão MANUAL (sem IA)
+## 4. Criar cartão MANUAL (sem IA, sem grifo)
 
-Selecionar um trecho no leitor abre uma barrinha perguntando o **tipo** (Monstro / V-ou-F /
-Tesouro — sem IA, pedido explícito do usuário após reverter uma primeira versão que usava
-gpt-4o). Escolhido o tipo, abre um formulário já travado na matéria/tópico do PDF com o trecho
-grifado **pré-preenchido no campo certo**:
-- Monstro → vira o **verso** (resposta); usuário escreve a pergunta.
-- V-ou-F → vira o **frente** (afirmação); usuário escreve a explicação + escolhe o gabarito.
-- Tesouro → vira os dois; usuário edita o frente pra inserir o `___`.
+Três botões na barra do leitor, logo ao lado de "Parei aqui" (Monstro / V-ou-F / Tesouro — sem
+IA, pedido explícito do usuário). Clicar num deles abre, por cima do PDF (que continua visível
+atrás), um formulário já travado na matéria/tópico do PDF, com os campos **vazios** — o usuário
+preenche do zero, sem precisar selecionar texto nem sair da página do PDF.
+
+Versão anterior (task #110/#111) disparava o formulário ao SELECIONAR um trecho no leitor, com
+o trecho pré-preenchendo o campo certo por tipo; o usuário achou a seleção "salpicada"/pouco
+confiável em certos PDFs (mesmo após a correção de `ordenarPorLeitura()`) e pediu pra trocar por
+botões diretos na barra (task #114) — mais previsível, sem depender de onde o texto cai no
+layout do PDF. A TextLayer/seleção de texto continua existindo em `VisorPdf.tsx` (útil pra
+ler/copiar), só não dispara mais a criação de cartão.
 
 `novaCartaManual()` monta o `Carta` localmente (mesmos defaults de repetição espaçada do
 `CartasTab`), sem nenhuma chamada de rede.
@@ -102,7 +108,7 @@ grifado **pré-preenchido no campo certo**:
 src/lib/estudo-data.ts                                    PdfEstudo (+ arquivoEnviado), calcularPagPorHora
 src/lib/pdf-storage.ts                                     salvarArquivoPdf/obterArquivoPdf/excluirArquivoPdf/contarPaginasPdf
 src/app/api/estudo/biblioteca/[id]/arquivo/route.ts         URLs assinadas (POST/GET/DELETE), client admin lazy
-src/components/estudo/BibliotecaTab.tsx                     lista + form + LeitorPdf fullscreen + grifo→cartão manual
+src/components/estudo/BibliotecaTab.tsx                     lista + form + LeitorPdf fullscreen + botões de criar cartão manual
 src/components/estudo/biblioteca/VisorPdf.tsx                pdf.js: canvas+TextLayer, virtualização por scroll, ordenarPorLeitura
 src/components/estudo/EditalTab.tsx                          chip 📖 % por tópico (prop pdfs opcional)
 src/components/estudo/DashboardTab.tsx                       KPI "Leitura PDFs"
@@ -116,5 +122,6 @@ src/components/estudo/DashboardTab.tsx                       KPI "Leitura PDFs"
   configurado"), o metadado do PDF é salvo mesmo se o upload falhar, e a linha mostra "Anexar"
   (não "Ler PDF") quando `arquivoEnviado` não é `true`.
 - Com credenciais reais: cadastrar um PDF com arquivo → confirmar "Ler PDF" aparece → abrir →
-  grifar um trecho → criar um cartão de cada tipo → excluir o PDF e confirmar que o objeto some
-  do bucket (best-effort, não bloqueia a exclusão do metadado).
+  clicar cada um dos 3 botões de cartão na barra → criar um cartão de cada tipo sem sair da
+  página do PDF → excluir o PDF e confirmar que o objeto some do bucket (best-effort, não
+  bloqueia a exclusão do metadado).

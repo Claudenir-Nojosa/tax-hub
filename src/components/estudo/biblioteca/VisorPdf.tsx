@@ -14,9 +14,11 @@ interface ItemTextoPdf {
 }
 
 // Visor de PDF próprio (pdf.js) — substitui o viewer nativo do navegador porque o plugin nativo
-// NÃO expõe a seleção de texto pro site (impossível "grifar → criar cartão" com iframe). Aqui
-// cada página vira canvas + uma CAMADA DE TEXTO transparente selecionável (TextLayer), então o
-// LeitorPdf consegue ler window.getSelection() e oferecer o botão de criar cartão.
+// não dá o mesmo controle de zoom/virtualização que a leitura de PDFs de 100+ páginas precisa.
+// Cada página vira canvas + uma CAMADA DE TEXTO transparente selecionável (TextLayer): a criação
+// de cartão hoje é por botões na barra do leitor (não depende de seleção), mas o texto continua
+// selecionável/copiável pro usuário — ordenarPorLeitura() garante que a seleção siga a ordem
+// visual de leitura, não a ordem interna do PDF.
 // Páginas são VIRTUALIZADAS por CÁLCULO DE SCROLL (janela de ±1200px em volta da viewport): só
 // as próximas são renderizadas — PDFs do Estratégia têm 100+ páginas e renderizar tudo travaria
 // a aba. (Não usar IntersectionObserver aqui: em abas sem foco/ocultas o compositor pode nunca
