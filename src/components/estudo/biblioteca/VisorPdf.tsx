@@ -5,6 +5,14 @@ import { Loader2, Minus, Plus } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 
+// pdfjs-dist não reexporta TextItem/TextContent no barrel principal — tipo mínimo local com só
+// os campos usados por ordenarPorLeitura() (str/transform/height vêm do TextItem real da lib)
+interface ItemTextoPdf {
+  str: string;
+  transform: number[];
+  height: number;
+}
+
 // Visor de PDF próprio (pdf.js) — substitui o viewer nativo do navegador porque o plugin nativo
 // NÃO expõe a seleção de texto pro site (impossível "grifar → criar cartão" com iframe). Aqui
 // cada página vira canvas + uma CAMADA DE TEXTO transparente selecionável (TextLayer), então o
@@ -23,6 +31,43 @@ if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerPort) {
     new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url),
     { type: "module" }
   );
+}
+
+// PDFs com caixas de texto (ex.: "Leis Bizuradas" do Estratégia — o artigo em caixa, o comentário
+// fora dela) costumam ter o conteúdo gravado no PDF numa ordem DIFERENTE da ordem visual (a caixa
+// pode ter sido desenhada antes/depois do parágrafo ao redor no fluxo interno do arquivo).
+// getTextContent() devolve os itens nessa ordem "de gravação", e a seleção nativa do navegador
+// segue ORDEM NO DOM — se os spans da TextLayer forem inseridos na ordem que o PDF entrega,
+// arrastar uma seleção visualmente contínua vira um "salpicado" (pega texto de caixas/parágrafos
+// distantes que caem no meio do intervalo do DOM). Corrige-se reordenando os itens por POSIÇÃO
+// VISUAL (linhas de cima pra baixo, dentro de cada linha da esquerda pra direita) antes de montar
+// a TextLayer — o item.transform é [a,b,c,d,x,y] em espaço PDF, onde y CRESCE PRA CIMA.
+function ordenarPorLeitura<T>(items: T[]): T[] {
+  const textos = items as unknown as (ItemTextoPdf | { type: string })[];
+  // se algum item for conteúdo marcado (sem transform — ex. abre/fecha tag estrutural), não
+  // reordena: mexer na intercalação desses marcadores pode quebrar a estrutura que a TextLayer
+  // espera. Na prática a maioria dos PDFs simples não tem conteúdo marcado.
+  if (textos.some((it) => !("transform" in it))) return items;
+  const comPos = textos as ItemTextoPdf[];
+
+  const alturaMedia = comPos.reduce((s, it) => s + (it.height || 0), 0) / (comPos.length || 1);
+  const limiar = Math.max(alturaMedia * 0.5, 1);
+
+  const ordenadoPorY = [...comPos].sort((a, b) => b.transform[5] - a.transform[5] || a.transform[4] - b.transform[4]);
+
+  const linhas: ItemTextoPdf[][] = [];
+  let refY: number | null = null;
+  for (const item of ordenadoPorY) {
+    const y = item.transform[5];
+    const ultima = linhas[linhas.length - 1];
+    if (ultima && refY !== null && Math.abs(refY - y) <= limiar) {
+      ultima.push(item);
+    } else {
+      linhas.push([item]);
+    }
+    refY = y;
+  }
+  return linhas.flatMap((linha) => [...linha].sort((a, b) => a.transform[4] - b.transform[4])) as unknown as T[];
 }
 
 // CSS mínimo da TextLayer (extraído do pdf_viewer.css oficial): spans transparentes posicionados
@@ -230,11 +275,14 @@ function PaginaPdf({
         // stream: o streaming pode depender de agendamento de frame (quebra em aba oculta)
         const textContent = await page.getTextContent();
         if (cancelado || !textRef.current) return;
+        // reordena por posição visual ANTES de montar a TextLayer (ver comentário da função) —
+        // sem isso, arrastar uma seleção em PDFs com caixas de texto vira um "salpicado"
+        const textContentOrdenado = { ...textContent, items: ordenarPorLeitura(textContent.items) };
         const textDiv = textRef.current;
         textDiv.replaceChildren();
         textDiv.style.setProperty("--scale-factor", String(scale));
         const textLayer = new pdfjs.TextLayer({
-          textContentSource: textContent,
+          textContentSource: textContentOrdenado,
           container: textDiv,
           viewport,
         });
