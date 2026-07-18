@@ -30,7 +30,11 @@ function clienteAdmin(): SupabaseClient | null {
 async function garantirBucket(admin: SupabaseClient) {
   const { error } = await admin.storage.createBucket(BUCKET, {
     public: false,
-    fileSizeLimit: "200MB",
+    // 50MB é o teto do plano FREE do Supabase (limite global de upload) — pedir mais que isso
+    // faz o próprio createBucket falhar com "The object exceeded the maximum allowed size".
+    // Se o projeto migrar pra um plano pago, dá pra subir este valor (e o limite global em
+    // Storage Settings) pra até 500GB.
+    fileSizeLimit: "50MB",
     allowedMimeTypes: ["application/pdf"],
   })
   // "already exists" é o caminho feliz normal (bucket já criado numa chamada anterior) — só
