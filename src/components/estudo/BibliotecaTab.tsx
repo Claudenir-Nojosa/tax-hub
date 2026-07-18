@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
-  ArrowLeft, BookOpen, CheckCircle2, ChevronDown, Clock, FileUp, Gem, Library, Pause, Pencil, Play, Plus, Swords, Trash2, X, Zap,
+  ArrowLeft, BookOpen, CheckCircle2, ChevronDown, Clock, FileUp, Gem, Library, Loader2, Pause, Pencil, Play, Plus, Swords, Trash2, X, Zap,
 } from "lucide-react";
 import {
   MATERIAS, calcularPagPorHora, dateKeyLocal,
   type AtividadeCalendario, type Carta, type MateriaConcurso, type MateriaDef, type PdfEstudo, type TipoCarta,
 } from "@/lib/estudo-data";
 import {
-  salvarArquivoPdf, obterArquivoPdf, excluirArquivoPdf, listarIdsComArquivo, contarPaginasPdf,
+  salvarArquivoPdf, obterArquivoPdf, excluirArquivoPdf, contarPaginasPdf,
 } from "@/lib/pdf-storage";
 import { resolverCorMateria, fmtHoras } from "./trilha/trilha-ui";
 
@@ -22,9 +22,9 @@ const VisorPdf = dynamic(() => import("./biblioteca/VisorPdf"), { ssr: false });
 // progresso "parei na pág. X", % lido e ETA calculada com o páginas/hora histórico do Timer
 // (calcularPagPorHora). O cronômetro do leitor conta sozinho e, ao fechar (sessão ≥1 min), salva
 // uma atividade de Estudo no calendário da matéria/tópico do PDF via onRegistrarSessao.
-// O arquivo fica no IndexedDB DESTE navegador (pdf-storage.ts — Vercel não aceita upload >4,5MB);
-// os metadados/progresso sincronizam normalmente via EstudoState. Em outro dispositivo a entrada
-// aparece com o botão "Anexar" pra reanexar o arquivo local.
+// O arquivo fica no SUPABASE STORAGE (privado — pdf-storage.ts), não mais no navegador: uma vez
+// enviado, `PdfEstudo.arquivoEnviado` sincroniza junto com o resto do EstudoState e o PDF abre em
+// qualquer dispositivo que o usuário logar, sem precisar reanexar.
 
 interface Props {
   pdfs: PdfEstudo[];
@@ -82,14 +82,11 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
 
   const [formAberto, setFormAberto] = useState(false);
   const [editando, setEditando] = useState<PdfEstudo | null>(null);
-  // presença do ARQUIVO é por-dispositivo (IndexedDB) — carregada na montagem, nunca persistida
-  const [idsComArquivo, setIdsComArquivo] = useState<Set<string>>(new Set());
   const [lendo, setLendo] = useState<PdfEstudo | null>(null);
   const [blobLeitura, setBlobLeitura] = useState<Blob | null>(null);
-
-  useEffect(() => {
-    listarIdsComArquivo().then(setIdsComArquivo).catch(() => { /* IndexedDB indisponível — botões de leitura somem */ });
-  }, []);
+  // upload em andamento (linha mostra spinner) e leitor abrindo (baixando o PDF do Storage)
+  const [enviandoIds, setEnviandoIds] = useState<Set<string>>(new Set());
+  const [carregandoLeitor, setCarregandoLeitor] = useState<string | null>(null);
 
   const pagPorHora = useMemo(() => calcularPagPorHora(calendario), [calendario]);
 
@@ -126,59 +123,74 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
   }, [pdfs, materiasAtivas]);
 
   const salvarPdf = async (pdf: PdfEstudo, arquivo?: File) => {
+    let registro = pdf;
     if (arquivo) {
       try {
-        await salvarArquivoPdf(pdf.id, arquivo, arquivo.name);
-        setIdsComArquivo((prev) => new Set(prev).add(pdf.id));
-      } catch {
-        alert("Não consegui salvar o arquivo no navegador — o PDF foi cadastrado só com os dados.");
+        await salvarArquivoPdf(pdf.id, arquivo);
+        registro = { ...pdf, arquivoEnviado: true };
+      } catch (e) {
+        alert(`Não consegui enviar o arquivo pro Storage — o PDF foi cadastrado só com os dados. ${e instanceof Error ? e.message : ""}`.trim());
       }
     }
     if (editando) {
-      onChange(pdfs.map((p) => (p.id === pdf.id ? pdf : p)));
+      onChange(pdfs.map((p) => (p.id === registro.id ? registro : p)));
       setEditando(null);
       setFormAberto(false);
     } else {
-      onChange([pdf, ...pdfs]);
+      onChange([registro, ...pdfs]);
       // form fica aberto com a matéria mantida (mesma lição das Cartas) — só fecha no X
     }
   };
 
-  // anexar/reanexar arquivo numa entrada já existente (ex.: cadastrada em outro dispositivo)
+  // anexar/reanexar arquivo numa entrada já existente (ex.: cadastrada de outro dispositivo, sem
+  // o arquivo ainda enviado)
   const anexarEm = async (pdf: PdfEstudo, arquivo: File) => {
+    setEnviandoIds((prev) => new Set(prev).add(pdf.id));
     try {
-      await salvarArquivoPdf(pdf.id, arquivo, arquivo.name);
-      setIdsComArquivo((prev) => new Set(prev).add(pdf.id));
-    } catch {
-      alert("Não consegui salvar o arquivo no navegador.");
-      return;
-    }
-    // se o total de páginas detectado divergir do cadastrado, corrige pelo arquivo real
-    const paginas = await contarPaginasPdf(arquivo);
-    if (paginas !== null && paginas !== pdf.totalPaginas) {
+      await salvarArquivoPdf(pdf.id, arquivo);
+      // se o total de páginas detectado divergir do cadastrado, corrige pelo arquivo real
+      const paginas = await contarPaginasPdf(arquivo);
       onChange(
         pdfs.map((p) =>
           p.id === pdf.id
-            ? { ...p, totalPaginas: paginas, paginaAtual: Math.min(p.paginaAtual, paginas), atualizadoEm: new Date().toISOString() }
+            ? {
+                ...p,
+                arquivoEnviado: true,
+                ...(paginas !== null && paginas !== p.totalPaginas
+                  ? { totalPaginas: paginas, paginaAtual: Math.min(p.paginaAtual, paginas) }
+                  : {}),
+                atualizadoEm: new Date().toISOString(),
+              }
             : p
         )
       );
-    }
-  };
-
-  const abrirLeitor = async (pdf: PdfEstudo) => {
-    const blob = await obterArquivoPdf(pdf.id).catch(() => null);
-    if (!blob) {
-      alert("Arquivo não encontrado neste navegador — use \"Anexar\" pra reanexar o PDF.");
-      setIdsComArquivo((prev) => {
+    } catch (e) {
+      alert(`Não consegui enviar o arquivo pro Storage. ${e instanceof Error ? e.message : ""}`.trim());
+    } finally {
+      setEnviandoIds((prev) => {
         const nova = new Set(prev);
         nova.delete(pdf.id);
         return nova;
       });
-      return;
     }
-    setBlobLeitura(blob);
-    setLendo(pdf);
+  };
+
+  const abrirLeitor = async (pdf: PdfEstudo) => {
+    setCarregandoLeitor(pdf.id);
+    try {
+      const blob = await obterArquivoPdf(pdf.id);
+      if (!blob) {
+        alert('Arquivo não encontrado no Storage — use "Anexar" pra reenviar o PDF.');
+        onChange(pdfs.map((p) => (p.id === pdf.id ? { ...p, arquivoEnviado: false } : p)));
+        return;
+      }
+      setBlobLeitura(blob);
+      setLendo(pdf);
+    } catch (e) {
+      alert(`Não consegui abrir o PDF. ${e instanceof Error ? e.message : "Tente de novo."}`);
+    } finally {
+      setCarregandoLeitor(null);
+    }
   };
 
   const fecharLeitor = () => {
@@ -197,14 +209,9 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
   };
 
   const excluir = (p: PdfEstudo) => {
-    if (!confirm(`Excluir "${p.nome}" da biblioteca? O arquivo salvo neste navegador e o progresso de leitura somem.`)) return;
+    if (!confirm(`Excluir "${p.nome}" da biblioteca? O arquivo no Storage e o progresso de leitura somem.`)) return;
     onChange(pdfs.filter((x) => x.id !== p.id));
-    excluirArquivoPdf(p.id).catch(() => { /* arquivo órfão fica no IndexedDB — inofensivo */ });
-    setIdsComArquivo((prev) => {
-      const nova = new Set(prev);
-      nova.delete(p.id);
-      return nova;
-    });
+    if (p.arquivoEnviado) excluirArquivoPdf(p.id).catch(() => { /* best-effort — fica um objeto órfão, inofensivo */ });
   };
 
   return (
@@ -218,7 +225,7 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
               <div className="text-lg font-bold">Biblioteca de PDFs</div>
               <div className="text-xs text-sky-100">
                 {pdfs.length === 0
-                  ? "Anexe seus PDFs (Estratégia etc.), leia aqui dentro e acompanhe até onde chegou."
+                  ? "Anexe seus PDFs (Estratégia etc.), leia aqui dentro em qualquer dispositivo e acompanhe até onde chegou."
                   : `${pdfs.length} PDF${pdfs.length !== 1 ? "s" : ""} · ${paginasLidas.toLocaleString("pt-BR")}/${totalPaginas.toLocaleString("pt-BR")} páginas lidas` +
                     (etaTotal
                       ? ` · faltam ~${etaTotal} de leitura no seu ritmo de ${Math.round(pagPorHora!)} pág/h`
@@ -265,8 +272,9 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
           <BookOpen className="h-8 w-8 mx-auto mb-3 text-sky-400" />
           <p className="text-sm text-gray-600 dark:text-gray-300 font-medium mb-1">Nenhum PDF na biblioteca ainda.</p>
           <p className="text-xs text-gray-400 dark:text-gray-500 max-w-md mx-auto mb-4">
-            Anexe as aulas em PDF que você estuda: elas ficam salvas neste navegador, você lê aqui
-            dentro do site e a biblioteca acompanha o % lido e quanto tempo de leitura falta.
+            Anexe as aulas em PDF que você estuda: elas ficam salvas na sua conta (Supabase
+            Storage privado), você lê aqui dentro do site em qualquer dispositivo e a biblioteca
+            acompanha o % lido e quanto tempo de leitura falta.
           </p>
           <button
             type="button"
@@ -296,7 +304,9 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
                   <PdfRow
                     key={p.id}
                     pdf={p}
-                    temArquivo={idsComArquivo.has(p.id)}
+                    temArquivo={p.arquivoEnviado === true}
+                    enviando={enviandoIds.has(p.id)}
+                    carregando={carregandoLeitor === p.id}
                     pagPorHora={pagPorHora}
                     onLer={() => abrirLeitor(p)}
                     onAnexar={(arq) => anexarEm(p, arq)}
@@ -685,10 +695,12 @@ function InputPaginaLeitor({ pdf, onCommit }: { pdf: PdfEstudo; onCommit: (pag: 
 // ─── Linha de PDF ────────────────────────────────────────────────────────────
 
 function PdfRow({
-  pdf, temArquivo, pagPorHora, onLer, onAnexar, onAtualizarPagina, onConcluir, onEditar, onExcluir,
+  pdf, temArquivo, enviando, carregando, pagPorHora, onLer, onAnexar, onAtualizarPagina, onConcluir, onEditar, onExcluir,
 }: {
   pdf: PdfEstudo;
   temArquivo: boolean;
+  enviando: boolean;
+  carregando: boolean;
   pagPorHora: number | null;
   onLer: () => void;
   onAnexar: (arquivo: File) => void;
@@ -738,9 +750,11 @@ function PdfRow({
             <button
               type="button"
               onClick={onLer}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition-colors"
+              disabled={carregando}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition-colors disabled:opacity-60 disabled:cursor-wait"
             >
-              <BookOpen className="h-3.5 w-3.5" /> Ler PDF
+              {carregando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BookOpen className="h-3.5 w-3.5" />}
+              {carregando ? "Abrindo…" : "Ler PDF"}
             </button>
           ) : (
             <>
@@ -758,10 +772,12 @@ function PdfRow({
               <button
                 type="button"
                 onClick={() => anexoRef.current?.click()}
-                title="O arquivo não está neste navegador — anexe o PDF pra ler aqui dentro"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-300 dark:border-sky-700 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30 text-xs font-medium transition-colors"
+                disabled={enviando}
+                title="O arquivo ainda não foi enviado — anexe o PDF pra ler aqui dentro (fica salvo na nuvem)"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-300 dark:border-sky-700 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30 text-xs font-medium transition-colors disabled:opacity-60 disabled:cursor-wait"
               >
-                <FileUp className="h-3.5 w-3.5" /> Anexar
+                {enviando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileUp className="h-3.5 w-3.5" />}
+                {enviando ? "Enviando…" : "Anexar"}
               </button>
             </>
           )}
@@ -848,6 +864,7 @@ function FormPdf({
   const [mostrarTopicos, setMostrarTopicos] = useState((pdfParaEditar?.topicos?.length ?? 0) > 0);
   const [salvasAgora, setSalvasAgora] = useState(0);
   const [flash, setFlash] = useState(false);
+  const [enviando, setEnviando] = useState(false);
   const arquivoRef = useRef<HTMLInputElement>(null);
 
   const topicosDaMateria = materiasAtivas.find((m) => m.nome === materia)?.topicos ?? [];
@@ -866,43 +883,48 @@ function FormPdf({
   };
 
   const salvar = async () => {
-    if (!podeSalvar) return;
-    const topicos = [...topicosSel].filter((t) => topicosDaMateria.includes(t));
-    if (pdfParaEditar) {
-      await onSalvar(
-        {
-          ...pdfParaEditar,
-          nome: nome.trim(),
-          materia,
-          topicos: topicos.length > 0 ? topicos : undefined,
-          totalPaginas: paginasNum,
-          paginaAtual: Math.min(pdfParaEditar.paginaAtual, paginasNum),
-          atualizadoEm: new Date().toISOString(),
-        },
-        arquivo ?? undefined
-      );
-    } else {
-      await onSalvar(
-        {
-          id: novoId(),
-          nome: nome.trim(),
-          materia,
-          topicos: topicos.length > 0 ? topicos : undefined,
-          totalPaginas: paginasNum,
-          paginaAtual: 0,
-          criadoEm: new Date().toISOString(),
-        },
-        arquivo ?? undefined
-      );
-      // matéria fica mantida pro próximo PDF (cadastro em sequência); limpa o resto
-      setNome("");
-      setTotalPaginas("");
-      setTopicosSel(new Set());
-      setArquivo(null);
-      setPaginasDetectadas(false);
-      setSalvasAgora((n) => n + 1);
-      setFlash(true);
-      setTimeout(() => setFlash(false), 1800);
+    if (!podeSalvar || enviando) return;
+    setEnviando(true);
+    try {
+      const topicos = [...topicosSel].filter((t) => topicosDaMateria.includes(t));
+      if (pdfParaEditar) {
+        await onSalvar(
+          {
+            ...pdfParaEditar,
+            nome: nome.trim(),
+            materia,
+            topicos: topicos.length > 0 ? topicos : undefined,
+            totalPaginas: paginasNum,
+            paginaAtual: Math.min(pdfParaEditar.paginaAtual, paginasNum),
+            atualizadoEm: new Date().toISOString(),
+          },
+          arquivo ?? undefined
+        );
+      } else {
+        await onSalvar(
+          {
+            id: novoId(),
+            nome: nome.trim(),
+            materia,
+            topicos: topicos.length > 0 ? topicos : undefined,
+            totalPaginas: paginasNum,
+            paginaAtual: 0,
+            criadoEm: new Date().toISOString(),
+          },
+          arquivo ?? undefined
+        );
+        // matéria fica mantida pro próximo PDF (cadastro em sequência); limpa o resto
+        setNome("");
+        setTotalPaginas("");
+        setTopicosSel(new Set());
+        setArquivo(null);
+        setPaginasDetectadas(false);
+        setSalvasAgora((n) => n + 1);
+        setFlash(true);
+        setTimeout(() => setFlash(false), 1800);
+      }
+    } finally {
+      setEnviando(false);
     }
   };
 
@@ -951,7 +973,7 @@ function FormPdf({
             : "Clique pra escolher o arquivo PDF"}
         </div>
         <div className="text-[10px] text-gray-400 mt-0.5">
-          {arquivo ? "Clique pra trocar" : "O arquivo fica salvo neste navegador — você lê aqui dentro do site"}
+          {arquivo ? "Clique pra trocar" : "O arquivo vai pra sua biblioteca na nuvem — você lê aqui dentro, em qualquer dispositivo"}
         </div>
       </button>
 
@@ -1035,12 +1057,19 @@ function FormPdf({
         <button
           type="button"
           onClick={salvar}
-          disabled={!podeSalvar}
-          className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={!podeSalvar || enviando}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-wait"
         >
-          {pdfParaEditar ? "Salvar alterações" : salvasAgora > 0 ? "Adicionar outro PDF" : "Adicionar PDF"}
+          {enviando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {enviando
+            ? "Enviando…"
+            : pdfParaEditar
+            ? "Salvar alterações"
+            : salvasAgora > 0
+            ? "Adicionar outro PDF"
+            : "Adicionar PDF"}
         </button>
-        {!pdfParaEditar && (flash || salvasAgora > 0) && (
+        {!pdfParaEditar && !enviando && (flash || salvasAgora > 0) && (
           <span className={`text-xs transition-opacity ${flash ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 opacity-70"}`}>
             {flash ? "✓ PDF adicionado! Matéria mantida pro próximo." : `${salvasAgora} PDF${salvasAgora !== 1 ? "s" : ""} adicionado${salvasAgora !== 1 ? "s" : ""} agora.`}
           </span>

@@ -170,6 +170,9 @@ export interface PdfEstudo {
   paginaAtual: number; // 0..totalPaginas — "parei na página X" (= páginas lidas)
   criadoEm: string;
   atualizadoEm?: string;
+  // true = o arquivo está salvo no Supabase Storage (pdf-storage.ts), disponível em qualquer
+  // dispositivo logado — verdade sincronizada via EstudoState, não precisa checar por-dispositivo
+  arquivoEnviado?: boolean;
 }
 
 // média histórica de páginas/hora das sessões do calendário que registraram páginas (campo

@@ -1,90 +1,65 @@
 "use client"
 
-// Persistência local (IndexedDB) dos ARQUIVOS da Biblioteca de PDFs — mesmo racional do
-// reforma-wizard-store: PDFs do Estratégia têm 5-50MB e não passam pelo Vercel (body de function
-// limitado a ~4,5MB) nem cabem no Postgres; ficam no navegador, chaveados pelo id do PdfEstudo.
-// Os METADADOS + progresso (EstudoState.pdfs) continuam sincronizando via localStorage/banco —
-// limitação assumida: o ARQUIVO só existe NESTE navegador; em outra máquina a Biblioteca mostra
-// a entrada normalmente e oferece "reanexar o arquivo".
+// Arquivos da Biblioteca de PDFs — vivem no SUPABASE STORAGE (bucket privado "biblioteca-pdfs"),
+// não mais no navegador: antes ficavam no IndexedDB deste dispositivo (pdf-storage.ts v1), o que
+// significava reanexar o arquivo em cada computador/celular. Agora o binário é enviado uma vez e
+// fica disponível em qualquer lugar que o usuário logar — a "verdade" de que existe é o campo
+// `PdfEstudo.arquivoEnviado`, sincronizado junto com o resto do EstudoState.
+//
+// Fluxo (nunca o binário passa pela function do Vercel — limite de body ~4,5MB, PDFs do
+// Estratégia passam disso fácil):
+//   upload:   POST /api/estudo/biblioteca/{id}/arquivo → {path, token} (autenticado, path
+//             derivado da sessão) → cliente Supabase (anon key) faz uploadToSignedUrl() DIRETO
+//             pro Storage, sem passar pelo nosso servidor.
+//   leitura:  GET  /api/estudo/biblioteca/{id}/arquivo → {url assinada, 5min} → fetch(url).blob()
+//   exclusão: DELETE /api/estudo/biblioteca/{id}/arquivo
+//
+// A chave anon (NEXT_PUBLIC_*) é segura de expor no browser por design — quem autoriza a
+// operação é o TOKEN assinado que a rota autenticada gera, não a chave em si.
 
-const DB_NAME = "taxhub-biblioteca"
-const STORE = "arquivos"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
-interface ArquivoPdfSalvo {
-  id: string // = PdfEstudo.id
-  blob: Blob
-  nomeArquivo: string
-  atualizadoEm: number
-}
-
-function abrirDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1)
-    req.onupgradeneeded = () => {
-      if (!req.result.objectStoreNames.contains(STORE)) {
-        req.result.createObjectStore(STORE, { keyPath: "id" })
-      }
-    }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
-}
-
-export async function salvarArquivoPdf(id: string, arquivo: File | Blob, nomeArquivo: string): Promise<void> {
-  const db = await abrirDb()
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite")
-      tx.objectStore(STORE).put({ id, blob: arquivo, nomeArquivo, atualizadoEm: Date.now() } satisfies ArquivoPdfSalvo)
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
-  } finally {
-    db.close()
+let clienteBrowser: SupabaseClient | null = null
+function obterClienteBrowser(): SupabaseClient {
+  if (!clienteBrowser) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !anonKey) throw new Error("Storage não configurado (NEXT_PUBLIC_SUPABASE_URL/ANON_KEY ausentes)")
+    clienteBrowser = createClient(url, anonKey)
   }
+  return clienteBrowser
+}
+
+async function jsonOuErro(res: Response): Promise<Record<string, unknown>> {
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : `Erro ${res.status}`)
+  return data
+}
+
+export async function salvarArquivoPdf(id: string, arquivo: File | Blob): Promise<void> {
+  const { path, token } = (await jsonOuErro(await fetch(`/api/estudo/biblioteca/${id}/arquivo`, { method: "POST" }))) as {
+    path: string
+    token: string
+  }
+  const { error } = await obterClienteBrowser()
+    .storage.from("biblioteca-pdfs")
+    .uploadToSignedUrl(path, token, arquivo, { contentType: "application/pdf" })
+  if (error) throw new Error(error.message)
 }
 
 export async function obterArquivoPdf(id: string): Promise<Blob | null> {
-  const db = await abrirDb()
-  try {
-    return await new Promise((resolve, reject) => {
-      const req = db.transaction(STORE, "readonly").objectStore(STORE).get(id)
-      req.onsuccess = () => resolve((req.result as ArquivoPdfSalvo | undefined)?.blob ?? null)
-      req.onerror = () => reject(req.error)
-    })
-  } finally {
-    db.close()
-  }
+  const res = await fetch(`/api/estudo/biblioteca/${id}/arquivo`)
+  if (res.status === 404) return null
+  const { url } = (await jsonOuErro(res)) as { url: string }
+  const resArquivo = await fetch(url)
+  if (!resArquivo.ok) throw new Error(`Falha ao baixar o arquivo (${resArquivo.status})`)
+  return resArquivo.blob()
 }
 
 export async function excluirArquivoPdf(id: string): Promise<void> {
-  const db = await abrirDb()
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite")
-      tx.objectStore(STORE).delete(id)
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
-  } finally {
-    db.close()
-  }
-}
-
-// ids que TÊM arquivo salvo neste navegador — a Biblioteca usa pra decidir entre "Ler PDF" e
-// "Anexar arquivo" em cada entrada (a presença do arquivo é por-dispositivo, nunca persistida
-// no EstudoState pra não mentir em outra máquina)
-export async function listarIdsComArquivo(): Promise<Set<string>> {
-  const db = await abrirDb()
-  try {
-    return await new Promise((resolve, reject) => {
-      const req = db.transaction(STORE, "readonly").objectStore(STORE).getAllKeys()
-      req.onsuccess = () => resolve(new Set((req.result as string[]) ?? []))
-      req.onerror = () => reject(req.error)
-    })
-  } finally {
-    db.close()
-  }
+  await fetch(`/api/estudo/biblioteca/${id}/arquivo`, { method: "DELETE" }).catch(() => {
+    /* best-effort — se falhar, fica um objeto órfão no Storage, inofensivo */
+  })
 }
 
 // tenta contar as páginas do PDF no próprio navegador (pra preencher "Total de págs." sozinho ao
