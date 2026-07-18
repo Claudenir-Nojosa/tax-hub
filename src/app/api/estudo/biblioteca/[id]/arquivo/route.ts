@@ -49,7 +49,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   try {
     let { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path, { upsert: true })
-    if (error && /bucket not found/i.test(error.message)) {
+    // a API do Storage já usou "Bucket not found" e hoje usa "The related resource does not
+    // exist" pro mesmo caso (bucket ausente) — cobre as duas variações de texto
+    if (error && /bucket not found|related resource does not exist/i.test(error.message)) {
       await garantirBucket(admin)
       ;({ data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path, { upsert: true }))
     }
