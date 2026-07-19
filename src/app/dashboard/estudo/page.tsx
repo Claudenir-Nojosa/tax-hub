@@ -20,8 +20,9 @@ import {
   type Carta,
   type TrilhaEstudo,
   type PdfEstudo,
+  type MapaMental,
 } from "@/lib/estudo-data";
-import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, GraduationCap, Library } from "lucide-react";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, GraduationCap, Library, Brain } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
 
@@ -37,18 +38,20 @@ const TrilhaTab = dynamic(() => import("@/components/estudo/TrilhaTab"), { ssr: 
 // ssr:false é essencial aqui: o componente usa WebRTC/getUserMedia (APIs só de browser)
 const ProfessoraTab = dynamic(() => import("@/components/estudo/ProfessoraTab"), { ssr: false });
 const BibliotecaTab = dynamic(() => import("@/components/estudo/BibliotecaTab"), { ssr: false });
+const MapasMentaisTab = dynamic(() => import("@/components/estudo/MapasMentaisTab"), { ssr: false });
 const TimerEstudo = dynamic(() => import("@/components/estudo/TimerEstudo"), { ssr: false });
 const CompararEditaisTab = dynamic(() => import("@/components/estudo/CompararEditaisTab"), { ssr: false });
 
 const storageKey = (concursoId: string | null) =>
   concursoId ? `taxhub_estudo_c_${concursoId}` : "taxhub_estudo_v1";
 
-type Tab = "dashboard" | "edital" | "biblioteca" | "ciclo" | "trilha" | "calendario" | "caderno" | "relatorios" | "cartas" | "resumos" | "professora" | "comparar";
+type Tab = "dashboard" | "edital" | "biblioteca" | "mapas" | "ciclo" | "trilha" | "calendario" | "caderno" | "relatorios" | "cartas" | "resumos" | "professora" | "comparar";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "edital", label: "Edital", icon: BookOpen },
   { id: "biblioteca", label: "Biblioteca", icon: Library },
+  { id: "mapas", label: "Mapas Mentais", icon: Brain },
   { id: "ciclo", label: "Ciclo de Estudos", icon: RotateCcw },
   { id: "trilha", label: "Trilha", icon: Route },
   { id: "calendario", label: "Calendário", icon: CalendarDays },
@@ -69,6 +72,7 @@ function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {
     trilha: parsed.trilha,
     cartas: parsed.cartas ?? [],
     pdfs: parsed.pdfs ?? [],
+    mapasMentais: parsed.mapasMentais ?? [],
     topicos: {
       ...DEFAULT_ESTUDO_STATE.topicos,
       ...(parsed.topicos ?? {}),
@@ -188,6 +192,10 @@ export default function EstudoPage() {
 
   const updatePdfs = useCallback((pdfs: PdfEstudo[]) => {
     setState((prev) => ({ ...prev, pdfs }));
+  }, []);
+
+  const updateMapasMentais = useCallback((mapasMentais: MapaMental[]) => {
+    setState((prev) => ({ ...prev, mapasMentais }));
   }, []);
 
   // cartas geradas pelo grifo no leitor de PDF — prepend no baralho (mesma ordem do CartasTab)
@@ -344,6 +352,14 @@ export default function EstudoPage() {
                 handleTimerSalvar(minutos, "estudo", descricao, undefined, materia, topico, paginas)
               }
               onAdicionarCartas={adicionarCartas}
+            />
+          )}
+
+          {activeTab === "mapas" && (
+            <MapasMentaisTab
+              mapas={state.mapasMentais}
+              onChange={updateMapasMentais}
+              materiasConcurso={concursoAtivo?.materias as MateriaConcurso[] | undefined}
             />
           )}
 

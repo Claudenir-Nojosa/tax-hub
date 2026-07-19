@@ -155,6 +155,7 @@ export interface EstudoState {
   semanasOK: number;
   trilha?: TrilhaEstudo; // ausente = usuário ainda não gerou a trilha (aba mostra o wizard)
   pdfs: PdfEstudo[];
+  mapasMentais: MapaMental[];
 }
 
 // --- Biblioteca de PDFs ---
@@ -183,6 +184,38 @@ export function calcularPagPorHora(calendario: Record<string, AtividadeCalendari
   const totalPaginas = sessoes.reduce((s, a) => s + (a.paginas ?? 0), 0);
   const minutos = sessoes.reduce((s, a) => s + a.duracao, 0);
   return minutos > 0 ? totalPaginas / (minutos / 60) : null;
+}
+
+// --- Mapas Mentais ---
+
+// nó da árvore do mapa mental — recursivo, cada mapa é 1 raiz + filhos aninhados. Cores em hex
+// (ou undefined = herda a cor do ramo, calculada em mapa-utils.ts a partir do filho de 1º nível
+// mais próximo). Imagem já vem comprimida em base64 (mapa-utils.ts:comprimirImagem) — sem upload
+// pro Storage: mapas mentais tendem a ter várias imagens pequenas (ícones/diagramas), então
+// embutir no próprio JSON do EstudoState é mais simples que reabrir a integração de Storage feita
+// pra Biblioteca (bucket, RLS, signed URL) só pra thumbnails.
+export interface NoMapaMental {
+  id: string;
+  texto: string;
+  negrito?: boolean;
+  italico?: boolean;
+  cor?: string; // cor do texto (hex)
+  corFundo?: string; // hex — undefined = usa a cor do ramo (translúcida)
+  corBorda?: string; // hex — undefined = usa a cor do ramo
+  semBorda?: boolean;
+  imagem?: string; // data URL (já redimensionada/comprimida)
+  colapsado?: boolean;
+  filhos: NoMapaMental[];
+}
+
+export interface MapaMental {
+  id: string;
+  titulo: string;
+  materia: string;
+  topico?: string;
+  raiz: NoMapaMental;
+  criadoEm: string;
+  atualizadoEm?: string;
 }
 
 // --- Tipos de Concurso ---
@@ -1080,4 +1113,5 @@ export const DEFAULT_ESTUDO_STATE: EstudoState = {
   streak: 0,
   semanasOK: 0,
   pdfs: [],
+  mapasMentais: [],
 };
