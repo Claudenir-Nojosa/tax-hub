@@ -72,12 +72,58 @@ function ordenarPorLeitura<T>(items: T[]): T[] {
   return linhas.flatMap((linha) => [...linha].sort((a, b) => a.transform[4] - b.transform[4])) as unknown as T[];
 }
 
-// CSS mínimo da TextLayer (extraído do pdf_viewer.css oficial): spans transparentes posicionados
-// por cima do canvas; a seleção fica visível pelo ::selection. --scale-factor é obrigatório no v4+.
+// CSS da TextLayer portado do pdf_viewer.css OFICIAL do pdfjs-dist v6 (.textLayer). No v6 o JS
+// NÃO define mais font-size/transform inline em cada span: ele injeta variáveis CSS por span
+// (--font-height, --scale-x, --rotate) e espera que o CSS as transforme em font-size/transform —
+// o app fornece --scale-factor (= viewport.scale) e o resto deriva via --total-scale-factor.
+// LIÇÃO: uma versão "mínima" deste CSS (só position/color/white-space, padrão da v4) deixa os
+// spans com fonte herdada e sem scaleX → a caixa invisível de cada texto fica de tamanho errado
+// e a SELEÇÃO aparece deslocada/maior/menor que o texto desenhado no canvas.
 const CSS_TEXT_LAYER = `
-.pdfTextLayer { position: absolute; inset: 0; overflow: hidden; line-height: 1; text-size-adjust: none; forced-color-adjust: none; transform-origin: 0 0; caret-color: CanvasText; }
-.pdfTextLayer span, .pdfTextLayer br { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
-.pdfTextLayer ::selection, .pdfTextLayer span::selection { background: rgba(56, 189, 248, 0.45); color: transparent; }
+.pdfTextLayer {
+  --user-unit: 1;
+  --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+  color-scheme: only light;
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 0;
+}
+.pdfTextLayer span, .pdfTextLayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+.pdfTextLayer > :not(.markedContent),
+.pdfTextLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.pdfTextLayer .markedContent { display: contents; }
+.pdfTextLayer ::selection { background: rgba(56, 189, 248, 0.45); color: transparent; }
+.pdfTextLayer br::selection { background: transparent; }
 `;
 
 interface Props {
@@ -257,24 +303,11 @@ function PaginaPdf({
         const page = await doc.getPage(numero);
         if (cancelado || !canvasRef.current || !textRef.current) return;
         const viewport = page.getViewport({ scale });
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const canvas = canvasRef.current;
-        canvas.width = Math.floor(viewport.width * dpr);
-        canvas.height = Math.floor(viewport.height * dpr);
-        canvas.style.width = `${viewport.width}px`;
-        canvas.style.height = `${viewport.height}px`;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        renderTask = page.render({
-          canvas,
-          canvasContext: ctx,
-          viewport,
-          transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
-        });
-        await renderTask.promise;
-        if (cancelado || !textRef.current) return;
-        // camada de texto selecionável por cima do canvas — getTextContent() completo em vez do
-        // stream: o streaming pode depender de agendamento de frame (quebra em aba oculta)
+
+        // 1) camada de texto selecionável — montada ANTES do canvas: não depende dele, deixa o
+        // texto selecionável mais cedo e não usa requestAnimationFrame (o canvas usa — ver
+        // abaixo). getTextContent() completo em vez do stream: o streaming pode depender de
+        // agendamento de frame (quebra em aba oculta).
         const textContent = await page.getTextContent();
         if (cancelado || !textRef.current) return;
         // reordena por posição visual ANTES de montar a TextLayer (ver comentário da função) —
@@ -282,13 +315,33 @@ function PaginaPdf({
         const textContentOrdenado = { ...textContent, items: ordenarPorLeitura(textContent.items) };
         const textDiv = textRef.current;
         textDiv.replaceChildren();
-        textDiv.style.setProperty("--scale-factor", String(scale));
+        // contrato do v6: o app fornece --scale-factor = viewport.scale; o CSS_TEXT_LAYER deriva
+        // --total-scale-factor e calcula font-size/transform de cada span a partir das variáveis
+        // (--font-height/--scale-x/--rotate) que o TextLayer injeta por span
+        textDiv.style.setProperty("--scale-factor", String(viewport.scale));
         const textLayer = new pdfjs.TextLayer({
           textContentSource: textContentOrdenado,
           container: textDiv,
           viewport,
         });
         await textLayer.render();
+
+        // 2) desenho da página no canvas — só `canvas` (API atual do v6), nunca junto com
+        // `canvasContext` (a doc diz que canvasContext é só compat retroativa e exige
+        // canvas: null quando usado; passar os dois deixa o RenderTask num estado ambíguo)
+        if (cancelado || !canvasRef.current) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const canvas = canvasRef.current;
+        canvas.width = Math.floor(viewport.width * dpr);
+        canvas.height = Math.floor(viewport.height * dpr);
+        canvas.style.width = `${viewport.width}px`;
+        canvas.style.height = `${viewport.height}px`;
+        renderTask = page.render({
+          canvas,
+          viewport,
+          transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
+        });
+        await renderTask.promise;
       } catch (e) {
         // RenderingCancelledException ao trocar zoom/scroll rápido é esperado; o resto é bug real
         if (!(e instanceof Error && e.name === "RenderingCancelledException")) {

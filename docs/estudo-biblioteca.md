@@ -61,6 +61,18 @@ depende dela.
   dentro da linha) ANTES de montar a `TextLayer`.
 - **Zoom próprio** (a UI é nossa) e detecção de "página visível" pelo scroll (informa a barra do
   leitor via `onPaginaVisivel`).
+- **CSS da TextLayer tem que ser o do v6, não um "mínimo"**: no pdfjs-dist v6 o JS não define
+  mais font-size/transform inline nos spans — ele injeta variáveis por span (`--font-height`,
+  `--scale-x`, `--rotate`) e é o CSS oficial que as converte em `font-size: calc(...)` e
+  `transform: ...`, a partir do `--scale-factor` (= `viewport.scale`) que o app põe no container.
+  Um CSS reduzido (só position/color/white-space, padrão da v4) deixa os spans com fonte herdada
+  e sem scaleX → a caixa invisível fica de tamanho errado e a SELEÇÃO aparece
+  deslocada/maior/menor que o texto do canvas (bug reportado pelo usuário em 2026-07-19).
+- **`page.render({ canvas })` só com `canvas`** (API atual do v6): `canvasContext` é compat
+  retroativa e a doc exige `canvas: null` quando usado — nunca passar os dois juntos.
+- A TextLayer é montada ANTES do desenho do canvas (independentes): texto selecionável mais
+  cedo, e a TextLayer não depende de `requestAnimationFrame` (o render do canvas usa rAF
+  internamente, que pode nunca disparar em abas ocultas — relevante pros testes automatizados).
 
 ## 3. Leitor fullscreen + cronômetro
 
