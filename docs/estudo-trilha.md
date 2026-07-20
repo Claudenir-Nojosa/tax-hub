@@ -70,6 +70,12 @@ cronômetro da sessão é a única fonte "ao vivo"). Quando `segundos >= restant
 `DashboardTab`: o CardTrilha virou o resumo da meta de hoje (blocos feitos, pendências,
 matérias 100%) — computa `computarMetaDia` na hora.
 
+**LIÇÃO — `EstudoConfigCiclo.horasPorDia` guarda MINUTOS, apesar do nome**: `CicloTab.tsx`
+(`updateHoras`) grava `horas * 60` e divide por 60 só na exibição. A 1ª versão deste motor
+multiplicava por 60 de novo (`horasDia * 60`) achando que o campo vinha em horas — bug real
+reportado pelo usuário (dia de "180h/5400min" pra uma config de 3h). O campo do `MetaDia` chama-se
+`minutosDia`, não `horasDia`, exatamente pra isso não se repetir.
+
 ## 5. Arquivos
 
 ```

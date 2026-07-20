@@ -14,7 +14,7 @@ import {
   computarMetaDia, criarTrilhaDinamica, grupoCicloSeguinte, resolverGrupoEfetivo,
   type MetaDia, type QuestaoLiberada,
 } from "@/lib/trilha-dinamica";
-import { resolverCorMateria } from "./trilha/trilha-ui";
+import { fmtHoras, resolverCorMateria } from "./trilha/trilha-ui";
 
 // Trilha DINÂMICA — nada de plano pré-gerado: a meta de HOJE é derivada na hora do estado real
 // (tópicos estudados, cadernos A-D, sessões do calendário) pelas regras do método do usuário
@@ -135,8 +135,8 @@ export default function TrilhaTab({
               <div className="text-lg font-bold">Meta de hoje · {fmtDataCurta(meta.data)}</div>
               <div className="text-xs text-emerald-100">
                 Dia do <b>grupo {meta.grupoCiclo}</b> do ciclo
-                {meta.horasDia > 0
-                  ? ` · ${meta.horasDia}h de estudo${meta.blocos.length > 0 ? ` divididas em ${meta.blocos.length} matéria${meta.blocos.length > 1 ? "s" : ""}` : ""}`
+                {meta.minutosDia > 0
+                  ? ` · ${fmtHoras(meta.minutosDia)} de estudo${meta.blocos.length > 0 ? ` divididas em ${meta.blocos.length} matéria${meta.blocos.length > 1 ? "s" : ""}` : ""}`
                   : " · sem horas configuradas pra hoje (dia livre)"}
               </div>
             </div>
@@ -245,7 +245,7 @@ export default function TrilhaTab({
           </div>
         </div>
       )}
-      {meta.blocos.length === 0 && meta.horasDia > 0 && (
+      {meta.blocos.length === 0 && meta.minutosDia > 0 && (
         <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-5 text-center text-xs text-gray-400">
           Nenhuma matéria com teoria pendente nos grupos do ciclo — configure o Ciclo de Estudos ou aproveite as questões abaixo.
         </div>

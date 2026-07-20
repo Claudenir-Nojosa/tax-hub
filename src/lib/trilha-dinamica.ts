@@ -136,7 +136,7 @@ export interface Revisao30 {
 export interface MetaDia {
   data: string; // dateKey
   grupoCiclo: GrupoCiclo; // grupo EFETIVO do dia (pula grupos sem teoria pendente)
-  horasDia: number;
+  minutosDia: number; // total de minutos de estudo configurados pra hoje no Ciclo
   blocos: BlocoEstudo[];
   blocosConcluidos: boolean; // todos os blocos entregues (false se não há blocos)
   questoesPendentes: QuestaoLiberada[]; // todas as matérias ativas
@@ -217,7 +217,10 @@ export function computarMetaDia(params: {
   const { trilha, configCiclo, materiasAtivas, topicos, calendario } = params;
   const hoje = params.hoje ?? dateKeyLocal();
   const diaSemana = DIAS_SEMANA[parseDateKey(hoje).getDay()];
-  const horasDia = configCiclo.horasPorDia[diaSemana] ?? 0;
+  // ATENÇÃO à unidade: apesar do NOME, `configCiclo.horasPorDia` guarda MINUTOS — o CicloTab
+  // grava `horas * 60` (updateHoras) e divide por 60 pra exibir. Multiplicar por 60 aqui de novo
+  // foi um bug real (meta de "180h/5400min" num dia de 3h, reportado pelo usuário).
+  const minutosDia = configCiclo.horasPorDia[diaSemana] ?? 0;
 
   const grupoEfetivo = resolverGrupoEfetivo(trilha.grupoCiclo, configCiclo, materiasAtivas, topicos);
 
@@ -229,10 +232,10 @@ export function computarMetaDia(params: {
   const materiasBloco = materiasDoGrupo(grupoEfetivo, configCiclo, materiasAtivas)
     .map((m) => analises.find((a) => a.materia === m.nome) ?? analisarMateria(m, topicos))
     .filter((a) => a.topicoAtual !== null);
-  const minutosPorBloco = materiasBloco.length > 0 && horasDia > 0
-    ? Math.floor((horasDia * 60) / materiasBloco.length)
+  const minutosPorBloco = materiasBloco.length > 0 && minutosDia > 0
+    ? Math.floor(minutosDia / materiasBloco.length)
     : 0;
-  const blocos: BlocoEstudo[] = horasDia > 0
+  const blocos: BlocoEstudo[] = minutosDia > 0
     ? materiasBloco.map((a) => {
         const feitos = minutosEstudoHoje(calendario, hoje, a.materia);
         return {
@@ -272,7 +275,7 @@ export function computarMetaDia(params: {
   return {
     data: hoje,
     grupoCiclo: grupoEfetivo,
-    horasDia,
+    minutosDia,
     blocos,
     blocosConcluidos: blocos.length > 0 && blocos.every((b) => b.concluido),
     questoesPendentes: analises.flatMap((a) => a.questoesLiberadas),
