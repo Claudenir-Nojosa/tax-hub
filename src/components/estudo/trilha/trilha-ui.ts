@@ -1,6 +1,6 @@
 import {
   CORES_MATERIA, COR_MATERIA_PADRAO,
-  type MateriaConcurso, type MateriaDef,
+  type MateriaBase, type MateriaConcurso, type MateriaDef,
 } from "@/lib/estudo-data";
 
 // Helpers de apresentação compartilhados entre as abas do Estudo (Trilha, Biblioteca etc.).
@@ -20,7 +20,7 @@ export function fmtHoras(min: number): string {
 // pra concursos customizados, porque ele buscava só na lista MATERIAS hardcoded.
 export function resolverCorMateria(
   nome: string,
-  materiasAtivas: (MateriaDef | MateriaConcurso)[]
+  materiasAtivas: (MateriaDef | MateriaConcurso | MateriaBase)[]
 ): { dot: string; badge: string } {
   const m = materiasAtivas.find((x) => x.nome === nome);
   if (!m) return COR_MATERIA_PADRAO;

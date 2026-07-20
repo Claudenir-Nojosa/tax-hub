@@ -70,6 +70,23 @@ cronômetro da sessão é a única fonte "ao vivo"). Quando `segundos >= restant
 `DashboardTab`: o CardTrilha virou o resumo da meta de hoje (blocos feitos, pendências,
 matérias 100%) — computa `computarMetaDia` na hora.
 
+### 3.1 Saudação + redesign do card (2026-07-20)
+
+`DashboardTab.tsx` ganhou um componente `Saudacao` no topo da aba (`👋 Oi, {primeiro nome}` +
+frase motivacional). Nome vem de `useSession()` (`next-auth/react` — `SessionProvider` já
+envolve o app em `src/app/layout.tsx`, então qualquer client component pode chamar direto).
+`fraseMotivacional(streakDias, metaBatida)` varia por horário (bom dia/tarde/noite) e por
+contexto (meta de hoje batida > streak ≥7 > streak ≥1 > neutra).
+
+`CardTrilha` foi redesenhado no estilo "Meta atual" (referência visual de um concorrente): eyebrow
+uppercase + badge "Grupo X" + data de início: barra de progresso mais grossa com um marcador
+circular na posição atual (`left: {perc}%`); linha de stats "N matérias · N atividades"; e uma
+fileira de tiras finas coloridas na base do card, uma por bloco do dia, usando a COR REAL da
+matéria (`resolverCorMateria` — mesma paleta do Edital) quando concluído, cinza quando pendente.
+`resolverCorMateria` (`trilha-ui.ts`) teve o tipo do parâmetro alargado pra aceitar `MateriaBase`
+também (antes só `MateriaDef | MateriaConcurso`), já que o `DashboardTab` trabalha com o tipo
+mais genérico.
+
 **LIÇÃO — `EstudoConfigCiclo.horasPorDia` guarda MINUTOS, apesar do nome**: `CicloTab.tsx`
 (`updateHoras`) grava `horas * 60` e divide por 60 só na exibição. A 1ª versão deste motor
 multiplicava por 60 de novo (`horasDia * 60`) achando que o campo vinha em horas — bug real
