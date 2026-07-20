@@ -1,6 +1,5 @@
 "use client";
 
-import { useSession } from "next-auth/react";
 import { BookOpen, HelpCircle, Target, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles, Gauge, Route, ArrowRight, Trophy, Library, Flag, CalendarDays, ListChecks } from "lucide-react";
 import {
   NIVEL_CONFIG,
@@ -24,30 +23,6 @@ interface Props {
   state: EstudoState;
   materiasConcurso?: MateriaBase[];
   onIrParaTrilha?: () => void;
-}
-
-// Saudação + frase motivacional no topo da aba — usa o primeiro nome da sessão (NextAuth) e
-// varia o tom conforme o horário e o progresso do dia (meta batida / streak / neutro).
-function fraseMotivacional(streakDias: number, metaBatida: boolean): string {
-  const hora = new Date().getHours();
-  const saudacao = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
-  if (metaBatida) return `${saudacao}! Meta de hoje batida — orgulho disso. Aproveita o embalo. 🎉`;
-  if (streakDias >= 7) return `${saudacao}! ${streakDias} dias seguidos estudando — sequência impecável, não para agora.`;
-  if (streakDias >= 1) return `${saudacao}! Você está numa sequência de ${streakDias} dia${streakDias > 1 ? "s" : ""} — bora manter viva.`;
-  return `${saudacao}! Bora começar mais um dia rumo à aprovação.`;
-}
-
-function Saudacao({ metaBatida, streakDias }: { metaBatida: boolean; streakDias: number }) {
-  const { data: session } = useSession();
-  const primeiroNome = session?.user?.name?.split(" ")[0] ?? "Concurseiro";
-  return (
-    <div>
-      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-        <span aria-hidden>👋</span> Oi, {primeiroNome}
-      </h2>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{fraseMotivacional(streakDias, metaBatida)}</p>
-    </div>
-  );
 }
 
 function fmtDataCurtaBR(dateKey: string): string {
@@ -342,17 +317,8 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
 
   const NivelIcon = nivelConfig.icone;
 
-  // meta de hoje batida (mesmo cálculo que MetaDiaria) — só pra escolher o tom da frase da saudação
-  const dayKeyHoje = DOW_TO_KEY[new Date().getDay()];
-  const metaMinHoje = state.configCiclo.horasPorDia[dayKeyHoje] ?? 0;
-  const estudadoMinHoje = (state.calendario[dateKeyLocal()] ?? []).reduce((s, a) => s + a.duracao, 0);
-  const metaHojeBatida = metaMinHoje > 0 && estudadoMinHoje >= metaMinHoje;
-
   return (
     <div className="space-y-6">
-      {/* Saudação + frase motivacional */}
-      <Saudacao metaBatida={metaHojeBatida} streakDias={streakDias} />
-
       {/* Meta diária */}
       <MetaDiaria state={state} />
 

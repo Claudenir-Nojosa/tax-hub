@@ -70,13 +70,7 @@ cronômetro da sessão é a única fonte "ao vivo"). Quando `segundos >= restant
 `DashboardTab`: o CardTrilha virou o resumo da meta de hoje (blocos feitos, pendências,
 matérias 100%) — computa `computarMetaDia` na hora.
 
-### 3.1 Saudação + redesign do card (2026-07-20)
-
-`DashboardTab.tsx` ganhou um componente `Saudacao` no topo da aba (`👋 Oi, {primeiro nome}` +
-frase motivacional). Nome vem de `useSession()` (`next-auth/react` — `SessionProvider` já
-envolve o app em `src/app/layout.tsx`, então qualquer client component pode chamar direto).
-`fraseMotivacional(streakDias, metaBatida)` varia por horário (bom dia/tarde/noite) e por
-contexto (meta de hoje batida > streak ≥7 > streak ≥1 > neutra).
+### 3.1 Redesign do card (2026-07-20)
 
 `CardTrilha` foi redesenhado no estilo "Meta atual" (referência visual de um concorrente): eyebrow
 uppercase + badge "Grupo X" + data de início: barra de progresso mais grossa com um marcador
