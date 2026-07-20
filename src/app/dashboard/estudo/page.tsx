@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
@@ -9,6 +9,8 @@ import {
   calcularNivel,
   calcularStreakDias,
   dateKeyLocal,
+  topicoKey,
+  filtrarTopicosExcluidos,
   NIVEL_CONFIG,
   type EstudoState,
   type TopicoState,
@@ -75,6 +77,7 @@ function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {
     cartas: parsed.cartas ?? [],
     pdfs: parsed.pdfs ?? [],
     mapasMentais: parsed.mapasMentais ?? [],
+    topicosExcluidos: parsed.topicosExcluidos ?? [],
     topicos: {
       ...DEFAULT_ESTUDO_STATE.topicos,
       ...(parsed.topicos ?? {}),
@@ -200,6 +203,18 @@ export default function EstudoPage() {
     setState((prev) => ({ ...prev, mapasMentais }));
   }, []);
 
+  // excluir/reativar um tópico no Edital — reversível: só some da lista/cálculos, o progresso
+  // (estudado, cadernos A-D) já registrado em `topicos` fica intacto e volta se reativado
+  const toggleTopicoExcluido = useCallback((materia: string, topico: string) => {
+    const key = topicoKey(materia, topico);
+    setState((prev) => ({
+      ...prev,
+      topicosExcluidos: prev.topicosExcluidos.includes(key)
+        ? prev.topicosExcluidos.filter((k) => k !== key)
+        : [...prev.topicosExcluidos, key],
+    }));
+  }, []);
+
   // cartas geradas pelo grifo no leitor de PDF — prepend no baralho (mesma ordem do CartasTab)
   const adicionarCartas = useCallback((novas: Carta[]) => {
     setState((prev) => ({ ...prev, cartas: [...novas, ...prev.cartas] }));
@@ -241,14 +256,23 @@ export default function EstudoPage() {
   const nivel = calcularNivel(xp);
   const nivelConfig = NIVEL_CONFIG[nivel];
 
+  // matérias com os tópicos EXCLUÍDOS já removidos — fonte única passada pra toda aba EXCETO o
+  // Edital (que precisa da lista completa, incluindo excluídos, pra poder reativá-los). undefined
+  // quando o concurso ainda não carregou — cada aba já tem seu próprio fallback pra MATERIAS
+  // nesse caso transitório (na prática concursoAtivo.materias está sempre populado).
+  const materiasFiltradas = useMemo(() => {
+    const materias = concursoAtivo?.materias as MateriaConcurso[] | undefined;
+    if (!materias) return undefined;
+    return filtrarTopicosExcluidos(materias, state.topicosExcluidos);
+  }, [concursoAtivo?.materias, state.topicosExcluidos]);
+
   // minutos que faltam pra fechar o bloco de estudo de HOJE de cada matéria (trilha dinâmica) —
   // o leitor de PDF usa isso pra avisar "meta do dia concluída" no meio da sessão
   const metaMinutosRestantes = (() => {
     const t = state.trilhaDinamica;
     if (!t?.ativa) return undefined;
-    const mats = (concursoAtivo?.materias as MateriaConcurso[] | undefined) ?? MATERIAS;
     const meta = computarMetaDia({
-      trilha: t, configCiclo: state.configCiclo, materiasAtivas: mats,
+      trilha: t, configCiclo: state.configCiclo, materiasAtivas: materiasFiltradas ?? MATERIAS,
       topicos: state.topicos, calendario: state.calendario,
     });
     const rec: Record<string, number> = {};
@@ -343,17 +367,21 @@ export default function EstudoPage() {
           {activeTab === "dashboard" && (
             <DashboardTab
               state={state}
-              materiasConcurso={concursoAtivo?.materias as MateriaBase[] | undefined}
+              materiasConcurso={materiasFiltradas}
               onIrParaTrilha={() => setActiveTab("trilha")}
             />
           )}
 
+          {/* Edital recebe a lista COMPLETA (com tópicos excluídos inclusos) — é a única aba
+              onde dá pra ver e reativar o que foi ocultado */}
           {activeTab === "edital" && (
             <EditalTab
               topicos={state.topicos}
               onUpdate={updateTopicos}
               materiasConcurso={concursoAtivo?.materias as MateriaConcurso[] | undefined}
               pdfs={state.pdfs}
+              topicosExcluidos={state.topicosExcluidos}
+              onToggleTopicoExcluido={toggleTopicoExcluido}
             />
           )}
 
@@ -362,7 +390,7 @@ export default function EstudoPage() {
               pdfs={state.pdfs}
               calendario={state.calendario}
               onChange={updatePdfs}
-              materiasConcurso={concursoAtivo?.materias as MateriaConcurso[] | undefined}
+              materiasConcurso={materiasFiltradas}
               // cronômetro do leitor: a sessão de leitura vira atividade de Estudo no calendário
               // da matéria/tópico do PDF (mesmo fluxo do TimerEstudo — alimenta streak e pág/h)
               onRegistrarSessao={(minutos, materia, topico, paginas, descricao) =>
@@ -377,7 +405,7 @@ export default function EstudoPage() {
             <MapasMentaisTab
               mapas={state.mapasMentais}
               onChange={updateMapasMentais}
-              materiasConcurso={concursoAtivo?.materias as MateriaConcurso[] | undefined}
+              materiasConcurso={materiasFiltradas}
             />
           )}
 
@@ -385,14 +413,14 @@ export default function EstudoPage() {
             <CicloTab
               config={state.configCiclo}
               onChange={updateConfigCiclo}
-              materiasConcurso={concursoAtivo?.materias as MateriaBase[] | undefined}
+              materiasConcurso={materiasFiltradas}
             />
           )}
 
           {activeTab === "professora" && (
             <ProfessoraTab
               topicos={state.topicos}
-              materiasConcurso={concursoAtivo?.materias as MateriaConcurso[] | undefined}
+              materiasConcurso={materiasFiltradas}
               concursoNome={concursoAtivo?.nome}
             />
           )}
@@ -403,7 +431,7 @@ export default function EstudoPage() {
               topicos={state.topicos}
               configCiclo={state.configCiclo}
               calendario={state.calendario}
-              materiasConcurso={concursoAtivo?.materias as MateriaConcurso[] | undefined}
+              materiasConcurso={materiasFiltradas}
               onUpdateTrilha={updateTrilhaDinamica}
               onUpdateTopicos={updateTopicos}
               onIrParaCiclo={() => setActiveTab("ciclo")}
@@ -431,7 +459,7 @@ export default function EstudoPage() {
           )}
 
           {activeTab === "relatorios" && (
-            <RelatoriosTab state={state} materiasConcurso={concursoAtivo?.materias as MateriaBase[] | undefined} />
+            <RelatoriosTab state={state} materiasConcurso={materiasFiltradas} />
           )}
 
           {activeTab === "cartas" && (
@@ -439,7 +467,7 @@ export default function EstudoPage() {
           )}
 
           {activeTab === "resumos" && (
-            <ResumosTab materiasConcurso={concursoAtivo?.materias as MateriaBase[] | undefined} />
+            <ResumosTab materiasConcurso={materiasFiltradas} />
           )}
 
           {activeTab === "comparar" && <CompararEditaisTab />}

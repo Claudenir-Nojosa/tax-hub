@@ -179,6 +179,10 @@ export interface EstudoState {
   trilhaDinamica?: TrilhaDinamicaState; // ausente = usuário ainda não ativou (aba mostra intro)
   pdfs: PdfEstudo[];
   mapasMentais: MapaMental[];
+  // tópicos ocultos do Edital (topicoKey) — "excluir" é reversível: some da lista, do Ciclo, da
+  // Trilha e de todos os cálculos (% do edital, tópico atual etc.), mas o progresso já registrado
+  // (estudado, cadernos A-D) fica guardado em `topicos` e volta do jeito que estava se reativado
+  topicosExcluidos: string[];
 }
 
 // --- Biblioteca de PDFs ---
@@ -521,6 +525,22 @@ export function calcularStreakDias(calendario: Record<string, AtividadeCalendari
 
 export function topicoKey(materia: string, topico: string): string {
   return `${materia}||${topico}`;
+}
+
+// Remove tópicos ocultos de uma lista de matérias — usado por TODA aba exceto o Edital (que
+// precisa ver os tópicos ocultos pra poder reativá-los). Genérico: funciona com MateriaConcurso,
+// MateriaDef e MateriaBase (todas têm `nome`/`topicos`). Nunca remove a matéria em si, mesmo que
+// fique com 0 tópicos — evita quebrar referências por nome (Ciclo, cor por matéria etc.).
+export function filtrarTopicosExcluidos<T extends { nome: string; topicos: string[] }>(
+  materias: T[],
+  topicosExcluidos: string[]
+): T[] {
+  if (topicosExcluidos.length === 0) return materias;
+  const excluidos = new Set(topicosExcluidos);
+  return materias.map((m) => ({
+    ...m,
+    topicos: m.topicos.filter((t) => !excluidos.has(topicoKey(m.nome, t))),
+  }));
 }
 
 export function defaultTopicoState(): TopicoState {
@@ -1137,4 +1157,5 @@ export const DEFAULT_ESTUDO_STATE: EstudoState = {
   semanasOK: 0,
   pdfs: [],
   mapasMentais: [],
+  topicosExcluidos: [],
 };

@@ -11,13 +11,17 @@ import {
   type MateriaConcurso,
   type PdfEstudo,
 } from "@/lib/estudo-data";
-import { ChevronDown, ChevronRight, Search, CheckSquare, Square, BookOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, Search, CheckSquare, Square, BookOpen, EyeOff, RotateCcw } from "lucide-react";
 
 interface Props {
   topicos: Record<string, TopicoState>;
   onUpdate: (topicos: Record<string, TopicoState>) => void;
   materiasConcurso?: MateriaConcurso[]; // se passado, usa em vez de MATERIAS hardcoded
   pdfs?: PdfEstudo[]; // Biblioteca: mostra % lido dos PDFs que cobrem cada tópico (opcional)
+  // excluir um tópico é reversível: some do Ciclo/Trilha/cálculos em todo o resto do app, mas o
+  // Edital continua mostrando ele (esmaecido) pra dar a opção de reativar
+  topicosExcluidos?: string[];
+  onToggleTopicoExcluido?: (materia: string, topico: string) => void;
 }
 
 // % de leitura dos PDFs da Biblioteca que cobrem este tópico (média ponderada pelo total de
@@ -81,7 +85,7 @@ const COR_BORDER: Record<string, string> = {
   yellow: "border-l-yellow-500",
 };
 
-export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = [] }: Props) {
+export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = [], topicosExcluidos = [], onToggleTopicoExcluido }: Props) {
   const materiasAtivas = materiasConcurso
     ? materiasConcurso.map(m => ({ ...m, corBorder: COR_BORDER[m.cor] ?? "border-l-gray-400" }))
     : MATERIAS;
@@ -163,13 +167,17 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
           </div>
         ))}
         <div className="w-12 text-center">Média</div>
+        <div className="w-8" />
       </div>
 
       {/* Matérias */}
       <div className="space-y-2">
         {materiasFiltradas.map((m) => {
-          const totalTopicos = m.topicos.length;
-          const estudadoCount = m.topicos.filter((t) => topicos[topicoKey(m.nome, t)]?.estudado).length;
+          // % e contagem da matéria ignoram tópicos ocultos (excluídos) — só a lista expandida
+          // abaixo mostra eles, esmaecidos, com opção de reativar
+          const topicosAtivos = m.topicos.filter((t) => !topicosExcluidos.includes(topicoKey(m.nome, t)));
+          const totalTopicos = topicosAtivos.length;
+          const estudadoCount = topicosAtivos.filter((t) => topicos[topicoKey(m.nome, t)]?.estudado).length;
           const perc = totalTopicos > 0 ? Math.round((estudadoCount / totalTopicos) * 100) : 0;
           const isOpen = expandidos[m.nome] ?? false;
 
@@ -229,11 +237,12 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                     const estado = topicos[key];
                     const media = calcularMedia(estado.cadernos);
                     const percPdf = percLeituraTopico(pdfs, m.nome, t);
+                    const excluido = topicosExcluidos.includes(key);
                     return (
                       <div
                         key={t}
                         className={`flex flex-col md:flex-row md:items-center gap-2 md:gap-2 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${
-                          estado.estudado ? "bg-emerald-50/50 dark:bg-emerald-950/10" : ""
+                          excluido ? "opacity-50" : estado.estudado ? "bg-emerald-50/50 dark:bg-emerald-950/10" : ""
                         }`}
                       >
                         {/* Número */}
@@ -245,6 +254,11 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                         <div className="flex-1 min-w-0">
                           <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
                             {t}
+                            {excluido && (
+                              <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full align-middle bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                                <EyeOff className="h-2.5 w-2.5" /> Oculto
+                              </span>
+                            )}
                             {percPdf !== null && (
                               <span
                                 title="Leitura dos PDFs da Biblioteca que cobrem este tópico"
@@ -315,6 +329,24 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                             {media === 0 ? "—" : `${media}%`}
                           </span>
                         </div>
+
+                        {/* Excluir/reativar — reversível: só oculta, o progresso não é apagado */}
+                        {onToggleTopicoExcluido && (
+                          <div className="md:w-8 flex md:justify-center">
+                            <button
+                              type="button"
+                              onClick={() => onToggleTopicoExcluido(m.nome, t)}
+                              title={excluido ? "Reativar tópico" : "Excluir tópico (oculta, sem apagar o progresso)"}
+                              className={`flex-shrink-0 p-1 rounded transition-colors ${
+                                excluido
+                                  ? "text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                  : "text-gray-300 dark:text-gray-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                              }`}
+                            >
+                              {excluido ? <RotateCcw className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
