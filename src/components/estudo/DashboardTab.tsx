@@ -360,9 +360,10 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        {[
+      {/* Stats — grid-cols do breakpoint largo acompanha a QUANTIDADE real de cards (5 sem
+          Biblioteca, 6 com ela) pra nunca sobrar um card sozinho numa linha nova */}
+      {(() => {
+        const stats = [
           { label: "Tópicos Estudados", value: `${estudados}/${totalTopicos}` as string | number, sub: null as string | null, Icon: BookOpen, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/30" },
           { label: "% do Edital", value: `${percEdital}%`, sub: null, Icon: TrendingUp, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/30" },
           { label: "Questões Feitas", value: totalQuestoes, sub: null, Icon: HelpCircle, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
@@ -385,17 +386,23 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
                 bg: "bg-sky-50 dark:bg-sky-950/30",
               }]
             : []),
-        ].map((s) => (
-          <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center shadow-sm">
-            <div className={`flex items-center justify-center w-9 h-9 rounded-lg mx-auto mb-2 ${s.bg}`}>
-              <s.Icon className={`h-5 w-5 ${s.color}`} />
-            </div>
-            <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{s.label}</div>
-            {s.sub && <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{s.sub}</div>}
+        ];
+        const gridColsLg = stats.length >= 6 ? "lg:grid-cols-6" : "lg:grid-cols-5";
+        return (
+          <div className={`grid grid-cols-2 md:grid-cols-3 ${gridColsLg} gap-3`}>
+            {stats.map((s) => (
+              <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center shadow-sm">
+                <div className={`flex items-center justify-center w-9 h-9 rounded-lg mx-auto mb-2 ${s.bg}`}>
+                  <s.Icon className={`h-5 w-5 ${s.color}`} />
+                </div>
+                <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{s.label}</div>
+                {s.sub && <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{s.sub}</div>}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        );
+      })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Conquistas */}
