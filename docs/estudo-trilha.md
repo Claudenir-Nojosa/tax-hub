@@ -45,11 +45,12 @@ persistido, não é mais lido por nenhuma UI.
 
 ## 3. UI (`TrilhaTab.tsx`) e bookkeeping
 
-Painel "Meta de hoje": header com grupo/horas e contagem de blocos; card de cartas (domingo) ou
-linha com a próxima data; cards de revisão de 30 questões; blocos de estudo com barra de minutos
-(CTA "Ler PDF" → aba Biblioteca); questões liberadas com registro INLINE de acertos/erros (grava
-direto no caderno do grupo via `onUpdateTopicos` — mesmo dado do Edital, aparece lá também);
-progresso por matéria (teoria x/y · questões n/4y, badge 100%/em revisão).
+Painel "Meta de hoje": hero com anel de progresso (SVG puro) sobre a % dos blocos do dia + data
+por extenso; um único checklist vertical ("Sua trilha de hoje", ver 3.2) que reúne blocos de
+estudo, questões liberadas, revisão de 30 e cartas num só fluxo conectado por uma linha, em vez de
+cards soltos; questões liberadas com registro INLINE de acertos/erros (grava direto no caderno do
+grupo via `onUpdateTopicos` — mesmo dado do Edital, aparece lá também); progresso por matéria em
+grade de mini-anéis (teoria+questões combinados num só %, badge 100%/em revisão).
 
 Dois `useEffect` de bookkeeping (com guards contra loop):
 1. matéria recém-100% → grava `conclusaoMaterias[nome] = hoje` (uma vez);
@@ -86,6 +87,34 @@ mais genérico.
 multiplicava por 60 de novo (`horasDia * 60`) achando que o campo vinha em horas — bug real
 reportado pelo usuário (dia de "180h/5400min" pra uma config de 3h). O campo do `MetaDia` chama-se
 `minutosDia`, não `horasDia`, exatamente pra isso não se repetir.
+
+### 3.2 Redesign do painel: checklist único em timeline (2026-07-20)
+
+`TrilhaTab.tsx` foi reescrito visualmente a pedido do usuário ("mais bonito e intuitivo"). Trocou-
+se a pilha de cards desconectados (header + banner cartas + banners revisão30 + card blocos + card
+questões + card progresso) por:
+
+- **Hero com anel de progresso** (`AnelProgresso`, SVG puro sem lib): `stroke-dashoffset` sobre a
+  circunferência, mostra a % dos blocos do dia entregues (não uma métrica composta — combina com o
+  que já governa o avanço do ciclo, pra não inventar um número que diverge do que de fato destrava
+  o grupo seguinte).
+- **Checklist vertical único** ("Sua trilha de hoje"): cada item do dia (bloco de estudo, resumo de
+  questões liberadas, revisão de 30 pendente, cartas se for domingo) vira uma linha com círculo de
+  status (check verde se concluído) conectada por uma linha fina ao próximo item — modelo
+  "stepper", lê como uma lista de tarefas em vez de painéis paralelos sem hierarquia.
+- **Grade de mini-anéis por matéria**: cada card tem um anel pequeno com o % combinado (teoria +
+  questões, pesos iguais — `(topicosEstudados + gruposFeitos) / (totalTopicos * 5)`), troféu no
+  lugar do % quando 100%.
+- Tela de ativação (`Intro`) ganhou os mesmos ícones em badge circular colorido, mantendo a
+  estrutura (regras + aviso de ciclo vazio + CTA).
+
+**Cores por TIPO de item são fixas** (`TIPO_ITEM`: estudo=sky, questões=violet, revisão=amber,
+cartas=fuchsia) e **cores por grupo de questão também** (`GRUPO_COR`: A=blue, B=emerald, C=violet,
+D=amber, igual ao Edital) — nenhuma delas é montada por interpolação de string. O Tailwind JIT só
+enxerga classes literais no código-fonte; `` `bg-${cor}-500` `` não é detectado e renderiza sem
+estilo. Isso já valia pro `resolverCorMateria` (usado pra bolinha de cor de cada matéria, não pro
+anel) — o anel usa `stroke-emerald-500`/`stroke-amber-500` fixos (não a cor da matéria) por esse
+mesmo motivo, com a identidade da matéria ficando só na bolinha ao lado do nome.
 
 ## 5. Arquivos
 

@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight, BookOpen, CalendarClock, CheckCircle2, ChevronDown, Clock, Layers,
-  ListChecks, Route, Settings2, Sparkles, Trash2, Trophy, Zap,
+  ArrowRight, BookOpen, CalendarClock, Check, ChevronDown, Clock, Layers,
+  ListChecks, Route, Settings2, Sparkles, Target, Trash2, Trophy,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   MATERIAS, dateKeyLocal, topicoKey,
   type AtividadeCalendario, type EstudoConfigCiclo, type Grupo, type MateriaConcurso,
@@ -12,7 +13,7 @@ import {
 } from "@/lib/estudo-data";
 import {
   computarMetaDia, criarTrilhaDinamica, grupoCicloSeguinte, resolverGrupoEfetivo,
-  type MetaDia, type QuestaoLiberada,
+  type AnaliseMateria, type BlocoEstudo, type MetaDia, type QuestaoLiberada, type Revisao30,
 } from "@/lib/trilha-dinamica";
 import { fmtHoras, resolverCorMateria } from "./trilha/trilha-ui";
 
@@ -21,6 +22,11 @@ import { fmtHoras, resolverCorMateria } from "./trilha/trilha-ui";
 // (src/lib/trilha-dinamica.ts). Este componente só apresenta a meta e grava o bookkeeping mínimo
 // (posição do ciclo, datas de conclusão de matéria, revisões feitas) — se o usuário não entrega
 // o dia, o grupo do ciclo não avança e a meta de amanhã "espera" por ele.
+//
+// Visual: um único "checklist" vertical (timeline) reúne tudo que é acionável hoje — blocos de
+// estudo, questões liberadas, revisão de 30 e cartas — em vez de cards soltos sem hierarquia.
+// Cores de cada TIPO de item (estudo/questões/revisão/cartas) são fixas (ver TIPO_ITEM), não
+// dinâmicas por matéria, pra evitar classes Tailwind interpoladas (não são detectadas pelo JIT).
 
 interface Props {
   trilha?: TrilhaDinamicaState;
@@ -36,10 +42,61 @@ interface Props {
 }
 
 const GRUPO_LABEL: Record<Grupo, string> = { A: "Grupo A", B: "Grupo B", C: "Grupo C", D: "Grupo D" };
+const GRUPO_COR: Record<Grupo, string> = {
+  A: "bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300",
+  B: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300",
+  C: "bg-violet-100 text-violet-700 dark:bg-violet-900/60 dark:text-violet-300",
+  D: "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300",
+};
+
+type TipoPasso = "estudo" | "questoes" | "revisao" | "cartas";
+const TIPO_ITEM: Record<TipoPasso, string> = {
+  estudo: "bg-sky-100 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400",
+  questoes: "bg-violet-100 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400",
+  revisao: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400",
+  cartas: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400",
+};
 
 function fmtDataCurta(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
+
+function fmtDataLonga(dateKey: string): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const s = new Date(y, m - 1, d).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// ─── Anel de progresso (SVG puro, sem libs) ────────────────────────────────────
+
+function AnelProgresso({
+  perc, size = 84, espessura = 8, corStroke = "stroke-white", corTrilho = "stroke-white/25", children,
+}: {
+  perc: number;
+  size?: number;
+  espessura?: number;
+  corStroke?: string;
+  corTrilho?: string;
+  children?: React.ReactNode;
+}) {
+  const raio = (size - espessura) / 2;
+  const circ = 2 * Math.PI * raio;
+  const clamped = Math.min(100, Math.max(0, perc));
+  const offset = circ * (1 - clamped / 100);
+  return (
+    <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={raio} strokeWidth={espessura} fill="none" className={corTrilho} />
+        <circle
+          cx={size / 2} cy={size / 2} r={raio} strokeWidth={espessura} fill="none"
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+          className={`${corStroke} transition-all duration-700 ease-out`}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">{children}</div>
+    </div>
+  );
 }
 
 export default function TrilhaTab({
@@ -120,184 +177,125 @@ export default function TrilhaTab({
   };
 
   const blocosFeitos = meta.blocos.filter((b) => b.concluido).length;
+  const percBlocos = meta.blocos.length > 0 ? Math.round((blocosFeitos / meta.blocos.length) * 100) : 0;
   const materiasEmRevisao = meta.analises.filter(
     (a) => a.materiaConcluida && (trilha.revisoes30Feitas[a.materia] ?? []).length > 0
   );
+  const pendencias = meta.questoesPendentes.length + meta.revisoes30.length + (meta.revisarCartas ? 1 : 0);
+
+  // ── monta o checklist único do dia ────────────────────────────────────────
+  type Passo = { id: string; tipo: TipoPasso; concluido: boolean; icone: LucideIcon; corpo: React.ReactNode };
+  const passos: Passo[] = [];
+
+  for (const b of meta.blocos) {
+    passos.push({
+      id: `bloco-${b.materia}`,
+      tipo: "estudo",
+      concluido: b.concluido,
+      icone: BookOpen,
+      corpo: <CorpoBloco b={b} materiasAtivas={materiasAtivas} onIrParaBiblioteca={onIrParaBiblioteca} />,
+    });
+  }
+  if (meta.questoesPendentes.length > 0) {
+    passos.push({
+      id: "questoes",
+      tipo: "questoes",
+      concluido: false,
+      icone: ListChecks,
+      corpo: <CorpoQuestoes questoes={meta.questoesPendentes} materiasAtivas={materiasAtivas} onRegistrar={registrarQuestoes} />,
+    });
+  }
+  for (const r of meta.revisoes30) {
+    passos.push({
+      id: `revisao-${r.materia}`,
+      tipo: "revisao",
+      concluido: false,
+      icone: Trophy,
+      corpo: <CorpoRevisao30 r={r} onMarcar={() => marcarRevisao30(r.materia)} />,
+    });
+  }
+  if (meta.revisarCartas) {
+    passos.push({
+      id: "cartas",
+      tipo: "cartas",
+      concluido: false,
+      icone: Layers,
+      corpo: <CorpoCartas onIrParaCartas={onIrParaCartas} onMarcar={marcarCartasFeitas} />,
+    });
+  }
 
   return (
     <div className="space-y-4">
-      {/* header do dia */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-5 text-white shadow-lg">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <Route className="h-6 w-6" />
-            <div>
-              <div className="text-lg font-bold">Meta de hoje · {fmtDataCurta(meta.data)}</div>
-              <div className="text-xs text-emerald-100">
-                Dia do <b>grupo {meta.grupoCiclo}</b> do ciclo
-                {meta.minutosDia > 0
-                  ? ` · ${fmtHoras(meta.minutosDia)} de estudo${meta.blocos.length > 0 ? ` divididas em ${meta.blocos.length} matéria${meta.blocos.length > 1 ? "s" : ""}` : ""}`
-                  : " · sem horas configuradas pra hoje (dia livre)"}
-              </div>
+      {/* hero do dia */}
+      <div className="bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-600 rounded-2xl p-5 sm:p-6 text-white shadow-lg">
+        <div className="flex items-center gap-4 sm:gap-5">
+          <AnelProgresso perc={meta.blocos.length > 0 ? percBlocos : 0} size={80} espessura={7}>
+            <div className="text-center leading-none">
+              <div className="text-lg font-bold">{meta.blocos.length > 0 ? `${percBlocos}%` : "—"}</div>
+              <div className="text-[9px] text-emerald-100 uppercase tracking-wide mt-0.5">hoje</div>
+            </div>
+          </AnelProgresso>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] uppercase tracking-wider text-emerald-100 font-semibold mb-0.5">
+              {fmtDataLonga(meta.data)}
+            </div>
+            <div className="text-lg sm:text-xl font-bold leading-snug">
+              {meta.blocosConcluidos
+                ? "Meta de hoje entregue! 🎉"
+                : meta.blocos.length > 0
+                  ? `Grupo ${meta.grupoCiclo} · ${blocosFeitos}/${meta.blocos.length} blocos`
+                  : "Dia livre de blocos"}
+            </div>
+            <div className="text-xs text-emerald-100 mt-1">
+              {meta.minutosDia > 0 ? `${fmtHoras(meta.minutosDia)} de estudo hoje` : "Sem horas configuradas pra hoje"}
+              {pendencias > 0 && ` · ${pendencias} pendência${pendencias !== 1 ? "s" : ""} no checklist`}
             </div>
           </div>
-          {meta.blocos.length > 0 && (
-            <div className={`text-center rounded-xl px-4 py-2 ${meta.blocosConcluidos ? "bg-white/25" : "bg-white/10"}`}>
-              <div className="text-lg font-bold tabular-nums">{blocosFeitos}/{meta.blocos.length}</div>
-              <div className="text-[10px] text-emerald-100 uppercase tracking-wide">{meta.blocosConcluidos ? "dia entregue ✓" : "blocos de estudo"}</div>
-            </div>
-          )}
         </div>
         {meta.blocosConcluidos && (
-          <div className="mt-3 text-xs bg-white/15 rounded-lg px-3 py-2 flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5" />
-            Blocos de hoje entregues! Amanhã o ciclo segue pro{" "}
+          <div className="mt-4 text-xs bg-white/15 backdrop-blur-sm rounded-lg px-3 py-2 flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 flex-shrink-0" />
+            Amanhã o ciclo segue pro{" "}
             {/* grupo EFETIVO de amanhã: se o grupo seguinte não tiver matéria com teoria
                 pendente, o motor pula pra frente — mostrar o que de fato vai acontecer */}
             <b>grupo {resolverGrupoEfetivo(grupoCicloSeguinte(meta.grupoCiclo), configCiclo, materiasAtivas, topicos)}</b>.
           </div>
         )}
+        {!meta.revisarCartas && (
+          <div className="mt-3 text-[11px] text-emerald-100/90 flex items-center gap-1.5">
+            <CalendarClock className="h-3 w-3 flex-shrink-0" />
+            Próxima revisão das cartas: domingo {fmtDataCurta(meta.proximoDomingoCartas)}
+          </div>
+        )}
       </div>
 
-      {/* revisão das cartas (a cada 2 domingos) */}
-      {meta.revisarCartas ? (
-        <div className="rounded-xl border-2 border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-          <Layers className="h-6 w-6 text-violet-500 flex-shrink-0" />
-          <div className="flex-1">
-            <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">Hoje é dia de revisar as cartas</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">A cada 2 domingos (14 dias) — revise o baralho na aba Cartas.</div>
-          </div>
-          <div className="flex gap-2">
-            {onIrParaCartas && (
-              <button type="button" onClick={onIrParaCartas} className="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium flex items-center gap-1">
-                Ir pras cartas <ArrowRight className="h-3 w-3" />
-              </button>
-            )}
-            <button type="button" onClick={marcarCartasFeitas} className="px-3 py-1.5 rounded-lg border border-violet-300 dark:border-violet-700 text-violet-600 dark:text-violet-300 text-xs font-medium">
-              Marcar feita
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="text-[11px] text-gray-400 dark:text-gray-500 flex items-center gap-1.5 px-1">
-          <CalendarClock className="h-3 w-3" />
-          Próxima revisão das cartas: domingo {fmtDataCurta(meta.proximoDomingoCartas)}
-        </div>
-      )}
-
-      {/* revisões de 30 questões (matéria concluída ontem ou antes) */}
-      {meta.revisoes30.map((r) => (
-        <div key={r.materia} className="rounded-xl border-2 border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-          <Trophy className="h-6 w-6 text-amber-500 flex-shrink-0" />
-          <div className="flex-1">
-            <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-              {r.materia} — revisão da matéria
-            </div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              Matéria 100% concluída em {fmtDataCurta(r.concluidaEm)}. Faça <b>30 questões englobando todos os tópicos</b> (não é 30 por tópico).
-            </div>
-          </div>
-          <button type="button" onClick={() => marcarRevisao30(r.materia)} className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium self-start sm:self-auto">
-            Concluí as 30 questões
-          </button>
-        </div>
-      ))}
-
-      {/* blocos de estudo do dia */}
-      {meta.blocos.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-            <BookOpen className="h-4 w-4 text-emerald-500" />
-            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex-1">Estudo de hoje — grupo {meta.grupoCiclo}</span>
-            <span className="text-[11px] text-gray-400">tempo monitorado pelo leitor de PDF / Timer</span>
-          </div>
-          <div className="divide-y divide-gray-100 dark:divide-gray-700">
-            {meta.blocos.map((b) => {
-              const cor = resolverCorMateria(b.materia, materiasAtivas);
-              const perc = Math.min(100, Math.round((b.minutosFeitos / b.minutosAlvo) * 100));
-              return (
-                <div key={b.materia} className="px-4 py-3 flex items-center gap-3">
-                  <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cor.dot}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{b.materia}</div>
-                    <div className="text-[11px] text-gray-400 truncate" title={b.topico}>tópico atual: {b.topico}</div>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
-                        <div className={`rounded-full h-1.5 transition-all ${b.concluido ? "bg-emerald-500" : "bg-sky-500"}`} style={{ width: `${perc}%` }} />
-                      </div>
-                      <span className="text-[11px] text-gray-500 tabular-nums whitespace-nowrap">
-                        {b.minutosFeitos}/{b.minutosAlvo} min
-                      </span>
-                    </div>
-                  </div>
-                  {b.concluido ? (
-                    <span className="flex items-center gap-1 text-emerald-500 text-xs font-semibold flex-shrink-0"><CheckCircle2 className="h-4 w-4" /> feito</span>
-                  ) : (
-                    onIrParaBiblioteca && (
-                      <button type="button" onClick={onIrParaBiblioteca} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-medium flex items-center gap-1">
-                        Ler PDF <ArrowRight className="h-3 w-3" />
-                      </button>
-                    )
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      {meta.blocos.length === 0 && meta.minutosDia > 0 && (
-        <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-5 text-center text-xs text-gray-400">
-          Nenhuma matéria com teoria pendente nos grupos do ciclo — configure o Ciclo de Estudos ou aproveite as questões abaixo.
-        </div>
-      )}
-
-      {/* questões liberadas (escalonamento A/B/C/D) */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-          <ListChecks className="h-4 w-4 text-violet-500" />
-          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex-1">Questões liberadas</span>
-          <span className="text-[11px] text-gray-400">{meta.questoesPendentes.length} pendente{meta.questoesPendentes.length !== 1 ? "s" : ""}</span>
-        </div>
-        {meta.questoesPendentes.length === 0 ? (
-          <div className="px-4 py-5 text-center text-xs text-gray-400">
-            Nada pendente — concluir um tópico libera o grupo A do anterior, o B do antepenúltimo, e assim por diante.
+      {/* checklist único do dia */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5">
+        <div className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-4">Sua trilha de hoje</div>
+        {passos.length === 0 ? (
+          <div className="py-6 text-center">
+            <Check className="h-8 w-8 text-emerald-400 mx-auto mb-2" />
+            <div className="text-sm text-gray-500 dark:text-gray-400">Tudo em dia — nada pendente no checklist agora.</div>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100 dark:divide-gray-700">
-            {meta.questoesPendentes.map((q) => (
-              <LinhaQuestao key={q.id} q={q} materiasAtivas={materiasAtivas} onRegistrar={registrarQuestoes} />
+          <div>
+            {passos.map((p, i) => (
+              <PassoLinha key={p.id} passo={p} ultimo={i === passos.length - 1} />
             ))}
           </div>
         )}
       </div>
 
       {/* progresso por matéria */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-          <Zap className="h-4 w-4 text-amber-500" />
-          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex-1">Progresso rumo aos 100%</span>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Target className="h-4 w-4 text-emerald-500" />
+          <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Progresso rumo aos 100%</span>
         </div>
-        <div className="divide-y divide-gray-100 dark:divide-gray-700">
-          {meta.analises.map((a) => {
-            const cor = resolverCorMateria(a.materia, materiasAtivas);
-            const totalGrupos = a.totalTopicos * 4;
-            const emRevisao = materiasEmRevisao.some((m) => m.materia === a.materia);
-            return (
-              <div key={a.materia} className="px-4 py-2.5 flex items-center gap-3">
-                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cor.dot}`} />
-                <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate">{a.materia}</span>
-                {a.materiaConcluida ? (
-                  <span className="text-[11px] font-semibold text-emerald-500 flex items-center gap-1">
-                    <Trophy className="h-3 w-3" /> 100%{emRevisao ? " · em revisão" : ""}
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-gray-400 tabular-nums whitespace-nowrap">
-                    teoria {a.topicosEstudados}/{a.totalTopicos} · questões {a.gruposFeitos}/{totalGrupos}
-                  </span>
-                )}
-              </div>
-            );
-          })}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {meta.analises.map((a) => (
+            <CardMateria key={a.materia} a={a} materiasAtivas={materiasAtivas} emRevisao={materiasEmRevisao.some((m) => m.materia === a.materia)} />
+          ))}
         </div>
       </div>
 
@@ -306,6 +304,160 @@ export default function TrilhaTab({
           <Trash2 className="h-3 w-3" /> Desativar trilha
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── Linha do checklist (timeline vertical conectada) ──────────────────────────
+
+function PassoLinha({
+  passo, ultimo,
+}: {
+  passo: { tipo: TipoPasso; concluido: boolean; icone: LucideIcon; corpo: React.ReactNode };
+  ultimo: boolean;
+}) {
+  const Icone = passo.icone;
+  return (
+    <div className="flex gap-3">
+      <div className="flex flex-col items-center flex-shrink-0">
+        <div className={`h-9 w-9 rounded-full flex items-center justify-center ${passo.concluido ? "bg-emerald-500 text-white" : TIPO_ITEM[passo.tipo]}`}>
+          {passo.concluido ? <Check className="h-4 w-4" /> : <Icone className="h-4 w-4" />}
+        </div>
+        {!ultimo && <div className="w-0.5 flex-1 min-h-[16px] bg-gray-150 dark:bg-gray-700 my-1 rounded-full" />}
+      </div>
+      <div className={`flex-1 min-w-0 ${ultimo ? "" : "pb-5"}`}>{passo.corpo}</div>
+    </div>
+  );
+}
+
+function CorpoBloco({
+  b, materiasAtivas, onIrParaBiblioteca,
+}: {
+  b: BlocoEstudo;
+  materiasAtivas: (MateriaDef | MateriaConcurso)[];
+  onIrParaBiblioteca?: () => void;
+}) {
+  const cor = resolverCorMateria(b.materia, materiasAtivas);
+  const perc = Math.min(100, Math.round((b.minutosFeitos / Math.max(1, b.minutosAlvo)) * 100));
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cor.dot}`} />
+          <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{b.materia}</span>
+        </div>
+        <div className="text-[11px] text-gray-400 truncate mt-0.5" title={b.topico}>tópico atual: {b.topico}</div>
+        <div className="mt-1.5 flex items-center gap-2">
+          <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-500 ${b.concluido ? "bg-emerald-500" : "bg-sky-500"}`} style={{ width: `${perc}%` }} />
+          </div>
+          <span className="text-[11px] text-gray-500 tabular-nums whitespace-nowrap">{b.minutosFeitos}/{b.minutosAlvo}min</span>
+        </div>
+      </div>
+      {!b.concluido && onIrParaBiblioteca && (
+        <button type="button" onClick={onIrParaBiblioteca} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-medium flex items-center gap-1">
+          Ler PDF <ArrowRight className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CorpoQuestoes({
+  questoes, materiasAtivas, onRegistrar,
+}: {
+  questoes: QuestaoLiberada[];
+  materiasAtivas: (MateriaDef | MateriaConcurso)[];
+  onRegistrar: (q: QuestaoLiberada, acertos: number, erros: number) => void;
+}) {
+  return (
+    <div>
+      <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+        {questoes.length} questõe{questoes.length !== 1 ? "s" : ""} liberada{questoes.length !== 1 ? "s" : ""}
+      </div>
+      <div className="text-[11px] text-gray-400 mb-2">Escalonadas pelos tópicos concluídos — sem prazo, ficam acumuladas até você registrar.</div>
+      <div className="space-y-1 max-h-64 overflow-y-auto pr-1 -mr-1">
+        {questoes.map((q) => (
+          <LinhaQuestao key={q.id} q={q} materiasAtivas={materiasAtivas} onRegistrar={onRegistrar} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CorpoRevisao30({ r, onMarcar }: { r: Revisao30; onMarcar: () => void }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">{r.materia} — revisão da matéria</div>
+        <div className="text-[11px] text-gray-400">
+          100% concluída em {fmtDataCurta(r.concluidaEm)} — <b>30 questões englobando todos os tópicos</b> (não 30 por tópico).
+        </div>
+      </div>
+      <button type="button" onClick={onMarcar} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-medium">
+        Concluí
+      </button>
+    </div>
+  );
+}
+
+function CorpoCartas({
+  onIrParaCartas, onMarcar,
+}: {
+  onIrParaCartas?: () => void;
+  onMarcar: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">Revisar as cartas</div>
+        <div className="text-[11px] text-gray-400">A cada 2 domingos (14 dias)</div>
+      </div>
+      <div className="flex gap-1.5 flex-shrink-0">
+        {onIrParaCartas && (
+          <button type="button" onClick={onIrParaCartas} className="px-2.5 py-1.5 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-[11px] font-medium flex items-center gap-1">
+            Ir <ArrowRight className="h-3 w-3" />
+          </button>
+        )}
+        <button type="button" onClick={onMarcar} className="px-2.5 py-1.5 rounded-lg border border-fuchsia-300 dark:border-fuchsia-700 text-fuchsia-600 dark:text-fuchsia-300 text-[11px] font-medium">
+          Marquei
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Card de progresso por matéria (mini anel) ─────────────────────────────────
+
+function CardMateria({
+  a, materiasAtivas, emRevisao,
+}: {
+  a: AnaliseMateria;
+  materiasAtivas: (MateriaDef | MateriaConcurso)[];
+  emRevisao: boolean;
+}) {
+  const cor = resolverCorMateria(a.materia, materiasAtivas);
+  const totalUnidades = a.totalTopicos * 5; // teoria (x1) + questões (4 grupos)
+  const feitas = a.topicosEstudados + a.gruposFeitos;
+  const perc = totalUnidades > 0 ? Math.round((feitas / totalUnidades) * 100) : 0;
+  return (
+    <div className="rounded-xl border border-gray-100 dark:border-gray-700 p-3 flex flex-col items-center text-center gap-1.5">
+      <AnelProgresso
+        perc={perc}
+        size={56}
+        espessura={5}
+        corStroke={a.materiaConcluida ? "stroke-amber-500" : "stroke-emerald-500"}
+        corTrilho="stroke-gray-100 dark:stroke-gray-700"
+      >
+        {a.materiaConcluida ? <Trophy className="h-4 w-4 text-amber-500" /> : <span className="text-xs font-bold text-gray-700 dark:text-gray-200">{perc}%</span>}
+      </AnelProgresso>
+      <span className="w-full flex items-center justify-center gap-1">
+        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
+        <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300 truncate" title={a.materia}>{a.materia}</span>
+      </span>
+      <span className="text-[10px] text-gray-400">
+        {a.materiaConcluida ? (emRevisao ? "em revisão" : "100% concluída") : `teoria ${a.topicosEstudados}/${a.totalTopicos} · questões ${a.gruposFeitos}/${a.totalTopicos * 4}`}
+      </span>
     </div>
   );
 }
@@ -326,19 +478,20 @@ function LinhaQuestao({
   const podeSalvar = acertos !== "" && erros !== "" && Number(acertos) + Number(erros) > 0;
 
   return (
-    <div className="px-4 py-2.5">
+    <div className="rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/40 px-2 py-1.5 -mx-2 transition-colors">
       <button type="button" onClick={() => setAberto((v) => !v)} className="w-full flex items-center gap-2.5 text-left">
-        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${cor.badge} flex-shrink-0`}>{GRUPO_LABEL[q.grupo]}</span>
+        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${GRUPO_COR[q.grupo]}`}>{GRUPO_LABEL[q.grupo]}</span>
+        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
         <div className="flex-1 min-w-0">
           <span className="text-sm text-gray-700 dark:text-gray-300">{q.materia}</span>
           <span className="text-xs text-gray-400"> · tópico {q.ordemTopico}: </span>
-          <span className="text-xs text-gray-500 dark:text-gray-400" title={q.topico}>{q.topico.length > 60 ? q.topico.slice(0, 60) + "…" : q.topico}</span>
-          <div className="text-[10px] text-gray-400">{q.motivo}</div>
+          <span className="text-xs text-gray-500 dark:text-gray-400" title={q.topico}>{q.topico.length > 50 ? q.topico.slice(0, 50) + "…" : q.topico}</span>
         </div>
         <ChevronDown className={`h-3.5 w-3.5 text-gray-400 flex-shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
       </button>
       {aberto && (
         <div className="mt-2 flex items-center gap-2 pl-1">
+          <span className="text-[10px] text-gray-400 flex-1">{q.motivo}</span>
           <label className="text-[11px] text-gray-500">Acertos</label>
           <input type="number" min={0} value={acertos} onChange={(e) => setAcertos(e.target.value)} className="w-16 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1 text-sm text-gray-800 dark:text-gray-200 outline-none focus:border-emerald-400" />
           <label className="text-[11px] text-gray-500">Erros</label>
@@ -366,29 +519,31 @@ function Intro({
   onAtivar: () => void;
   onIrParaCiclo?: () => void;
 }) {
-  const regras = [
-    { icone: Clock, texto: "Cada dia pertence a um grupo do ciclo (A/B/C). As horas do dia são divididas entre as matérias do grupo — ex.: 3h e 3 matérias = 1h de PDF em cada, no tópico atual. O tempo é monitorado pelo leitor de PDF." },
-    { icone: ListChecks, texto: "Concluir um tópico libera questões dos anteriores: grupo A do último, B do penúltimo, C do antepenúltimo, D do anterior a esse — até fechar os 4 grupos de todos os tópicos." },
-    { icone: Trophy, texto: "Matéria 100% (teoria + todos os grupos) entra em modo revisão: no dia seguinte, 30 questões englobando todos os tópicos dela." },
-    { icone: Layers, texto: "A cada 2 domingos, revisão das cartas." },
-    { icone: Sparkles, texto: "Trilha 100% mutável: o ciclo só avança quando você entrega os blocos do dia — a meta de amanhã depende do que você fez hoje." },
+  const regras: { icone: LucideIcon; cor: string; texto: string }[] = [
+    { icone: Clock, cor: "bg-sky-100 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400", texto: "Cada dia pertence a um grupo do ciclo (A/B/C). As horas do dia são divididas entre as matérias do grupo — ex.: 3h e 3 matérias = 1h de PDF em cada, no tópico atual. O tempo é monitorado pelo leitor de PDF." },
+    { icone: ListChecks, cor: "bg-violet-100 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400", texto: "Concluir um tópico libera questões dos anteriores: grupo A do último, B do penúltimo, C do antepenúltimo, D do anterior a esse — até fechar os 4 grupos de todos os tópicos." },
+    { icone: Trophy, cor: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400", texto: "Matéria 100% (teoria + todos os grupos) entra em modo revisão: no dia seguinte, 30 questões englobando todos os tópicos dela." },
+    { icone: Layers, cor: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400", texto: "A cada 2 domingos, revisão das cartas." },
+    { icone: Sparkles, cor: "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400", texto: "Trilha 100% mutável: o ciclo só avança quando você entrega os blocos do dia — a meta de amanhã depende do que você fez hoje." },
   ];
   return (
     <div className="max-w-2xl mx-auto space-y-4">
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-6 text-white shadow-lg">
-        <div className="flex items-center gap-2.5 mb-1">
+      <div className="bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-600 rounded-2xl p-6 sm:p-7 text-white shadow-lg">
+        <div className="h-12 w-12 rounded-2xl bg-white/15 flex items-center justify-center mb-3">
           <Route className="h-6 w-6" />
-          <div className="text-xl font-bold">Trilha dinâmica</div>
         </div>
+        <div className="text-xl font-bold mb-1">Trilha dinâmica</div>
         <p className="text-sm text-emerald-100">
           Sua meta diária calculada automaticamente do seu progresso real — sem plano fixo, ela se adapta ao que você entrega.
         </p>
       </div>
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
         {regras.map((r, i) => (
-          <div key={i} className="px-4 py-3 flex gap-3">
-            <r.icone className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-gray-600 dark:text-gray-300">{r.texto}</p>
+          <div key={i} className="px-4 py-3.5 flex gap-3 items-start">
+            <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${r.cor}`}>
+              <r.icone className="h-4 w-4" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-300 pt-1.5">{r.texto}</p>
           </div>
         ))}
       </div>
