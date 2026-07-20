@@ -1,147 +1,95 @@
-# Trilha de Estudos — Cérebro do Módulo
+# Trilha Dinâmica — Cérebro do Módulo
 
-Este documento descreve a feature **Trilha** dentro de `/dashboard/estudo` (concurso SEFAZ-CE) —
-um plano de estudos guiado por metas, com visual estilo Duolingo (caminho sinuoso de nós). Atualize
-este arquivo sempre que uma regra do gerador, do filtro de matérias ativas ou do layout do
-caminho mudar.
+Aba "Trilha" em `/dashboard/estudo`. **Reescrita em 2026-07-20** (a pedido do usuário, "siga à
+risca" o método pessoal dele): saiu o plano de metas pré-geradas (trilha-generator, deletado) e
+entrou uma trilha **100% derivada do progresso real, recalculada a cada render** — se o usuário
+não entrega o dia, a meta de amanhã espera por ele. Atualize este arquivo se as regras mudarem.
 
-## 1. Visão geral
+## 1. As regras (método do usuário, na ordem em que ele descreveu)
 
-A Trilha divide o edital em **metas** sequenciais (`TrilhaMeta`). Regras fechadas por pedidos
-explícitos do usuário, em ordem: metas pequenas (achou as antigas "absurdas de difíceis e
-grandes"), sem "questoes" (praticar fica por conta do usuário fora da Trilha, registrando direto
-no Edital/Caderno de Erros), sem revisão espaçada, e — forma final — **cada meta é EXATAMENTE UM
-TÓPICO de UMA matéria, sem objetivo de duração**: a meta é literalmente "conclua a teoria do
-tópico X". Tópicos já `estudado:true` no Edital são **excluídos por completo** — a Trilha só
-cobre tópicos novos. Uma trilha típica tem **centenas de metas** (1 por tópico não estudado das
-matérias no Ciclo).
+1. **Estudo por PDF**: cada matéria tem tópicos; cada tópico tem um PDF (Biblioteca). O dia
+   pertence a um grupo do ciclo (A/B/C, do Ciclo de Estudos) e as horas do dia são divididas
+   IGUALMENTE entre as matérias do grupo — ex.: 3h e 3 matérias = 1h cada, no **tópico atual**
+   (primeiro não estudado) de cada matéria. O tempo é monitorado pelas sessões de estudo do
+   calendário (leitor de PDF/Timer, atividades tipo "estudo" da matéria, somadas por dia).
+2. **Questões escalonadas A-D**: cada tópico tem 4 grupos de questões — os cadernos A/B/C/D do
+   Edital (grupo "feito" = acertos+erros > 0). Concluir o tópico k libera: grupo **A do k-1**,
+   **B do k-2**, **C do k-3**, **D do k-4**. Quando a teoria da matéria acaba, a "cauda" (grupos
+   cujo gatilho seria um tópico que não existe) libera toda de uma vez.
+3. **Matéria 100%** = teoria completa + os 4 grupos de TODOS os tópicos feitos. No **dia
+   seguinte** à conclusão entra a atividade "revisão da matéria: 30 questões englobando todos os
+   tópicos" (30 no total, não 30 por tópico) — o "modo revisão".
+4. **Cartas**: a cada 2 domingos (14 dias), atividade de revisar as cartas. Âncora = primeiro
+   domingo após a ativação da trilha. "Feita" = marcada na trilha OU atividade tipo "cartas" no
+   calendário do dia.
+5. **Mutável pela entrega**: o grupo do ciclo só avança quando TODOS os blocos de estudo do dia
+   foram entregues (1x por dia, guard `grupoCicloAvancadoEm`). Grupos sem nenhuma matéria com
+   teoria pendente são PULADOS (`resolverGrupoEfetivo`, A→B→C→A).
 
-**`duracaoMin` ainda existe e é preenchida por nível** (`nunca` 90min/tópico, `comecei` 60min,
-`sem_confianca` 30min `teoriaRapida`, `arestas` 15min `teoriaRapida`), mas é **estimativa interna
-pra projeções apenas** — `estimarResumo()`/`projetarTermino()` usam `totalMinutos ÷ minutosSemana`
-da disponibilidade escolhida pra responder "cabe até a prova?" e "término ~data". A UI **nunca
-mostra duração como objetivo da meta** (nem no painel da meta, nem no caminho, nem no passo 3 do
-wizard, que mostra "Tópicos a estudar"/"Matérias" em vez de "Carga total"). O nível declarado
-também pesa na intercalação (fator do round-robin). `TrilhaAtividadeTipo` mantém `"questoes"` e
-`"revisao"` no tipo (`estudo-data.ts`), e `numeroRevisao`/`quantidadeQuestoes` continuam como
-campos opcionais, só por compatibilidade com trilhas antigas já persistidas — o gerador NUNCA
-mais produz nenhuma das duas, e `TrilhaAtividade.topicos` segue sendo array (sempre com 1 item
-nas trilhas novas) pelo mesmo motivo.
+## 2. Arquitetura: derivar > persistir
 
-A geração é **100% determinística** (`src/lib/trilha-generator.ts`, sem IA) — reprodutível e
-recalculável a qualquer momento; a IA só escreve a `orientacao` (1-2 frases) das primeiras 120
-metas (limite por request da rota) via `POST /api/estudo/trilha/orientacoes`, com graceful
-degradation se falhar.
+`src/lib/trilha-dinamica.ts` — funções puras, sem React/DOM:
+- `analisarMateria(materia, topicos)` → tópico atual, questões liberadas (com motivo), grupos
+  feitos, matéria concluída. TUDO derivado de `EstudoState.topicos` (estudado + cadernos A-D).
+- `computarMetaDia({hoje, trilha, configCiclo, materiasAtivas, topicos, calendario})` → a meta
+  do dia inteira: blocos de estudo (alvo/feito em minutos), questões pendentes, revisões de 30
+  devidas, domingo de cartas. `MateriaLike = {nome, topicos}` — aceita MateriaDef,
+  MateriaConcurso e MateriaBase.
+- `criarTrilhaDinamica()` → estado inicial na ativação.
 
-No visual (`TrilhaTab.tsx` + `src/components/estudo/trilha/*`), **1 nó do caminho = 1
-`TrilhaMeta` = 1 tópico**: `TrilhaPath.tsx` desenha um caminho sinuoso (posição de cada nó e a
-curva de fundo vêm da MESMA função seno — nunca desalinham, e são responsivos sem medir DOM). Cada
-nó é **colorido pela cor da matéria** (`resolverCorMateria`), com efeito 3D de botão (inset shadow
-no rodapé, estilo Duolingo — funciona com qualquer cor sem precisar da variante escura), e mostra
-**badge da matéria + nome do tópico** logo abaixo — o caminho conta a história inteira sem abrir
-nada. Estados: concluído = check, atual = estrela + ring + balão "Você está aqui" quicando
-(framer-motion), futuro = cadeado cinza. O trecho já percorrido da curva é pintado de verde sólido
-por cima do pontilhado. Clicar num nó não bloqueado abre `MetaPainel.tsx` (Dialog) com a frase
-"Conclua a teoria de: {tópico}" e o botão de status — sem duração. O progresso do header é contado
-em **tópicos concluídos** (metas 100% concluídas), não em minutos.
+`EstudoState.trilhaDinamica` (`TrilhaDinamicaState`) guarda SÓ o que não dá pra derivar:
+posição do ciclo (`grupoCiclo` + `grupoCicloAvancadoEm`), datas de conclusão de matéria
+(`conclusaoMaterias` — agenda a revisão de 30 pro dia seguinte), revisões de 30 feitas,
+âncora + domingos de cartas feitos. O campo antigo `trilha` (TrilhaEstudo) ficou como legado
+persistido, não é mais lido por nenhuma UI.
 
-O ritmo REAL pós-primeira-conclusão (`ritmoMetasPorSemana`, em `projetarTermino()`) é medido em
-"metas concluídas por semana" — combina com o visual: dá pra dizer literalmente "você está
-completando ~15 metas por semana".
+## 3. UI (`TrilhaTab.tsx`) e bookkeeping
 
-## 2. Ciclo de Estudos é a fonte de verdade das matérias ativas
+Painel "Meta de hoje": header com grupo/horas e contagem de blocos; card de cartas (domingo) ou
+linha com a próxima data; cards de revisão de 30 questões; blocos de estudo com barra de minutos
+(CTA "Ler PDF" → aba Biblioteca); questões liberadas com registro INLINE de acertos/erros (grava
+direto no caderno do grupo via `onUpdateTopicos` — mesmo dado do Edital, aparece lá também);
+progresso por matéria (teoria x/y · questões n/4y, badge 100%/em revisão).
 
-**Regra central**: a Trilha só gera conteúdo (teoria) para matérias com
-`configCiclo.materias[nome].incluir === true` (editado em `CicloTab.tsx`). Não existe mais uma
-lista própria de "matérias puladas" da Trilha — `TrilhaConfig.puladas` é `@deprecated` (opcional,
-mantido só pra não quebrar trilhas antigas persistidas; não é mais lido pelo gerador nem escrito
-pelo wizard). Isso significa que **editar o Ciclo depois de gerar a trilha tem efeito**: o botão
-"Atualizar trilha (N)" no header reage a mudanças feitas na aba Ciclo, comparando contra o Ciclo
-**atual**, não contra o estado congelado no momento da criação.
+Dois `useEffect` de bookkeeping (com guards contra loop):
+1. matéria recém-100% → grava `conclusaoMaterias[nome] = hoje` (uma vez);
+2. blocos do dia todos entregues → `grupoCiclo = seguinte(efetivo)` + `grupoCicloAvancadoEm =
+   hoje` (nunca 2x no mesmo dia).
 
-## 3. Ciclo mutável: matéria "graduada" + banner de substituição
+O banner "amanhã segue pro grupo X" mostra o grupo EFETIVO de amanhã (resolve o skip de grupos
+vazios — com todas as matérias na divisão A, amanhã volta pro A, não pro B literal).
 
-Quando **todas as atividades de todas as metas** de uma matéria ficam `status === "concluida"`,
-ela é considerada **graduada** — calculado em runtime por
-`materiasConcluidasNaTrilha(trilha): string[]` (nunca persistido, pra não dessincronizar de uma
-reversão de status via `proximoStatus`, que cicla de volta a `nao_iniciada`).
+## 4. Aviso de meta no leitor de PDF
 
-Efeitos de uma matéria graduada:
-- `gerarTrilha({..., materiasConcluidas})` para de incluí-la em `ativas` — nenhuma atividade nova
-  é gerada pra ela numa regeneração (Refazer) ou atualização incremental. Como a Trilha não tem
-  revisão, uma matéria graduada simplesmente some da trilha regerada.
-- `topicosNaoCobertos`/`atualizarTrilha` também ignoram os tópicos dela — não voltam a aparecer
-  como "faltantes" só porque a matéria terminou.
-- `MateriaConcluidaBanner.tsx` (renderizado no topo da Trilha ativa) mostra um card comemorativo
-  por matéria graduada, com a lista de matérias do edital **ainda fora do Ciclo** — ao clicar
-  "Adicionar ao Ciclo" com uma ou mais selecionadas, `onUpdateConfigCiclo` marca
-  `incluir: true` pra elas (usando os defaults de `MateriaDef` quando existem, senão
-  `{peso:1, prioridade:"Baixa", divisao:"A"}`). Isso normalmente dispara o "Atualizar trilha (N)"
-  do header, já que a matéria nova entrou no Ciclo mas ainda não tem cobertura na trilha atual —
-  fechando o ciclo "concluí uma matéria → entra outra no lugar" pedido pelo usuário.
-- O dismiss do banner (botão X, sem adicionar substituta) é por matéria, salvo em
-  `localStorage["taxhub_trilha_banner_dismiss"]` — não vai pro banco (evita risco de schema no
-  blob atômico `EstudoState.trilha`).
-- `DashboardTab.tsx` (`CardTrilha`) mostra só um indicador leve ("X concluída — escolha a próxima
-  no Ciclo"); o fluxo completo com o picker mora só na aba Trilha.
+`page.tsx` calcula `metaMinutosRestantes: Record<materia, minutos>` (alvo − feito de hoje, por
+bloco) e passa por `BibliotecaTab` → `LeitorPdf` (`minutosMetaRestantes` da matéria do PDF,
+congelado na abertura — as sessões só entram no calendário ao FECHAR o leitor, então o
+cronômetro da sessão é a única fonte "ao vivo"). Quando `segundos >= restante*60`, toast
+"🎯 Meta de hoje de {matéria} concluída!" (uma vez por sessão).
 
-## 4. Wizard (3 passos)
+`DashboardTab`: o CardTrilha virou o resumo da meta de hoje (blocos feitos, pendências,
+matérias 100%) — computa `computarMetaDia` na hora.
 
-1. **Disponibilidade** — inalterado.
-2. **Conhecimentos** — lista **só** as matérias elegíveis: `incluir=true` no Ciclo **e** ainda não
-   graduadas (se estiver refazendo uma trilha existente). Sem coluna "Pular". Uma faixa fixa,
-   visível nos 3 passos, mostra "Matérias no Ciclo: N incluída(s)" com um atalho "Editar Ciclo →"
-   (`onIrParaCiclo`, navega pra aba Ciclo). Se zero matérias elegíveis, aviso bloqueante impede
-   avançar.
-3. **Conclusão** — preview síncrono (`gerarTrilha` em memória) inalterado, só passa a receber
-   `materiasConcluidas` também.
-
-## 5. Resolução de cor por matéria
-
-`MateriaDef` (as 19 matérias hardcoded do SEFAZ-CE, fallback quando o usuário não tem concurso
-próprio) já embute `corDot`/`corBadge`. `MateriaConcurso` (concurso customizado do usuário, via
-`ConcursoModal.tsx`) só tem `cor: string` — uma chave livre (`sky`, `blue`, `emerald`... as mesmas
-16 de `CORES_DISPONIVEIS` no modal). `resolverCorMateria()` (`trilha/trilha-ui.ts`) resolve os
-dois casos via o mapa estático `CORES_MATERIA` (`src/lib/estudo-data.ts` — Tailwind não suporta
-classes montadas em runtime, cada variante tem que estar escrita literalmente). Esse mapa foi
-promovido de `EditalTab.tsx` (`COR_BORDER`) pra ser compartilhado; o bug antigo do `corMateria()`
-da Trilha (sempre caía em cinza pra concursos customizados, porque só buscava na lista hardcoded
-`MATERIAS`) foi corrigido junto.
-
-## 6. Arquivos
+## 5. Arquivos
 
 ```
-src/lib/estudo-data.ts                                   tipos da Trilha + CORES_MATERIA (mapa de cor compartilhado)
-src/lib/trilha-generator.ts                               gerador determinístico (regras numéricas no comentário de topo)
-src/app/api/estudo/trilha/orientacoes/route.ts             IA — só as `orientacao` das metas, resumo compacto
-src/components/estudo/TrilhaTab.tsx                        orquestração: Wizard ↔ Trilha ativa
-src/components/estudo/trilha/trilha-ui.ts                  STATUS_CONFIG, TIPO_CONFIG, fmtHoras/fmtData, resolverCorMateria
-src/components/estudo/trilha/TrilhaPath.tsx                 caminho sinuoso (1 nó = 1 TrilhaMeta)
-src/components/estudo/trilha/MetaPainel.tsx                 Dialog com as atividades de uma meta (AtividadeRow/RegistrarResultado)
-src/components/estudo/trilha/MateriaConcluidaBanner.tsx    banner de matéria graduada + picker de substituta
-src/components/estudo/DashboardTab.tsx                      CardTrilha: indicador leve de matéria(s) graduada(s)
-scripts/validar-trilha.ts                                   smoke-test determinístico (rodar: npx tsx scripts/validar-trilha.ts)
+src/lib/trilha-dinamica.ts            motor puro (análise por matéria + meta do dia)
+src/lib/estudo-data.ts                 TrilhaDinamicaState (+ TrilhaEstudo legado deprecated)
+src/components/estudo/TrilhaTab.tsx    painel Meta de Hoje + ativação + bookkeeping
+src/components/estudo/DashboardTab.tsx CardTrilha (resumo da meta de hoje)
+src/components/estudo/BibliotecaTab.tsx metaMinutosRestantes → aviso no LeitorPdf
+src/components/estudo/trilha/trilha-ui.ts  fmtHoras/resolverCorMateria (compartilhados)
 ```
+Deletados na reescrita: `trilha-generator.ts`, `scripts/validar-trilha.ts`, `TrilhaPath.tsx`,
+`MetaPainel.tsx`, `MateriaConcluidaBanner.tsx`, rota `/api/estudo/trilha/orientacoes`.
 
-## 7. Persistência
+## 6. Verificação
 
-`TrilhaEstudo` inteiro vive em `EstudoState.trilha`, salvo como parte do blob `Json` de
-`ConcursoProgresso.dados` (upsert em `POST /api/concurso/{id}/progresso`, sem validação de schema
-no servidor). **"Blob atômico"**: ao fazer merge com defaults no client (`mergeWithDefaults` em
-`page.tsx`), a trilha nunca é deep-merged — passa inteira ou fica ausente. Nada na task de
-reformulação do visual mudou isso; `materiasConcluidasNaTrilha`/graduação são cálculo puro, não
-persistido.
-
-## 8. Verificação
-
-`npx tsx scripts/validar-trilha.ts` — 8 cenários determinísticos: geração básica (nunca/arestas,
-1 meta = exatamente 1 tópico de 1 matéria, total de metas = total de tópicos ativos), matérias
-fora do Ciclo e tópicos pré-estudados excluídos por completo, `atualizarTrilha` cobrindo tópicos
-novos, Ciclo como fonte de verdade (cenário 5),
-matéria graduada sem conteúdo novo (cenário 6), `topicosNaoCobertos` ignorando matéria graduada
-(cenário 7), nenhum cenário gera atividade tipo `"questoes"` ou `"revisao"` (cenário 8). Validação
-visual: sem test runner no projeto — testar manualmente
-navegando `/dashboard/estudo` → aba Trilha (wizard sem coluna "Pular" e com a faixa do Ciclo;
-caminho com nós bloqueados/atual/concluídos; abrir o painel de uma meta e ciclar status; forçar
-uma matéria 100% concluída e conferir o banner + fluxo "Adicionar ao Ciclo" disparando "Atualizar
-trilha").
+- `npx tsc --noEmit`.
+- Motor: script sintético (padrão do antigo validar-trilha) cobrindo: liberação escalonada
+  (1/2/4 tópicos), cauda no fim da teoria, matéria 100%, blocos 3h→3×60min, soma de sessões do
+  calendário, grupo efetivo pulando grupo vazio, revisão de 30 no dia seguinte (não no mesmo
+  dia; some depois de feita), domingos de cartas (+0/+7/+14, marcação e atividade "cartas").
+- UI: rota descartável `/signup/preview-trilha` — ativar, conferir blocos/questões/progresso,
+  simular 3 sessões de 60min → 3/3 "dia entregue" + ciclo avança (1x), registrar questões
+  inline → some da lista e progresso atualiza.

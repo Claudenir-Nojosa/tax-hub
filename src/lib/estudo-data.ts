@@ -145,6 +145,26 @@ export const TRILHA_NIVEL_CONFIG: Record<TrilhaNivelMateria, { label: string; cu
   arestas: { label: "Só falta aparar as arestas", curto: "Aparar arestas" },
 };
 
+// --- Trilha DINÂMICA (método pessoal do usuário — regras em docs/estudo-trilha.md) ---
+// Quase tudo é DERIVADO na hora (src/lib/trilha-dinamica.ts) do estado que já existe: tópicos
+// estudados, cadernos A-D (grupo "feito" = acertos+erros > 0) e sessões do calendário. Este
+// estado guarda só o que não dá pra derivar:
+export interface TrilhaDinamicaState {
+  ativa: boolean;
+  iniciadaEm: string; // dateKey
+  // posição do ciclo A/B/C — avança quando os blocos de estudo do dia são todos entregues
+  // (trilha "mutável": sem entrega, o dia seguinte repete o mesmo grupo)
+  grupoCiclo: "A" | "B" | "C";
+  grupoCicloAvancadoEm?: string; // dateKey do último avanço (impede avançar 2x no mesmo dia)
+  // matéria 100% (todos os tópicos estudados + 4 grupos de questões de cada tópico feitos):
+  // a data de conclusão agenda a revisão de 30 questões pro DIA SEGUINTE
+  conclusaoMaterias: Record<string, string>; // nome -> dateKey da conclusão
+  revisoes30Feitas: Record<string, string[]>; // nome -> dateKeys das revisões de 30 questões feitas
+  // revisão das cartas a cada 2 domingos, ancorada no 1º domingo após a ativação
+  ancoraCartas: string; // dateKey (um domingo)
+  cartasFeitasEm: string[]; // dateKeys dos domingos em que a revisão foi feita
+}
+
 export interface EstudoState {
   topicos: Record<string, TopicoState>;
   calendario: Record<string, AtividadeCalendario[]>;
@@ -153,7 +173,10 @@ export interface EstudoState {
   configCiclo: EstudoConfigCiclo;
   streak: number;
   semanasOK: number;
-  trilha?: TrilhaEstudo; // ausente = usuário ainda não gerou a trilha (aba mostra o wizard)
+  /** @deprecated trilha antiga de metas pré-geradas — substituída pela trilhaDinamica; mantido
+   * só pra não descartar dados persistidos de estados antigos */
+  trilha?: TrilhaEstudo;
+  trilhaDinamica?: TrilhaDinamicaState; // ausente = usuário ainda não ativou (aba mostra intro)
   pdfs: PdfEstudo[];
   mapasMentais: MapaMental[];
 }

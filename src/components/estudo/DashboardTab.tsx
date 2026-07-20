@@ -16,7 +16,7 @@ import {
   type MateriaBase,
   topicoKey,
 } from "@/lib/estudo-data";
-import { materiasConcluidasNaTrilha } from "@/lib/trilha-generator";
+import { computarMetaDia } from "@/lib/trilha-dinamica";
 
 interface Props {
   state: EstudoState;
@@ -24,11 +24,11 @@ interface Props {
   onIrParaTrilha?: () => void;
 }
 
-// Card da meta atual da Trilha — informa onde o usuário está no plano guiado; sem trilha vira
-// CTA pra criar uma (a lógica de meta atual espelha metaAtualIndex do trilha-generator).
-function CardTrilha({ state, onIrParaTrilha }: { state: EstudoState; onIrParaTrilha?: () => void }) {
-  const trilha = state.trilha;
-  if (!trilha || trilha.metas.length === 0) {
+// Card da meta de HOJE da trilha dinâmica — resumo dos blocos de estudo do dia e pendências;
+// sem trilha ativa vira CTA pra ativar.
+function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: EstudoState; materiasConcurso?: MateriaBase[]; onIrParaTrilha?: () => void }) {
+  const trilha = state.trilhaDinamica;
+  if (!trilha?.ativa) {
     return (
       <button
         type="button"
@@ -38,9 +38,9 @@ function CardTrilha({ state, onIrParaTrilha }: { state: EstudoState; onIrParaTri
       >
         <Route className="h-6 w-6 text-emerald-500 flex-shrink-0" />
         <div className="flex-1">
-          <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">Crie sua trilha de estudos</div>
+          <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">Ative sua trilha dinâmica</div>
           <div className="text-xs text-gray-500 dark:text-gray-400">
-            Um plano guiado por metas até fechar 100% do edital — teoria, questões e revisões espaçadas.
+            Meta diária calculada do seu progresso real — estudo por PDF, questões escalonadas A-D e revisões.
           </div>
         </div>
         {onIrParaTrilha && <ArrowRight className="h-4 w-4 text-emerald-500 flex-shrink-0" />}
@@ -48,15 +48,17 @@ function CardTrilha({ state, onIrParaTrilha }: { state: EstudoState; onIrParaTri
     );
   }
 
-  const idx = trilha.metas.findIndex((m) => m.atividades.some((a) => a.status !== "concluida"));
-  const meta = trilha.metas[idx === -1 ? trilha.metas.length - 1 : idx];
-  const feitas = meta.atividades.filter((a) => a.status === "concluida").length;
-  const perc = Math.round((feitas / meta.atividades.length) * 100);
-  const materias = [...new Set(meta.atividades.map((a) => a.materia))];
-  const tudoConcluido = idx === -1;
-  // matéria(s) 100% concluída(s) na trilha — indicador leve; o banner completo com o picker de
-  // substituta mora na própria aba Trilha (MateriaConcluidaBanner)
-  const graduadas = materiasConcluidasNaTrilha(trilha);
+  const meta = computarMetaDia({
+    trilha,
+    configCiclo: state.configCiclo,
+    materiasAtivas: materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS,
+    topicos: state.topicos,
+    calendario: state.calendario,
+  });
+  const feitos = meta.blocos.filter((b) => b.concluido).length;
+  const perc = meta.blocos.length > 0 ? Math.round((feitos / meta.blocos.length) * 100) : 0;
+  const pendencias = meta.questoesPendentes.length + meta.revisoes30.length + (meta.revisarCartas ? 1 : 0);
+  const concluidas = meta.analises.filter((a) => a.materiaConcluida).length;
 
   return (
     <button
@@ -69,30 +71,36 @@ function CardTrilha({ state, onIrParaTrilha }: { state: EstudoState; onIrParaTri
         <div className="flex items-center gap-2">
           <Route className="h-5 w-5 text-emerald-500" />
           <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-            {tudoConcluido ? "Trilha concluída! 🏆" : `Trilha — Meta ${meta.numero} de ${trilha.metas.length}`}
+            {meta.blocosConcluidos ? "Meta de hoje entregue! 🏆" : `Meta de hoje — grupo ${meta.grupoCiclo}`}
           </span>
         </div>
-        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-          {feitas}/{meta.atividades.length}
-        </span>
+        {meta.blocos.length > 0 && (
+          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+            {feitos}/{meta.blocos.length}
+          </span>
+        )}
       </div>
-      <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-2 mb-2">
-        <div className="bg-emerald-500 rounded-full h-2 transition-all duration-500" style={{ width: `${perc}%` }} />
-      </div>
+      {meta.blocos.length > 0 && (
+        <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-2 mb-2">
+          <div className="bg-emerald-500 rounded-full h-2 transition-all duration-500" style={{ width: `${perc}%` }} />
+        </div>
+      )}
       <div className="flex gap-1 flex-wrap">
-        {materias.slice(0, 3).map((m) => (
-          <span key={m} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-            {m.length > 30 ? m.slice(0, 30) + "…" : m}
+        {meta.blocos.slice(0, 3).map((b) => (
+          <span key={b.materia} className={`text-[10px] px-1.5 py-0.5 rounded ${b.concluido ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"}`}>
+            {b.materia.length > 30 ? b.materia.slice(0, 30) + "…" : b.materia}
           </span>
         ))}
-        {materias.length > 3 && <span className="text-[10px] text-gray-400">+{materias.length - 3}</span>}
+        {pendencias > 0 && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300">
+            {pendencias} pendência{pendencias !== 1 ? "s" : ""}
+          </span>
+        )}
       </div>
-      {graduadas.length > 0 && (
+      {concluidas > 0 && (
         <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700 flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
           <Trophy className="h-3 w-3" />
-          {graduadas.length === 1
-            ? `${graduadas[0]} concluída — escolha a próxima no Ciclo`
-            : `${graduadas.length} matérias concluídas — escolha as próximas no Ciclo`}
+          {concluidas === 1 ? "1 matéria 100% (em revisão)" : `${concluidas} matérias 100% (em revisão)`}
         </div>
       )}
     </button>
@@ -275,8 +283,8 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
       {/* Meta diária */}
       <MetaDiaria state={state} />
 
-      {/* Meta atual da Trilha */}
-      <CardTrilha state={state} onIrParaTrilha={onIrParaTrilha} />
+      {/* Meta de hoje da trilha dinâmica */}
+      <CardTrilha state={state} materiasConcurso={materiasConcurso} onIrParaTrilha={onIrParaTrilha} />
 
       {/* Level + XP hero */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">

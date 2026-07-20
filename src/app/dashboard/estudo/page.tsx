@@ -18,10 +18,12 @@ import {
   type AtividadeTipo,
   type Grupo,
   type Carta,
-  type TrilhaEstudo,
+  type TrilhaDinamicaState,
   type PdfEstudo,
   type MapaMental,
+  MATERIAS,
 } from "@/lib/estudo-data";
+import { computarMetaDia } from "@/lib/trilha-dinamica";
 import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, GraduationCap, Library, Brain } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
@@ -67,9 +69,9 @@ function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {
   return {
     ...DEFAULT_ESTUDO_STATE,
     ...parsed,
-    // trilha é um blob atômico: passa inteira ou fica ausente — NUNCA deep-mergear com default
-    // (não existe default; metas/atividades são geradas de uma vez pelo trilha-generator)
-    trilha: parsed.trilha,
+    // blobs atômicos: passam inteiros ou ficam ausentes — nunca deep-mergear com default
+    trilha: parsed.trilha, // legado (trilha antiga de metas pré-geradas)
+    trilhaDinamica: parsed.trilhaDinamica,
     cartas: parsed.cartas ?? [],
     pdfs: parsed.pdfs ?? [],
     mapasMentais: parsed.mapasMentais ?? [],
@@ -186,8 +188,8 @@ export default function EstudoPage() {
     setState((prev) => ({ ...prev, configCiclo }));
   }, []);
 
-  const updateTrilha = useCallback((trilha: TrilhaEstudo | undefined) => {
-    setState((prev) => ({ ...prev, trilha }));
+  const updateTrilhaDinamica = useCallback((trilhaDinamica: TrilhaDinamicaState | undefined) => {
+    setState((prev) => ({ ...prev, trilhaDinamica }));
   }, []);
 
   const updatePdfs = useCallback((pdfs: PdfEstudo[]) => {
@@ -238,6 +240,21 @@ export default function EstudoPage() {
   const xp = calcularXP(state.topicos, state.calendario, state.cartas);
   const nivel = calcularNivel(xp);
   const nivelConfig = NIVEL_CONFIG[nivel];
+
+  // minutos que faltam pra fechar o bloco de estudo de HOJE de cada matéria (trilha dinâmica) —
+  // o leitor de PDF usa isso pra avisar "meta do dia concluída" no meio da sessão
+  const metaMinutosRestantes = (() => {
+    const t = state.trilhaDinamica;
+    if (!t?.ativa) return undefined;
+    const mats = (concursoAtivo?.materias as MateriaConcurso[] | undefined) ?? MATERIAS;
+    const meta = computarMetaDia({
+      trilha: t, configCiclo: state.configCiclo, materiasAtivas: mats,
+      topicos: state.topicos, calendario: state.calendario,
+    });
+    const rec: Record<string, number> = {};
+    for (const b of meta.blocos) rec[b.materia] = Math.max(0, b.minutosAlvo - b.minutosFeitos);
+    return rec;
+  })();
 
   if (!loaded) {
     return (
@@ -352,6 +369,7 @@ export default function EstudoPage() {
                 handleTimerSalvar(minutos, "estudo", descricao, undefined, materia, topico, paginas)
               }
               onAdicionarCartas={adicionarCartas}
+              metaMinutosRestantes={metaMinutosRestantes}
             />
           )}
 
@@ -381,16 +399,16 @@ export default function EstudoPage() {
 
           {activeTab === "trilha" && (
             <TrilhaTab
-              trilha={state.trilha}
+              trilha={state.trilhaDinamica}
               topicos={state.topicos}
               configCiclo={state.configCiclo}
+              calendario={state.calendario}
               materiasConcurso={concursoAtivo?.materias as MateriaConcurso[] | undefined}
-              dataProva={concursoAtivo?.dataProva}
-              concursoNome={concursoAtivo?.nome}
-              onUpdateTrilha={updateTrilha}
+              onUpdateTrilha={updateTrilhaDinamica}
               onUpdateTopicos={updateTopicos}
-              onUpdateConfigCiclo={updateConfigCiclo}
               onIrParaCiclo={() => setActiveTab("ciclo")}
+              onIrParaBiblioteca={() => setActiveTab("biblioteca")}
+              onIrParaCartas={() => setActiveTab("cartas")}
             />
           )}
 

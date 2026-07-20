@@ -1,572 +1,414 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  CheckCircle2, Sparkles,
-  Signal, Route, RefreshCw, ArrowLeft, ArrowRight, PlusCircle, Target, CalendarClock, Trash2, Settings2,
+  ArrowRight, BookOpen, CalendarClock, CheckCircle2, ChevronDown, Clock, Layers,
+  ListChecks, Route, Settings2, Sparkles, Trash2, Trophy, Zap,
 } from "lucide-react";
 import {
-  MATERIAS, topicoKey,
-  TRILHA_DISPONIBILIDADE_CONFIG, TRILHA_NIVEL_CONFIG,
-  type EstudoConfigCiclo, type MateriaConcurso, type MateriaDef, type TopicoState,
-  type TrilhaConfig,
-  type TrilhaDisponibilidade, type TrilhaEstudo, type TrilhaNivelMateria,
+  MATERIAS, dateKeyLocal, topicoKey,
+  type AtividadeCalendario, type EstudoConfigCiclo, type Grupo, type MateriaConcurso,
+  type MateriaDef, type TopicoState, type TrilhaDinamicaState,
 } from "@/lib/estudo-data";
 import {
-  gerarTrilha, estimarResumo, projetarTermino, atualizarTrilha, topicosNaoCobertos,
-  proximoStatus, metaAtualIndex, materiasConcluidasNaTrilha,
-} from "@/lib/trilha-generator";
-import { fmtData } from "./trilha/trilha-ui";
-import TrilhaPath from "./trilha/TrilhaPath";
-import MetaPainel from "./trilha/MetaPainel";
-import MateriaConcluidaBanner from "./trilha/MateriaConcluidaBanner";
+  computarMetaDia, criarTrilhaDinamica, grupoCicloSeguinte, resolverGrupoEfetivo,
+  type MetaDia, type QuestaoLiberada,
+} from "@/lib/trilha-dinamica";
+import { resolverCorMateria } from "./trilha/trilha-ui";
+
+// Trilha DINÂMICA — nada de plano pré-gerado: a meta de HOJE é derivada na hora do estado real
+// (tópicos estudados, cadernos A-D, sessões do calendário) pelas regras do método do usuário
+// (src/lib/trilha-dinamica.ts). Este componente só apresenta a meta e grava o bookkeeping mínimo
+// (posição do ciclo, datas de conclusão de matéria, revisões feitas) — se o usuário não entrega
+// o dia, o grupo do ciclo não avança e a meta de amanhã "espera" por ele.
 
 interface Props {
-  trilha?: TrilhaEstudo;
+  trilha?: TrilhaDinamicaState;
   topicos: Record<string, TopicoState>;
   configCiclo: EstudoConfigCiclo;
+  calendario: Record<string, AtividadeCalendario[]>;
   materiasConcurso?: MateriaConcurso[];
-  dataProva?: string;
-  concursoNome?: string;
-  onUpdateTrilha: (trilha: TrilhaEstudo | undefined) => void;
+  onUpdateTrilha: (trilha: TrilhaDinamicaState | undefined) => void;
   onUpdateTopicos: (topicos: Record<string, TopicoState>) => void;
-  onUpdateConfigCiclo?: (config: EstudoConfigCiclo) => void;
   onIrParaCiclo?: () => void;
+  onIrParaBiblioteca?: () => void;
+  onIrParaCartas?: () => void;
 }
 
-const DISPONIBILIDADE_ICONE: Record<TrilhaDisponibilidade, string> = {
-  easy: "text-sky-500", normal: "text-emerald-500", hard: "text-amber-500", hardcore: "text-orange-600",
-};
+const GRUPO_LABEL: Record<Grupo, string> = { A: "Grupo A", B: "Grupo B", C: "Grupo C", D: "Grupo D" };
 
-const NIVEIS: TrilhaNivelMateria[] = ["nunca", "comecei", "sem_confianca", "arestas"];
-
-// ─── Componente ───────────────────────────────────────────────────────────────
+function fmtDataCurta(dateKey: string): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
 
 export default function TrilhaTab({
-  trilha, topicos, configCiclo, materiasConcurso, dataProva, concursoNome,
-  onUpdateTrilha, onUpdateTopicos, onUpdateConfigCiclo, onIrParaCiclo,
+  trilha, topicos, configCiclo, calendario, materiasConcurso,
+  onUpdateTrilha, onUpdateTopicos, onIrParaCiclo, onIrParaBiblioteca, onIrParaCartas,
 }: Props) {
-  const MATERIAS_ATIVAS: (MateriaDef | MateriaConcurso)[] = materiasConcurso ?? MATERIAS;
+  const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
+    materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
+  const hoje = dateKeyLocal();
 
-  const [modoWizard, setModoWizard] = useState(false);
-  const emWizard = !trilha || modoWizard;
+  const temMateriasNoCiclo = materiasAtivas.some((m) => configCiclo.materias[m.nome]?.incluir);
 
-  // matérias já 100% concluídas na trilha atual — usado pro wizard (Refazer não regenera
-  // conteúdo novo pra elas) e é vazio na primeiríssima geração (sem trilha anterior)
-  const materiasConcluidas = useMemo(() => (trilha ? materiasConcluidasNaTrilha(trilha) : []), [trilha]);
+  const meta: MetaDia | null = useMemo(() => {
+    if (!trilha?.ativa) return null;
+    return computarMetaDia({ hoje, trilha, configCiclo, materiasAtivas, topicos, calendario });
+  }, [trilha, configCiclo, materiasAtivas, topicos, calendario, hoje]);
 
-  return emWizard ? (
-    <Wizard
-      materias={MATERIAS_ATIVAS}
-      topicos={topicos}
-      configCiclo={configCiclo}
-      dataProva={dataProva}
-      concursoNome={concursoNome}
-      configAnterior={trilha?.config}
-      materiasConcluidas={materiasConcluidas}
-      onIrParaCiclo={onIrParaCiclo}
-      onCancelar={trilha ? () => setModoWizard(false) : undefined}
-      onGerar={(novaTrilha) => {
-        onUpdateTrilha(novaTrilha);
-        setModoWizard(false);
-        buscarOrientacoes(novaTrilha, concursoNome, dataProva, onUpdateTrilha);
-      }}
-    />
-  ) : (
-    <TrilhaAtiva
-      trilha={trilha!}
-      topicos={topicos}
-      configCiclo={configCiclo}
-      materias={MATERIAS_ATIVAS}
-      dataProva={dataProva}
-      onUpdateTrilha={onUpdateTrilha}
-      onUpdateTopicos={onUpdateTopicos}
-      onUpdateConfigCiclo={onUpdateConfigCiclo}
-      onRefazer={() => setModoWizard(true)}
-      onExcluir={() => onUpdateTrilha(undefined)}
-    />
-  );
-}
+  // ── bookkeeping 1: registra a DATA de conclusão de matérias recém-100% (agenda a revisão de
+  // 30 questões pro dia seguinte)
+  useEffect(() => {
+    if (!trilha?.ativa || !meta) return;
+    const novas = meta.analises.filter((a) => a.materiaConcluida && !trilha.conclusaoMaterias[a.materia]);
+    if (novas.length === 0) return;
+    const conclusaoMaterias = { ...trilha.conclusaoMaterias };
+    for (const a of novas) conclusaoMaterias[a.materia] = hoje;
+    onUpdateTrilha({ ...trilha, conclusaoMaterias });
+  }, [trilha, meta, hoje, onUpdateTrilha]);
 
-// orientações da IA em background: salva a trilha determinística primeiro; se a IA falhar,
-// nada quebra (a trilha continua sem os textos)
-async function buscarOrientacoes(
-  trilha: TrilhaEstudo,
-  concursoNome: string | undefined,
-  dataProva: string | undefined,
-  onUpdateTrilha: (t: TrilhaEstudo) => void
-) {
-  try {
-    // limite de 120 metas por request da rota (edital grande = muitas metas pequenas, por design)
-    const metasDeConteudo = trilha.metas.slice(0, 120);
-    if (metasDeConteudo.length === 0) return;
-    const resumo = metasDeConteudo.map((m) => ({
-      numero: m.numero,
-      materias: [...new Set(m.atividades.map((a) => a.materia))],
-      nTopicos: new Set(m.atividades.flatMap((a) => a.topicos.map((t) => `${a.materia}|${t}`))).size,
-      temTeoria: m.atividades.some((a) => a.tipo === "teoria"),
-    }));
-    const res = await fetch("/api/estudo/trilha/orientacoes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ concursoNome, dataProva, metas: resumo }),
-    });
-    if (!res.ok) return;
-    const data = (await res.json()) as { orientacoes?: Record<string, string> };
-    if (!data.orientacoes) return;
+  // ── bookkeeping 2: entregou todos os blocos do dia → o ciclo avança (1x por dia). Sem
+  // entrega, amanhã repete o mesmo grupo — é isso que torna a trilha "mutável pela entrega".
+  useEffect(() => {
+    if (!trilha?.ativa || !meta) return;
+    if (!meta.blocosConcluidos || trilha.grupoCicloAvancadoEm === hoje) return;
     onUpdateTrilha({
       ...trilha,
-      metas: trilha.metas.map((m) => ({ ...m, orientacao: data.orientacoes![String(m.numero)] ?? m.orientacao })),
+      grupoCiclo: grupoCicloSeguinte(meta.grupoCiclo),
+      grupoCicloAvancadoEm: hoje,
     });
-  } catch {
-    // silencioso por design — trilha funciona sem orientações
+  }, [trilha, meta, hoje, onUpdateTrilha]);
+
+  if (!trilha?.ativa || !meta) {
+    return (
+      <Intro
+        temMateriasNoCiclo={temMateriasNoCiclo}
+        onAtivar={() => onUpdateTrilha(criarTrilhaDinamica())}
+        onIrParaCiclo={onIrParaCiclo}
+      />
+    );
   }
-}
 
-// ─── Wizard (3 passos, estilo Gurujá) ────────────────────────────────────────
+  const registrarQuestoes = (q: QuestaoLiberada, acertos: number, erros: number) => {
+    const key = topicoKey(q.materia, q.topico);
+    const estado = topicos[key];
+    if (!estado) return;
+    onUpdateTopicos({
+      ...topicos,
+      [key]: { ...estado, cadernos: { ...estado.cadernos, [q.grupo]: { acertos, erros } } },
+    });
+  };
 
-function Wizard({
-  materias, topicos, configCiclo, dataProva, concursoNome, configAnterior, materiasConcluidas,
-  onIrParaCiclo, onGerar, onCancelar,
-}: {
-  materias: (MateriaDef | MateriaConcurso)[];
-  topicos: Record<string, TopicoState>;
-  configCiclo: EstudoConfigCiclo;
-  dataProva?: string;
-  concursoNome?: string;
-  configAnterior?: TrilhaConfig;
-  materiasConcluidas: string[];
-  onIrParaCiclo?: () => void;
-  onGerar: (trilha: TrilhaEstudo) => void;
-  onCancelar?: () => void;
-}) {
-  const [passo, setPasso] = useState<1 | 2 | 3>(1);
-  const [disponibilidade, setDisponibilidade] = useState<TrilhaDisponibilidade>(
-    configAnterior?.disponibilidade ?? "normal"
+  const marcarRevisao30 = (materia: string) => {
+    onUpdateTrilha({
+      ...trilha,
+      revisoes30Feitas: {
+        ...trilha.revisoes30Feitas,
+        [materia]: [...(trilha.revisoes30Feitas[materia] ?? []), hoje],
+      },
+    });
+  };
+
+  const marcarCartasFeitas = () => {
+    onUpdateTrilha({ ...trilha, cartasFeitasEm: [...trilha.cartasFeitasEm, hoje] });
+  };
+
+  const desativar = () => {
+    if (!confirm("Desativar a trilha dinâmica? O progresso do edital e dos cadernos não é perdido — só o acompanhamento diário some.")) return;
+    onUpdateTrilha(undefined);
+  };
+
+  const blocosFeitos = meta.blocos.filter((b) => b.concluido).length;
+  const materiasEmRevisao = meta.analises.filter(
+    (a) => a.materiaConcluida && (trilha.revisoes30Feitas[a.materia] ?? []).length > 0
   );
-  const [niveis, setNiveis] = useState<Record<string, TrilhaNivelMateria>>(() => {
-    if (configAnterior) return { ...configAnterior.nivelPorMateria };
-    const init: Record<string, TrilhaNivelMateria> = {};
-    for (const m of materias) {
-      const todosEstudados = m.topicos.length > 0 && m.topicos.every((t) => topicos[topicoKey(m.nome, t)]?.estudado);
-      init[m.nome] = todosEstudados ? "arestas" : "nunca";
-    }
-    return init;
-  });
-
-  // fonte de verdade de "matéria ativa" é o Ciclo de Estudos — não existe mais uma lista própria
-  // de "puladas" no wizard da trilha (ver docs/estudo-trilha.md)
-  const graduadasSet = new Set(materiasConcluidas);
-  const totalNoCiclo = materias.filter((m) => configCiclo.materias[m.nome]?.incluir ?? false).length;
-  const materiasElegiveis = materias.filter(
-    (m) => (configCiclo.materias[m.nome]?.incluir ?? false) && !graduadasSet.has(m.nome)
-  );
-
-  const config: TrilhaConfig = useMemo(() => ({ disponibilidade, nivelPorMateria: niveis }), [disponibilidade, niveis]);
-
-  // passo 3: gera em memória (síncrono e rápido) pra mostrar o resumo antes de confirmar
-  const preview = useMemo(() => {
-    if (passo !== 3) return null;
-    try {
-      const metas = gerarTrilha({ materias, config, topicos, configCiclo, materiasConcluidas });
-      return { metas, resumo: estimarResumo(metas, disponibilidade, dataProva) };
-    } catch {
-      return null;
-    }
-  }, [passo, materias, config, topicos, configCiclo, dataProva, materiasConcluidas, disponibilidade]);
-
-  const PASSOS = ["Disponibilidade", "Conhecimentos", "Conclusão"];
 
   return (
-    <div className="space-y-6">
-      {/* Stepper */}
-      <div className="flex items-center justify-center gap-0">
-        {PASSOS.map((label, i) => {
-          const n = (i + 1) as 1 | 2 | 3;
-          const ativo = passo === n;
-          const feito = passo > n;
-          return (
-            <div key={label} className="flex items-center">
-              {i > 0 && <div className={`w-10 sm:w-20 h-0.5 ${feito || ativo ? "bg-emerald-500" : "bg-gray-200 dark:bg-gray-700"}`} />}
-              <div className="flex flex-col items-center gap-1 px-2">
-                <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center border-2 text-sm font-bold transition-all ${
-                    feito
-                      ? "bg-emerald-500 border-emerald-500 text-white"
-                      : ativo
-                      ? "border-emerald-500 text-emerald-500"
-                      : "border-gray-300 dark:border-gray-600 text-gray-400"
-                  }`}
-                >
-                  {feito ? <CheckCircle2 className="h-4 w-4" /> : n}
-                </div>
-                <span className={`text-xs ${ativo ? "text-gray-900 dark:text-white font-medium" : "text-gray-400"}`}>{label}</span>
+    <div className="space-y-4">
+      {/* header do dia */}
+      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-5 text-white shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <Route className="h-6 w-6" />
+            <div>
+              <div className="text-lg font-bold">Meta de hoje · {fmtDataCurta(meta.data)}</div>
+              <div className="text-xs text-emerald-100">
+                Dia do <b>grupo {meta.grupoCiclo}</b> do ciclo
+                {meta.horasDia > 0
+                  ? ` · ${meta.horasDia}h de estudo${meta.blocos.length > 0 ? ` divididas em ${meta.blocos.length} matéria${meta.blocos.length > 1 ? "s" : ""}` : ""}`
+                  : " · sem horas configuradas pra hoje (dia livre)"}
               </div>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Faixa fixa: Ciclo é a fonte de verdade das matérias ativas */}
-      <div className="flex items-center justify-between gap-3 text-xs bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2">
-        <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-          <Settings2 className="h-3.5 w-3.5 text-gray-400" />
-          Matérias no Ciclo: <strong className="text-gray-700 dark:text-gray-200">{totalNoCiclo}</strong> incluída(s)
-          {graduadasSet.size > 0 && ` · ${graduadasSet.size} já concluída(s)`}
-        </span>
-        {onIrParaCiclo && (
-          <button type="button" onClick={onIrParaCiclo} className="shrink-0 text-blue-600 dark:text-blue-400 hover:underline font-medium">
-            Editar Ciclo →
-          </button>
+          </div>
+          {meta.blocos.length > 0 && (
+            <div className={`text-center rounded-xl px-4 py-2 ${meta.blocosConcluidos ? "bg-white/25" : "bg-white/10"}`}>
+              <div className="text-lg font-bold tabular-nums">{blocosFeitos}/{meta.blocos.length}</div>
+              <div className="text-[10px] text-emerald-100 uppercase tracking-wide">{meta.blocosConcluidos ? "dia entregue ✓" : "blocos de estudo"}</div>
+            </div>
+          )}
+        </div>
+        {meta.blocosConcluidos && (
+          <div className="mt-3 text-xs bg-white/15 rounded-lg px-3 py-2 flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5" />
+            Blocos de hoje entregues! Amanhã o ciclo segue pro{" "}
+            {/* grupo EFETIVO de amanhã: se o grupo seguinte não tiver matéria com teoria
+                pendente, o motor pula pra frente — mostrar o que de fato vai acontecer */}
+            <b>grupo {resolverGrupoEfetivo(grupoCicloSeguinte(meta.grupoCiclo), configCiclo, materiasAtivas, topicos)}</b>.
+          </div>
         )}
       </div>
 
-      {materiasElegiveis.length === 0 && (
-        <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-800 dark:text-amber-300 flex flex-wrap items-center justify-between gap-3">
-          <span>Nenhuma matéria elegível no Ciclo de Estudos (todas fora ou já concluídas na trilha) — inclua ao menos uma pra gerar a trilha.</span>
-          {onIrParaCiclo && (
-            <button type="button" onClick={onIrParaCiclo} className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition-colors">
-              Ir para o Ciclo
+      {/* revisão das cartas (a cada 2 domingos) */}
+      {meta.revisarCartas ? (
+        <div className="rounded-xl border-2 border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <Layers className="h-6 w-6 text-violet-500 flex-shrink-0" />
+          <div className="flex-1">
+            <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">Hoje é dia de revisar as cartas</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">A cada 2 domingos (14 dias) — revise o baralho na aba Cartas.</div>
+          </div>
+          <div className="flex gap-2">
+            {onIrParaCartas && (
+              <button type="button" onClick={onIrParaCartas} className="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium flex items-center gap-1">
+                Ir pras cartas <ArrowRight className="h-3 w-3" />
+              </button>
+            )}
+            <button type="button" onClick={marcarCartasFeitas} className="px-3 py-1.5 rounded-lg border border-violet-300 dark:border-violet-700 text-violet-600 dark:text-violet-300 text-xs font-medium">
+              Marcar feita
             </button>
-          )}
+          </div>
+        </div>
+      ) : (
+        <div className="text-[11px] text-gray-400 dark:text-gray-500 flex items-center gap-1.5 px-1">
+          <CalendarClock className="h-3 w-3" />
+          Próxima revisão das cartas: domingo {fmtDataCurta(meta.proximoDomingoCartas)}
         </div>
       )}
 
-      {/* Passo 1 — Disponibilidade */}
-      {passo === 1 && (
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quanto tempo deseja se dedicar aos estudos?</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {(Object.keys(TRILHA_DISPONIBILIDADE_CONFIG) as TrilhaDisponibilidade[]).map((d) => {
-              const cfg = TRILHA_DISPONIBILIDADE_CONFIG[d];
-              const sel = disponibilidade === d;
+      {/* revisões de 30 questões (matéria concluída ontem ou antes) */}
+      {meta.revisoes30.map((r) => (
+        <div key={r.materia} className="rounded-xl border-2 border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <Trophy className="h-6 w-6 text-amber-500 flex-shrink-0" />
+          <div className="flex-1">
+            <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+              {r.materia} — revisão da matéria
+            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              Matéria 100% concluída em {fmtDataCurta(r.concluidaEm)}. Faça <b>30 questões englobando todos os tópicos</b> (não é 30 por tópico).
+            </div>
+          </div>
+          <button type="button" onClick={() => marcarRevisao30(r.materia)} className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium self-start sm:self-auto">
+            Concluí as 30 questões
+          </button>
+        </div>
+      ))}
+
+      {/* blocos de estudo do dia */}
+      {meta.blocos.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+            <BookOpen className="h-4 w-4 text-emerald-500" />
+            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex-1">Estudo de hoje — grupo {meta.grupoCiclo}</span>
+            <span className="text-[11px] text-gray-400">tempo monitorado pelo leitor de PDF / Timer</span>
+          </div>
+          <div className="divide-y divide-gray-100 dark:divide-gray-700">
+            {meta.blocos.map((b) => {
+              const cor = resolverCorMateria(b.materia, materiasAtivas);
+              const perc = Math.min(100, Math.round((b.minutosFeitos / b.minutosAlvo) * 100));
               return (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setDisponibilidade(d)}
-                  className={`rounded-2xl border-2 p-5 text-center transition-all ${
-                    sel
-                      ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 shadow-md"
-                      : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"
-                  }`}
-                >
-                  <Signal className={`h-8 w-8 mx-auto mb-2 ${DISPONIBILIDADE_ICONE[d]}`} />
-                  <div className="text-base font-bold text-gray-900 dark:text-white">{cfg.label}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{cfg.faixa}</div>
-                  <div
-                    className={`mt-3 mx-auto w-4 h-4 rounded-full border-2 ${
-                      sel ? "border-emerald-500 bg-emerald-500" : "border-gray-300 dark:border-gray-600"
-                    }`}
-                  />
-                </button>
+                <div key={b.materia} className="px-4 py-3 flex items-center gap-3">
+                  <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cor.dot}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{b.materia}</div>
+                    <div className="text-[11px] text-gray-400 truncate" title={b.topico}>tópico atual: {b.topico}</div>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                        <div className={`rounded-full h-1.5 transition-all ${b.concluido ? "bg-emerald-500" : "bg-sky-500"}`} style={{ width: `${perc}%` }} />
+                      </div>
+                      <span className="text-[11px] text-gray-500 tabular-nums whitespace-nowrap">
+                        {b.minutosFeitos}/{b.minutosAlvo} min
+                      </span>
+                    </div>
+                  </div>
+                  {b.concluido ? (
+                    <span className="flex items-center gap-1 text-emerald-500 text-xs font-semibold flex-shrink-0"><CheckCircle2 className="h-4 w-4" /> feito</span>
+                  ) : (
+                    onIrParaBiblioteca && (
+                      <button type="button" onClick={onIrParaBiblioteca} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-medium flex items-center gap-1">
+                        Ler PDF <ArrowRight className="h-3 w-3" />
+                      </button>
+                    )
+                  )}
+                </div>
               );
             })}
           </div>
         </div>
       )}
+      {meta.blocos.length === 0 && meta.horasDia > 0 && (
+        <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-5 text-center text-xs text-gray-400">
+          Nenhuma matéria com teoria pendente nos grupos do ciclo — configure o Ciclo de Estudos ou aproveite as questões abaixo.
+        </div>
+      )}
 
-      {/* Passo 2 — Conhecimentos */}
-      {passo === 2 && (
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Em que nível você se encontra em cada matéria?</h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            Isso ajuda a ordenar a trilha (matérias que você domina menos aparecem com mais frequência) e a estimar a
-            data de término. Só entram matérias incluídas no Ciclo de Estudos e ainda não concluídas na trilha — e só
-            tópicos ainda não estudados.
-          </p>
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="hidden md:grid grid-cols-[1fr_repeat(4,110px)] gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-[11px] font-medium text-gray-500 dark:text-gray-400">
-              <span>Disciplina</span>
-              {NIVEIS.map((n) => (
-                <span key={n} className="text-center leading-tight">{TRILHA_NIVEL_CONFIG[n].label}</span>
-              ))}
-            </div>
-            {materiasElegiveis.map((m) => (
-              <div
-                key={m.nome}
-                className="grid grid-cols-1 md:grid-cols-[1fr_repeat(4,110px)] gap-2 px-4 py-2.5 border-b border-gray-50 dark:border-gray-700/50 items-center"
-              >
-                <span className="text-xs font-medium text-gray-800 dark:text-gray-200">{m.nome}</span>
-                {NIVEIS.map((n) => (
-                  <div key={n} className="flex md:justify-center items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setNiveis((prev) => ({ ...prev, [m.nome]: n }))}
-                      title={TRILHA_NIVEL_CONFIG[n].label}
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                        niveis[m.nome] === n
-                          ? "border-emerald-500 bg-emerald-500"
-                          : "border-gray-300 dark:border-gray-600 hover:border-emerald-400"
-                      }`}
-                    >
-                      {niveis[m.nome] === n && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </button>
-                    <span className="md:hidden text-[11px] text-gray-500">{TRILHA_NIVEL_CONFIG[n].curto}</span>
-                  </div>
-                ))}
-              </div>
+      {/* questões liberadas (escalonamento A/B/C/D) */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+          <ListChecks className="h-4 w-4 text-violet-500" />
+          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex-1">Questões liberadas</span>
+          <span className="text-[11px] text-gray-400">{meta.questoesPendentes.length} pendente{meta.questoesPendentes.length !== 1 ? "s" : ""}</span>
+        </div>
+        {meta.questoesPendentes.length === 0 ? (
+          <div className="px-4 py-5 text-center text-xs text-gray-400">
+            Nada pendente — concluir um tópico libera o grupo A do anterior, o B do antepenúltimo, e assim por diante.
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100 dark:divide-gray-700">
+            {meta.questoesPendentes.map((q) => (
+              <LinhaQuestao key={q.id} q={q} materiasAtivas={materiasAtivas} onRegistrar={registrarQuestoes} />
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Passo 3 — Conclusão */}
-      {passo === 3 && (
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Sua trilha está pronta pra nascer</h3>
-          {!preview ? (
-            <p className="text-sm text-red-500">Não foi possível montar a trilha — verifique se há matérias incluídas no Ciclo de Estudos.</p>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {[
-                  { label: "Tópicos a estudar", valor: String(preview.resumo.totalMetas), Icon: Target },
-                  { label: "Matérias", valor: String(new Set(preview.metas.flatMap((m) => m.atividades.map((a) => a.materia))).size), Icon: CalendarClock },
-                  { label: "Duração estimada", valor: `${preview.resumo.semanasEstimadas} semanas`, Icon: Route },
-                  { label: "Término projetado", valor: fmtData(preview.resumo.dataProjetada), Icon: Sparkles },
-                ].map((c) => (
-                  <div key={c.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center">
-                    <c.Icon className="h-5 w-5 mx-auto mb-1.5 text-emerald-500" />
-                    <div className="text-lg font-bold text-gray-900 dark:text-white">{c.valor}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">{c.label}</div>
-                  </div>
-                ))}
+      {/* progresso por matéria */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+          <Zap className="h-4 w-4 text-amber-500" />
+          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex-1">Progresso rumo aos 100%</span>
+        </div>
+        <div className="divide-y divide-gray-100 dark:divide-gray-700">
+          {meta.analises.map((a) => {
+            const cor = resolverCorMateria(a.materia, materiasAtivas);
+            const totalGrupos = a.totalTopicos * 4;
+            const emRevisao = materiasEmRevisao.some((m) => m.materia === a.materia);
+            return (
+              <div key={a.materia} className="px-4 py-2.5 flex items-center gap-3">
+                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cor.dot}`} />
+                <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate">{a.materia}</span>
+                {a.materiaConcluida ? (
+                  <span className="text-[11px] font-semibold text-emerald-500 flex items-center gap-1">
+                    <Trophy className="h-3 w-3" /> 100%{emRevisao ? " · em revisão" : ""}
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-gray-400 tabular-nums whitespace-nowrap">
+                    teoria {a.topicosEstudados}/{a.totalTopicos} · questões {a.gruposFeitos}/{totalGrupos}
+                  </span>
+                )}
               </div>
-              {preview.resumo.diasAteProva !== undefined && (
-                <div
-                  className={`rounded-xl border px-4 py-3 text-sm ${
-                    preview.resumo.cabeAteProva
-                      ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"
-                      : "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300"
-                  }`}
-                >
-                  {preview.resumo.cabeAteProva
-                    ? `Na sua disponibilidade, você conclui o edital em ${preview.resumo.semanasEstimadas} semana(s) — antes da prova (faltam ${preview.resumo.diasAteProva} dias). 🎯`
-                    : `Na sua disponibilidade, a trilha leva ${preview.resumo.semanasEstimadas} semana(s) e passa da data da prova (faltam ${preview.resumo.diasAteProva} dias). Considere subir a disponibilidade.`}
-                </div>
-              )}
-              <p className="text-xs text-gray-400 dark:text-gray-500">
-                A trilha cobre os tópicos ainda não estudados das matérias incluídas no Ciclo — cada meta é UM único
-                tópico de UMA matéria: &quot;conclua a teoria do tópico X&quot;. Sem questões, sem revisão, sem meta de
-                tempo. Depois de gerar, a IA escreve uma orientação por meta.
-              </p>
-            </div>
-          )}
+            );
+          })}
         </div>
-      )}
+      </div>
 
-      {/* Navegação */}
-      <div className="flex justify-between items-center pt-2">
-        <div>
-          {onCancelar && (
-            <button type="button" onClick={onCancelar} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-              Cancelar e voltar pra trilha atual
-            </button>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {passo > 1 && (
-            <button
-              type="button"
-              onClick={() => setPasso((p) => (p - 1) as 1 | 2)}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" /> Voltar
-            </button>
-          )}
-          {passo < 3 ? (
-            <button
-              type="button"
-              disabled={materiasElegiveis.length === 0}
-              onClick={() => setPasso((p) => (p + 1) as 2 | 3)}
-              className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-40"
-            >
-              Avançar <ArrowRight className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={!preview}
-              onClick={() => {
-                if (!preview) return;
-                onGerar({ config, metas: preview.metas, criadaEm: new Date().toISOString(), versao: 1 });
-              }}
-              className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-40"
-            >
-              <Sparkles className="h-4 w-4" /> Gerar minha trilha
-            </button>
-          )}
-        </div>
+      <div className="flex justify-end">
+        <button type="button" onClick={desativar} className="text-[11px] text-gray-400 hover:text-red-400 flex items-center gap-1 transition-colors">
+          <Trash2 className="h-3 w-3" /> Desativar trilha
+        </button>
       </div>
     </div>
   );
 }
 
-// ─── Trilha ativa ────────────────────────────────────────────────────────────
+// ─── Linha de questão liberada (registro inline de acertos/erros) ────────────
 
-function TrilhaAtiva({
-  trilha, topicos, configCiclo, materias, dataProva, onUpdateTrilha, onUpdateTopicos, onUpdateConfigCiclo, onRefazer, onExcluir,
+function LinhaQuestao({
+  q, materiasAtivas, onRegistrar,
 }: {
-  trilha: TrilhaEstudo;
-  topicos: Record<string, TopicoState>;
-  configCiclo: EstudoConfigCiclo;
-  materias: (MateriaDef | MateriaConcurso)[];
-  dataProva?: string;
-  onUpdateTrilha: (t: TrilhaEstudo) => void;
-  onUpdateTopicos: (t: Record<string, TopicoState>) => void;
-  onUpdateConfigCiclo?: (c: EstudoConfigCiclo) => void;
-  onRefazer: () => void;
-  onExcluir: () => void;
+  q: QuestaoLiberada;
+  materiasAtivas: (MateriaDef | MateriaConcurso)[];
+  onRegistrar: (q: QuestaoLiberada, acertos: number, erros: number) => void;
 }) {
-  const [metaSelecionada, setMetaSelecionada] = useState<number | null>(null);
-  const idxAtual = metaAtualIndex(trilha.metas);
-
-  // 1 meta = 1 tópico — o progresso é contado em METAS concluídas (não em minutos/atividades)
-  const metasConcluidas = trilha.metas.filter((m) => m.atividades.every((a) => a.status === "concluida")).length;
-  const percGeral = trilha.metas.length > 0 ? Math.round((metasConcluidas / trilha.metas.length) * 100) : 0;
-  const projecao = projetarTermino(trilha);
-  const naoCobertos = useMemo(() => topicosNaoCobertos(trilha, materias, configCiclo, topicos), [trilha, materias, configCiclo, topicos]);
-  // ritmo ESPERADO (antes de haver metas concluídas pra calcular o ritmo real): metas são
-  // pequenas agora, então "1 meta/semana" não vale mais — deriva quantas metas cabem por semana
-  // na disponibilidade escolhida, a partir do tamanho médio real das metas desta trilha
-  const metasPorSemanaEsperado = useMemo(() => {
-    const totalMinutos = trilha.metas.reduce((s, m) => s + m.atividades.reduce((a, x) => a + x.duracaoMin, 0), 0);
-    const orcamentoSemanal = TRILHA_DISPONIBILIDADE_CONFIG[trilha.config.disponibilidade].minutosSemana;
-    const semanas = Math.max(1, Math.ceil(totalMinutos / orcamentoSemanal));
-    return Math.max(1, Math.round(trilha.metas.length / semanas));
-  }, [trilha]);
-
-  const handleStatusClick = (metaNumero: number, atividadeId: string) => {
-    const metas = trilha.metas.map((m) => {
-      if (m.numero !== metaNumero) return m;
-      const atividades = m.atividades.map((a) =>
-        a.id === atividadeId ? { ...a, status: proximoStatus(a.status) } : a
-      );
-      const completa = atividades.every((a) => a.status === "concluida");
-      return {
-        ...m,
-        atividades,
-        // marca a conclusão da meta na primeira vez que fecha; reabrir atividade reabre a meta
-        concluidaEm: completa ? m.concluidaEm ?? new Date().toISOString() : undefined,
-      };
-    });
-    onUpdateTrilha({ ...trilha, metas });
-
-    // efeito colateral: TEORIA concluída marca os tópicos como estudados no Edital (one-way —
-    // voltar o status da atividade NÃO desmarca o Edital, pra não perder XP por misclick)
-    const meta = trilha.metas.find((m) => m.numero === metaNumero);
-    const atividade = meta?.atividades.find((a) => a.id === atividadeId);
-    if (atividade && atividade.tipo === "teoria" && proximoStatus(atividade.status) === "concluida") {
-      const novos = { ...topicos };
-      for (const t of atividade.topicos) {
-        const k = topicoKey(atividade.materia, t);
-        novos[k] = {
-          estudado: true,
-          cadernos: novos[k]?.cadernos ?? {
-            A: { acertos: 0, erros: 0 }, B: { acertos: 0, erros: 0 }, C: { acertos: 0, erros: 0 }, D: { acertos: 0, erros: 0 },
-          },
-        };
-      }
-      onUpdateTopicos(novos);
-    }
-  };
-
-  const handleAtualizar = () => {
-    onUpdateTrilha(atualizarTrilha(trilha, materias, topicos, configCiclo));
-  };
-
-  const idxSelecionada = metaSelecionada !== null ? trilha.metas.findIndex((m) => m.numero === metaSelecionada) : -1;
-  const metaObj = idxSelecionada === -1 ? null : trilha.metas[idxSelecionada];
-  const estadoSelecionada: "concluida" | "atual" | "futura" =
-    idxSelecionada === -1 ? "futura" : idxSelecionada < idxAtual ? "concluida" : idxSelecionada === idxAtual ? "atual" : "futura";
+  const [aberto, setAberto] = useState(false);
+  const [acertos, setAcertos] = useState("");
+  const [erros, setErros] = useState("");
+  const cor = resolverCorMateria(q.materia, materiasAtivas);
+  const podeSalvar = acertos !== "" && erros !== "" && Number(acertos) + Number(erros) > 0;
 
   return (
-    <div className="space-y-5">
-      {/* Header de progresso */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-5 text-white shadow-lg">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <Route className="h-6 w-6" />
-            <div>
-              <div className="text-lg font-bold">Trilha de Estudos</div>
-              <div className="text-xs text-emerald-100">
-                Meta {trilha.metas[idxAtual]?.numero ?? "-"} de {trilha.metas.length} ·{" "}
-                {projecao.ritmoMetasPorSemana !== null
-                  ? `seu ritmo: ${projecao.ritmoMetasPorSemana} meta(s)/semana`
-                  : `ritmo estimado: ~${metasPorSemanaEsperado} meta(s)/semana`}
-                {projecao.dataProjetada && ` · término ~${fmtData(projecao.dataProjetada)}`}
-                {dataProva && ` · prova ${fmtData(new Date(dataProva))}`}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {naoCobertos.length > 0 && (
-              <button
-                type="button"
-                onClick={handleAtualizar}
-                title={`${naoCobertos.length} tópico(s) novo(s) no edital fora da trilha`}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
-              >
-                <PlusCircle className="h-3.5 w-3.5" /> Atualizar trilha ({naoCobertos.length})
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm("Refazer a trilha do zero? Tópicos com teoria já concluída não repetirão teoria (o Edital continua marcado), mas o progresso de atividades da trilha atual será perdido.")) onRefazer();
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
-            >
-              <RefreshCw className="h-3.5 w-3.5" /> Refazer
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm("Excluir a trilha atual? As metas e o progresso de atividades (status, orientações) somem — os tópicos já marcados como estudados no Edital e os cadernos de questões continuam intactos. Você pode criar uma trilha nova depois."))
-                  onExcluir();
-              }}
-              title="Excluir a trilha e voltar ao início"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-red-500/40 rounded-lg text-xs font-medium transition-colors"
-            >
-              <Trash2 className="h-3.5 w-3.5" /> Excluir
-            </button>
-          </div>
+    <div className="px-4 py-2.5">
+      <button type="button" onClick={() => setAberto((v) => !v)} className="w-full flex items-center gap-2.5 text-left">
+        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${cor.badge} flex-shrink-0`}>{GRUPO_LABEL[q.grupo]}</span>
+        <div className="flex-1 min-w-0">
+          <span className="text-sm text-gray-700 dark:text-gray-300">{q.materia}</span>
+          <span className="text-xs text-gray-400"> · tópico {q.ordemTopico}: </span>
+          <span className="text-xs text-gray-500 dark:text-gray-400" title={q.topico}>{q.topico.length > 60 ? q.topico.slice(0, 60) + "…" : q.topico}</span>
+          <div className="text-[10px] text-gray-400">{q.motivo}</div>
         </div>
-        <div className="bg-emerald-900/40 rounded-full h-2.5">
-          <div className="bg-white rounded-full h-2.5 transition-all duration-500" style={{ width: `${percGeral}%` }} />
+        <ChevronDown className={`h-3.5 w-3.5 text-gray-400 flex-shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
+      </button>
+      {aberto && (
+        <div className="mt-2 flex items-center gap-2 pl-1">
+          <label className="text-[11px] text-gray-500">Acertos</label>
+          <input type="number" min={0} value={acertos} onChange={(e) => setAcertos(e.target.value)} className="w-16 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1 text-sm text-gray-800 dark:text-gray-200 outline-none focus:border-emerald-400" />
+          <label className="text-[11px] text-gray-500">Erros</label>
+          <input type="number" min={0} value={erros} onChange={(e) => setErros(e.target.value)} className="w-16 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1 text-sm text-gray-800 dark:text-gray-200 outline-none focus:border-emerald-400" />
+          <button
+            type="button"
+            disabled={!podeSalvar}
+            onClick={() => onRegistrar(q, Number(acertos), Number(erros))}
+            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-medium"
+          >
+            Salvar
+          </button>
         </div>
-        <div className="flex justify-between mt-1 text-xs text-emerald-100">
-          <span>{metasConcluidas}/{trilha.metas.length} tópicos concluídos</span>
-          <span>{percGeral}%</span>
-        </div>
-      </div>
-
-      {onUpdateConfigCiclo && (
-        <MateriaConcluidaBanner
-          trilha={trilha}
-          materiasAtivas={materias}
-          configCiclo={configCiclo}
-          onUpdateConfigCiclo={onUpdateConfigCiclo}
-        />
       )}
+    </div>
+  );
+}
 
-      {/* Caminho estilo Duolingo — 1 nó por meta */}
-      <TrilhaPath
-        metas={trilha.metas}
-        idxAtual={idxAtual}
-        materiasAtivas={materias}
-        onSelectMeta={setMetaSelecionada}
-      />
-      <MetaPainel
-        meta={metaObj}
-        estado={estadoSelecionada}
-        aberto={metaSelecionada !== null && estadoSelecionada !== "futura"}
-        onClose={() => setMetaSelecionada(null)}
-        onStatusClick={(atividadeId) => metaSelecionada !== null && handleStatusClick(metaSelecionada, atividadeId)}
-        topicos={topicos}
-        onUpdateTopicos={onUpdateTopicos}
-      />
+// ─── Tela de ativação ─────────────────────────────────────────────────────────
+
+function Intro({
+  temMateriasNoCiclo, onAtivar, onIrParaCiclo,
+}: {
+  temMateriasNoCiclo: boolean;
+  onAtivar: () => void;
+  onIrParaCiclo?: () => void;
+}) {
+  const regras = [
+    { icone: Clock, texto: "Cada dia pertence a um grupo do ciclo (A/B/C). As horas do dia são divididas entre as matérias do grupo — ex.: 3h e 3 matérias = 1h de PDF em cada, no tópico atual. O tempo é monitorado pelo leitor de PDF." },
+    { icone: ListChecks, texto: "Concluir um tópico libera questões dos anteriores: grupo A do último, B do penúltimo, C do antepenúltimo, D do anterior a esse — até fechar os 4 grupos de todos os tópicos." },
+    { icone: Trophy, texto: "Matéria 100% (teoria + todos os grupos) entra em modo revisão: no dia seguinte, 30 questões englobando todos os tópicos dela." },
+    { icone: Layers, texto: "A cada 2 domingos, revisão das cartas." },
+    { icone: Sparkles, texto: "Trilha 100% mutável: o ciclo só avança quando você entrega os blocos do dia — a meta de amanhã depende do que você fez hoje." },
+  ];
+  return (
+    <div className="max-w-2xl mx-auto space-y-4">
+      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-6 text-white shadow-lg">
+        <div className="flex items-center gap-2.5 mb-1">
+          <Route className="h-6 w-6" />
+          <div className="text-xl font-bold">Trilha dinâmica</div>
+        </div>
+        <p className="text-sm text-emerald-100">
+          Sua meta diária calculada automaticamente do seu progresso real — sem plano fixo, ela se adapta ao que você entrega.
+        </p>
+      </div>
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+        {regras.map((r, i) => (
+          <div key={i} className="px-4 py-3 flex gap-3">
+            <r.icone className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-gray-600 dark:text-gray-300">{r.texto}</p>
+          </div>
+        ))}
+      </div>
+      {!temMateriasNoCiclo && (
+        <div className="rounded-xl border-2 border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 text-xs text-gray-600 dark:text-gray-300 flex items-center gap-2">
+          <Settings2 className="h-4 w-4 text-amber-500 flex-shrink-0" />
+          <span className="flex-1">Nenhuma matéria incluída no Ciclo de Estudos — configure o ciclo primeiro (grupos A/B/C e horas por dia).</span>
+          {onIrParaCiclo && (
+            <button type="button" onClick={onIrParaCiclo} className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium whitespace-nowrap">Ir pro Ciclo</button>
+          )}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={onAtivar}
+        disabled={!temMateriasNoCiclo}
+        className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+      >
+        <Sparkles className="h-4 w-4" /> Ativar trilha dinâmica
+      </button>
     </div>
   );
 }

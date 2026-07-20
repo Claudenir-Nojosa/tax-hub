@@ -35,6 +35,9 @@ interface Props {
   // criar cartão: botões na barra do leitor (ao lado de "Parei aqui") abrem o formulário do tipo
   // escolhido; o usuário preenche manualmente (sem IA), já travado na matéria/tópico do PDF
   onAdicionarCartas?: (cartas: Carta[]) => void;
+  // trilha dinâmica: minutos que faltam HOJE pra fechar o bloco de estudo de cada matéria — o
+  // leitor avisa em tempo real quando a sessão atual cruza esse restante ("meta do dia feita!")
+  metaMinutosRestantes?: Record<string, number>;
 }
 
 // mesma config visual das cartas em CartasTab.tsx, reduzida aos 3 tipos que o leitor oferece
@@ -76,7 +79,7 @@ function fmtEta(paginasRestantes: number, pagPorHora: number | null): string | n
   return fmtHoras(Math.round((paginasRestantes / pagPorHora) * 60));
 }
 
-export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConcurso, onRegistrarSessao, onAdicionarCartas }: Props) {
+export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConcurso, onRegistrarSessao, onAdicionarCartas, metaMinutosRestantes }: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
     materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
 
@@ -331,6 +334,7 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
           onAtualizarPagina={(pag) => atualizarPagina(lendo.id, pag)}
           onRegistrarSessao={onRegistrarSessao}
           onAdicionarCartas={onAdicionarCartas}
+          minutosMetaRestantes={metaMinutosRestantes?.[lendo.materia]}
           onFechar={fecharLeitor}
         />
       )}
@@ -350,13 +354,16 @@ function fmtCrono(segundos: number): string {
 }
 
 function LeitorPdf({
-  pdf, blob, onAtualizarPagina, onRegistrarSessao, onAdicionarCartas, onFechar,
+  pdf, blob, onAtualizarPagina, onRegistrarSessao, onAdicionarCartas, minutosMetaRestantes, onFechar,
 }: {
   pdf: PdfEstudo;
   blob: Blob;
   onAtualizarPagina: (pagina: number) => void;
   onRegistrarSessao?: (minutos: number, materia: string, topico: string | undefined, paginas: number | undefined, descricao: string) => void;
   onAdicionarCartas?: (cartas: Carta[]) => void;
+  // trilha dinâmica: minutos que faltavam (na abertura do leitor) pro bloco de hoje desta
+  // matéria — quando o cronômetro da sessão cruza esse valor, avisa que a meta do dia foi batida
+  minutosMetaRestantes?: number;
   onFechar: () => void;
 }) {
   // cronômetro: conta sozinho desde a abertura; pausável. Ao fechar com ≥1 min, a sessão vira
@@ -388,11 +395,24 @@ function LeitorPdf({
     toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   };
 
+  // aviso da trilha dinâmica: dispara UMA vez quando a sessão atual cobre o que faltava do
+  // bloco de hoje desta matéria (o restante veio congelado da abertura — as sessões só entram
+  // no calendário ao fechar o leitor, então o cronômetro é a única fonte "ao vivo")
+  const metaAvisadaRef = useRef(false);
+  const metaRestanteRef = useRef(minutosMetaRestantes);
+
   useEffect(() => {
     if (pausado) return;
     const interval = setInterval(() => {
       segundosRef.current += 1;
       setSegundos(segundosRef.current);
+      const restante = metaRestanteRef.current;
+      if (!metaAvisadaRef.current && restante !== undefined && restante > 0 && segundosRef.current >= restante * 60) {
+        metaAvisadaRef.current = true;
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        setToast(`🎯 Meta de hoje de ${pdfRef.current.materia} concluída!`);
+        toastTimerRef.current = setTimeout(() => setToast(null), 6000);
+      }
     }, 1000);
     return () => clearInterval(interval);
   }, [pausado]);
