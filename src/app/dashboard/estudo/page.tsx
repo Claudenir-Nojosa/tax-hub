@@ -29,6 +29,7 @@ import { computarMetaDia } from "@/lib/trilha-dinamica";
 import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, GraduationCap, Library, Brain } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
+import { toast } from "sonner";
 
 const DashboardTab = dynamic(() => import("@/components/estudo/DashboardTab"), { ssr: false });
 const EditalTab = dynamic(() => import("@/components/estudo/EditalTab"), { ssr: false });
@@ -215,6 +216,38 @@ export default function EstudoPage() {
     }));
   }, []);
 
+  // excluir um tópico DE VERDADE — remove da lista de tópicos da matéria (concurso.materias no
+  // banco, via PUT), diferente de toggleTopicoExcluido (que só oculta). Também limpa o progresso
+  // (estudado/cadernos) e a marca de oculto desse tópico, já que ele deixa de existir. Otimista:
+  // atualiza a UI na hora, PUT em paralelo; se falhar, avisa e reverte.
+  const deleteTopico = useCallback((materia: string, topico: string) => {
+    if (!concursoAtivo) return;
+    const materiasAtualizadas = (concursoAtivo.materias as MateriaConcurso[]).map((m) =>
+      m.nome === materia ? { ...m, topicos: m.topicos.filter((t) => t !== topico) } : m
+    );
+    const anterior = concursoAtivo.materias;
+    setConcursoAtivo((prev) => (prev ? { ...prev, materias: materiasAtualizadas } : prev));
+    const key = topicoKey(materia, topico);
+    setState((prev) => {
+      const { [key]: _removido, ...topicosRestantes } = prev.topicos;
+      return {
+        ...prev,
+        topicos: topicosRestantes,
+        topicosExcluidos: prev.topicosExcluidos.filter((k) => k !== key),
+      };
+    });
+    fetch(`/api/concurso/${concursoAtivo.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ materias: materiasAtualizadas }),
+    }).then((res) => {
+      if (!res.ok) throw new Error();
+    }).catch(() => {
+      toast.error("Não deu pra excluir o tópico — tente de novo");
+      setConcursoAtivo((prev) => (prev ? { ...prev, materias: anterior } : prev));
+    });
+  }, [concursoAtivo]);
+
   // cartas geradas pelo grifo no leitor de PDF — prepend no baralho (mesma ordem do CartasTab)
   const adicionarCartas = useCallback((novas: Carta[]) => {
     setState((prev) => ({ ...prev, cartas: [...novas, ...prev.cartas] }));
@@ -382,6 +415,7 @@ export default function EstudoPage() {
               pdfs={state.pdfs}
               topicosExcluidos={state.topicosExcluidos}
               onToggleTopicoExcluido={toggleTopicoExcluido}
+              onDeleteTopico={concursoAtivo ? deleteTopico : undefined}
             />
           )}
 

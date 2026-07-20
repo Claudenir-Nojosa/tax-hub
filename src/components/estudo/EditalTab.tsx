@@ -11,17 +11,20 @@ import {
   type MateriaConcurso,
   type PdfEstudo,
 } from "@/lib/estudo-data";
-import { ChevronDown, ChevronRight, Search, CheckSquare, Square, BookOpen, EyeOff, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronRight, Search, CheckSquare, Square, BookOpen, EyeOff, RotateCcw, Trash2 } from "lucide-react";
 
 interface Props {
   topicos: Record<string, TopicoState>;
   onUpdate: (topicos: Record<string, TopicoState>) => void;
   materiasConcurso?: MateriaConcurso[]; // se passado, usa em vez de MATERIAS hardcoded
   pdfs?: PdfEstudo[]; // Biblioteca: mostra % lido dos PDFs que cobrem cada tópico (opcional)
-  // excluir um tópico é reversível: some do Ciclo/Trilha/cálculos em todo o resto do app, mas o
-  // Edital continua mostrando ele (esmaecido) pra dar a opção de reativar
+  // ocultar é reversível: some do Ciclo/Trilha/cálculos em todo o resto do app, mas o Edital
+  // continua mostrando o tópico (esmaecido) pra dar a opção de reativar; progresso intacto
   topicosExcluidos?: string[];
   onToggleTopicoExcluido?: (materia: string, topico: string) => void;
+  // excluir é DEFINITIVO: remove o tópico da matéria (concurso.materias) e apaga o progresso
+  // dele — sem prop, o botão de lixeira não aparece (ex.: sem concurso ativo ainda carregado)
+  onDeleteTopico?: (materia: string, topico: string) => void;
 }
 
 // % de leitura dos PDFs da Biblioteca que cobrem este tópico (média ponderada pelo total de
@@ -85,7 +88,7 @@ const COR_BORDER: Record<string, string> = {
   yellow: "border-l-yellow-500",
 };
 
-export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = [], topicosExcluidos = [], onToggleTopicoExcluido }: Props) {
+export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = [], topicosExcluidos = [], onToggleTopicoExcluido, onDeleteTopico }: Props) {
   const materiasAtivas = materiasConcurso
     ? materiasConcurso.map(m => ({ ...m, corBorder: COR_BORDER[m.cor] ?? "border-l-gray-400" }))
     : MATERIAS;
@@ -117,6 +120,12 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
         [grupo]: { ...prev.cadernos[grupo], [field]: value },
       },
     }));
+  };
+
+  const excluirTopico = (materia: string, topico: string) => {
+    if (!onDeleteTopico) return;
+    if (!confirm(`Excluir "${topico}" de ${materia} DEFINITIVAMENTE?\n\nDiferente de ocultar, isso apaga o progresso desse tópico (estudado, cadernos A-D) e não pode ser desfeito.`)) return;
+    onDeleteTopico(materia, topico);
   };
 
   const marcarTodos = (materia: string, estudado: boolean) => {
@@ -167,7 +176,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
           </div>
         ))}
         <div className="w-12 text-center">Média</div>
-        <div className="w-8" />
+        <div className="w-16" />
       </div>
 
       {/* Matérias */}
@@ -330,21 +339,33 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                           </span>
                         </div>
 
-                        {/* Excluir/reativar — reversível: só oculta, o progresso não é apagado */}
-                        {onToggleTopicoExcluido && (
-                          <div className="md:w-8 flex md:justify-center">
-                            <button
-                              type="button"
-                              onClick={() => onToggleTopicoExcluido(m.nome, t)}
-                              title={excluido ? "Reativar tópico" : "Excluir tópico (oculta, sem apagar o progresso)"}
-                              className={`flex-shrink-0 p-1 rounded transition-colors ${
-                                excluido
-                                  ? "text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                                  : "text-gray-300 dark:text-gray-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
-                              }`}
-                            >
-                              {excluido ? <RotateCcw className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                            </button>
+                        {/* Ocultar/reativar (reversível) + excluir de vez (definitivo) */}
+                        {(onToggleTopicoExcluido || onDeleteTopico) && (
+                          <div className="flex md:w-16 items-center gap-1 md:justify-center">
+                            {onToggleTopicoExcluido && (
+                              <button
+                                type="button"
+                                onClick={() => onToggleTopicoExcluido(m.nome, t)}
+                                title={excluido ? "Reativar tópico" : "Ocultar tópico (reversível, sem apagar o progresso)"}
+                                className={`flex-shrink-0 p-1 rounded transition-colors ${
+                                  excluido
+                                    ? "text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                    : "text-gray-300 dark:text-gray-600 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                                }`}
+                              >
+                                {excluido ? <RotateCcw className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                              </button>
+                            )}
+                            {onDeleteTopico && (
+                              <button
+                                type="button"
+                                onClick={() => excluirTopico(m.nome, t)}
+                                title="Excluir tópico definitivamente (apaga o progresso, não dá pra desfazer)"
+                                className="flex-shrink-0 p-1 rounded text-gray-300 dark:text-gray-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
