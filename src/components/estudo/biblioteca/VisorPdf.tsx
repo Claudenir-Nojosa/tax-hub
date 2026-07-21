@@ -169,6 +169,9 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
   const [dims, setDims] = useState<{ w: number; h: number }[]>([]);
   const [scale, setScale] = useState<number | null>(null); // null até calcular o "ajustar à largura"
   const [erro, setErro] = useState<string | null>(null);
+  // segundos decorridos abrindo o documento — só pra mostrar na tela de loading e no erro de
+  // timeout; ajuda a diferenciar "travou de vez" de "só está MUITO lento nesse aparelho/arquivo"
+  const [segundosAbrindo, setSegundosAbrindo] = useState(0);
   // janela de páginas renderizadas (números inclusivos) — recalculada a cada scroll
   const [janela, setJanela] = useState<{ ini: number; fim: number }>({ ini: 1, fim: 2 });
   const jaRolouRef = useRef(false);
@@ -181,6 +184,10 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
   useEffect(() => {
     let cancelado = false;
     let taskLocal: ReturnType<typeof pdfjs.getDocument> | null = null;
+    const inicio = Date.now();
+    const tickerId = setInterval(() => {
+      if (!cancelado) setSegundosAbrindo(Math.floor((Date.now() - inicio) / 1000));
+    }, 1000);
     (async () => {
       try {
         const buf = await blob.arrayBuffer();
@@ -188,15 +195,18 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
         taskLocal = task;
         // watchdog: em navegadores onde o worker trava sem lançar erro (ex.: alguma API interna
         // indisponível), o "Abrindo PDF..." giraria pra sempre — com timeout vira um erro
-        // acionável em vez de spinner infinito (relatado pelo usuário no celular)
+        // acionável em vez de spinner infinito (relatado pelo usuário no celular). 2min (não 30s
+        // como antes) — depois do usuário bater no timeout mesmo já com worker clássico, é
+        // preciso separar "travou de vez" de "só está bem mais lento nesse aparelho/arquivo do
+        // que qualquer coisa testada até aqui" antes de investigar mais a fundo.
         let timeoutId: ReturnType<typeof setTimeout>;
         const d = await Promise.race([
           task.promise.finally(() => clearTimeout(timeoutId)),
           new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(
-              () => reject(new Error("Tempo esgotado ao abrir o PDF — atualize a página ou tente outro navegador")),
-              30000
-            );
+            timeoutId = setTimeout(() => {
+              const s = Math.floor((Date.now() - inicio) / 1000);
+              reject(new Error(`Tempo esgotado ao abrir o PDF depois de ${s}s — atualize a página ou tente outro navegador`));
+            }, 120000);
           }),
         ]);
         if (cancelado) return;
@@ -230,10 +240,13 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
         }
       } catch (e) {
         if (!cancelado) setErro(e instanceof Error ? e.message : "Erro ao abrir o PDF");
+      } finally {
+        clearInterval(tickerId);
       }
     })();
     return () => {
       cancelado = true;
+      clearInterval(tickerId);
       taskLocal?.destroy().catch(() => { /* já destruído */ });
     };
   }, [blob]);
@@ -297,7 +310,8 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
       <style>{CSS_TEXT_LAYER}</style>
       {!doc || scale === null ? (
         <div className="h-full flex items-center justify-center gap-2 text-sm text-gray-400">
-          <Loader2 className="h-4 w-4 animate-spin" /> Abrindo PDF…
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Abrindo PDF{segundosAbrindo > 0 ? ` (${segundosAbrindo}s)` : "…"}
         </div>
       ) : (
         <>
