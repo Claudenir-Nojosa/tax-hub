@@ -169,35 +169,65 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
   const janelaRef = useRef(janela);
   janelaRef.current = janela;
 
-  // carrega o documento + dimensões (escala 1) de todas as páginas (só metadados — leve)
+  // carrega o documento — só a página 1 bloqueia o "Abrindo PDF...", as demais entram em
+  // background (ver comentário abaixo)
   useEffect(() => {
     let cancelado = false;
-    let docLocal: PDFDocumentProxy | null = null;
+    let taskLocal: ReturnType<typeof pdfjs.getDocument> | null = null;
     (async () => {
       try {
         const buf = await blob.arrayBuffer();
-        const d = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
-        if (cancelado) { d.loadingTask.destroy(); return; }
-        docLocal = d;
-        const dd: { w: number; h: number }[] = [];
-        for (let i = 1; i <= d.numPages; i++) {
-          const page = await d.getPage(i);
-          const vp = page.getViewport({ scale: 1 });
-          dd.push({ w: vp.width, h: vp.height });
-        }
+        const task = pdfjs.getDocument({ data: new Uint8Array(buf) });
+        taskLocal = task;
+        // watchdog: em navegadores onde o worker trava sem lançar erro (ex.: alguma API interna
+        // indisponível), o "Abrindo PDF..." giraria pra sempre — com timeout vira um erro
+        // acionável em vez de spinner infinito (relatado pelo usuário no celular)
+        let timeoutId: ReturnType<typeof setTimeout>;
+        const d = await Promise.race([
+          task.promise.finally(() => clearTimeout(timeoutId)),
+          new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(
+              () => reject(new Error("Tempo esgotado ao abrir o PDF — atualize a página ou tente outro navegador")),
+              30000
+            );
+          }),
+        ]);
         if (cancelado) return;
+
+        // só a página 1 define a dimensão inicial — as demais usam a MESMA estimativa (quase
+        // sempre certa: PDFs de curso têm todas as páginas do mesmo tamanho) e são corrigidas em
+        // segundo plano. Sem isso, um PDF de 100+ páginas (comum no Estratégia) esperava dezenas
+        // de getPage() sequenciais (1 round-trip pro worker cada) antes de mostrar qualquer
+        // coisa — em celular isso é bem mais lento que no desktop e parecia travado ("girando
+        // sem parar"), mesmo sem nenhum erro de verdade.
+        const page1 = await d.getPage(1);
+        if (cancelado) return;
+        const vp1 = page1.getViewport({ scale: 1 });
+        const dimPadrao = { w: vp1.width, h: vp1.height };
         setDoc(d);
-        setDims(dd);
+        setDims(new Array(d.numPages).fill(dimPadrao));
         // ajustar à largura do container (com folga pras margens)
         const larguraDisponivel = (containerRef.current?.clientWidth ?? 900) - 48;
-        setScale(Math.min(2.5, Math.max(0.5, larguraDisponivel / (dd[0]?.w ?? 612))));
+        setScale(Math.min(2.5, Math.max(0.5, larguraDisponivel / dimPadrao.w)));
+
+        // corrige em segundo plano só as páginas cuja dimensão real divergir da estimativa
+        for (let i = 2; i <= d.numPages; i++) {
+          if (cancelado) return;
+          const page = await d.getPage(i);
+          if (cancelado) return;
+          const vp = page.getViewport({ scale: 1 });
+          if (vp.width !== dimPadrao.w || vp.height !== dimPadrao.h) {
+            const dim = { w: vp.width, h: vp.height };
+            setDims((prev) => prev.map((p, idx) => (idx === i - 1 ? dim : p)));
+          }
+        }
       } catch (e) {
         if (!cancelado) setErro(e instanceof Error ? e.message : "Erro ao abrir o PDF");
       }
     })();
     return () => {
       cancelado = true;
-      docLocal?.loadingTask.destroy().catch(() => { /* já destruído */ });
+      taskLocal?.destroy().catch(() => { /* já destruído */ });
     };
   }, [blob]);
 
