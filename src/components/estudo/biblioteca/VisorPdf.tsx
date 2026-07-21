@@ -1,5 +1,26 @@
 "use client";
 
+// Polyfill: `Promise.withResolvers` (ES2024) só chegou no Safari 17.4 (mar/2024); pdfjs-dist v6
+// usa isso internamente em quase toda troca de mensagem (sendWithPromise, cache de fonte, stream
+// de chunks — 27 usos no bundle principal). Sem isso, iOS/Safari mais antigo (e navegadores
+// in-app com WebKit desatualizado) quebram com "undefined is not a function" ao abrir QUALQUER
+// PDF — reproduz exatamente o bug relatado (funciona no desktop com Chrome/Firefox atualizado,
+// quebra só no celular). Precisa ficar ANTES do import de "pdfjs-dist" porque `Promise` é
+// compartilhado globalmente no processo — e precisa ser repetido no worker (thread separada, com
+// seu próprio global `Promise`), ver pdf-worker-entry.ts.
+if (typeof window !== "undefined" && !("withResolvers" in Promise)) {
+  // @ts-expect-error -- polyfill de API ES2024 ausente em runtimes mais antigos
+  Promise.withResolvers = function <T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+}
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Minus, Plus } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
@@ -28,9 +49,12 @@ interface ItemTextoPdf {
 // o pdf.js cai num fallback global (globalThis.pdfjsWorker) que o unpdf — usado pra contar
 // páginas no cadastro — registra com OUTRA versão do pdfjs, dando "API version X does not match
 // Worker version Y". Com workerPort não existe fallback: é sempre o worker desta versão.
+// Aponta pro wrapper (pdf-worker-entry.ts) em vez do arquivo do pdfjs-dist direto: o wrapper
+// aplica o MESMO polyfill de Promise.withResolvers antes de importar o worker de verdade — essa
+// thread tem seu próprio global `Promise`, então o polyfill lá em cima não alcança aqui.
 if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerPort) {
   pdfjs.GlobalWorkerOptions.workerPort = new Worker(
-    new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url),
+    new URL("./pdf-worker-entry.ts", import.meta.url),
     { type: "module" }
   );
 }
