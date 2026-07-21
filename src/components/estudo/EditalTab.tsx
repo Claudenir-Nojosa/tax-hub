@@ -195,11 +195,16 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
               key={m.nome}
               className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden"
             >
-              {/* Header da matéria */}
-              <button
-                type="button"
+              {/* Header da matéria — div (não button) porque contém os botões "Todos"/"Limpar" quando
+                  aberto; <button> dentro de <button> é HTML inválido e causa erro de hidratação */}
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => toggleExpand(m.nome)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 border-l-4 ${m.corBorder} hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpand(m.nome); }
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3.5 border-l-4 ${m.corBorder} hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors cursor-pointer`}
               >
                 <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">
                   {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -236,7 +241,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                     </div>
                   )}
                 </div>
-              </button>
+              </div>
 
               {/* Tópicos */}
               {isOpen && (
