@@ -36,6 +36,23 @@ async function jsonOuErro(res: Response): Promise<Record<string, unknown>> {
   return data
 }
 
+// Nenhum fetch() nativamente trava pra sempre, mas em navegadores/redes problemáticos (relatado
+// pelo usuário: iPhone, PDF de 171 páginas) uma requisição pode ficar pendurada indefinidamente
+// sem nunca resolver NEM rejeitar — sem timeout, isso vira um "Abrindo PDF..." eterno sem nenhum
+// erro (o botão "Ler" fica girando pra sempre). Corrida contra um timer, igual ao watchdog do
+// VisorPdf.tsx — não cancela a requisição de verdade (não dá pra confiar 100% em AbortController
+// nesses mesmos navegadores problemáticos), só garante que a Promise que a UI espera SEMPRE
+// resolve ou rejeita dentro do prazo.
+function comTimeout<T>(promise: Promise<T>, timeoutMs: number, mensagem: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>
+  return Promise.race([
+    promise.finally(() => clearTimeout(timeoutId)),
+    new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(mensagem)), timeoutMs)
+    }),
+  ])
+}
+
 export async function salvarArquivoPdf(id: string, arquivo: File | Blob): Promise<void> {
   const { path, token } = (await jsonOuErro(await fetch(`/api/estudo/biblioteca/${id}/arquivo`, { method: "POST" }))) as {
     path: string
@@ -48,12 +65,16 @@ export async function salvarArquivoPdf(id: string, arquivo: File | Blob): Promis
 }
 
 export async function obterArquivoPdf(id: string): Promise<Blob | null> {
-  const res = await fetch(`/api/estudo/biblioteca/${id}/arquivo`)
+  const res = await comTimeout(
+    fetch(`/api/estudo/biblioteca/${id}/arquivo`),
+    15000,
+    "Tempo esgotado ao preparar o download do PDF — tente de novo"
+  )
   if (res.status === 404) return null
   const { url } = (await jsonOuErro(res)) as { url: string }
-  const resArquivo = await fetch(url)
+  const resArquivo = await comTimeout(fetch(url), 60000, "Tempo esgotado ao baixar o PDF — verifique sua conexão e tente de novo")
   if (!resArquivo.ok) throw new Error(`Falha ao baixar o arquivo (${resArquivo.status})`)
-  return resArquivo.blob()
+  return comTimeout(resArquivo.blob(), 60000, "Tempo esgotado ao processar o PDF baixado — tente de novo")
 }
 
 export async function excluirArquivoPdf(id: string): Promise<void> {
