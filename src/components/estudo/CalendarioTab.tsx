@@ -160,6 +160,7 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
       onUpdate({ ...calendario, [selectedDay]: [...prev, nova] });
     }
     resetForm();
+    setModalOpen(false);
   };
 
   const removeAtividade = (dayKey: string, id: string) => {
