@@ -52,10 +52,17 @@ interface ItemTextoPdf {
 // Aponta pro wrapper (pdf-worker-entry.ts) em vez do arquivo do pdfjs-dist direto: o wrapper
 // aplica o MESMO polyfill de Promise.withResolvers antes de importar o worker de verdade — essa
 // thread tem seu próprio global `Promise`, então o polyfill lá em cima não alcança aqui.
+// SEM `{ type: "module" }`: reportado pelo usuário que, mesmo com o polyfill acima, em iPhone
+// (Chrome iOS — que roda sobre o MESMO motor WebKit do Safari, por exigência da Apple) o
+// getDocument() nunca respondia (timeout de 30s, sem erro nenhum) — sintoma de "module worker"
+// (`{type:"module"}`) quebrado nesse motor, um bug antigo e conhecido do WebKit com imports
+// estáticos dentro de worker de módulo. Worker CLÁSSICO (sem `type`) resolve isso: o webpack já
+// empacota o wrapper + o import do pdfjs-dist num chunk único de qualquer jeito — o `type` só
+// controla como o NAVEGADOR interpreta o arquivo final, não como o webpack empacota — então tirar
+// o `type` não muda nada no desktop e evita depender de suporte a módulo ES em worker no iOS.
 if (typeof window !== "undefined" && !pdfjs.GlobalWorkerOptions.workerPort) {
   pdfjs.GlobalWorkerOptions.workerPort = new Worker(
-    new URL("./pdf-worker-entry.ts", import.meta.url),
-    { type: "module" }
+    new URL("./pdf-worker-entry.ts", import.meta.url)
   );
 }
 
