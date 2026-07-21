@@ -23,7 +23,6 @@ export interface Carta {
   frente: string;
   verso: string;
   gabarito?: "verdadeiro" | "falso"; // somente para armadilha
-  erroId?: string;  // vincula ao ErroEntry de origem (caderno de erros)
   intervalo: number;      // dias até próxima revisão
   facilidade: number;     // SM-2 easiness factor (padrão 2.5)
   repeticoes: number;     // revisões bem-sucedidas consecutivas
@@ -52,15 +51,6 @@ export interface AtividadeCalendario {
   materia?: string;
   topico?: string;
   paginas?: number; // páginas lidas na sessão — alimenta o KPI "páginas por hora"
-}
-
-export interface ErroEntry {
-  id: string;
-  materia: string;
-  topico: string;
-  questao: string;
-  revisado: boolean;
-  data: string;
 }
 
 export interface ConfigMateria {
@@ -168,7 +158,6 @@ export interface TrilhaDinamicaState {
 export interface EstudoState {
   topicos: Record<string, TopicoState>;
   calendario: Record<string, AtividadeCalendario[]>;
-  cadernoErros: ErroEntry[];
   cartas: Carta[];
   configCiclo: EstudoConfigCiclo;
   streak: number;
@@ -178,7 +167,6 @@ export interface EstudoState {
   trilha?: TrilhaEstudo;
   trilhaDinamica?: TrilhaDinamicaState; // ausente = usuário ainda não ativou (aba mostra intro)
   pdfs: PdfEstudo[];
-  mapasMentais: MapaMental[];
   // tópicos ocultos do Edital (topicoKey) — "excluir" é reversível: some da lista, do Ciclo, da
   // Trilha e de todos os cálculos (% do edital, tópico atual etc.), mas o progresso já registrado
   // (estudado, cadernos A-D) fica guardado em `topicos` e volta do jeito que estava se reativado
@@ -211,38 +199,6 @@ export function calcularPagPorHora(calendario: Record<string, AtividadeCalendari
   const totalPaginas = sessoes.reduce((s, a) => s + (a.paginas ?? 0), 0);
   const minutos = sessoes.reduce((s, a) => s + a.duracao, 0);
   return minutos > 0 ? totalPaginas / (minutos / 60) : null;
-}
-
-// --- Mapas Mentais ---
-
-// nó da árvore do mapa mental — recursivo, cada mapa é 1 raiz + filhos aninhados. Cores em hex
-// (ou undefined = herda a cor do ramo, calculada em mapa-utils.ts a partir do filho de 1º nível
-// mais próximo). Imagem já vem comprimida em base64 (mapa-utils.ts:comprimirImagem) — sem upload
-// pro Storage: mapas mentais tendem a ter várias imagens pequenas (ícones/diagramas), então
-// embutir no próprio JSON do EstudoState é mais simples que reabrir a integração de Storage feita
-// pra Biblioteca (bucket, RLS, signed URL) só pra thumbnails.
-export interface NoMapaMental {
-  id: string;
-  texto: string;
-  negrito?: boolean;
-  italico?: boolean;
-  cor?: string; // cor do texto (hex)
-  corFundo?: string; // hex — undefined = usa a cor do ramo (translúcida)
-  corBorda?: string; // hex — undefined = usa a cor do ramo
-  semBorda?: boolean;
-  imagem?: string; // data URL (já redimensionada/comprimida)
-  colapsado?: boolean;
-  filhos: NoMapaMental[];
-}
-
-export interface MapaMental {
-  id: string;
-  titulo: string;
-  materia: string;
-  topico?: string;
-  raiz: NoMapaMental;
-  criadoEm: string;
-  atualizadoEm?: string;
 }
 
 // --- Tipos de Concurso ---
@@ -1150,12 +1106,10 @@ export function buildDefaultConfigCiclo(): EstudoConfigCiclo {
 export const DEFAULT_ESTUDO_STATE: EstudoState = {
   topicos: buildDefaultTopicos(),
   calendario: {},
-  cadernoErros: [],
   cartas: [],
   configCiclo: buildDefaultConfigCiclo(),
   streak: 0,
   semanasOK: 0,
   pdfs: [],
-  mapasMentais: [],
   topicosExcluidos: [],
 };

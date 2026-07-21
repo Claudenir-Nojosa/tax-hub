@@ -15,18 +15,16 @@ import {
   type EstudoState,
   type TopicoState,
   type AtividadeCalendario,
-  type ErroEntry,
   type EstudoConfigCiclo,
   type AtividadeTipo,
   type Grupo,
   type Carta,
   type TrilhaDinamicaState,
   type PdfEstudo,
-  type MapaMental,
   MATERIAS,
 } from "@/lib/estudo-data";
 import { computarMetaDia } from "@/lib/trilha-dinamica";
-import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, NotebookPen, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, GraduationCap, Library, Brain } from "lucide-react";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -35,36 +33,29 @@ const DashboardTab = dynamic(() => import("@/components/estudo/DashboardTab"), {
 const EditalTab = dynamic(() => import("@/components/estudo/EditalTab"), { ssr: false });
 const CicloTab = dynamic(() => import("@/components/estudo/CicloTab"), { ssr: false });
 const CalendarioTab = dynamic(() => import("@/components/estudo/CalendarioTab"), { ssr: false });
-const CadernoErrosTab = dynamic(() => import("@/components/estudo/CadernoErrosTab"), { ssr: false });
 const RelatoriosTab = dynamic(() => import("@/components/estudo/RelatoriosTab"), { ssr: false });
 const CartasTab = dynamic(() => import("@/components/estudo/CartasTab"), { ssr: false });
 const ResumosTab = dynamic(() => import("@/components/estudo/ResumosTab"), { ssr: false });
 const TrilhaTab = dynamic(() => import("@/components/estudo/TrilhaTab"), { ssr: false });
-// ssr:false é essencial aqui: o componente usa WebRTC/getUserMedia (APIs só de browser)
-const ProfessoraTab = dynamic(() => import("@/components/estudo/ProfessoraTab"), { ssr: false });
 const BibliotecaTab = dynamic(() => import("@/components/estudo/BibliotecaTab"), { ssr: false });
-const MapasMentaisTab = dynamic(() => import("@/components/estudo/MapasMentaisTab"), { ssr: false });
 const TimerEstudo = dynamic(() => import("@/components/estudo/TimerEstudo"), { ssr: false });
 const CompararEditaisTab = dynamic(() => import("@/components/estudo/CompararEditaisTab"), { ssr: false });
 
 const storageKey = (concursoId: string | null) =>
   concursoId ? `taxhub_estudo_c_${concursoId}` : "taxhub_estudo_v1";
 
-type Tab = "dashboard" | "edital" | "biblioteca" | "mapas" | "ciclo" | "trilha" | "calendario" | "caderno" | "relatorios" | "cartas" | "resumos" | "professora" | "comparar";
+type Tab = "dashboard" | "edital" | "biblioteca" | "ciclo" | "trilha" | "calendario" | "relatorios" | "cartas" | "resumos" | "comparar";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "edital", label: "Edital", icon: BookOpen },
   { id: "biblioteca", label: "Biblioteca", icon: Library },
-  { id: "mapas", label: "Mapas Mentais", icon: Brain },
   { id: "ciclo", label: "Ciclo de Estudos", icon: RotateCcw },
   { id: "trilha", label: "Trilha", icon: Route },
   { id: "calendario", label: "Calendário", icon: CalendarDays },
-  { id: "caderno", label: "Caderno de Erros", icon: NotebookPen },
   { id: "relatorios", label: "Relatórios", icon: BarChart2 },
   { id: "cartas", label: "Cartas", icon: Layers },
   { id: "resumos", label: "Resumos", icon: FileText },
-  { id: "professora", label: "Professora", icon: GraduationCap },
   { id: "comparar", label: "Comparar Editais", icon: GitCompare },
 ];
 
@@ -77,7 +68,6 @@ function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {
     trilhaDinamica: parsed.trilhaDinamica,
     cartas: parsed.cartas ?? [],
     pdfs: parsed.pdfs ?? [],
-    mapasMentais: parsed.mapasMentais ?? [],
     topicosExcluidos: parsed.topicosExcluidos ?? [],
     topicos: {
       ...DEFAULT_ESTUDO_STATE.topicos,
@@ -180,10 +170,6 @@ export default function EstudoPage() {
     setState((prev) => ({ ...prev, calendario }));
   }, []);
 
-  const updateCadernoErros = useCallback((cadernoErros: ErroEntry[]) => {
-    setState((prev) => ({ ...prev, cadernoErros }));
-  }, []);
-
   const updateCartas = useCallback((cartas: Carta[]) => {
     setState((prev) => ({ ...prev, cartas }));
   }, []);
@@ -198,10 +184,6 @@ export default function EstudoPage() {
 
   const updatePdfs = useCallback((pdfs: PdfEstudo[]) => {
     setState((prev) => ({ ...prev, pdfs }));
-  }, []);
-
-  const updateMapasMentais = useCallback((mapasMentais: MapaMental[]) => {
-    setState((prev) => ({ ...prev, mapasMentais }));
   }, []);
 
   // excluir/reativar um tópico no Edital — reversível: só some da lista/cálculos, o progresso
@@ -435,27 +417,11 @@ export default function EstudoPage() {
             />
           )}
 
-          {activeTab === "mapas" && (
-            <MapasMentaisTab
-              mapas={state.mapasMentais}
-              onChange={updateMapasMentais}
-              materiasConcurso={materiasFiltradas}
-            />
-          )}
-
           {activeTab === "ciclo" && (
             <CicloTab
               config={state.configCiclo}
               onChange={updateConfigCiclo}
               materiasConcurso={materiasFiltradas}
-            />
-          )}
-
-          {activeTab === "professora" && (
-            <ProfessoraTab
-              topicos={state.topicos}
-              materiasConcurso={materiasFiltradas}
-              concursoNome={concursoAtivo?.nome}
             />
           )}
 
@@ -484,20 +450,12 @@ export default function EstudoPage() {
             />
           )}
 
-          {activeTab === "caderno" && (
-            <CadernoErrosTab
-              erros={state.cadernoErros}
-              topicos={state.topicos}
-              onUpdate={updateCadernoErros}
-            />
-          )}
-
           {activeTab === "relatorios" && (
             <RelatoriosTab state={state} materiasConcurso={materiasFiltradas} />
           )}
 
           {activeTab === "cartas" && (
-            <CartasTab cartas={state.cartas} onChange={updateCartas} cadernoErros={state.cadernoErros} />
+            <CartasTab cartas={state.cartas} onChange={updateCartas} />
           )}
 
           {activeTab === "resumos" && (
