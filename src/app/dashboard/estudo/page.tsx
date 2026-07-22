@@ -55,8 +55,6 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "calendario", label: "Calendário", icon: CalendarDays },
   { id: "relatorios", label: "Relatórios", icon: BarChart2 },
   { id: "cartas", label: "Cartas", icon: Layers },
-  { id: "resumos", label: "Resumos", icon: FileText },
-  { id: "comparar", label: "Comparar Editais", icon: GitCompare },
 ];
 
 function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {

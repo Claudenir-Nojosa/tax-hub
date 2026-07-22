@@ -227,7 +227,15 @@ export default function TrilhaTab({
   return (
     <div className="space-y-4">
       {/* hero do dia */}
-      <div className="bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-600 rounded-2xl p-5 sm:p-6 text-white shadow-lg">
+      <div className="relative bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-600 rounded-2xl p-5 sm:p-6 text-white shadow-lg">
+        <button
+          type="button"
+          onClick={desativar}
+          title="Desativar trilha"
+          className="absolute top-3 right-3 p-1.5 rounded-lg text-emerald-100 hover:text-white hover:bg-white/15 transition-colors"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
         <div className="flex items-center gap-4 sm:gap-5">
           <AnelProgresso perc={meta.blocos.length > 0 ? percBlocos : 0} size={80} espessura={7}>
             <div className="text-center leading-none">
@@ -297,12 +305,6 @@ export default function TrilhaTab({
             <CardMateria key={a.materia} a={a} materiasAtivas={materiasAtivas} emRevisao={materiasEmRevisao.some((m) => m.materia === a.materia)} />
           ))}
         </div>
-      </div>
-
-      <div className="flex justify-end">
-        <button type="button" onClick={desativar} className="text-[11px] text-muted-foreground hover:text-red-400 flex items-center gap-1 transition-colors">
-          <Trash2 className="h-3 w-3" /> Desativar trilha
-        </button>
       </div>
     </div>
   );
