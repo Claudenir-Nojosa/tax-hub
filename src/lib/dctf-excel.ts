@@ -74,7 +74,7 @@ async function montarTabela(wb: ExcelJS.Workbook, spec: TabelaSpec, logoBase64: 
   ws.getRow(1).height = 60
   if (logoBase64) {
     const imageId = wb.addImage({ base64: `data:image/png;base64,${logoBase64}`, extension: "png" })
-    ws.addImage(imageId, { tl: { col: 1, row: 0 }, ext: { width: 140, height: 74 } })
+    ws.addImage(imageId, { tl: { col: 1, row: 0 }, ext: { width: 140, height: 41 } })
   }
   const tituloCell = ws.getCell(3, 2)
   tituloCell.value = spec.titulo

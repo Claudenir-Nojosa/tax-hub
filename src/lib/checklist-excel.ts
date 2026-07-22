@@ -267,7 +267,7 @@ export async function preencherAbaChecklist(
   const logoBase64 = await carregarLogoBase64()
   if (logoBase64) {
     const imageId = wb.addImage({ base64: `data:image/png;base64,${logoBase64}`, extension: "png" })
-    ws.addImage(imageId, { tl: { col: 1, row: 0 }, ext: { width: 140, height: 74 } })
+    ws.addImage(imageId, { tl: { col: 1, row: 0 }, ext: { width: 140, height: 41 } })
   }
 
   const nomeCurto = nomeCliente.trim().split(/\s+/)[0] || nomeCliente

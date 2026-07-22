@@ -48,28 +48,33 @@ async function carregarLogoBase64(): Promise<string | null> {
 const LABEL_SITUACAO: Record<Situacao, string> = {
   dentro_estado: "Dentro do Estado",
   fora_estado: "Fora do Estado",
-  importacao_exterior: "Importação do Exterior",
 }
 
 interface LinhaCalculada {
   linha: LinhaEntradaEfd
-  resultado: ResultadoAntecipacaoItem
+  resultado: ResultadoAntecipacaoItem | null
+}
+
+// "YYYY-MM" → Date do 1º dia do mês, mesma convenção usada na aba "Entradas" da Recuperação de
+// Crédito — precisa ser um Date de verdade (não texto) pro AutoFilter do Excel agrupar por ano.
+function paParaData(pa: string): Date | string {
+  const m = /^(\d{4})-(\d{2})$/.exec(pa)
+  return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1)) : pa
 }
 
 const LINHA_HEADER = 6
 
+// Todo item de toda nota entra na listagem (decisão confirmada com o usuário) — só os itens com
+// CFOP 1403/2403 têm `resultado` preenchido; os demais aparecem com as colunas de ICMS-ST em
+// branco, mantendo os dados brutos do item (Vlr Item, Vlr Desconto Item etc.).
 export async function montarAbaAntecipacaoIcmsSt(wb: ExcelJS.Workbook, linhas: LinhaEntradaEfd[], nomeEmpresa: string): Promise<LinhaCalculada[]> {
-  const calculadas: LinhaCalculada[] = []
-  for (const linha of linhas) {
-    const resultado = calcularAntecipacaoItem(linha)
-    if (resultado) calculadas.push({ linha, resultado })
-  }
+  const calculadas: LinhaCalculada[] = linhas.map((linha) => ({ linha, resultado: calcularAntecipacaoItem(linha) }))
 
   const ws = wb.addWorksheet("Antecipação ICMS-ST", { views: [{ showGridLines: false }] })
   ws.properties.tabColor = { argb: "FF1F3864" }
 
   const colunas = [
-    { nome: "Competência", largura: 12 },
+    { nome: "Competência", largura: 12, data: true },
     { nome: "CNPJ", largura: 17 },
     { nome: "Empresa", largura: 26 },
     { nome: "Fornecedor", largura: 30 },
@@ -95,7 +100,7 @@ export async function montarAbaAntecipacaoIcmsSt(wb: ExcelJS.Workbook, linhas: L
   const logoBase64 = await carregarLogoBase64()
   if (logoBase64) {
     const imageId = wb.addImage({ base64: `data:image/png;base64,${logoBase64}`, extension: "png" })
-    ws.addImage(imageId, { tl: { col: 1, row: 0 }, ext: { width: 140, height: 74 } })
+    ws.addImage(imageId, { tl: { col: 1, row: 0 }, ext: { width: 140, height: 41 } })
   }
 
   const nomeCurto = nomeEmpresa.trim().split(/\s+/)[0] || nomeEmpresa
@@ -109,24 +114,24 @@ export async function montarAbaAntecipacaoIcmsSt(wb: ExcelJS.Workbook, linhas: L
     style: { theme: "TableStyleMedium2", showRowStripes: true },
     columns: colunas.map((c) => ({ name: c.nome, filterButton: true })),
     rows: calculadas.map(({ linha, resultado }) => [
-      linha.pa,
+      paParaData(linha.pa),
       linha.cnpj,
       linha.empresa,
       linha.nomeFornecedor || null,
       linha.cnpjFornecedor || linha.cpfFornecedor || null,
       linha.ufFornecedor || null,
       linha.cfop,
-      LABEL_SITUACAO[resultado.situacao],
+      resultado ? LABEL_SITUACAO[resultado.situacao] : null,
       linha.cstIcms || null,
-      resultado.origemEstrangeira ? "Sim" : "Não",
+      resultado ? (resultado.origemEstrangeira ? "Sim" : "Não") : null,
       linha.dataEntradaSaida,
       linha.vlrItem,
       linha.vlrDescontoItem,
-      resultado.base,
-      resultado.aliquotaBase,
-      resultado.adicionalRegiao,
-      resultado.aliquotaTotal,
-      resultado.valor,
+      resultado ? resultado.base : null,
+      resultado ? resultado.aliquotaBase : null,
+      resultado ? resultado.adicionalRegiao : null,
+      resultado ? resultado.aliquotaTotal : null,
+      resultado ? resultado.valor : null,
     ]),
   })
 
@@ -139,8 +144,8 @@ export async function montarAbaAntecipacaoIcmsSt(wb: ExcelJS.Workbook, linhas: L
     const soma = calculadas.reduce((s, l) => {
       const campo = c.nome === "Vlr Item" ? l.linha.vlrItem
         : c.nome === "Vlr Desconto Item" ? l.linha.vlrDescontoItem
-        : c.nome === "Base de Cálculo" ? l.resultado.base
-        : l.resultado.valor
+        : c.nome === "Base de Cálculo" ? (l.resultado?.base ?? 0)
+        : (l.resultado?.valor ?? 0)
       return s + campo
     }, 0)
     const cell = ws.getCell(ROW_SUBTOTAL, col)
@@ -161,6 +166,7 @@ export async function montarAbaAntecipacaoIcmsSt(wb: ExcelJS.Workbook, linhas: L
       cell.alignment = { horizontal: COLS_ESQUERDA.has(c.nome) ? "left" : "center", vertical: "middle" }
       if (c.monetaria) cell.numFmt = BRL
       if (COLS_PCT.has(c.nome)) cell.numFmt = "0.00%"
+      if (c.data) cell.numFmt = "mm-dd-yy"
     })
   }
 

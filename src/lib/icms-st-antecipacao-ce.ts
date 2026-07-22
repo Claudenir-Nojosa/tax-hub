@@ -5,11 +5,15 @@ import type { LinhaEntradaEfd } from "./efd-icms-ipi-entradas-parser"
 // (CST/origem 1, 2, 3 ou 8). Regra confirmada com o usuário nesta sessão, não extraída de
 // nenhuma legislação lida diretamente pela IA — ver docs/automacao-icms-st.md.
 //
-// Alíquota base pela "situação" do CFOP da entrada:
-//   CFOP 1xxx (dentro do estado) ou 3xxx (importação direta do exterior) → 3% até 31/12/2023,
-//   3,33% a partir de 01/01/2024.
-//   CFOP 2xxx (fora do estado, interestadual) → 8% até 31/12/2023, 8,90% a partir de 01/01/2024.
-// Adicional regional — SÓ quando fora do estado (2xxx) E mercadoria de origem estrangeira:
+// Só se aplica a CFOP 1403 (dentro do estado) e 2403 (fora do estado) — os únicos CFOPs de
+// "compra ... em operação com mercadoria sujeita ao regime de substituição tributária" (decisão
+// confirmada com o usuário: todo item de toda nota é lido/listado, mas só esses dois CFOPs
+// alimentam as colunas de ICMS-ST; qualquer outro CFOP fica de fora do cálculo).
+//
+// Alíquota base pela "situação":
+//   CFOP 1403 (dentro do estado) → 3% até 31/12/2023, 3,33% a partir de 01/01/2024.
+//   CFOP 2403 (fora do estado, interestadual) → 8% até 31/12/2023, 8,90% a partir de 01/01/2024.
+// Adicional regional — SÓ quando fora do estado (2403) E mercadoria de origem estrangeira:
 //   +3% quando o fornecedor é do Sul (PR/SC/RS) ou Sudeste (SP/RJ/MG), exceto ES.
 //   +8% quando o fornecedor é do Norte, Nordeste, Centro-Oeste, ou ES.
 // Base de cálculo: Vlr Item − Vlr Desconto Item (decisão confirmada com o usuário).
@@ -38,13 +42,11 @@ export function origemEstrangeira(cstIcms: string): boolean {
   return ["1", "2", "3", "8"].includes(cstIcms.charAt(0))
 }
 
-export type Situacao = "dentro_estado" | "fora_estado" | "importacao_exterior"
+export type Situacao = "dentro_estado" | "fora_estado"
 
 export function classificarSituacao(cfop: string): Situacao | null {
-  const primeiro = cfop.charAt(0)
-  if (primeiro === "1") return "dentro_estado"
-  if (primeiro === "2") return "fora_estado"
-  if (primeiro === "3") return "importacao_exterior"
+  if (cfop === "1403") return "dentro_estado"
+  if (cfop === "2403") return "fora_estado"
   return null
 }
 
@@ -79,7 +81,8 @@ export interface ResultadoAntecipacaoItem {
   valor: number
 }
 
-// null quando o CFOP não é de entrada (guarda) ou a Data de Entrada/Saída não pôde ser lida.
+// null quando o CFOP não é 1403/2403 (item fora do escopo do ICMS-ST) ou a Data de Entrada/Saída
+// não pôde ser lida — o item continua aparecendo na listagem/export, só sem as colunas de ICMS-ST.
 export function calcularAntecipacaoItem(linha: LinhaEntradaEfd): ResultadoAntecipacaoItem | null {
   const situacao = classificarSituacao(linha.cfop)
   if (!situacao) return null

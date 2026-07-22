@@ -9,7 +9,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@
 import { parseEntradasEfdIcmsIpi, type LinhaEntradaEfd } from "@/lib/efd-icms-ipi-entradas-parser";
 import { calcularAntecipacaoItem, type ResultadoAntecipacaoItem } from "@/lib/icms-st-antecipacao-ce";
 import { exportarAntecipacaoIcmsStExcel } from "@/lib/icms-st-antecipacao-excel";
-import { Percent, Upload, FileText, X, Loader2, Download, RefreshCw, AlertTriangle } from "lucide-react";
+import { Percent, Upload, FileText, X, Loader2, Download, RefreshCw, Info, ChevronDown, ChevronRight } from "lucide-react";
 
 interface ArquivoCarregado {
   id: string;
@@ -20,7 +20,7 @@ interface ArquivoCarregado {
 
 interface LinhaResultado {
   linha: LinhaEntradaEfd;
-  resultado: ResultadoAntecipacaoItem;
+  resultado: ResultadoAntecipacaoItem | null;
 }
 
 function formatBytes(bytes: number): string {
@@ -36,7 +36,6 @@ function formatCurrency(value: number): string {
 const LABEL_SITUACAO: Record<ResultadoAntecipacaoItem["situacao"], string> = {
   dentro_estado: "Dentro do Estado",
   fora_estado: "Fora do Estado",
-  importacao_exterior: "Importação do Exterior",
 };
 
 type Etapa = "idle" | "lendo" | "concluido";
@@ -44,9 +43,9 @@ type Etapa = "idle" | "lendo" | "concluido";
 export default function AntecipacaoIcmsStPage() {
   const [arquivos, setArquivos] = useState<ArquivoCarregado[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [listaExpandida, setListaExpandida] = useState(false);
   const [etapa, setEtapa] = useState<Etapa>("idle");
   const [resultado, setResultado] = useState<LinhaResultado[] | null>(null);
-  const [naoClassificados, setNaoClassificados] = useState(0);
   const [nomeEmpresa, setNomeEmpresa] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -116,19 +115,15 @@ export default function AntecipacaoIcmsStPage() {
       return;
     }
 
-    const calculadas: LinhaResultado[] = [];
-    let semClassificar = 0;
-    for (const linha of todasLinhas) {
-      const r = calcularAntecipacaoItem(linha);
-      if (r) calculadas.push({ linha, resultado: r });
-      else semClassificar++;
-    }
+    // Todo item de toda nota entra na lista — só os itens com CFOP 1403/2403 recebem o cálculo
+    // de ICMS-ST (calcularAntecipacaoItem devolve null pros demais).
+    const todasCalculadas: LinhaResultado[] = todasLinhas.map((linha) => ({ linha, resultado: calcularAntecipacaoItem(linha) }));
 
-    setResultado(calculadas);
-    setNaoClassificados(semClassificar);
+    setResultado(todasCalculadas);
     setNomeEmpresa(empresaEncontrada || "Empresa");
     setEtapa("concluido");
-    toast.success(`${calculadas.length} itens calculados!`);
+    const aplicaveis = todasCalculadas.filter((r) => r.resultado).length;
+    toast.success(`${todasCalculadas.length} itens lidos, ${aplicaveis} sujeitos a ICMS-ST!`);
   };
 
   const handleReset = () => {
@@ -144,16 +139,15 @@ export default function AntecipacaoIcmsStPage() {
 
   const processando = etapa === "lendo";
 
-  const totalGeral = resultado ? resultado.reduce((s, r) => s + r.resultado.valor, 0) : 0;
-  const totalPorCompetencia = resultado
-    ? Array.from(
-        resultado.reduce((mapa, r) => {
-          mapa.set(r.linha.pa, (mapa.get(r.linha.pa) ?? 0) + r.resultado.valor);
-          return mapa;
-        }, new Map<string, number>())
-      ).sort(([a], [b]) => a.localeCompare(b))
-    : [];
-  const comAdicional = resultado ? resultado.filter((r) => r.resultado.adicionalRegiao > 0).length : 0;
+  const aplicaveis = resultado ? resultado.filter((r) => r.resultado) : [];
+  const totalGeral = aplicaveis.reduce((s, r) => s + r.resultado!.valor, 0);
+  const totalPorCompetencia = Array.from(
+    aplicaveis.reduce((mapa, r) => {
+      mapa.set(r.linha.pa, (mapa.get(r.linha.pa) ?? 0) + r.resultado!.valor);
+      return mapa;
+    }, new Map<string, number>())
+  ).sort(([a], [b]) => a.localeCompare(b));
+  const comAdicional = aplicaveis.filter((r) => r.resultado!.adicionalRegiao > 0).length;
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 space-y-8">
@@ -164,9 +158,9 @@ export default function AntecipacaoIcmsStPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Antecipação ICMS-ST (Ceará)</h1>
           <p className="text-sm text-muted-foreground">
-            Importe o EFD ICMS/IPI — calcula a antecipação parcial do ICMS/FECOP devida sobre cada entrada,
-            conforme a IN CE nº 17/2013 e o critério de origem estrangeira da Resolução SF nº 13/2012. Ferramenta
-            específica do Ceará.
+            Importe o EFD ICMS/IPI — calcula a antecipação parcial do ICMS/FECOP devida sobre os itens com CFOP
+            1403/2403, conforme a IN CE nº 17/2013 e o critério de origem estrangeira da Resolução SF nº 13/2012.
+            Ferramenta específica do Ceará.
           </p>
         </div>
       </div>
@@ -211,32 +205,41 @@ export default function AntecipacaoIcmsStPage() {
 
             {arquivos.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
+                <button
+                  type="button"
+                  onClick={() => setListaExpandida((v) => !v)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide px-1 hover:text-foreground transition-colors"
+                >
+                  {listaExpandida ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                   {arquivos.length} arquivo{arquivos.length > 1 ? "s" : ""} carregado{arquivos.length > 1 ? "s" : ""}
-                </p>
-                {arquivos.map((a) => (
-                  <div
-                    key={a.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-border dark:border-border bg-muted/50"
-                  >
-                    <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
-                      <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{a.name}</p>
-                      <p className="text-xs text-muted-foreground">{formatBytes(a.size)}</p>
-                    </div>
-                    {!processando && (
-                      <button
-                        type="button"
-                        onClick={() => removerArquivo(a.id)}
-                        className="text-muted-foreground dark:text-muted-foreground hover:text-red-500 flex-shrink-0"
+                </button>
+                {listaExpandida && (
+                  <div className="space-y-2">
+                    {arquivos.map((a) => (
+                      <div
+                        key={a.id}
+                        className="flex items-center gap-3 p-3 rounded-lg border border-border dark:border-border bg-muted/50"
                       >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
+                        <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                          <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{a.name}</p>
+                          <p className="text-xs text-muted-foreground">{formatBytes(a.size)}</p>
+                        </div>
+                        {!processando && (
+                          <button
+                            type="button"
+                            onClick={() => removerArquivo(a.id)}
+                            className="text-muted-foreground dark:text-muted-foreground hover:text-red-500 flex-shrink-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             )}
 
@@ -261,7 +264,7 @@ export default function AntecipacaoIcmsStPage() {
       {etapa === "concluido" && resultado && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{resultado.length} itens calculados — {nomeEmpresa}</p>
+            <p className="text-sm text-muted-foreground">{resultado.length} itens lidos — {nomeEmpresa}</p>
             <Button variant="outline" size="sm" onClick={handleReset}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Nova análise
@@ -289,30 +292,30 @@ export default function AntecipacaoIcmsStPage() {
             </Card>
           </div>
 
-          {naoClassificados > 0 && (
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50">
-              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-amber-800 dark:text-amber-300">
-                {naoClassificados} item(ns) ficaram de fora do cálculo (CFOP fora do escopo de entrada ou Data de
-                Entrada/Saída não reconhecida).
-              </p>
-            </div>
-          )}
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border border-border">
+            <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-muted-foreground">
+              {aplicaveis.length} de {resultado.length} itens têm CFOP 1403 ou 2403 (sujeitos a ICMS-ST) — os demais
+              aparecem na listagem/Excel só com os dados do item, sem as colunas de antecipação.
+            </p>
+          </div>
 
-          <Card className="border-border overflow-hidden">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Por competência</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {totalPorCompetencia.map(([pa, valor]) => (
-                  <Badge key={pa} variant="outline" className="text-xs font-normal">
-                    {pa}: {formatCurrency(valor)}
-                  </Badge>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          {totalPorCompetencia.length > 0 && (
+            <Card className="border-border overflow-hidden">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Por competência</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {totalPorCompetencia.map(([pa, valor]) => (
+                    <Badge key={pa} variant="outline" className="text-xs font-normal">
+                      {pa}: {formatCurrency(valor)}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-border">
             <CardHeader className="pb-3">
@@ -338,9 +341,9 @@ export default function AntecipacaoIcmsStPage() {
                         <TableCell className="max-w-[200px] truncate">{r.linha.nomeFornecedor}</TableCell>
                         <TableCell>{r.linha.ufFornecedor}</TableCell>
                         <TableCell>{r.linha.cfop}</TableCell>
-                        <TableCell className="text-xs">{LABEL_SITUACAO[r.resultado.situacao]}</TableCell>
-                        <TableCell className="text-right">{(r.resultado.aliquotaTotal * 100).toFixed(2)}%</TableCell>
-                        <TableCell className="text-right">{formatCurrency(r.resultado.valor)}</TableCell>
+                        <TableCell className="text-xs">{r.resultado ? LABEL_SITUACAO[r.resultado.situacao] : "—"}</TableCell>
+                        <TableCell className="text-right">{r.resultado ? `${(r.resultado.aliquotaTotal * 100).toFixed(2)}%` : "—"}</TableCell>
+                        <TableCell className="text-right">{r.resultado ? formatCurrency(r.resultado.valor) : "—"}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
