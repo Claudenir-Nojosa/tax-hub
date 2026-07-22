@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs"
 import { montarAbaIcms, type DeclaracaoEfdRegistro } from "./efd-icms-excel"
+import { montarAbaEntradas } from "./entradas-icms-excel"
 import { montarAbasPisCofins, type DeclaracaoEfdContribuicoesRegistro } from "./efd-contribuicoes-excel"
 import { montarAbaComprovantePagamento } from "./comprovante-pagamento-excel"
 import type { DadosComprovantePagamento } from "./comprovante-pagamento-parser"
@@ -173,6 +174,21 @@ function sanitizarNomeArquivo(nome: string): string {
   return nome.replace(/[\\/:*?"<>|]/g, "").trim()
 }
 
+// Quais tipos de declaração incluir no Excel — todos `true` por padrão quando omitido (mesmo
+// comportamento de sempre, "baixar tudo"), preenchido pelo diálogo de seleção de abas na UI
+// (SelecionarAbasExportDialog.tsx). DCTF e DCTFWeb compartilham um flag só (`dctf`) porque saem
+// juntas na mesma chamada de montagem (`montarAbasDctf`) e aparecem como um grupo só no diálogo.
+export interface IncluirAbas {
+  icms?: boolean
+  pisCofins?: boolean
+  comprovantes?: boolean
+  ecf?: boolean
+  dctf?: boolean
+  fontes?: boolean
+  ecd?: boolean
+  cadastro?: boolean
+}
+
 // Monta um único Excel com uma aba por tipo de declaração fiscal presente no projeto (ICMS/IPI,
 // PIS/COFINS e/ou Comprovante de Pagamentos) — é o que a UI de Recuperação de Crédito chama
 // quando o usuário clica em "Baixar Excel" na seção de declarações fiscais, pra nunca gerar
@@ -191,17 +207,18 @@ export async function exportarDeclaracaoFiscalExcel(
     fontesPagadoras?: DeclaracaoFontesPagadorasRegistro[]
     ecd?: DeclaracaoEcdRegistro[]
     cadastro?: DadosCadastroEmpresa | null
-  }
+  },
+  incluir?: IncluirAbas
 ): Promise<void> {
-  const temIcms = (dados.icms?.length ?? 0) > 0
-  const temPisCofins = (dados.pisCofins?.length ?? 0) > 0
-  const temComprovantes = (dados.comprovantes?.length ?? 0) > 0
-  const temEcf = (dados.ecf?.length ?? 0) > 0
-  const temDctfWeb = (dados.dctfWeb?.length ?? 0) > 0
-  const temDctf = (dados.dctf?.length ?? 0) > 0
-  const temFontes = (dados.fontesPagadoras?.length ?? 0) > 0
-  const temEcd = (dados.ecd?.length ?? 0) > 0
-  const cadastro = dados.cadastro ?? null
+  const temIcms = (dados.icms?.length ?? 0) > 0 && (incluir?.icms ?? true)
+  const temPisCofins = (dados.pisCofins?.length ?? 0) > 0 && (incluir?.pisCofins ?? true)
+  const temComprovantes = (dados.comprovantes?.length ?? 0) > 0 && (incluir?.comprovantes ?? true)
+  const temEcf = (dados.ecf?.length ?? 0) > 0 && (incluir?.ecf ?? true)
+  const temDctfWeb = (dados.dctfWeb?.length ?? 0) > 0 && (incluir?.dctf ?? true)
+  const temDctf = (dados.dctf?.length ?? 0) > 0 && (incluir?.dctf ?? true)
+  const temFontes = (dados.fontesPagadoras?.length ?? 0) > 0 && (incluir?.fontes ?? true)
+  const temEcd = (dados.ecd?.length ?? 0) > 0 && (incluir?.ecd ?? true)
+  const cadastro = incluir?.cadastro ?? true ? dados.cadastro ?? null : null
   const temCadastro = !!cadastro && !!(cadastro.consultaCnpj || cadastro.qsa || cadastro.simplesNacional)
 
   if (!temIcms && !temPisCofins && !temComprovantes && !temEcf && !temDctfWeb && !temDctf && !temFontes && !temEcd && !temCadastro)
@@ -217,7 +234,14 @@ export async function exportarDeclaracaoFiscalExcel(
   const wsMenu = temCadastro ? criarAbaMenu(wb) : null
   const wsChecklist = criarAbaChecklist(wb)
 
-  if (temIcms) await montarAbaIcms(wb, dados.icms!, nomeCliente)
+  if (temIcms) {
+    await montarAbaIcms(wb, dados.icms!, nomeCliente)
+    await montarAbaEntradas(
+      wb,
+      dados.icms!.map((d) => ({ competencia: d.competencia, linhasEntrada: d.dados.linhasEntrada })),
+      nomeCliente
+    )
+  }
   const refsDebito = temPisCofins ? await montarAbasPisCofins(wb, dados.pisCofins!, nomeCliente) : null
   const refsDebitoEcf = temEcf ? await montarAbasEcf(wb, dados.ecf!, nomeCliente) : null
   if (temEcd) await montarAbasEcd(wb, dados.ecd!)

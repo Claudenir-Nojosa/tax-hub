@@ -2,6 +2,7 @@ import ExcelJS from "exceljs"
 import type { DadosEfdIcmsIpi, RegistroAgregado } from "./efd-icms-parser"
 import { isSaida, labelCfop, labelCst } from "./efd-icms-parser"
 import { montarAbaChecklist } from "./checklist-excel"
+import { montarAbaEntradas } from "./entradas-icms-excel"
 
 // Mesma convenção visual usada em src/lib/pgdas/export-pgdas-excel.ts (duplicado de propósito
 // pra não arriscar regressão nos exports já em produção).
@@ -337,6 +338,11 @@ export async function exportarEfdIcmsExcel(
   wb.creator = "Tax Hub — Recuperação de Crédito"
   wb.created = new Date()
   await montarAbaIcms(wb, declaracoes, nomeCliente)
+  await montarAbaEntradas(
+    wb,
+    declaracoes.map((d) => ({ competencia: d.competencia, linhasEntrada: d.dados.linhasEntrada })),
+    nomeCliente
+  )
   await montarAbaChecklist(wb, nomeCliente)
 
   const buffer = await wb.xlsx.writeBuffer()

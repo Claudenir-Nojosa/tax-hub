@@ -103,6 +103,28 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   real com IPI diferente de zero (o arquivo de amostra disponível tinha todos os valores de IPI
   zerados). Antes de implementar essa parte, validar o `E520` campo a campo contra um cliente
   industrial real com IPI não-zero, do mesmo jeito que o `E110` do ICMS foi validado.
+- **Aba "Entradas" (item a item)**: sempre que há EFD ICMS/IPI importado, o Excel também ganha
+  uma aba **"Entradas"** (`src/lib/entradas-icms-excel.ts`, `montarAbaEntradas`) — granularidade
+  de ITEM (um `C170` por linha), diferente da aba "ICMS e IPI" (agregada por CFOP+CST+alíquota
+  via `C190`). As linhas vêm de `parseEntradasEfdIcmsIpi()`
+  (`src/lib/efd-icms-ipi-entradas-parser.ts`) — parser já existente, construído originalmente
+  para a Reforma Tributária (aba "Entradas - EFD ICMS IPI" de crédito IBS/CBS) e **reaproveitado
+  aqui sem alteração**; o upload route (`efd/upload/route.ts`) roda esse parser em paralelo ao
+  `processarArquivosEfd` e grava o resultado em `DadosEfdIcmsIpi.linhasEntrada` (mesmo campo
+  `Json`, sem migração de schema). Estilo Excel Table (1 linha = 1 item), igual à aba
+  "Comprovante de Pagamentos" (seção 6): `SUBTOTAL` em todas as colunas monetárias, filtro,
+  zebra. Validado com um EFD real da GIGI Tecidos (123 itens) — soma manual de "Vlr Item" bateu
+  exatamente com o `SUBTOTAL` gerado.
+  - **GAP CONHECIDO / decisão deliberada — sem a análise de oportunidade de ICMS-ST**: a
+    planilha de referência do usuário (cliente real, "Análise Entradas.xlsx") tinha 6 colunas a
+    mais (chave composta, alíquota de ICMS-ST "correta", valor de ICMS-ST recalculado, flag
+    "Oport" Sim/Não, base e crédito de PIS/COFINS) alimentadas por um `VLOOKUP` numa segunda aba
+    ("De x para") — uma tabela de alíquotas de ICMS-ST **pesquisada manualmente pela equipe**,
+    específica daquele cliente/produto/UF/período. Isso não é generalizável a partir do EFD
+    sozinho, então ficou de fora da aba "Entradas" — confirmado com o usuário. Essa mesma regra
+    de ICMS-ST, na sua forma **genérica** (baseada em legislação, não numa tabela manual por
+    cliente), está prevista para virar uma automação própria em `/dashboard/automacoes` — ver
+    `docs/automacao-icms-st.md` — implementada em `/dashboard/automacoes/antecipacao-icms-st`.
 
 ## 5. PIS/COFINS (EFD Contribuições)
 

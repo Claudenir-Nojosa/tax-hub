@@ -4,6 +4,8 @@
 // registros C190 (valor operacional/base de cálculo/ICMS/IPI agregados por CFOP+CST+alíquota)
 // e a apuração do ICMS (E110).
 
+import type { LinhaEntradaEfd } from "./efd-icms-ipi-entradas-parser"
+
 export interface TotaisOperacao {
   valorOperacional: number
   baseCalculo: number
@@ -34,6 +36,10 @@ export interface DadosEfdIcmsIpi {
   arquivoNome: string
   registros: RegistroAgregado[] // um por combinação única (CFOP, CST, Alíquota)
   apuracaoIcms: ApuracaoIcms
+  // Linhas de entrada item a item (C100/C170), pra aba "Entradas" — preenchido no upload route
+  // via parseEntradasEfdIcmsIpi (src/lib/efd-icms-ipi-entradas-parser.ts), não por parseUmaEfd.
+  // Opcional pra não quebrar registros antigos gravados antes dessa mudança.
+  linhasEntrada?: LinhaEntradaEfd[]
 }
 
 function parseNumeroEfd(raw: string | undefined): number {

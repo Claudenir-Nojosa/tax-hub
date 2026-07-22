@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "../../../../../../auth"
 import db from "@/lib/db"
 import { processarArquivosEfd } from "@/lib/efd-icms-parser"
+import { parseEntradasEfdIcmsIpi } from "@/lib/efd-icms-ipi-entradas-parser"
 import { detectarTipoEfd, processarArquivosEfdContribuicoes } from "@/lib/efd-contribuicoes-parser"
 import { processarArquivosEcf, temBlocoPresumido } from "@/lib/ecf-parser"
 import { detectarDctf, processarArquivosDctf } from "@/lib/dctf-parser"
@@ -166,6 +167,10 @@ export async function POST(req: NextRequest) {
           })
           continue
         }
+
+        // Linhas item a item (C100/C170) pra aba "Entradas" — mesmo parser usado na Reforma
+        // Tributária (src/lib/efd-icms-ipi-entradas-parser.ts), reaproveitado aqui sem alteração.
+        dados.linhasEntrada = parseEntradasEfdIcmsIpi(conteudo).linhas
 
         await db.declaracaoEfdIcmsIpi.upsert({
           where: { projetoId_competencia: { projetoId: projeto.id, competencia: dados.competencia } },

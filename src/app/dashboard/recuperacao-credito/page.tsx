@@ -26,10 +26,11 @@ import type { DadosFontesPagadoras } from "@/lib/fontes-pagadoras-parser";
 import type { DeclaracaoFontesPagadorasRegistro } from "@/lib/fontes-pagadoras-excel";
 import type { DadosEcd } from "@/lib/ecd-parser";
 import type { DeclaracaoEcdRegistro } from "@/lib/ecd-excel";
-import { exportarDeclaracaoFiscalExcel } from "@/lib/recuperacao-credito-excel";
+import { exportarDeclaracaoFiscalExcel, type IncluirAbas } from "@/lib/recuperacao-credito-excel";
 import type { DadosCadastroEmpresa } from "@/lib/cadastro-parser";
 import { resumoSimples } from "@/lib/cadastro-excel";
 import { SecaoColapsavel, GraficoBarras, GraficoSeries, ListaArquivosColapsavel } from "@/components/recuperacao-credito/painel-importados";
+import SelecionarAbasExportDialog, { type OpcaoAbaExport } from "@/components/recuperacao-credito/SelecionarAbasExportDialog";
 import {
   FileSearch,
   Upload,
@@ -260,6 +261,7 @@ export default function RecuperacaoCreditoPage() {
 
   const [declaracoesPgdas, setDeclaracoesPgdas] = useState<DeclaracaoRow[]>([]);
   const [carregandoDeclaracoes, setCarregandoDeclaracoes] = useState(false);
+  const [dialogAbasAberto, setDialogAbasAberto] = useState(false);
 
   const [declaracoesEfd, setDeclaracoesEfd] = useState<DeclaracaoEfdRow[]>([]);
   const [carregandoDeclaracoesEfd, setCarregandoDeclaracoesEfd] = useState(false);
@@ -880,21 +882,7 @@ export default function RecuperacaoCreditoPage() {
     }
   };
 
-  const handleBaixarExcelFiscal = async () => {
-    if (!clienteSelecionado) return;
-    if (
-      declaracoesEfd.length === 0 &&
-      declaracoesEfdContrib.length === 0 &&
-      declaracoesComprovante.length === 0 &&
-      declaracoesEcf.length === 0 &&
-      declaracoesDctfWeb.length === 0 &&
-      declaracoesDctf.length === 0 &&
-      declaracoesFontes.length === 0 &&
-      declaracoesEcd.length === 0 &&
-      !cadastro
-    )
-      return;
-
+  const montarDadosExportFiscal = () => {
     const icms: DeclaracaoEfdRegistro[] = declaracoesEfd.map((d) => ({ competencia: d.competencia, dados: d.dados }));
     const pisCofins: DeclaracaoEfdContribuicoesRegistro[] = declaracoesEfdContrib.map((d) => ({
       competencia: d.competencia,
@@ -906,17 +894,39 @@ export default function RecuperacaoCreditoPage() {
     const dctf: DeclaracaoDctfRegistro[] = declaracoesDctf.map((d) => ({ competencia: d.competencia, dados: d.dados }));
     const fontesPagadoras: DeclaracaoFontesPagadorasRegistro[] = declaracoesFontes.map((d) => ({ competencia: d.competencia, dados: d.dados }));
     const ecd: DeclaracaoEcdRegistro[] = declaracoesEcd.map((d) => ({ competencia: d.competencia, dados: d.dados }));
-    await exportarDeclaracaoFiscalExcel(clienteSelecionado.razaoSocial, {
-      icms,
-      pisCofins,
-      comprovantes,
-      ecf,
-      dctfWeb,
-      dctf,
-      fontesPagadoras,
-      ecd,
-      cadastro: cadastro?.dados ?? null,
-    });
+    return { icms, pisCofins, comprovantes, ecf, dctfWeb, dctf, fontesPagadoras, ecd, cadastro: cadastro?.dados ?? null };
+  };
+
+  // Um checkbox por tipo de declaração PRESENTE no projeto (mesmos agrupamentos das seções da
+  // página) — Checklist fica de fora da lista porque sempre entra no arquivo.
+  const opcoesAbasExport = (): OpcaoAbaExport[] => {
+    const opcoes: OpcaoAbaExport[] = [];
+    if (declaracoesEfd.length > 0) opcoes.push({ key: "icms", label: "ICMS e IPI (inclui Entradas)" });
+    if (declaracoesEfdContrib.length > 0) opcoes.push({ key: "pisCofins", label: "PIS e COFINS" });
+    if (declaracoesEcf.length > 0) opcoes.push({ key: "ecf", label: "IRPJ e CSLL" });
+    if (declaracoesEcd.length > 0) opcoes.push({ key: "ecd", label: "Balanço Patrimonial (ECD)" });
+    if (declaracoesDctfWeb.length > 0 || declaracoesDctf.length > 0) opcoes.push({ key: "dctf", label: "DCTF e DCTFWeb" });
+    if (declaracoesFontes.length > 0) opcoes.push({ key: "fontes", label: "Fontes Pagadoras" });
+    if (declaracoesComprovante.length > 0) opcoes.push({ key: "comprovantes", label: "Comprovante de Pagamentos" });
+    if (cadastro) opcoes.push({ key: "cadastro", label: "Cadastro (Menu)" });
+    return opcoes;
+  };
+
+  const handleBaixarExcelFiscal = async () => {
+    if (!clienteSelecionado) return;
+    const opcoes = opcoesAbasExport();
+    if (opcoes.length === 0) return;
+    // Com só 1 tipo de declaração não faz sentido perguntar quais abas — exporta direto.
+    if (opcoes.length === 1) {
+      await exportarDeclaracaoFiscalExcel(clienteSelecionado.razaoSocial, montarDadosExportFiscal());
+      return;
+    }
+    setDialogAbasAberto(true);
+  };
+
+  const handleConfirmarAbasExport = async (incluir: IncluirAbas) => {
+    if (!clienteSelecionado) return;
+    await exportarDeclaracaoFiscalExcel(clienteSelecionado.razaoSocial, montarDadosExportFiscal(), incluir);
   };
 
   const mesesAgrupados = Array.from(new Set(declaracoesPgdas.map((d) => d.competencia)))
@@ -1982,6 +1992,13 @@ export default function RecuperacaoCreditoPage() {
           </p>
         </div>
       )}
+
+      <SelecionarAbasExportDialog
+        open={dialogAbasAberto}
+        onOpenChange={setDialogAbasAberto}
+        opcoes={opcoesAbasExport()}
+        onConfirmar={handleConfirmarAbasExport}
+      />
     </div>
   );
 }
