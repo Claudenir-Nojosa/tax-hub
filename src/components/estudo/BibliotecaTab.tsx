@@ -787,11 +787,18 @@ function PdfRow({
 
       <div className="flex items-center gap-3 mt-2">
         <div className="flex-1">
-          <div className="bg-muted dark:bg-muted rounded-full h-2">
-            <div
-              className={`rounded-full h-2 transition-all duration-500 ${concluido ? "bg-emerald-500" : "bg-primary/40"}`}
-              style={{ width: `${perc}%` }}
-            />
+          <div className="relative bg-muted dark:bg-muted rounded-full h-2 overflow-hidden">
+            {concluido ? (
+              <div className="absolute inset-0 bg-emerald-500 rounded-full" />
+            ) : (
+              <>
+                <div className="absolute inset-y-0 left-0 w-full bg-gradient-to-r from-lime-300 via-lime-500 to-green-600 rounded-full" />
+                <div
+                  className="absolute inset-y-0 right-0 bg-muted dark:bg-muted transition-all duration-500"
+                  style={{ width: `${100 - perc}%` }}
+                />
+              </>
+            )}
           </div>
         </div>
         <span className="text-[11px] text-muted-foreground whitespace-nowrap w-24 text-right">

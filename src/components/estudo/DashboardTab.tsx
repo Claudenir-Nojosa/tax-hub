@@ -326,34 +326,34 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
       <CardTrilha state={state} materiasConcurso={materiasConcurso} onIrParaTrilha={onIrParaTrilha} />
 
       {/* Level + XP hero */}
-      <div className="bg-gradient-to-r from-primary to-emerald-600 rounded-2xl p-6 text-primary-foreground shadow-lg">
+      <div className="bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-600 rounded-2xl p-6 text-white shadow-lg">
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="flex items-center gap-2 text-3xl font-bold mb-1">
               <NivelIcon className="h-7 w-7" />
               <span>Nível {nivel} — {nivelConfig.titulo}</span>
             </div>
-            <div className="text-primary-foreground/70 text-sm">
+            <div className="text-emerald-100 text-sm">
               {xp} XP acumulados
               {proximoNivel && ` · faltam ${xpProximo - xp} XP para o Nível ${nivel + 1}`}
             </div>
           </div>
           <div className="text-right">
-            <div className="text-sm text-primary-foreground/70">Streak</div>
+            <div className="text-sm text-emerald-100">Streak</div>
             <div className="flex items-center justify-end gap-1.5 text-2xl font-bold">
               <Flame className="h-6 w-6 text-orange-300" />
               {streakDias}
             </div>
-            <div className="text-xs text-primary-foreground/70">dias</div>
+            <div className="text-xs text-emerald-100">dias</div>
           </div>
         </div>
-        <div className="bg-primary-foreground/20 rounded-full h-3">
+        <div className="bg-white/15 backdrop-blur-sm rounded-full h-3">
           <div
-            className="bg-primary-foreground rounded-full h-3 transition-all duration-500"
+            className="bg-white rounded-full h-3 transition-all duration-500"
             style={{ width: `${Math.min(progNivel, 100)}%` }}
           />
         </div>
-        <div className="flex justify-between mt-1 text-xs text-primary-foreground/70">
+        <div className="flex justify-between mt-1 text-xs text-emerald-100">
           <span>{xpNivelAtual} XP</span>
           <span>{progNivel}%</span>
           <span>{xpProximo === 999999 ? "∞" : xpProximo} XP</span>

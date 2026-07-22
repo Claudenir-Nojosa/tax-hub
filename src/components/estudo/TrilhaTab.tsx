@@ -52,7 +52,7 @@ const GRUPO_COR: Record<Grupo, string> = {
 type TipoPasso = "estudo" | "questoes" | "revisao" | "cartas";
 const TIPO_ITEM: Record<TipoPasso, string> = {
   estudo: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary",
-  questoes: "bg-violet-100 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400",
+  questoes: "bg-teal-100 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400",
   revisao: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400",
   cartas: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400",
 };
@@ -521,7 +521,7 @@ function Intro({
 }) {
   const regras: { icone: LucideIcon; cor: string; texto: string }[] = [
     { icone: Clock, cor: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary", texto: "Cada dia pertence a um grupo do ciclo (A/B/C). As horas do dia são divididas entre as matérias do grupo — ex.: 3h e 3 matérias = 1h de PDF em cada, no tópico atual. O tempo é monitorado pelo leitor de PDF." },
-    { icone: ListChecks, cor: "bg-violet-100 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400", texto: "Concluir um tópico libera questões dos anteriores: grupo A do último, B do penúltimo, C do antepenúltimo, D do anterior a esse — até fechar os 4 grupos de todos os tópicos." },
+    { icone: ListChecks, cor: "bg-teal-100 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400", texto: "Concluir um tópico libera questões dos anteriores: grupo A do último, B do penúltimo, C do antepenúltimo, D do anterior a esse — até fechar os 4 grupos de todos os tópicos." },
     { icone: Trophy, cor: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400", texto: "Matéria 100% (teoria + todos os grupos) entra em modo revisão: no dia seguinte, 30 questões englobando todos os tópicos dela." },
     { icone: Layers, cor: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400", texto: "A cada 2 domingos, revisão das cartas." },
     { icone: Sparkles, cor: "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400", texto: "Trilha 100% mutável: o ciclo só avança quando você entrega os blocos do dia — a meta de amanhã depende do que você fez hoje." },
