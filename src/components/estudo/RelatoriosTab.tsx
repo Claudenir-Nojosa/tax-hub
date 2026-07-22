@@ -583,7 +583,7 @@ export default function RelatoriosTab({ state, materiasConcurso }: { state: Estu
                   <Line
                     dataKey="real"
                     name="Real (estimado)"
-                    stroke="#3b82f6"
+                    stroke="#14b8a6"
                     strokeWidth={2.5}
                     dot={false}
                     connectNulls={false}
@@ -626,8 +626,8 @@ export default function RelatoriosTab({ state, materiasConcurso }: { state: Estu
               <AreaChart data={xpEvo} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="xpGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                    <stop offset="5%"  stopColor="#14b8a6" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="opacity-10" />
@@ -648,13 +648,13 @@ export default function RelatoriosTab({ state, materiasConcurso }: { state: Estu
                     return (
                       <div className="bg-card border border-border rounded-lg p-3 shadow-xl text-xs">
                         <p className="font-semibold text-foreground mb-0.5">{label}</p>
-                        <p className="text-purple-600 dark:text-purple-400 font-bold">{payload[0].value} XP acumulados</p>
+                        <p className="text-primary dark:text-primary font-bold">{payload[0].value} XP acumulados</p>
                       </div>
                     );
                   }}
                 />
                 <Area
-                  type="monotone" dataKey="xp" stroke="#8b5cf6" strokeWidth={2.5}
+                  type="monotone" dataKey="xp" stroke="#14b8a6" strokeWidth={2.5}
                   fill="url(#xpGrad)" dot={false} activeDot={{ r: 5 }}
                 />
               </AreaChart>
@@ -789,15 +789,15 @@ export default function RelatoriosTab({ state, materiasConcurso }: { state: Estu
                 <AreaChart data={semanal} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="relGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      <stop offset="5%"  stopColor="#14b8a6" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="opacity-10" />
                   <XAxis dataKey="semana" tick={{ fontSize: 11, fill: "currentColor" }} className="text-muted-foreground" />
                   <YAxis tick={{ fontSize: 11, fill: "currentColor" }} className="text-muted-foreground" tickFormatter={(v) => `${v}h`} />
                   <Tooltip content={<TooltipHoras />} />
-                  <Area type="monotone" dataKey="horas" stroke="#3b82f6" strokeWidth={2.5} fill="url(#relGrad)" dot={{ r: 3.5, fill: "#3b82f6" }} activeDot={{ r: 5 }} />
+                  <Area type="monotone" dataKey="horas" stroke="#14b8a6" strokeWidth={2.5} fill="url(#relGrad)" dot={{ r: 3.5, fill: "#14b8a6" }} activeDot={{ r: 5 }} />
                 </AreaChart>
               </ResponsiveContainer>
             )}
@@ -937,7 +937,7 @@ export default function RelatoriosTab({ state, materiasConcurso }: { state: Estu
                     <YAxis tick={{ fontSize: 11, fill: "currentColor" }} className="text-muted-foreground" tickFormatter={(v) => `${v}h`} />
                     <Tooltip content={<TooltipHoras />} />
                     <Bar dataKey="horas" radius={[4, 4, 0, 0]}>
-                      {diasData.map((e, i) => <Cell key={i} fill={e.horas === maxH && maxH > 0 ? "#6366f1" : "#a5b4fc"} />)}
+                      {diasData.map((e, i) => <Cell key={i} fill={e.horas === maxH && maxH > 0 ? "#0d9488" : "#5eead4"} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
