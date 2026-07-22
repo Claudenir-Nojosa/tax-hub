@@ -792,7 +792,7 @@ function PdfRow({
               <div className="absolute inset-0 bg-emerald-500 rounded-full" />
             ) : (
               <>
-                <div className="absolute inset-y-0 left-0 w-full bg-gradient-to-r from-lime-300 via-lime-500 to-green-600 rounded-full" />
+                <div className="absolute inset-y-0 left-0 w-full bg-gradient-to-r from-emerald-300 via-emerald-500 to-teal-600 rounded-full" />
                 <div
                   className="absolute inset-y-0 right-0 bg-muted dark:bg-muted transition-all duration-500"
                   style={{ width: `${100 - perc}%` }}

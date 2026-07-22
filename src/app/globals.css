@@ -16,42 +16,42 @@ body {
     --card-foreground: 150 25% 10%;
     --popover: 0 0% 100%;
     --popover-foreground: 150 25% 10%;
-    --primary: 85 55% 36%;
+    --primary: 170 70% 28%;
     --primary-foreground: 0 0% 100%;
     --secondary: 90 20% 95%;
     --secondary-foreground: 150 25% 15%;
     --muted: 90 15% 94%;
     --muted-foreground: 150 10% 40%;
-    --accent: 84 45% 92%;
-    --accent-foreground: 85 60% 26%;
+    --accent: 170 45% 92%;
+    --accent-foreground: 170 70% 22%;
     --destructive: 0 75% 50%;
     --destructive-foreground: 0 0% 100%;
     --border: 90 15% 88%;
     --input: 90 15% 88%;
-    --ring: 85 55% 38%;
+    --ring: 170 70% 30%;
     --radius: 1rem;
 
-    --chart-1: 85 55% 40%;
+    --chart-1: 170 70% 32%;
     --chart-2: 160 55% 38%;
     --chart-3: 40 85% 52%;
     --chart-4: 200 65% 48%;
     --chart-5: 340 65% 55%;
 
     /* Custom tax-hub tokens (adicionados) */
-    --gradient-start: 85 55% 38%;
-    --gradient-end: 160 55% 35%;
+    --gradient-start: 160 70% 30%;
+    --gradient-end: 178 65% 26%;
     --glass-bg: 0 0% 100% / 0.7;
     --glass-border: 0 0% 0% / 0.08;
-    --glow: 85 55% 40% / 0.25;
+    --glow: 170 70% 32% / 0.25;
 
     --sidebar-background: 90 25% 97%;
     --sidebar-foreground: 150 15% 32%;
-    --sidebar-primary: 85 55% 34%;
+    --sidebar-primary: 170 70% 26%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 84 45% 90%;
-    --sidebar-accent-foreground: 85 60% 26%;
+    --sidebar-accent: 170 45% 90%;
+    --sidebar-accent-foreground: 170 70% 22%;
     --sidebar-border: 90 15% 88%;
-    --sidebar-ring: 85 55% 38%;
+    --sidebar-ring: 170 70% 30%;
   }
 
   .dark {
@@ -62,21 +62,21 @@ body {
     --card-foreground: 100 15% 96%;
     --popover: 150 16% 8%;
     --popover-foreground: 100 15% 96%;
-    --primary: 81 70% 55%;
+    --primary: 170 65% 48%;
     --primary-foreground: 150 30% 8%;
     --secondary: 150 12% 13%;
     --secondary-foreground: 100 15% 92%;
     --muted: 150 10% 14%;
     --muted-foreground: 150 8% 62%;
     --accent: 150 14% 15%;
-    --accent-foreground: 81 60% 62%;
+    --accent-foreground: 170 60% 58%;
     --destructive: 0 70% 55%;
     --destructive-foreground: 0 0% 98%;
     --border: 150 10% 15%;
     --input: 150 10% 17%;
-    --ring: 81 70% 55%;
+    --ring: 170 65% 48%;
 
-    --chart-1: 81 70% 55%;
+    --chart-1: 170 65% 48%;
     --chart-2: 160 60% 45%;
     --chart-3: 40 90% 60%;
     --chart-4: 200 70% 55%;
@@ -85,16 +85,16 @@ body {
     /* Custom tax-hub tokens dark (adicionados) */
     --glass-bg: 150 15% 8% / 0.7;
     --glass-border: 0 0% 100% / 0.08;
-    --glow: 81 70% 55% / 0.4;
+    --glow: 170 65% 48% / 0.4;
 
     --sidebar-background: 150 18% 5%;
     --sidebar-foreground: 150 8% 60%;
-    --sidebar-primary: 81 70% 55%;
+    --sidebar-primary: 170 65% 48%;
     --sidebar-primary-foreground: 150 30% 8%;
     --sidebar-accent: 150 14% 12%;
-    --sidebar-accent-foreground: 81 65% 62%;
+    --sidebar-accent-foreground: 170 65% 58%;
     --sidebar-border: 150 10% 12%;
-    --sidebar-ring: 81 70% 55%;
+    --sidebar-ring: 170 65% 48%;
   }
 }
 

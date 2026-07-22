@@ -46,9 +46,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <ThemeToggle />
           </header>
 
-          <header className="hidden lg:flex items-center justify-end px-6 py-[18px] border-b border-border bg-card sticky top-0 z-30">
+          <div className="hidden lg:block fixed top-4 right-6 z-30">
             <ThemeToggle />
-          </header>
+          </div>
 
           <div className="flex-1 overflow-y-auto bg-background">
             <main className="min-h-full p-4 lg:p-6">

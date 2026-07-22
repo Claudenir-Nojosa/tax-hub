@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "tax-hub",
+  title: "TAX Hub",
   description: "tax-hub",
   icons: {
     icon: [
