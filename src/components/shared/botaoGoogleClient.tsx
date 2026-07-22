@@ -28,7 +28,7 @@ export default function BotaoGoogleClient() {
         onClick={handleGoogleSignIn}
         disabled={isLoading}
         variant="outline"
-        className="flex items-center justify-center gap-3 w-full px-4 py-3 border rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:border-gray-400 dark:hover:border-gray-600 transition-all duration-300 shadow-sm hover:shadow-md"
+        className="flex items-center justify-center gap-3 w-full px-4 py-3 border rounded-xl text-foreground hover:bg-accent hover:text-accent-foreground hover:border-ring transition-all duration-300 shadow-sm hover:shadow-md"
       >
         {isLoading ? (
           <>

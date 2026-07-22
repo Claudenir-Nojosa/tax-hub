@@ -35,7 +35,7 @@ export default function LoginForm() {
     <Form action={formAction}>
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <Label className="text-sm font-medium text-foreground">
             Email
           </Label>
           <Input
@@ -50,12 +50,12 @@ export default function LoginForm() {
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <Label className="text-sm font-medium text-foreground">
               Senha
             </Label>
             <Link
               href="/forgot-password"
-              className="text-xs text-[#007cca] dark:text-[#00cfec] hover:underline"
+              className="text-xs text-[hsl(var(--primary))] dark:text-[hsl(var(--chart-4))] hover:underline"
             >
               Esqueceu sua senha?
             </Link>
@@ -71,7 +71,7 @@ export default function LoginForm() {
         </div>
 
         <Button
-          className="w-full mt-2 bg-gradient-to-r from-[#00cfec] to-[#007cca] hover:from-[#00cfec]/90 hover:to-[#007cca]/90 text-white font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full mt-2 bg-gradient-to-r from-[hsl(var(--chart-4))] to-[hsl(var(--primary))] hover:from-[hsl(var(--chart-4))]/90 hover:to-[hsl(var(--primary))]/90 text-white font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
           type="submit"
           disabled={isPending}
         >

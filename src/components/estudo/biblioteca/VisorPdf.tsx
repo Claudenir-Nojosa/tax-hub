@@ -306,10 +306,10 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
   }
 
   return (
-    <div ref={containerRef} onScroll={recalcular} className="flex-1 overflow-auto bg-gray-800 relative">
+    <div ref={containerRef} onScroll={recalcular} className="flex-1 overflow-auto bg-muted relative">
       <style>{CSS_TEXT_LAYER}</style>
       {!doc || scale === null ? (
-        <div className="h-full flex items-center justify-center gap-2 text-sm text-gray-400">
+        <div className="h-full flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Abrindo PDF{segundosAbrindo > 0 ? ` (${segundosAbrindo}s)` : "…"}
         </div>
@@ -329,20 +329,20 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
             ))}
           </div>
           {/* zoom flutuante — o viewer é nosso, então o zoom também é */}
-          <div className="sticky bottom-4 float-right mr-4 -mt-14 flex items-center gap-0.5 bg-gray-900/90 border border-gray-700 rounded-lg p-1 shadow-lg">
+          <div className="sticky bottom-4 float-right mr-4 -mt-14 flex items-center gap-0.5 bg-muted/90 border border-border rounded-lg p-1 shadow-lg">
             <button
               type="button"
               onClick={() => setScale((s) => Math.max(0.5, Math.round(((s ?? 1) - 0.15) * 100) / 100))}
-              className="h-7 w-7 rounded-md flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+              className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
               title="Diminuir zoom"
             >
               <Minus className="h-3.5 w-3.5" />
             </button>
-            <span className="text-[11px] text-gray-300 w-10 text-center font-mono">{Math.round(scale * 100)}%</span>
+            <span className="text-[11px] text-muted-foreground w-10 text-center font-mono">{Math.round(scale * 100)}%</span>
             <button
               type="button"
               onClick={() => setScale((s) => Math.min(3, Math.round(((s ?? 1) + 0.15) * 100) / 100))}
-              className="h-7 w-7 rounded-md flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+              className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
               title="Aumentar zoom"
             >
               <Plus className="h-3.5 w-3.5" />

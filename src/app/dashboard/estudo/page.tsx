@@ -298,7 +298,7 @@ export default function EstudoPage() {
   if (!loaded) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-gray-400 dark:text-gray-500 text-sm">Carregando...</div>
+        <div className="text-muted-foreground text-sm">Carregando...</div>
       </div>
     );
   }
@@ -306,7 +306,7 @@ export default function EstudoPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 md:px-6 py-4">
+      <div className="bg-card border-b border-border px-4 md:px-6 py-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center">
@@ -319,27 +319,27 @@ export default function EstudoPage() {
               )}
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900 dark:text-white">
+              <h1 className="text-lg font-bold text-foreground">
                 {concursoAtivo?.nome ?? "Estudo SEFAZ-CE 2026"}
               </h1>
               <div className="flex items-center gap-2">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   {concursoAtivo?.orgao ?? "Acompanhe sua preparação para o concurso"}
                 </p>
-                <Link href="/dashboard/estudo/concursos" className="text-xs text-blue-500 hover:text-blue-400 flex items-center gap-0.5">
+                <Link href="/dashboard/estudo/concursos" className="text-xs text-primary hover:text-primary flex items-center gap-0.5">
                   <RefreshCw className="h-3 w-3" /> Trocar
                 </Link>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5">
-              <nivelConfig.icone className="h-5 w-5 text-gray-700 dark:text-gray-200" />
+            <div className="flex items-center gap-2 bg-muted border border-border rounded-xl px-4 py-2.5">
+              <nivelConfig.icone className="h-5 w-5 text-foreground dark:text-foreground" />
               <div>
-                <div className="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                <div className="text-xs font-semibold text-foreground dark:text-foreground">
                   Nível {nivel} · {nivelConfig.titulo}
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">{xp} XP</div>
+                <div className="text-xs text-muted-foreground">{xp} XP</div>
               </div>
             </div>
             <div className="text-center bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2.5">
@@ -361,8 +361,8 @@ export default function EstudoPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-all ${
                   isActive
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
+                    ? "bg-primary text-white shadow-sm"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:text-foreground"
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />

@@ -190,7 +190,7 @@ export default function ExportarPdfDialog({
 
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5 text-xs">
-              <ScrollText className="h-3.5 w-3.5 text-blue-500" /> Legislações aplicáveis
+              <ScrollText className="h-3.5 w-3.5 text-primary" /> Legislações aplicáveis
             </Label>
             <RichTextInput
               value={legislacoes}

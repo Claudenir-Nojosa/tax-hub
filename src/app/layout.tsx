@@ -42,7 +42,7 @@ export default async function RootLayout({
   return (
     <html lang="pt" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white dark:bg-gray-950`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background`}
       >
         <SessionProvider session={session} refetchOnWindowFocus={false}>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>

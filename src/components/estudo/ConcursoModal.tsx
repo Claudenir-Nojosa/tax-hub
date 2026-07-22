@@ -16,7 +16,7 @@ const CORES_DISPONIVEIS = [
 ]
 
 const COR_CLASSES: Record<string, string> = {
-  sky: "bg-sky-500", blue: "bg-blue-500", emerald: "bg-emerald-500",
+  sky: "bg-sky-500", blue: "bg-primary", emerald: "bg-emerald-500",
   violet: "bg-violet-500", rose: "bg-rose-500", amber: "bg-amber-500",
   teal: "bg-teal-500", indigo: "bg-indigo-500", pink: "bg-pink-500",
   cyan: "bg-cyan-500", lime: "bg-lime-500", orange: "bg-orange-500",
@@ -216,45 +216,45 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-gray-900 border border-gray-700 p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-muted border border-border p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-bold text-white">{inicial?.id ? "Editar Concurso" : "Novo Concurso"}</h2>
-          <button onClick={onFechar} className="text-gray-400 hover:text-white"><X className="h-5 w-5" /></button>
+          <button onClick={onFechar} className="text-muted-foreground hover:text-white"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="space-y-4">
           {/* Dados básicos */}
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1">
-              <Label className="text-xs text-gray-400">Nome do Concurso *</Label>
-              <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: SEFAZ-CE 2026" className="bg-gray-800 border-gray-600" />
+              <Label className="text-xs text-muted-foreground">Nome do Concurso *</Label>
+              <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: SEFAZ-CE 2026" className="bg-muted border-border" />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-gray-400">Órgão / Banca</Label>
-              <Input value={orgao} onChange={e => setOrgao(e.target.value)} placeholder="Ex: CEBRASPE" className="bg-gray-800 border-gray-600" />
+              <Label className="text-xs text-muted-foreground">Órgão / Banca</Label>
+              <Input value={orgao} onChange={e => setOrgao(e.target.value)} placeholder="Ex: CEBRASPE" className="bg-muted border-border" />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-gray-400">Data da Prova</Label>
-              <Input type="date" value={dataProva} onChange={e => setDataProva(e.target.value)} className="bg-gray-800 border-gray-600" />
+              <Label className="text-xs text-muted-foreground">Data da Prova</Label>
+              <Input type="date" value={dataProva} onChange={e => setDataProva(e.target.value)} className="bg-muted border-border" />
             </div>
             <div className="col-span-2 space-y-1">
-              <Label className="text-xs text-gray-400">URL da Foto (opcional)</Label>
-              <Input value={foto} onChange={e => setFoto(e.target.value)} placeholder="https://..." className="bg-gray-800 border-gray-600" />
+              <Label className="text-xs text-muted-foreground">URL da Foto (opcional)</Label>
+              <Input value={foto} onChange={e => setFoto(e.target.value)} placeholder="https://..." className="bg-muted border-border" />
             </div>
           </div>
 
           {/* Importar via IA */}
-          <div className="rounded-lg border border-dashed border-gray-600 p-4 space-y-3">
+          <div className="rounded-lg border border-dashed border-border p-4 space-y-3">
             <div className="flex items-center gap-2 mb-1">
-              <FileText className="h-5 w-5 text-blue-400 shrink-0" />
+              <FileText className="h-5 w-5 text-primary shrink-0" />
               <div>
-                <p className="text-sm font-medium text-gray-200">Importar Conteúdo Programático via IA</p>
-                <p className="text-xs text-gray-400">Envie o PDF do edital ou cole o texto — a IA extrai as matérias automaticamente</p>
+                <p className="text-sm font-medium text-foreground">Importar Conteúdo Programático via IA</p>
+                <p className="text-xs text-muted-foreground">Envie o PDF do edital ou cole o texto — a IA extrai as matérias automaticamente</p>
               </div>
             </div>
 
             {parsindoPdf ? (
-              <div className="flex items-center justify-center gap-2 py-4 text-blue-400">
+              <div className="flex items-center justify-center gap-2 py-4 text-primary">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm">Processando com IA...</span>
               </div>
@@ -269,9 +269,9 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
                       className="hidden"
                       onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadPdf(f); e.target.value = "" }}
                     />
-                    <div className="flex items-center justify-center gap-2 rounded-lg border border-gray-600 bg-gray-800 hover:bg-gray-700 px-3 py-2.5 transition-colors">
-                      <Upload className="h-4 w-4 text-blue-400" />
-                      <span className="text-xs text-gray-300">Enviar PDF</span>
+                    <div className="flex items-center justify-center gap-2 rounded-lg border border-border bg-muted hover:bg-accent px-3 py-2.5 transition-colors">
+                      <Upload className="h-4 w-4 text-primary" />
+                      <span className="text-xs text-muted-foreground">Enviar PDF</span>
                     </div>
                   </label>
 
@@ -279,10 +279,10 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
                   <button
                     type="button"
                     onClick={() => setModoImport(v => v === "texto" ? null : "texto")}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-gray-600 bg-gray-800 hover:bg-gray-700 px-3 py-2.5 transition-colors"
+                    className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-border bg-muted hover:bg-accent px-3 py-2.5 transition-colors"
                   >
                     <FileText className="h-4 w-4 text-emerald-400" />
-                    <span className="text-xs text-gray-300">Colar texto</span>
+                    <span className="text-xs text-muted-foreground">Colar texto</span>
                   </button>
                 </div>
 
@@ -293,12 +293,12 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
                       onChange={e => setTextoEdital(e.target.value)}
                       placeholder="Cole aqui o conteúdo programático do edital..."
                       rows={8}
-                      className="w-full text-xs bg-gray-700 border border-gray-600 text-gray-100 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
+                      className="w-full text-xs bg-muted border border-border text-foreground rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
                     />
                     <Button
                       onClick={handleProcessarTexto}
                       disabled={!textoEdital.trim()}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                      className="w-full bg-primary hover:bg-primary/90 text-white"
                       size="sm"
                     >
                       Extrair matérias com IA
@@ -311,37 +311,37 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
 
           {/* Matérias */}
           <div className="space-y-2">
-            <Label className="text-xs text-gray-400">Matérias ({materias.length})</Label>
+            <Label className="text-xs text-muted-foreground">Matérias ({materias.length})</Label>
             <div className="flex gap-2">
-              <Input value={novaMateria} onChange={e => setNovaMateria(e.target.value)} placeholder="Nome da matéria" className="bg-gray-800 border-gray-600" onKeyDown={e => e.key === "Enter" && adicionarMateria()} />
+              <Input value={novaMateria} onChange={e => setNovaMateria(e.target.value)} placeholder="Nome da matéria" className="bg-muted border-border" onKeyDown={e => e.key === "Enter" && adicionarMateria()} />
               <Button variant="outline" size="icon" onClick={adicionarMateria}><Plus className="h-4 w-4" /></Button>
             </div>
 
             <div className="space-y-1 max-h-64 overflow-y-auto">
               {materias.map(m => (
-                <div key={m.id} className="rounded-lg border border-gray-700 bg-gray-800/50">
+                <div key={m.id} className="rounded-lg border border-border bg-muted/50">
                   <div className="flex items-center gap-2 px-3 py-2 cursor-pointer" onClick={() => setExpandida(expandida === m.id ? null : m.id)}>
                     <button
                       type="button"
                       title="Alterar cor"
                       onClick={e => { e.stopPropagation(); abrirCorPicker(m.id, e.currentTarget) }}
-                      className={`w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-offset-2 ring-offset-gray-800/50 ring-transparent hover:ring-gray-500 transition-all ${COR_CLASSES[m.cor] ?? "bg-gray-500"}`}
+                      className={`w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-offset-2 ring-offset-background/50 ring-transparent hover:ring-ring transition-all ${COR_CLASSES[m.cor] ?? "bg-muted"}`}
                     />
-                    <span className="text-sm text-gray-200 flex-1">{m.nome}</span>
+                    <span className="text-sm text-foreground flex-1">{m.nome}</span>
                     <Badge variant="outline" className="text-xs">{m.topicos.length} tópicos</Badge>
-                    {expandida === m.id ? <ChevronDown className="h-3 w-3 text-gray-400" /> : <ChevronRight className="h-3 w-3 text-gray-400" />}
-                    <button onClick={e => { e.stopPropagation(); removerMateria(m.id) }} className="text-gray-500 hover:text-red-400">
+                    {expandida === m.id ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                    <button onClick={e => { e.stopPropagation(); removerMateria(m.id) }} className="text-muted-foreground hover:text-red-400">
                       <Trash2 className="h-3 w-3" />
                     </button>
                   </div>
                   {expandida === m.id && (
-                    <div className="px-3 pb-2 space-y-1 border-t border-gray-700">
+                    <div className="px-3 pb-2 space-y-1 border-t border-border">
                       <div className="flex gap-1 mt-2">
                         <Input
                           value={novosTopicos[m.id] ?? ""}
                           onChange={e => setNovosTopicos(prev => ({ ...prev, [m.id]: e.target.value }))}
                           placeholder="Adicionar tópico"
-                          className="bg-gray-700 border-gray-600 text-xs h-7"
+                          className="bg-muted border-border text-xs h-7"
                           onKeyDown={e => e.key === "Enter" && adicionarTopico(m.id)}
                         />
                         <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => adicionarTopico(m.id)}><Plus className="h-3 w-3" /></Button>
@@ -352,19 +352,19 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
                         const editando = editandoTopico === chave
                         return (
                           <div key={i}>
-                            <div className={`flex items-center gap-1.5 text-xs text-gray-300 group ${eSub ? "pl-5" : "pl-1"}`}>
-                              {eSub && <CornerDownRight className="h-3 w-3 text-gray-500 shrink-0" />}
+                            <div className={`flex items-center gap-1.5 text-xs text-muted-foreground group ${eSub ? "pl-5" : "pl-1"}`}>
+                              {eSub && <CornerDownRight className="h-3 w-3 text-muted-foreground shrink-0" />}
                               {editando ? (
                                 <>
                                   <Input
                                     autoFocus
                                     value={editandoValor}
                                     onChange={e => setEditandoValor(e.target.value)}
-                                    className="bg-gray-700 border-gray-600 text-xs h-6 flex-1"
+                                    className="bg-muted border-border text-xs h-6 flex-1"
                                     onKeyDown={e => { if (e.key === "Enter") confirmarEdicaoTopico(m.id, i); if (e.key === "Escape") setEditandoTopico(null) }}
                                   />
                                   <button onClick={() => confirmarEdicaoTopico(m.id, i)} className="text-emerald-400 hover:text-emerald-300 shrink-0"><Check className="h-3 w-3" /></button>
-                                  <button onClick={() => setEditandoTopico(null)} className="text-gray-500 hover:text-gray-300 shrink-0"><X className="h-3 w-3" /></button>
+                                  <button onClick={() => setEditandoTopico(null)} className="text-muted-foreground hover:text-muted-foreground shrink-0"><X className="h-3 w-3" /></button>
                                 </>
                               ) : (
                                 <>
@@ -373,7 +373,7 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
                                     type="button"
                                     title="Editar"
                                     onClick={() => iniciarEdicaoTopico(m.id, i, eSub ? t.trimStart() : t)}
-                                    className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-amber-400 transition-opacity"
+                                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-amber-400 transition-opacity"
                                   >
                                     <Pencil className="h-3 w-3" />
                                   </button>
@@ -382,12 +382,12 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
                                       type="button"
                                       title="Adicionar subtópico"
                                       onClick={() => { setSubtopicoPara(subtopicoPara === chave ? null : chave); setNovoSubtopico("") }}
-                                      className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-blue-400 transition-opacity"
+                                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary transition-opacity"
                                     >
                                       <CornerDownRight className="h-3 w-3" />
                                     </button>
                                   )}
-                                  <button onClick={() => removerTopico(m.id, i)} className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-opacity"><X className="h-3 w-3" /></button>
+                                  <button onClick={() => removerTopico(m.id, i)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 transition-opacity"><X className="h-3 w-3" /></button>
                                 </>
                               )}
                             </div>
@@ -398,7 +398,7 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
                                   value={novoSubtopico}
                                   onChange={e => setNovoSubtopico(e.target.value)}
                                   placeholder="Nome do subtópico"
-                                  className="bg-gray-700 border-gray-600 text-xs h-6"
+                                  className="bg-muted border-border text-xs h-6"
                                   onKeyDown={e => { if (e.key === "Enter") adicionarSubtopico(m.id, i); if (e.key === "Escape") setSubtopicoPara(null) }}
                                 />
                                 <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => adicionarSubtopico(m.id, i)}><Plus className="h-2.5 w-2.5" /></Button>
@@ -417,7 +417,7 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
 
         <div className="flex justify-end gap-2 mt-6">
           <Button variant="outline" onClick={onFechar}>Cancelar</Button>
-          <Button onClick={handleSalvar} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Button onClick={handleSalvar} disabled={saving} className="bg-primary hover:bg-primary/90 text-white">
             {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : "Salvar Concurso"}
           </Button>
         </div>
@@ -427,7 +427,7 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
         <div
           ref={corPickerRef}
           style={{ top: corPicker.top, left: corPicker.left }}
-          className="fixed z-[60] grid grid-cols-4 gap-2 p-3 rounded-lg border border-gray-600 bg-gray-900 shadow-2xl"
+          className="fixed z-[60] grid grid-cols-4 gap-2 p-3 rounded-lg border border-border bg-muted shadow-2xl"
           onClick={e => e.stopPropagation()}
         >
           {CORES_DISPONIVEIS.map(cor => (
@@ -438,7 +438,7 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
               onClick={() => alterarCorMateria(corPicker.materiaId, cor)}
               className={`w-6 h-6 rounded-full ${COR_CLASSES[cor]} transition-transform hover:scale-110 ${
                 materias.find(m => m.id === corPicker.materiaId)?.cor === cor
-                  ? "ring-2 ring-white ring-offset-2 ring-offset-gray-900"
+                  ? "ring-2 ring-white ring-offset-2 ring-offset-background"
                   : ""
               }`}
             />

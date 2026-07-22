@@ -123,15 +123,15 @@ export default function ConsultaSimplesNacionalPage() {
           <BadgeCheck className="h-5 w-5 text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Consulta Simples Nacional</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <h1 className="text-2xl font-bold text-foreground">Consulta Simples Nacional</h1>
+          <p className="text-sm text-muted-foreground">
             Verifique em lote, por CNPJ, se a empresa é optante do Simples Nacional — via Excel ou colando a lista.
           </p>
         </div>
       </div>
 
       {etapa !== "concluido" && (
-        <Card className="border-gray-200 dark:border-gray-800">
+        <Card className="border-border">
           <CardHeader className="pb-4">
             <CardTitle className="text-base">CNPJs a consultar</CardTitle>
             <CardDescription className="text-xs">
@@ -156,14 +156,14 @@ export default function ConsultaSimplesNacionalPage() {
                   } ${
                     isDragging
                       ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20"
-                      : "border-gray-200 dark:border-gray-700 hover:border-emerald-300 dark:hover:border-emerald-800"
+                      : "border-border hover:border-emerald-300 dark:hover:border-emerald-800"
                   }`}
                 >
-                  <Upload className="h-6 w-6 text-gray-400 mb-2" />
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 text-center">
+                  <Upload className="h-6 w-6 text-muted-foreground mb-2" />
+                  <p className="text-sm font-medium text-foreground text-center">
                     Clique ou arraste a planilha aqui
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">.xlsx · .xls · .csv — uma coluna com "CNPJ" no título</p>
+                  <p className="text-xs text-muted-foreground mt-1">.xlsx · .xls · .csv — uma coluna com "CNPJ" no título</p>
                   <input
                     ref={inputRef}
                     type="file"
@@ -175,13 +175,13 @@ export default function ConsultaSimplesNacionalPage() {
                 </div>
 
                 {arquivo && (
-                  <div className="flex items-center gap-3 p-3 mt-3 rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+                  <div className="flex items-center gap-3 p-3 mt-3 rounded-lg border border-border dark:border-border bg-muted/50">
                     <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
                       <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                     </div>
-                    <p className="flex-1 min-w-0 text-sm font-medium text-gray-900 dark:text-white truncate">{arquivo.name}</p>
+                    <p className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{arquivo.name}</p>
                     {!processando && (
-                      <button type="button" onClick={() => setArquivo(null)} className="text-gray-300 dark:text-gray-600 hover:text-red-500 flex-shrink-0">
+                      <button type="button" onClick={() => setArquivo(null)} className="text-muted-foreground dark:text-muted-foreground hover:text-red-500 flex-shrink-0">
                         <X className="h-4 w-4" />
                       </button>
                     )}
@@ -202,7 +202,7 @@ export default function ConsultaSimplesNacionalPage() {
 
             {processando && (
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     {etapa === "lendo"
@@ -234,7 +234,7 @@ export default function ConsultaSimplesNacionalPage() {
       {etapa === "concluido" && resultado && contagem && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500 dark:text-gray-400">{resultado.length} CNPJ(s) consultado(s)</p>
+            <p className="text-sm text-muted-foreground">{resultado.length} CNPJ(s) consultado(s)</p>
             <Button variant="outline" size="sm" onClick={handleReset}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Nova consulta
@@ -245,27 +245,27 @@ export default function ConsultaSimplesNacionalPage() {
             <Card className="border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20">
               <CardContent className="pt-5 pb-4 text-center">
                 <CheckCircle2 className="h-5 w-5 mx-auto mb-1.5 text-emerald-600 dark:text-emerald-400" />
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{contagem.optantes}</p>
-                <p className="text-xs text-gray-400">Optantes</p>
+                <p className="text-2xl font-bold text-foreground">{contagem.optantes}</p>
+                <p className="text-xs text-muted-foreground">Optantes</p>
               </CardContent>
             </Card>
-            <Card className="border-gray-200 dark:border-gray-800">
+            <Card className="border-border">
               <CardContent className="pt-5 pb-4 text-center">
-                <XCircle className="h-5 w-5 mx-auto mb-1.5 text-gray-400" />
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{contagem.naoOptantes}</p>
-                <p className="text-xs text-gray-400">Não optantes</p>
+                <XCircle className="h-5 w-5 mx-auto mb-1.5 text-muted-foreground" />
+                <p className="text-2xl font-bold text-foreground">{contagem.naoOptantes}</p>
+                <p className="text-xs text-muted-foreground">Não optantes</p>
               </CardContent>
             </Card>
             <Card className="border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20">
               <CardContent className="pt-5 pb-4 text-center">
                 <AlertTriangle className="h-5 w-5 mx-auto mb-1.5 text-amber-600 dark:text-amber-400" />
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{contagem.erros}</p>
-                <p className="text-xs text-gray-400">Não encontrados/erro</p>
+                <p className="text-2xl font-bold text-foreground">{contagem.erros}</p>
+                <p className="text-xs text-muted-foreground">Não encontrados/erro</p>
               </CardContent>
             </Card>
           </div>
 
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-x-auto">
+          <div className="rounded-xl border border-border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -289,11 +289,11 @@ export default function ConsultaSimplesNacionalPage() {
                       ) : r.simplesNacional === true ? (
                         <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">Optante</Badge>
                       ) : (
-                        <Badge variant="outline" className="text-gray-500 dark:text-gray-400">Não optante</Badge>
+                        <Badge variant="outline" className="text-muted-foreground">Não optante</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs text-gray-500">{r.dataOpcaoSimples ?? "—"}</TableCell>
-                    <TableCell className="text-xs text-gray-500">{r.situacaoCadastral ?? "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{r.dataOpcaoSimples ?? "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{r.situacaoCadastral ?? "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -307,7 +307,7 @@ export default function ConsultaSimplesNacionalPage() {
             </Button>
           </div>
 
-          <p className="text-xs text-gray-400 text-center">
+          <p className="text-xs text-muted-foreground text-center">
             * Dados públicos da Receita Federal (BrasilAPI, com fallback ReceitaWS). CNPJs não encontrados podem
             estar com erro de digitação ou fora da base — confira manualmente antes de qualquer decisão fiscal.
           </p>

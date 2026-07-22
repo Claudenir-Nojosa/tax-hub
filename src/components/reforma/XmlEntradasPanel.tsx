@@ -54,20 +54,20 @@ export default function XmlEntradasPanel({ dadosXmlEntradas, onDadosXmlEntradas 
       <div
         className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
           dragging
-            ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20"
-            : "border-gray-200 dark:border-gray-700 hover:border-blue-300"
+            ? "border-primary bg-primary/10"
+            : "border-border hover:border-primary/40"
         }`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); onFiles(e.dataTransfer.files) }}
       >
-        <FileBox className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-        <p className="text-sm text-gray-500 mb-1">
+        <FileBox className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+        <p className="text-sm text-muted-foreground mb-1">
           {loading
             ? progress.total > 0 ? `Processando ${progress.atual}/${progress.total}...` : "Processando..."
             : "Arraste XMLs de NF-e de entrada aqui"}
         </p>
-        <p className="text-xs text-gray-400 mb-3">Aceita .xml individuais ou .zip</p>
+        <p className="text-xs text-muted-foreground mb-3">Aceita .xml individuais ou .zip</p>
         <Button
           variant="outline"
           size="sm"
@@ -101,10 +101,10 @@ export default function XmlEntradasPanel({ dadosXmlEntradas, onDadosXmlEntradas 
             {dadosXmlEntradas.totalNFs} NF-e de entradas importadas
           </span>
           {dadosXmlEntradas.periodos.length > 0 && (
-            <span className="text-xs text-gray-500">— {dadosXmlEntradas.periodos.join(", ")}</span>
+            <span className="text-xs text-muted-foreground">— {dadosXmlEntradas.periodos.join(", ")}</span>
           )}
         </div>
-        <button onClick={remover} className="text-gray-400 hover:text-red-500 transition-colors">
+        <button onClick={remover} className="text-muted-foreground hover:text-destructive transition-colors">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -114,17 +114,17 @@ export default function XmlEntradasPanel({ dadosXmlEntradas, onDadosXmlEntradas 
       </p>
 
       <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-2 text-center">
-          <p className="text-xs text-gray-500 mb-1">BC IBS/CBS Entradas</p>
-          <p className="font-bold text-blue-700 dark:text-blue-400 text-sm">{formatarMoeda(bcEntradas)}</p>
-          <p className="text-xs text-blue-500">base crédito</p>
+        <div className="rounded-md bg-primary/10 border border-primary/20 p-2 text-center">
+          <p className="text-xs text-muted-foreground mb-1">BC IBS/CBS Entradas</p>
+          <p className="font-bold text-primary text-sm">{formatarMoeda(bcEntradas)}</p>
+          <p className="text-xs text-primary">base crédito</p>
         </div>
-        <div className="rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-center">
-          <p className="text-xs text-gray-500 mb-1">Crédito ICMS atual</p>
+        <div className="rounded-md bg-card border border-border p-2 text-center">
+          <p className="text-xs text-muted-foreground mb-1">Crédito ICMS atual</p>
           <p className="font-semibold text-sm">{formatarMoeda(icmsCredito)}</p>
         </div>
-        <div className="rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-center">
-          <p className="text-xs text-gray-500 mb-1">Alíq. média</p>
+        <div className="rounded-md bg-card border border-border p-2 text-center">
+          <p className="text-xs text-muted-foreground mb-1">Alíq. média</p>
           <p className="font-semibold text-sm">{formatarPorcentagem(aliqMedia, 2)}</p>
         </div>
       </div>

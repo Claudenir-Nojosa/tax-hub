@@ -76,8 +76,8 @@ function SourceTab({
       onClick={onClick}
       className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
         active
-          ? "bg-blue-600 text-white"
-          : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+          ? "bg-primary text-primary-foreground"
+          : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
       }`}
     >
       {label}
@@ -176,9 +176,9 @@ export default function Step2Premissas({
     <div className="space-y-8">
 
       {/* ═══ SAÍDAS ═══ */}
-      <section className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+      <section className="rounded-lg border border-border p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-sm text-gray-900 dark:text-white">
+          <h3 className="font-semibold text-sm text-foreground">
             Saídas — base do cálculo IBS/CBS
           </h3>
           <div className="flex gap-1.5">
@@ -207,16 +207,16 @@ export default function Step2Premissas({
               </p>
             ) : dadosEfd.saidasParaSimulacao.totalVProd > 0 ? (
               <div className="grid grid-cols-3 gap-3 mt-2">
-                <div className="rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-2 text-center">
-                  <p className="text-xs text-gray-500 mb-1">Total saídas (VL_DOC)</p>
-                  <p className="font-bold text-blue-700 dark:text-blue-400 text-sm">{formatarMoeda(dadosEfd.saidasParaSimulacao.totalVProd)}</p>
+                <div className="rounded-md bg-primary/10 border border-primary/20 p-2 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Total saídas (VL_DOC)</p>
+                  <p className="font-bold text-primary text-sm">{formatarMoeda(dadosEfd.saidasParaSimulacao.totalVProd)}</p>
                 </div>
-                <div className="rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-center">
-                  <p className="text-xs text-gray-500 mb-1">Base IBS/CBS saídas</p>
+                <div className="rounded-md bg-card border border-border p-2 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Base IBS/CBS saídas</p>
                   <p className="font-semibold text-sm">{formatarMoeda(dadosEfd.saidasParaSimulacao.totalBaseIbsCbs)}</p>
                 </div>
-                <div className="rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-center">
-                  <p className="text-xs text-gray-500 mb-1">Alíq. ICMS média</p>
+                <div className="rounded-md bg-card border border-border p-2 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Alíq. ICMS média</p>
                   <p className="font-semibold text-sm">{formatarPorcentagem(dadosEfd.saidasParaSimulacao.aliquotaICMSEfetiva, 2)}</p>
                 </div>
               </div>
@@ -229,16 +229,16 @@ export default function Step2Premissas({
         )}
 
         {fonteSaidas === "manual" && (
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted-foreground">
             Os campos de tributação abaixo serão usados para estimar a carga sobre o faturamento informado.
           </p>
         )}
       </section>
 
       {/* ═══ ENTRADAS ═══ */}
-      <section className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+      <section className="rounded-lg border border-border p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-sm text-gray-900 dark:text-white">
+          <h3 className="font-semibold text-sm text-foreground">
             Entradas — base do crédito IBS/CBS
           </h3>
           <div className="flex gap-1.5">
@@ -260,17 +260,17 @@ export default function Step2Premissas({
               </p>
             ) : dadosEfd.bcICMSEntradas > 0 ? (
               <div className="grid grid-cols-3 gap-3 mt-2">
-                <div className="rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-2 text-center">
-                  <p className="text-xs text-gray-500 mb-1">BC ICMS Entradas</p>
-                  <p className="font-bold text-blue-700 dark:text-blue-400 text-sm">{formatarMoeda(dadosEfd.bcICMSEntradas)}</p>
-                  <p className="text-xs text-blue-500">base crédito IBS/CBS</p>
+                <div className="rounded-md bg-primary/10 border border-primary/20 p-2 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">BC ICMS Entradas</p>
+                  <p className="font-bold text-primary text-sm">{formatarMoeda(dadosEfd.bcICMSEntradas)}</p>
+                  <p className="text-xs text-primary">base crédito IBS/CBS</p>
                 </div>
-                <div className="rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-center">
-                  <p className="text-xs text-gray-500 mb-1">Crédito ICMS atual</p>
+                <div className="rounded-md bg-card border border-border p-2 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Crédito ICMS atual</p>
                   <p className="font-semibold text-sm">{formatarMoeda(dadosEfd.icmsCreditoEntradas)}</p>
                 </div>
-                <div className="rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-center">
-                  <p className="text-xs text-gray-500 mb-1">Alíq. média</p>
+                <div className="rounded-md bg-card border border-border p-2 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Alíq. média</p>
                   <p className="font-semibold text-sm">{formatarPorcentagem(dadosEfd.aliquotaMediaEntradas, 2)}</p>
                 </div>
               </div>
@@ -283,7 +283,7 @@ export default function Step2Premissas({
         )}
 
         {fonteEntradas === "nenhuma" && (
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted-foreground">
             Crédito IBS/CBS das compras será estimado pela alíquota ICMS compras × faturamento.
           </p>
         )}
@@ -292,9 +292,9 @@ export default function Step2Premissas({
       {/* ═══ EFD Upload (compartilhado) ═══ */}
       {efdNecessario && (
         <section>
-          <h3 className="font-semibold text-sm mb-3 text-gray-900 dark:text-white">
+          <h3 className="font-semibold text-sm mb-3 text-foreground">
             EFD ICMS IPI
-            <span className="ml-2 text-xs font-normal text-gray-500">— arquivo .txt do SPED Fiscal</span>
+            <span className="ml-2 text-xs font-normal text-muted-foreground">— arquivo .txt do SPED Fiscal</span>
           </h3>
           <EfdImportPanel dadosEfd={dadosEfd} onDadosEfd={handleDadosEfd} />
         </section>
@@ -302,7 +302,7 @@ export default function Step2Premissas({
 
       {/* ═══ Tributação Atual ═══ */}
       <section>
-        <h3 className="font-semibold text-sm mb-4 text-gray-900 dark:text-white">Tributação Atual</h3>
+        <h3 className="font-semibold text-sm mb-4 text-foreground">Tributação Atual</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Alíquota ICMS média — saídas (%)</Label>
@@ -318,7 +318,7 @@ export default function Step2Premissas({
             <div className="flex items-center gap-2">
               <Label>Alíquota ICMS média — compras (%)</Label>
               {badgeEntradas && (
-                <span className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 py-0.5 rounded font-medium">
+                <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
                   {badgeEntradas}
                 </span>
               )}
@@ -330,7 +330,7 @@ export default function Step2Premissas({
               onChange={(e) => set({ aliquotaICMSCompras: fromPct(e.target.value) })}
               placeholder="12.00"
             />
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               {fonteEntradas !== "nenhuma"
                 ? "Auto-preenchido pela fonte selecionada. Ajuste se necessário."
                 : "Usado para estimar crédito IBS/CBS nas compras"}
@@ -370,14 +370,14 @@ export default function Step2Premissas({
           )}
         </div>
 
-        <p className="mt-3 text-xs text-gray-500">
+        <p className="mt-3 text-xs text-muted-foreground">
           PIS (0,65%) + COFINS (3%) fixos para Lucro Presumido. IPI extinto a partir de 2027 (fora ZFM).
         </p>
       </section>
 
       {/* ═══ FCBF ═══ */}
       <section>
-        <h3 className="font-semibold text-sm mb-4 text-gray-900 dark:text-white">
+        <h3 className="font-semibold text-sm mb-4 text-foreground">
           Benefício Fiscal Estadual (FCBF / Crédito Presumido)
         </h3>
         <div className="flex items-center gap-3 mb-3">
@@ -404,7 +404,7 @@ export default function Step2Premissas({
                 onChange={(e) => set({ fcbfBaseCalculo: Number(e.target.value) })}
                 placeholder="Ex: 565000"
               />
-              <p className="text-xs text-gray-500">Valor mensal da base sobre o qual incide o crédito. Será anualizado (x12).</p>
+              <p className="text-xs text-muted-foreground">Valor mensal da base sobre o qual incide o crédito. Será anualizado (x12).</p>
             </div>
           </div>
         )}
@@ -418,7 +418,7 @@ export default function Step2Premissas({
       {/* ═══ Alíquotas da Reforma ═══ */}
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-sm text-gray-900 dark:text-white">
+          <h3 className="font-semibold text-sm text-foreground">
             Alíquotas da Reforma (LC 214/2025) — editáveis
           </h3>
           <Button variant="ghost" size="sm" onClick={resetPremissas} className="text-xs">
@@ -428,13 +428,13 @@ export default function Step2Premissas({
         <div className="overflow-x-auto">
           <table className="w-full text-xs border-collapse">
             <thead>
-              <tr className="border-b border-gray-200 dark:border-gray-700">
-                <th className="text-left py-2 pr-3 font-medium text-gray-500">Ano</th>
-                <th className="text-center py-2 px-2 font-medium text-gray-500">CBS (%)</th>
-                <th className="text-center py-2 px-2 font-medium text-gray-500">IBS UF (%)</th>
-                <th className="text-center py-2 px-2 font-medium text-gray-500">IBS Mun (%)</th>
-                <th className="text-center py-2 px-2 font-medium text-gray-500">Total IBS+CBS (%)</th>
-                <th className="text-center py-2 px-2 font-medium text-gray-500">ICMS restante (%)</th>
+              <tr className="border-b border-border">
+                <th className="text-left py-2 pr-3 font-medium text-muted-foreground">Ano</th>
+                <th className="text-center py-2 px-2 font-medium text-muted-foreground">CBS (%)</th>
+                <th className="text-center py-2 px-2 font-medium text-muted-foreground">IBS UF (%)</th>
+                <th className="text-center py-2 px-2 font-medium text-muted-foreground">IBS Mun (%)</th>
+                <th className="text-center py-2 px-2 font-medium text-muted-foreground">Total IBS+CBS (%)</th>
+                <th className="text-center py-2 px-2 font-medium text-muted-foreground">ICMS restante (%)</th>
               </tr>
             </thead>
             <tbody>
@@ -442,7 +442,7 @@ export default function Step2Premissas({
                 const p = data.premissasAnuais[ano]
                 const total = ((p.cbs + p.ibsUF + p.ibsMUN) * 100).toFixed(2)
                 return (
-                  <tr key={ano} className="border-b border-gray-100 dark:border-gray-800">
+                  <tr key={ano} className="border-b border-border">
                     <td className="py-2 pr-3 font-medium">{ano}</td>
                     <td className="py-1 px-2">
                       <Input type="number" step="0.01" className="h-7 text-xs text-center w-20" value={pct(p.cbs)} onChange={(e) => setPremissaAno(ano, "cbs", e.target.value)} />
@@ -453,7 +453,7 @@ export default function Step2Premissas({
                     <td className="py-1 px-2">
                       <Input type="number" step="0.01" className="h-7 text-xs text-center w-20" value={pct(p.ibsMUN)} onChange={(e) => setPremissaAno(ano, "ibsMUN", e.target.value)} />
                     </td>
-                    <td className="py-1 px-2 text-center font-semibold text-blue-600 dark:text-blue-400">{total}%</td>
+                    <td className="py-1 px-2 text-center font-semibold text-primary">{total}%</td>
                     <td className="py-1 px-2 text-center">{(p.icmsReducao * 100).toFixed(0)}%</td>
                   </tr>
                 )
@@ -465,7 +465,7 @@ export default function Step2Premissas({
 
       <div className="flex justify-between">
         <Button variant="outline" onClick={onBack}>← Voltar</Button>
-        <Button onClick={onNext} className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button onClick={onNext} className="bg-primary hover:bg-primary/90 text-primary-foreground">
           Calcular Simulação →
         </Button>
       </div>

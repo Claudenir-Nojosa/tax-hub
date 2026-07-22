@@ -32,7 +32,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   // Filtra apenas itens visíveis (valor não-zero e não-undefined)
   const visible = payload.filter((p: { value: number }) => p.value !== 0 && p.value != null)
   return (
-    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 shadow-lg text-sm min-w-[200px]">
+    <div className="bg-card border border-border rounded-lg p-3 shadow-lg text-sm min-w-[200px]">
       <p className="font-semibold mb-2">{label}</p>
       {visible.map((p: { name: string; value: number; color: string }) => {
         const isDelta = p.name === "Δ Aumento/Economia"
@@ -40,7 +40,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         return (
           <div key={p.name} className="flex items-center gap-2 mb-1">
             <span className="w-3 h-3 rounded-sm inline-block flex-shrink-0" style={{ background: p.color }} />
-            <span className="text-gray-600 dark:text-gray-400 flex-1">{p.name}:</span>
+            <span className="text-muted-foreground flex-1">{p.name}:</span>
             <span
               className={`font-medium ${
                 isDelta
@@ -100,15 +100,15 @@ export default function TransicaoChart({ resultados, temFCBF }: Props) {
   return (
     <ResponsiveContainer width="100%" height={380}>
       <ComposedChart data={data} margin={{ top: 28, right: 20, left: 10, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-700" />
+        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
         <XAxis dataKey="ano" tick={{ fontSize: 12 }} />
         <YAxis tickFormatter={formatY} tick={{ fontSize: 11 }} width={80} />
         <Tooltip content={<CustomTooltip />} />
         <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
 
         {/* Barras empilhadas — composição da carga reforma */}
-        <Bar dataKey="IBS/CBS" stackId="a" fill="#0569ff" />
-        <Bar dataKey="ICMS" stackId="a" fill="#00cfec" />
+        <Bar dataKey="IBS/CBS" stackId="a" fill="hsl(var(--primary))" />
+        <Bar dataKey="ICMS" stackId="a" fill="hsl(var(--chart-4))" />
         <Bar dataKey="IPI" stackId="a" fill="#6366f1">
           {/* Label de delta no topo da última barra empilhada */}
           <LabelList dataKey="_deltaPct" content={<DeltaLabel />} />

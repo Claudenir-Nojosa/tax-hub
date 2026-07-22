@@ -270,7 +270,7 @@ const tocEntries = [
 
 function LegalText({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-lg bg-gray-50 dark:bg-gray-900/60 border-l-4 border-gray-300 dark:border-gray-700 px-5 py-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+    <div className="rounded-lg bg-muted border-l-4 border-border px-5 py-4 text-sm text-foreground leading-relaxed">
       {children}
     </div>
   );
@@ -278,8 +278,8 @@ function LegalText({ children }: { children: React.ReactNode }) {
 
 function Comentario({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-4 rounded-lg bg-blue-50 dark:bg-blue-950/30 border-l-4 border-[#007cca] px-5 py-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-      <p className="text-xs font-semibold uppercase tracking-wider text-[#007cca] mb-3">
+    <div className="mt-4 rounded-lg bg-primary/10 border-l-4 border-primary px-5 py-4 text-sm text-foreground leading-relaxed">
+      <p className="text-xs font-semibold uppercase tracking-wider text-primary mb-3">
         💬 Meu comentário
       </p>
       {children}
@@ -293,10 +293,10 @@ function Artigo({
   id: string; numero: string; titulo: string; children: React.ReactNode;
 }) {
   return (
-    <div id={id} className="scroll-mt-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-4">
+    <div id={id} className="scroll-mt-4 rounded-xl border border-border bg-card p-6 space-y-4">
       <div>
-        <span className="text-xs font-bold uppercase tracking-wider text-[#007cca]">{numero}</span>
-        <h3 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{titulo}</h3>
+        <span className="text-xs font-bold uppercase tracking-wider text-primary">{numero}</span>
+        <h3 className="mt-1 text-lg font-semibold text-foreground">{titulo}</h3>
       </div>
       {children}
     </div>
@@ -306,9 +306,9 @@ function Artigo({
 function Secao({ id, titulo, subtitulo }: { id: string; titulo: string; subtitulo?: string }) {
   return (
     <div id={id} className="scroll-mt-4 pt-4">
-      <div className="border-b border-gray-200 dark:border-gray-800 pb-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-[#007cca]">{titulo}</p>
-        {subtitulo && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{subtitulo}</p>}
+      <div className="border-b border-border pb-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-primary">{titulo}</p>
+        {subtitulo && <p className="mt-1 text-xs text-muted-foreground">{subtitulo}</p>}
       </div>
     </div>
   );
@@ -326,7 +326,7 @@ function TableOfContents({ activeId }: { activeId: string }) {
 
   return (
     <nav ref={navRef} className="text-sm space-y-0.5">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 px-2">Índice</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3 px-2">Índice</p>
       {tocEntries.map((entry) => {
         const isActive = activeId === entry.id;
         return (
@@ -335,12 +335,12 @@ function TableOfContents({ activeId }: { activeId: string }) {
             href={`#${entry.id}`}
             className={[
               "block rounded-lg transition-all duration-150 leading-snug",
-              entry.level === 0 ? "px-2 py-1.5 font-semibold text-[13px] text-gray-800 dark:text-gray-100" : "",
-              entry.level === 1 ? "pl-4 pr-2 py-1.5 font-medium text-[12px] text-gray-600 dark:text-gray-400" : "",
-              entry.level === 2 ? "pl-6 pr-2 py-1 text-[12px] text-gray-500 dark:text-gray-500" : "",
+              entry.level === 0 ? "px-2 py-1.5 font-semibold text-[13px] text-foreground" : "",
+              entry.level === 1 ? "pl-4 pr-2 py-1.5 font-medium text-[12px] text-muted-foreground" : "",
+              entry.level === 2 ? "pl-6 pr-2 py-1 text-[12px] text-muted-foreground" : "",
               isActive
-                ? "!text-[#007cca] bg-blue-50 dark:bg-blue-950/50 font-medium"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-gray-200",
+                ? "!text-primary bg-primary/10 font-medium"
+                : "hover:bg-accent hover:text-accent-foreground",
             ].filter(Boolean).join(" ")}
           >
             {entry.label}
@@ -394,7 +394,7 @@ export default function CtnPage() {
       <div className="flex gap-8 items-start">
 
         {/* TOC lateral */}
-        <aside className="hidden xl:block w-64 flex-shrink-0 sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+        <aside className="hidden xl:block w-64 flex-shrink-0 sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
           <TableOfContents activeId={activeId} />
         </aside>
 
@@ -638,7 +638,7 @@ export default function CtnPage() {
 
           <Artigo id="art-11" numero="Art. 11" titulo="(Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">Artigo revogado. Integrava a Seção II do Capítulo II, que tratava da discriminação de rendas tributárias sob a ordem constitucional de 1946 e 1967. Seu conteúdo foi absorvido pelas normas de repartição de receitas da Constituição Federal de 1988 (arts. 157 a 162).</p>
+              <p className="italic text-muted-foreground">Artigo revogado. Integrava a Seção II do Capítulo II, que tratava da discriminação de rendas tributárias sob a ordem constitucional de 1946 e 1967. Seu conteúdo foi absorvido pelas normas de repartição de receitas da Constituição Federal de 1988 (arts. 157 a 162).</p>
             </LegalText>
             <Comentario>
               <p>
@@ -654,7 +654,7 @@ export default function CtnPage() {
 
           <Artigo id="art-12" numero="Art. 12" titulo="(Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">Artigo revogado. Tratava da discriminação de rendas entre entes federativos sob a ordem constitucional anterior à CF/88.</p>
+              <p className="italic text-muted-foreground">Artigo revogado. Tratava da discriminação de rendas entre entes federativos sob a ordem constitucional anterior à CF/88.</p>
             </LegalText>
             <Comentario>
               <p>
@@ -669,7 +669,7 @@ export default function CtnPage() {
 
           <Artigo id="art-13" numero="Art. 13" titulo="(Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">Artigo revogado. Integrava a mesma seção sobre discriminação de rendas.</p>
+              <p className="italic text-muted-foreground">Artigo revogado. Integrava a mesma seção sobre discriminação de rendas.</p>
             </LegalText>
             <Comentario>
               <p>
@@ -1510,7 +1510,7 @@ export default function CtnPage() {
 
           <Artigo id="art-52" numero="Art. 52" titulo="Combustíveis: Fato Gerador (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado pela Lei Complementar nº 102, de 11 de julho de 2000. O texto original definia
                 como fato gerador deste imposto a produção ou a importação de combustíveis, lubrificantes,
                 energia elétrica e minerais do País.
@@ -1538,7 +1538,7 @@ export default function CtnPage() {
 
           <Artigo id="art-53" numero="Art. 53" titulo="Combustíveis: Base de Cálculo (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original previa como base de cálculo o valor da operação de saída do
                 estabelecimento produtor (para a produção interna) ou a base de cálculo do imposto de
                 importação (para os produtos importados).
@@ -1560,7 +1560,7 @@ export default function CtnPage() {
 
           <Artigo id="art-54" numero="Art. 54" titulo="Combustíveis: Alíquotas (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original atribuía ao Poder Executivo a competência para fixar e alterar
                 as alíquotas do imposto, dentro dos limites estabelecidos em lei.
               </p>
@@ -1580,7 +1580,7 @@ export default function CtnPage() {
 
           <Artigo id="art-55" numero="Art. 55" titulo="Combustíveis: Isenções para Entes Públicos (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original isentava do imposto as operações realizadas por órgão público,
                 autarquia ou entidade paraestatal.
               </p>
@@ -1600,7 +1600,7 @@ export default function CtnPage() {
 
           <Artigo id="art-56" numero="Art. 56" titulo="Combustíveis: Exclusividade Federal (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original declarava o imposto exclusivo da União, vedando qualquer
                 adicional ou percentagem estadual ou municipal sobre ele.
               </p>
@@ -1623,7 +1623,7 @@ export default function CtnPage() {
 
           <Artigo id="art-57" numero="Art. 57" titulo="Transportes: Fato Gerador (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original definia como fato gerador a prestação ou utilização de serviços
                 de transporte de natureza comercial (exceto o estritamente municipal) e de comunicações,
                 inclusive radiodifusão.
@@ -1651,7 +1651,7 @@ export default function CtnPage() {
 
           <Artigo id="art-58" numero="Art. 58" titulo="Transportes: Base de Cálculo (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original estabelecia como base de cálculo o preço do serviço, sem
                 qualquer dedução.
               </p>
@@ -1670,7 +1670,7 @@ export default function CtnPage() {
 
           <Artigo id="art-59" numero="Art. 59" titulo="Transportes: Alíquotas (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original atribuía ao Poder Executivo a competência para fixar e alterar
                 as alíquotas, atendendo às condições do mercado de transportes e comunicações.
               </p>
@@ -1691,7 +1691,7 @@ export default function CtnPage() {
 
           <Artigo id="art-60" numero="Art. 60" titulo="Transportes: Contribuinte (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original identificava como contribuinte do imposto o prestador dos
                 serviços de transporte e comunicações referidos no Art. 57.
               </p>
@@ -1712,7 +1712,7 @@ export default function CtnPage() {
 
           <Artigo id="art-61" numero="Art. 61" titulo="Transportes e Comunicações: Isenções (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original previa isenções específicas do imposto sobre transportes e
                 comunicações para determinadas operações realizadas por entidades públicas e para serviços
                 de radiodifusão de recepção gratuita destinados à educação e à cultura.
@@ -1734,7 +1734,7 @@ export default function CtnPage() {
 
           <Artigo id="art-62" numero="Art. 62" titulo="Transportes e Comunicações: Normas Complementares (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original atribuía ao Poder Executivo a competência para estabelecer
                 normas complementares sobre a aplicação do imposto, com possibilidade de distinção entre
                 categorias de serviços para fins de alíquota.
@@ -1917,7 +1917,7 @@ export default function CtnPage() {
 
           <Artigo id="art-68" numero="Art. 68" titulo="ICM: Fato Gerador (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original definia como fato gerador do ICM (Imposto sobre Circulação de
                 Mercadorias), de competência dos Estados e do Distrito Federal, a saída de mercadorias de
                 estabelecimento comercial, industrial ou produtor.
@@ -1945,7 +1945,7 @@ export default function CtnPage() {
 
           <Artigo id="art-69" numero="Art. 69" titulo="ICM: Não-Cumulatividade (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original consagrava a não-cumulatividade do ICM, determinando que o
                 montante devido em cada operação resultasse da diferença entre o imposto cobrado nas
                 saídas e o pago nas entradas de mercadorias.
@@ -1974,7 +1974,7 @@ export default function CtnPage() {
 
           <Artigo id="art-70" numero="Art. 70" titulo="ICM: Base de Cálculo (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original fixava como base de cálculo do ICM o valor da operação de
                 que decorresse a saída da mercadoria; na falta desse valor, o preço corrente da mercadoria
                 no mercado atacadista da praça do remetente.
@@ -1999,7 +1999,7 @@ export default function CtnPage() {
 
           <Artigo id="art-71" numero="Art. 71" titulo="ICM: Alíquotas (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original estabelecia que as alíquotas do ICM seriam fixadas em
                 resolução do Senado Federal, sendo uniformes em todo o território nacional para as
                 operações interestaduais, com liberdade dos estados para as operações internas dentro
@@ -2023,7 +2023,7 @@ export default function CtnPage() {
 
           <Artigo id="art-72" numero="Art. 72" titulo="ICM: Convênios de Isenção (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original exigia que as isenções do ICM fossem concedidas mediante
                 convênios entre os estados, vedando benefícios fiscais unilaterais que comprometessem
                 a uniformidade do imposto no mercado nacional.
@@ -2047,7 +2047,7 @@ export default function CtnPage() {
 
           <Artigo id="art-73" numero="Art. 73" titulo="ICM: Contribuinte (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original definia como contribuinte do ICM o comerciante, o industrial
                 e o produtor que realizasse operações com mercadorias tributadas, com habitualidade
                 e intuito comercial.
@@ -2071,7 +2071,7 @@ export default function CtnPage() {
 
           <Artigo id="art-74" numero="Art. 74" titulo="ICM: Solidariedade (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original estabelecia que eram solidariamente responsáveis pelo
                 pagamento do ICM os comerciantes, industriais e produtores que participassem de
                 operações irregulares ou inidôneas com mercadorias, independentemente de terem
@@ -2096,7 +2096,7 @@ export default function CtnPage() {
 
           <Artigo id="art-75" numero="Art. 75" titulo="ICM: Disposições Finais da Seção (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original encerrava o capítulo do ICM com disposições sobre o
                 cumprimento de obrigações acessórias, emissão de documentos fiscais e poderes dos
                 estados para regulamentação complementar do imposto dentro dos limites fixados em
@@ -2400,7 +2400,7 @@ export default function CtnPage() {
 
           <Artigo id="art-83" numero="Art. 83" titulo="Discriminação das Rendas Tributárias (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original fixava os critérios gerais para discriminação das rendas
                 tributárias entre a União, os Estados e os Municípios, estabelecendo a separação
                 exclusiva de fontes como método principal de partilha fiscal e vedando a tributação
@@ -2423,7 +2423,7 @@ export default function CtnPage() {
 
           <Artigo id="art-84" numero="Art. 84" titulo="Rendas Tributárias da União (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original relacionava as rendas tributárias da União, incluindo os
                 impostos e taxas de sua competência, e as transferências resultantes de fundos de
                 participação previstos na legislação então vigente.
@@ -2444,7 +2444,7 @@ export default function CtnPage() {
 
           <Artigo id="art-85" numero="Art. 85" titulo="Rendas Tributárias dos Estados (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original relacionava as rendas tributárias estaduais e suas
                 participações nas receitas federais, fixando regras de repasse de cotas dos
                 impostos federais arrecadados em cada estado.
@@ -2465,7 +2465,7 @@ export default function CtnPage() {
 
           <Artigo id="art-86" numero="Art. 86" titulo="Rendas Tributárias dos Municípios (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original estabelecia as rendas tributárias dos municípios,
                 incluindo os impostos de competência municipal e as cotas-parte de impostos
                 federais e estaduais a que os municípios faziam jus.
@@ -2486,7 +2486,7 @@ export default function CtnPage() {
 
           <Artigo id="art-87" numero="Art. 87" titulo="Adicional Estadual do IR (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original permitia aos estados instituir adicional do Imposto de
                 Renda sobre rendimentos de contribuintes domiciliados em seus territórios, como
                 mecanismo de ampliação da capacidade fiscal estadual dentro do modelo de
@@ -2510,7 +2510,7 @@ export default function CtnPage() {
 
           <Artigo id="art-88" numero="Art. 88" titulo="Partilha do ITBI entre Estados e Municípios (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original regulamentava a distribuição das receitas do imposto sobre
                 transmissão de bens imóveis entre estados e municípios, fixando critérios de
                 partilha com base na localização do bem transmitido.
@@ -2532,7 +2532,7 @@ export default function CtnPage() {
 
           <Artigo id="art-89" numero="Art. 89" titulo="Cota-Parte Municipal do ICM (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original estabelecia a participação dos municípios na arrecadação
                 do ICM pelos estados, fixando percentual mínimo de cota-parte distribuível com
                 base no valor adicionado fiscal gerado em cada município.
@@ -2554,7 +2554,7 @@ export default function CtnPage() {
 
           <Artigo id="art-90" numero="Art. 90" titulo="Repasse da Cota Municipal do ICM (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original fixava os prazos e formas de repasse pelos estados aos
                 municípios da respectiva cota-parte do ICM, incluindo penalidades aplicáveis ao
                 estado em caso de inadimplência no repasse.
@@ -2577,7 +2577,7 @@ export default function CtnPage() {
 
           <Artigo id="art-91" numero="Art. 91" titulo="Receitas de Combustíveis (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original regulamentava as transferências intergovernamentais
                 relacionadas aos impostos sobre combustíveis e lubrificantes, então de competência
                 estadual, fixando obrigatoriedade de aplicação das receitas em obras rodoviárias.
@@ -2599,7 +2599,7 @@ export default function CtnPage() {
 
           <Artigo id="art-92" numero="Art. 92" titulo="Receitas do IPI para os Estados (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original dispunha sobre as participações dos estados nas receitas
                 do imposto federal sobre a produção industrial, incluindo percentuais de repasse
                 proporcionais à exportação de produtos industrializados de cada estado.
@@ -2621,7 +2621,7 @@ export default function CtnPage() {
 
           <Artigo id="art-93" numero="Art. 93" titulo="ISS — Titularidade Municipal (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original estabelecia que o imposto sobre serviços de qualquer
                 natureza pertencia integralmente ao município, definindo como critério de competência
                 ativa o local onde o serviço fosse efetivamente prestado.
@@ -2644,7 +2644,7 @@ export default function CtnPage() {
 
           <Artigo id="art-94" numero="Art. 94" titulo="Fundos de Participação (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original dispunha sobre a constituição e o funcionamento dos fundos
                 de participação de estados e municípios, fixando os percentuais dos impostos federais
                 sobre a renda e sobre produtos industrializados destinados a esses fundos e os critérios
@@ -2667,7 +2667,7 @@ export default function CtnPage() {
 
           <Artigo id="art-95" numero="Art. 95" titulo="Fiscalização das Transferências (Revogado)">
             <LegalText>
-              <p className="italic text-gray-500 dark:text-gray-400">
+              <p className="italic text-muted-foreground">
                 Revogado. O texto original encerrava o Livro Primeiro do CTN com disposições sobre
                 a fiscalização do cumprimento das normas de discriminação e distribuição de rendas
                 tributárias, atribuindo ao Tribunal de Contas da União competência para examinar
@@ -6092,7 +6092,7 @@ export default function CtnPage() {
                 <strong>prova de quitação de todos os tributos</strong>, observado o disposto nos
                 arts. 151, 205 e 206 desta Lei.
               </p>
-              <p className="mt-3 text-xs text-gray-500 dark:text-gray-400 italic">
+              <p className="mt-3 text-xs text-muted-foreground italic">
                 Redação dada pela Lei Complementar nº 118, de 9 de fevereiro de 2005.
               </p>
             </LegalText>

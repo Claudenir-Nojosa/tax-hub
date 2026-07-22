@@ -54,18 +54,18 @@ export default function EfdImportPanel({ dadosEfd, onDadosEfd }: Props) {
       <div
         className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
           dragging
-            ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20"
-            : "border-gray-200 dark:border-gray-700 hover:border-blue-300"
+            ? "border-primary bg-primary/10"
+            : "border-border hover:border-primary/50"
         }`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); onFiles(e.dataTransfer.files) }}
       >
-        <FileText className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-        <p className="text-sm text-gray-500 mb-1">
+        <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+        <p className="text-sm text-muted-foreground mb-1">
           {loading ? "Processando..." : "Arraste o arquivo .txt do EFD ICMS IPI aqui"}
         </p>
-        <p className="text-xs text-gray-400 mb-3">Registros extraídos: C100, C190 e E110</p>
+        <p className="text-xs text-muted-foreground mb-3">Registros extraídos: C100, C190 e E110</p>
         <Button
           variant="outline"
           size="sm"
@@ -99,14 +99,14 @@ export default function EfdImportPanel({ dadosEfd, onDadosEfd }: Props) {
             EFD ICMS IPI importado
           </span>
           {dadosEfd.periodos.length > 0 && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-muted-foreground">
               — {dadosEfd.periodos.join(", ")}
             </span>
           )}
         </div>
         <button
           onClick={remover}
-          className="text-gray-400 hover:text-red-500 transition-colors"
+          className="text-muted-foreground hover:text-destructive transition-colors"
           title="Remover EFD"
         >
           <X className="h-4 w-4" />
@@ -119,30 +119,30 @@ export default function EfdImportPanel({ dadosEfd, onDadosEfd }: Props) {
 
       {/* Seção 1 — C190 Créditos */}
       <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
           Créditos — C190 Entradas
         </p>
         <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-2 text-center">
-            <p className="text-xs text-gray-500 mb-1">BC ICMS Entradas</p>
-            <p className="font-bold text-blue-700 dark:text-blue-400 text-sm">
+          <div className="rounded-md bg-primary/10 border border-primary/20 p-2 text-center">
+            <p className="text-xs text-muted-foreground mb-1">BC ICMS Entradas</p>
+            <p className="font-bold text-primary text-sm">
               {formatarMoeda(dadosEfd.bcICMSEntradas)}
             </p>
-            <p className="text-xs text-blue-500">base crédito IBS/CBS</p>
+            <p className="text-xs text-primary">base crédito IBS/CBS</p>
           </div>
-          <div className="rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-center">
-            <p className="text-xs text-gray-500 mb-1">Crédito ICMS atual</p>
+          <div className="rounded-md bg-card border border-border p-2 text-center">
+            <p className="text-xs text-muted-foreground mb-1">Crédito ICMS atual</p>
             <p className="font-semibold text-sm">{formatarMoeda(dadosEfd.icmsCreditoEntradas)}</p>
           </div>
-          <div className="rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-center">
-            <p className="text-xs text-gray-500 mb-1">Alíq. média entradas</p>
+          <div className="rounded-md bg-card border border-border p-2 text-center">
+            <p className="text-xs text-muted-foreground mb-1">Alíq. média entradas</p>
             <p className="font-semibold text-sm">{formatarPorcentagem(dadosEfd.aliquotaMediaEntradas, 2)}</p>
           </div>
         </div>
 
         {/* Toggle tabela C190 */}
         <button
-          className="mt-2 flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
+          className="mt-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           onClick={() => setShowC190((v) => !v)}
         >
           {showC190 ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -151,20 +151,20 @@ export default function EfdImportPanel({ dadosEfd, onDadosEfd }: Props) {
         {showC190 && (
           <div className="mt-2 overflow-x-auto max-h-48 overflow-y-auto">
             <table className="w-full text-xs border-collapse">
-              <thead className="sticky top-0 bg-gray-50 dark:bg-gray-800">
-                <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left py-1 pr-2 font-medium text-gray-500">Tipo</th>
-                  <th className="text-left py-1 px-2 font-medium text-gray-500">CFOP</th>
-                  <th className="text-left py-1 px-2 font-medium text-gray-500">CST</th>
-                  <th className="text-right py-1 px-2 font-medium text-gray-500">Alíq.</th>
-                  <th className="text-right py-1 px-2 font-medium text-gray-500">VL OPR</th>
-                  <th className="text-right py-1 px-2 font-medium text-gray-500">BC ICMS</th>
-                  <th className="text-right py-1 pl-2 font-medium text-gray-500">ICMS</th>
+              <thead className="sticky top-0 bg-muted">
+                <tr className="border-b border-border">
+                  <th className="text-left py-1 pr-2 font-medium text-muted-foreground">Tipo</th>
+                  <th className="text-left py-1 px-2 font-medium text-muted-foreground">CFOP</th>
+                  <th className="text-left py-1 px-2 font-medium text-muted-foreground">CST</th>
+                  <th className="text-right py-1 px-2 font-medium text-muted-foreground">Alíq.</th>
+                  <th className="text-right py-1 px-2 font-medium text-muted-foreground">VL OPR</th>
+                  <th className="text-right py-1 px-2 font-medium text-muted-foreground">BC ICMS</th>
+                  <th className="text-right py-1 pl-2 font-medium text-muted-foreground">ICMS</th>
                 </tr>
               </thead>
               <tbody>
                 {[...dadosEfd.c190Entradas, ...dadosEfd.c190Saidas].map((r, i) => (
-                  <tr key={i} className="border-b border-gray-100 dark:border-gray-800">
+                  <tr key={i} className="border-b border-border">
                     <td className={`py-1 pr-2 font-medium ${r.tipoOperacao === "entrada" ? "text-green-600" : "text-orange-500"}`}>
                       {r.tipoOperacao === "entrada" ? "Ent" : "Saí"}
                     </td>
@@ -185,19 +185,19 @@ export default function EfdImportPanel({ dadosEfd, onDadosEfd }: Props) {
       {/* Seção 2 — C100 Documentos */}
       {(dadosEfd.totalDocumentosEntrada > 0 || dadosEfd.totalDocumentosSaida > 0) && (
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
             Documentos — C100
           </p>
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-center">
-              <p className="text-xs text-gray-500 mb-1">NFs Entrada</p>
+            <div className="rounded-md bg-card border border-border p-2 text-center">
+              <p className="text-xs text-muted-foreground mb-1">NFs Entrada</p>
               <p className="font-semibold text-sm">{dadosEfd.totalDocumentosEntrada}</p>
-              <p className="text-xs text-gray-400">{formatarMoeda(dadosEfd.totalEntradasVlOpr)}</p>
+              <p className="text-xs text-muted-foreground">{formatarMoeda(dadosEfd.totalEntradasVlOpr)}</p>
             </div>
-            <div className="rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-center">
-              <p className="text-xs text-gray-500 mb-1">NFs Saída</p>
+            <div className="rounded-md bg-card border border-border p-2 text-center">
+              <p className="text-xs text-muted-foreground mb-1">NFs Saída</p>
               <p className="font-semibold text-sm">{dadosEfd.totalDocumentosSaida}</p>
-              <p className="text-xs text-gray-400">{formatarMoeda(dadosEfd.totalSaidasVlOpr)}</p>
+              <p className="text-xs text-muted-foreground">{formatarMoeda(dadosEfd.totalSaidasVlOpr)}</p>
             </div>
           </div>
         </div>
@@ -206,16 +206,16 @@ export default function EfdImportPanel({ dadosEfd, onDadosEfd }: Props) {
       {/* Seção 3 — E110 Apuração */}
       {apuracaoICMS && (
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
             Apuração ICMS — E110
           </p>
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-center">
-              <p className="text-xs text-gray-500 mb-1">Total Débitos</p>
+            <div className="rounded-md bg-card border border-border p-2 text-center">
+              <p className="text-xs text-muted-foreground mb-1">Total Débitos</p>
               <p className="font-semibold text-sm text-red-600">{formatarMoeda(apuracaoICMS.vlTotDebitos)}</p>
             </div>
-            <div className="rounded-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 text-center">
-              <p className="text-xs text-gray-500 mb-1">Total Créditos</p>
+            <div className="rounded-md bg-card border border-border p-2 text-center">
+              <p className="text-xs text-muted-foreground mb-1">Total Créditos</p>
               <p className="font-semibold text-sm text-green-600">{formatarMoeda(apuracaoICMS.vlTotCreditos)}</p>
             </div>
           </div>
@@ -235,7 +235,7 @@ export default function EfdImportPanel({ dadosEfd, onDadosEfd }: Props) {
                 <p className="font-bold text-green-700 dark:text-green-400">{formatarMoeda(apuracaoICMS.vlSldCredorTransp)}</p>
               </>
             ) : (
-              <p className="text-xs text-gray-500">Sem saldo a recolher ou transportar</p>
+              <p className="text-xs text-muted-foreground">Sem saldo a recolher ou transportar</p>
             )}
           </div>
         </div>

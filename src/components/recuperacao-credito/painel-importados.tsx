@@ -36,7 +36,7 @@ export function ListaArquivosColapsavel({
   const tamanhoTotal = arquivos.reduce((s, a) => s + a.size, 0);
 
   return (
-    <div className="rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+    <div className="rounded-lg border border-border bg-muted">
       <button
         type="button"
         onClick={() => setAberto((v) => !v)}
@@ -46,14 +46,14 @@ export function ListaArquivosColapsavel({
           <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-900 dark:text-white">
+          <p className="text-sm font-medium text-foreground">
             {arquivos.length} {arquivos.length === 1 ? "arquivo carregado" : "arquivos carregados"}
           </p>
-          <p className="text-xs text-gray-400">{formatBytes(tamanhoTotal)} no total</p>
+          <p className="text-xs text-muted-foreground">{formatBytes(tamanhoTotal)} no total</p>
         </div>
         <ChevronDown
           className={cn(
-            "h-4 w-4 text-gray-400 transition-transform group-hover:text-gray-600 dark:group-hover:text-gray-300 flex-shrink-0",
+            "h-4 w-4 text-muted-foreground transition-transform group-hover:text-foreground flex-shrink-0",
             !aberto && "-rotate-90"
           )}
         />
@@ -63,19 +63,19 @@ export function ListaArquivosColapsavel({
           {arquivos.map((a) => (
             <div
               key={a.id}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg border border-border bg-card"
             >
               {ehPdfOuEfd(a.name) ? (
-                <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               ) : (
-                <FileSpreadsheet className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                <FileSpreadsheet className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               )}
-              <p className="flex-1 min-w-0 text-sm text-gray-700 dark:text-gray-200 truncate">{a.name}</p>
-              <p className="text-xs text-gray-400 flex-shrink-0">{formatBytes(a.size)}</p>
+              <p className="flex-1 min-w-0 text-sm text-foreground truncate">{a.name}</p>
+              <p className="text-xs text-muted-foreground flex-shrink-0">{formatBytes(a.size)}</p>
               <button
                 type="button"
                 onClick={() => onRemover(a.id)}
-                className="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 transition-colors flex-shrink-0"
+                className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -104,7 +104,7 @@ export function SecaoColapsavel({
 }) {
   const [aberto, setAberto] = useState(defaultAberto);
   return (
-    <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
+    <div className="pt-2 border-t border-border">
       <div className="flex items-center justify-between px-1">
         <button
           type="button"
@@ -113,14 +113,14 @@ export function SecaoColapsavel({
         >
           <ChevronDown
             className={cn(
-              "h-4 w-4 text-gray-400 transition-transform group-hover:text-gray-600 dark:group-hover:text-gray-300",
+              "h-4 w-4 text-muted-foreground transition-transform group-hover:text-foreground",
               !aberto && "-rotate-90"
             )}
           />
-          <span className="text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
             {titulo}
           </span>
-          {resumo && <span className="text-xs text-gray-400 normal-case tracking-normal">· {resumo}</span>}
+          {resumo && <span className="text-xs text-muted-foreground normal-case tracking-normal">· {resumo}</span>}
         </button>
         {acaoDireita}
       </div>
@@ -141,13 +141,13 @@ function TooltipCustom({ active, payload, label }: { active?: boolean; payload?:
   if (!active || !payload?.length) return null;
   const itens = payload as { name: string; value: number; color: string }[];
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 shadow-lg text-xs">
-      <p className="font-semibold text-gray-900 dark:text-white mb-1">{label}</p>
+    <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-lg text-xs">
+      <p className="font-semibold text-foreground mb-1">{label}</p>
       {itens.map((it) => (
         <div key={it.name} className="flex items-center gap-2">
           <span className="inline-block h-2 w-2 rounded-sm" style={{ background: it.color }} />
-          <span className="text-gray-500 dark:text-gray-400">{it.name}:</span>
-          <span className="font-medium text-gray-900 dark:text-white ml-auto">{brlCompacto(it.value)}</span>
+          <span className="text-muted-foreground">{it.name}:</span>
+          <span className="font-medium text-foreground ml-auto">{brlCompacto(it.value)}</span>
         </div>
       ))}
     </div>

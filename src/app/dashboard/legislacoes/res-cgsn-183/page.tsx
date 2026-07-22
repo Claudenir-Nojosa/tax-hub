@@ -38,7 +38,7 @@ const tocEntries = [
 
 function LegalText({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-lg bg-gray-50 dark:bg-gray-900/60 border-l-4 border-gray-300 dark:border-gray-700 px-5 py-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+    <div className="rounded-lg bg-muted border-l-4 border-border px-5 py-4 text-sm text-foreground leading-relaxed">
       {children}
     </div>
   );
@@ -46,8 +46,8 @@ function LegalText({ children }: { children: React.ReactNode }) {
 
 function Comentario({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-4 rounded-lg bg-blue-50 dark:bg-blue-950/30 border-l-4 border-[#007cca] px-5 py-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-      <p className="text-xs font-semibold uppercase tracking-wider text-[#007cca] mb-3">
+    <div className="mt-4 rounded-lg bg-primary/10 border-l-4 border-primary px-5 py-4 text-sm text-foreground leading-relaxed">
+      <p className="text-xs font-semibold uppercase tracking-wider text-primary mb-3">
         💬 Meu comentário
       </p>
       {children}
@@ -61,10 +61,10 @@ function Artigo({
   id: string; numero: string; titulo: string; children: React.ReactNode;
 }) {
   return (
-    <div id={id} className="scroll-mt-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-4">
+    <div id={id} className="scroll-mt-4 rounded-xl border border-border bg-card p-6 space-y-4">
       <div>
-        <span className="text-xs font-bold uppercase tracking-wider text-[#007cca]">{numero}</span>
-        <h3 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{titulo}</h3>
+        <span className="text-xs font-bold uppercase tracking-wider text-primary">{numero}</span>
+        <h3 className="mt-1 text-lg font-semibold text-foreground">{titulo}</h3>
       </div>
       {children}
     </div>
@@ -74,9 +74,9 @@ function Artigo({
 function Secao({ id, titulo, subtitulo }: { id: string; titulo: string; subtitulo?: string }) {
   return (
     <div id={id} className="scroll-mt-4 pt-4">
-      <div className="border-b border-gray-200 dark:border-gray-800 pb-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-[#007cca]">{titulo}</p>
-        {subtitulo && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{subtitulo}</p>}
+      <div className="border-b border-border pb-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-primary">{titulo}</p>
+        {subtitulo && <p className="mt-1 text-xs text-muted-foreground">{subtitulo}</p>}
       </div>
     </div>
   );
@@ -94,7 +94,7 @@ function TableOfContents({ activeId }: { activeId: string }) {
 
   return (
     <nav ref={navRef} className="text-sm space-y-0.5">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 px-2">Índice</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3 px-2">Índice</p>
       {tocEntries.map((entry) => {
         const isActive = activeId === entry.id;
         return (
@@ -103,12 +103,12 @@ function TableOfContents({ activeId }: { activeId: string }) {
             href={`#${entry.id}`}
             className={[
               "block rounded-lg transition-all duration-150 leading-snug",
-              entry.level === 0 ? "px-2 py-1.5 font-semibold text-[13px] text-gray-800 dark:text-gray-100" : "",
-              entry.level === 1 ? "pl-4 pr-2 py-1.5 font-medium text-[12px] text-gray-600 dark:text-gray-400" : "",
-              entry.level === 2 ? "pl-6 pr-2 py-1 text-[12px] text-gray-500 dark:text-gray-500" : "",
+              entry.level === 0 ? "px-2 py-1.5 font-semibold text-[13px] text-foreground" : "",
+              entry.level === 1 ? "pl-4 pr-2 py-1.5 font-medium text-[12px] text-muted-foreground" : "",
+              entry.level === 2 ? "pl-6 pr-2 py-1 text-[12px] text-muted-foreground" : "",
               isActive
-                ? "!text-[#007cca] bg-blue-50 dark:bg-blue-950/50 font-medium"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-gray-200",
+                ? "!text-primary bg-primary/10 font-medium"
+                : "hover:bg-accent hover:text-accent-foreground",
             ].filter(Boolean).join(" ")}
           >
             {entry.label}
@@ -172,7 +172,7 @@ export default function ResCgsn183Page() {
       <div className="flex gap-8 items-start">
 
         {/* TOC lateral */}
-        <aside className="hidden xl:block w-64 flex-shrink-0 sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+        <aside className="hidden xl:block w-64 flex-shrink-0 sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
           <TableOfContents activeId={activeId} />
         </aside>
 
@@ -180,10 +180,10 @@ export default function ResCgsn183Page() {
         <div className="flex-1 min-w-0 space-y-6">
 
           {/* Identificação */}
-          <div id="intro" className="scroll-mt-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#007cca]">Identificação</span>
-            <h3 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white mb-4">Resolução CGSN nº 183, de 26 de setembro de 2025</h3>
-            <div className="text-sm text-gray-700 dark:text-gray-300 space-y-3 leading-relaxed">
+          <div id="intro" className="scroll-mt-4 rounded-xl border border-border bg-card p-6">
+            <span className="text-xs font-bold uppercase tracking-wider text-primary">Identificação</span>
+            <h3 className="mt-1 text-lg font-semibold text-foreground mb-4">Resolução CGSN nº 183, de 26 de setembro de 2025</h3>
+            <div className="text-sm text-foreground space-y-3 leading-relaxed">
               <p>
                 <strong>Ementa:</strong> Altera a Resolução CGSN nº 140, de 22 de maio de 2018, que dispõe sobre o
                 Regime Especial Unificado de Arrecadação de Tributos e Contribuições devidos pelas Microempresas e
@@ -198,7 +198,7 @@ export default function ResCgsn183Page() {
                 <strong>Signatária:</strong> Adriana Gomes Rego — Vice-Presidente do Comitê Gestor do Simples Nacional.
               </p>
             </div>
-            <div className="mt-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border-l-4 border-amber-400 px-5 py-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+            <div className="mt-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border-l-4 border-amber-400 px-5 py-4 text-sm text-foreground leading-relaxed">
               <p className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2">⚠️ Contexto Geral</p>
               <p>
                 A Resolução CGSN nº 183/2025 é a primeira grande atualização da Resolução CGSN nº 140/2018 para

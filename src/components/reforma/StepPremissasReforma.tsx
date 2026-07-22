@@ -59,8 +59,8 @@ export default function StepPremissasReforma({ data, onChange, onBack, onNext }:
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Premissas de alíquota</h3>
-        <p className="text-xs text-gray-500 mt-1">
+        <h3 className="text-sm font-semibold text-foreground">Premissas de alíquota</h3>
+        <p className="text-xs text-muted-foreground mt-1">
           Alíquotas padrão da transição IBS/CBS (LC 214/2025). Ajuste por ano se o cliente tiver uma
           premissa específica; senão mantenha os valores padrão. A alíquota de ISS não vem do EFD
           Contribuições — informe-a aqui, é ela que será usada no gross-up das notas de serviço.
@@ -80,7 +80,7 @@ export default function StepPremissasReforma({ data, onChange, onBack, onNext }:
               onCheckedChange={(v) => onChange({ ...data, reducao60: v })}
             />
           </div>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted-foreground">
             LC 214/2025, art. 133 — medicamentos registrados na Anvisa ou produzidos por farmácia de
             manipulação. Aplica-se apenas ao <strong>débito</strong> (IBS/CBS das saídas); o crédito das
             entradas permanece integral. Só marque se a atividade do cliente realmente se enquadrar
@@ -89,10 +89,10 @@ export default function StepPremissasReforma({ data, onChange, onBack, onNext }:
         </div>
       </div>
 
-      <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between gap-4">
+      <div className="rounded-lg border border-border p-4 flex items-center justify-between gap-4">
         <div>
           <Label htmlFor="aliquotaIcms" className="text-sm font-medium">Alíquota ICMS padrão (%)</Label>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Alíquota modal do estado do cliente (ex: 22,5% no Piauí). Usada como premissa constante
             na coluna Alíquota ICMS de todas as linhas de mercadoria das abas de ano.
           </p>
@@ -107,23 +107,23 @@ export default function StepPremissasReforma({ data, onChange, onBack, onNext }:
         />
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-xs">
-          <thead className="bg-gray-50 dark:bg-gray-800">
+          <thead className="bg-muted">
             <tr>
-              <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400">Ano</th>
-              <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-400">CBS</th>
-              <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-400">IBS UF</th>
-              <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-400">IBS Mun</th>
-              <th className="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-400">ISS (%)</th>
+              <th className="px-3 py-2 text-left font-medium text-muted-foreground">Ano</th>
+              <th className="px-3 py-2 text-right font-medium text-muted-foreground">CBS</th>
+              <th className="px-3 py-2 text-right font-medium text-muted-foreground">IBS UF</th>
+              <th className="px-3 py-2 text-right font-medium text-muted-foreground">IBS Mun</th>
+              <th className="px-3 py-2 text-right font-medium text-muted-foreground">ISS (%)</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+          <tbody className="divide-y divide-border">
             {ANOS_TRANSICAO.map((ano) => {
               const p = data.premissasPorAno[ano]
               return (
                 <tr key={ano}>
-                  <td className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300">{ano}</td>
+                  <td className="px-3 py-2 font-medium text-foreground">{ano}</td>
                   <td className="px-3 py-2 text-right">
                     <Input
                       type="number"
@@ -169,7 +169,7 @@ export default function StepPremissasReforma({ data, onChange, onBack, onNext }:
 
       <div className="flex justify-between">
         <Button variant="outline" onClick={onBack}>← Voltar</Button>
-        <Button onClick={onNext} className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button onClick={onNext} className="bg-primary hover:bg-primary/90 text-primary-foreground">
           Próximo: Legislação →
         </Button>
       </div>

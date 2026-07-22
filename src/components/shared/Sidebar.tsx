@@ -84,10 +84,10 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
   return (
     <div
-      className={`flex flex-col h-full bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 border-r border-gray-200 dark:border-gray-800 shadow-lg dark:shadow-none transition-all duration-300 ${isCollapsed ? "w-20" : "w-64"}`}
+      className={`flex flex-col h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-all duration-300 ${isCollapsed ? "w-20" : "w-64"}`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
+      <div className="flex items-center justify-between p-4">
         {!isCollapsed && (
           <div className="flex items-center">
             <Image
@@ -113,7 +113,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="lg:hidden hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 h-10 w-10"
+            className="lg:hidden hover:bg-sidebar-accent text-sidebar-foreground hover:text-sidebar-accent-foreground h-10 w-10"
           >
             <X className="h-5 w-5" />
           </Button>
@@ -121,7 +121,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
             variant="ghost"
             size="icon"
             onClick={toggleSidebar}
-            className="hidden lg:flex hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 h-10 w-10"
+            className="hidden lg:flex hover:bg-sidebar-accent text-sidebar-foreground hover:text-sidebar-accent-foreground h-10 w-10"
           >
             <Menu className="h-5 w-5" />
           </Button>
@@ -130,7 +130,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
       {/* Ícone quando colapsado */}
       {isCollapsed && (
-        <div className="flex items-center justify-center py-4 border-b border-gray-200 dark:border-gray-800">
+        <div className="flex items-center justify-center py-4">
           <Image
             src="/icons/taxhub_icone_claro_transparente.png"
             alt="TAX Hub"
@@ -151,7 +151,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
       )}
 
       {/* Nav */}
-      <nav className="flex-1 p-4 overflow-y-auto">
+      <nav className="flex-1 px-3 py-2 overflow-y-auto">
         <ul className="space-y-1">
         {[
   { href: "/dashboard", label: "Início", icon: Home },
@@ -161,46 +161,53 @@ export default function Sidebar({ onClose }: SidebarProps) {
   { href: "/dashboard/recuperacao-credito", label: "Recuperação", icon: FileSearch },
   { href: "/dashboard/estudo", label: "Estudo", icon: GraduationCap },
   { href: "/dashboard/reforma-tributaria", label: "Reforma Tributária", icon: Scale },
-].map((item) => (
+].map((item) => {
+  const active = isActiveRoute(item.href);
+  return (
   <li key={item.href}>
     <Link
       href={createLink(item.href)}
-      className={`flex items-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 transition-all duration-200 ${isCollapsed ? "justify-center p-4" : "p-4"} ${isActiveRoute(item.href) ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white border-l-2 border-gray-300 dark:border-gray-700" : ""}`}
+      className={`flex items-center rounded-xl transition-all duration-200 ${isCollapsed ? "justify-center p-3.5" : "px-3.5 py-3"} ${
+        active
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+      }`}
       onClick={handleLinkClick}
     >
-      <item.icon className="h-5 w-5" />
+      <item.icon className={`h-5 w-5 flex-shrink-0 ${active ? "text-sidebar-primary" : ""}`} />
       {!isCollapsed && (
-        <span className="ml-4 text-sm font-medium">{item.label}</span>
+        <span className="ml-3 text-sm font-medium truncate">{item.label}</span>
       )}
     </Link>
   </li>
-))}
+  );
+})}
         </ul>
       </nav>
 
       {/* Usuário */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-3">
+      <div className="p-3 space-y-2">
         <Link
           href={createLink("/dashboard/perfil")}
-          className={`flex items-center rounded-lg p-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 cursor-pointer ${isCollapsed ? "justify-center" : ""}`}
+          className={`flex items-center rounded-xl p-3 hover:bg-sidebar-accent/60 transition-all duration-200 cursor-pointer ${isCollapsed ? "justify-center" : ""}`}
           onClick={handleLinkClick}
         >
-          <Avatar className="h-8 w-8 flex-shrink-0">
+          <Avatar className="h-8 w-8 flex-shrink-0 ring-2 ring-sidebar-primary/30">
             <AvatarImage
               src={session?.user?.image || ""}
               alt={session?.user?.name || "Usuário"}
               className="object-cover"
             />
-            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-cyan-500 text-white text-sm">
+            <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-sm font-semibold">
               {getInitials(session?.user?.name)}
             </AvatarFallback>
           </Avatar>
           {!isCollapsed && (
             <div className="ml-3 min-w-0 flex-1">
-              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+              <p className="text-sm font-medium text-foreground truncate">
                 {session?.user?.name}
               </p>
-              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+              <p className="text-xs text-sidebar-foreground/70 truncate">
                 {session?.user?.email}
               </p>
             </div>

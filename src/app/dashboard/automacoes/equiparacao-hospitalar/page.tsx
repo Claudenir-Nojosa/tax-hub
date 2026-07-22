@@ -45,8 +45,8 @@ type Etapa = "idle" | "lendo" | "classificando" | "concluido";
 const OPORTUNIDADE_CONFIG = {
   Sim: { label: "Sim", icon: CheckCircle2, className: "text-emerald-600 dark:text-emerald-400" },
   Meio: { label: "Meio", icon: MinusCircle, className: "text-amber-600 dark:text-amber-400" },
-  Dúvida: { label: "Dúvida", icon: HelpCircle, className: "text-blue-600 dark:text-blue-400" },
-  Não: { label: "Não", icon: XCircle, className: "text-gray-400 dark:text-gray-500" },
+  Dúvida: { label: "Dúvida", icon: HelpCircle, className: "text-primary dark:text-primary" },
+  Não: { label: "Não", icon: XCircle, className: "text-muted-foreground" },
 } as const;
 
 export default function EquiparacaoHospitalarPage() {
@@ -155,8 +155,8 @@ export default function EquiparacaoHospitalarPage() {
           <HeartPulse className="h-5 w-5 text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Conferência de Equiparação Hospitalar</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <h1 className="text-2xl font-bold text-foreground">Conferência de Equiparação Hospitalar</h1>
+          <p className="text-sm text-muted-foreground">
             Importe os XMLs de NFS-e — a IA analisa a descrição de cada serviço e identifica oportunidade de
             equiparação hospitalar (redução de IRPJ/CSLL no lucro presumido).
           </p>
@@ -164,7 +164,7 @@ export default function EquiparacaoHospitalarPage() {
       </div>
 
       {etapa !== "concluido" && (
-        <Card className="border-gray-200 dark:border-gray-800">
+        <Card className="border-border">
           <CardHeader className="pb-4">
             <CardTitle className="text-base">Arquivos XML</CardTitle>
             <CardDescription className="text-xs">
@@ -182,14 +182,14 @@ export default function EquiparacaoHospitalarPage() {
               } ${
                 isDragging
                   ? "border-rose-400 bg-rose-50 dark:bg-rose-950/20"
-                  : "border-gray-200 dark:border-gray-700 hover:border-rose-300 dark:hover:border-rose-800"
+                  : "border-border hover:border-rose-300 dark:hover:border-rose-800"
               }`}
             >
-              <Upload className="h-6 w-6 text-gray-400 mb-2" />
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 text-center">
+              <Upload className="h-6 w-6 text-muted-foreground mb-2" />
+              <p className="text-sm font-medium text-foreground text-center">
                 Clique ou arraste os XMLs aqui
               </p>
-              <p className="text-xs text-gray-400 mt-1">.xml · .zip — sem limite de quantidade</p>
+              <p className="text-xs text-muted-foreground mt-1">.xml · .zip — sem limite de quantidade</p>
               <input
                 ref={inputRef}
                 type="file"
@@ -203,26 +203,26 @@ export default function EquiparacaoHospitalarPage() {
 
             {arquivos.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">
                   {arquivos.length} arquivo{arquivos.length > 1 ? "s" : ""} carregado{arquivos.length > 1 ? "s" : ""}
                 </p>
                 {arquivos.map((a) => (
                   <div
                     key={a.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50"
+                    className="flex items-center gap-3 p-3 rounded-lg border border-border dark:border-border bg-muted/50"
                   >
                     <div className="w-9 h-9 rounded-lg bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center flex-shrink-0">
                       <FileText className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{a.name}</p>
-                      <p className="text-xs text-gray-400">{formatBytes(a.size)}</p>
+                      <p className="text-sm font-medium text-foreground truncate">{a.name}</p>
+                      <p className="text-xs text-muted-foreground">{formatBytes(a.size)}</p>
                     </div>
                     {!processando && (
                       <button
                         type="button"
                         onClick={() => removerArquivo(a.id)}
-                        className="text-gray-300 dark:text-gray-600 hover:text-red-500 flex-shrink-0"
+                        className="text-muted-foreground dark:text-muted-foreground hover:text-red-500 flex-shrink-0"
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -234,7 +234,7 @@ export default function EquiparacaoHospitalarPage() {
 
             {processando && (
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     {etapa === "lendo"
@@ -262,7 +262,7 @@ export default function EquiparacaoHospitalarPage() {
       {etapa === "concluido" && resultado && contagem && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500 dark:text-gray-400">{resultado.length} notas analisadas</p>
+            <p className="text-sm text-muted-foreground">{resultado.length} notas analisadas</p>
             <Button variant="outline" size="sm" onClick={handleReset}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Nova análise
@@ -273,11 +273,11 @@ export default function EquiparacaoHospitalarPage() {
             {(Object.keys(OPORTUNIDADE_CONFIG) as (keyof typeof OPORTUNIDADE_CONFIG)[]).map((key) => {
               const cfg = OPORTUNIDADE_CONFIG[key];
               return (
-                <Card key={key} className="border-gray-200 dark:border-gray-800">
+                <Card key={key} className="border-border">
                   <CardContent className="pt-5 pb-4 text-center">
                     <cfg.icon className={`h-5 w-5 mx-auto mb-1.5 ${cfg.className}`} />
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{contagem[key]}</p>
-                    <p className="text-xs text-gray-400">{cfg.label}</p>
+                    <p className="text-2xl font-bold text-foreground">{contagem[key]}</p>
+                    <p className="text-xs text-muted-foreground">{cfg.label}</p>
                   </CardContent>
                 </Card>
               );
@@ -307,7 +307,7 @@ export default function EquiparacaoHospitalarPage() {
             </Button>
           </div>
 
-          <p className="text-xs text-gray-400 text-center">
+          <p className="text-xs text-muted-foreground text-center">
             * A classificação é feita por IA com base nas regras de equiparação hospitalar e deve ser validada por um
             profissional antes de qualquer decisão fiscal.
           </p>

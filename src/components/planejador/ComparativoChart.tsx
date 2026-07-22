@@ -51,24 +51,24 @@ const CustomTooltip = ({
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-xl">
-        <p className="font-semibold text-gray-900 dark:text-white mb-2">
+      <div className="bg-card border border-border rounded-xl p-4 shadow-xl">
+        <p className="font-semibold text-foreground mb-2">
           {label}
         </p>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
+        <p className="text-sm text-muted-foreground">
           Carga tributária:{" "}
-          <span className="font-bold text-gray-900 dark:text-white">
+          <span className="font-bold text-foreground">
             {data.cargaPercentual.toFixed(1)}%
           </span>
         </p>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
+        <p className="text-sm text-muted-foreground">
           Total anual:{" "}
-          <span className="font-bold text-gray-900 dark:text-white">
+          <span className="font-bold text-foreground">
             {formatCurrency(data.totalAnual)}
           </span>
         </p>
         {!data.elegivel && (
-          <p className="text-xs text-red-500 mt-1">* Empresa não elegível</p>
+          <p className="text-xs text-destructive mt-1">* Empresa não elegível</p>
         )}
       </div>
     );
@@ -102,12 +102,12 @@ export default function ComparativoChart({
           <XAxis
             dataKey="name"
             tick={{ fontSize: 13, fill: "currentColor" }}
-            className="text-gray-600 dark:text-gray-400"
+            className="text-muted-foreground"
           />
           <YAxis
             tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`}
             tick={{ fontSize: 12, fill: "currentColor" }}
-            className="text-gray-500 dark:text-gray-500"
+            className="text-muted-foreground"
           />
           <Tooltip content={<CustomTooltip />} />
           <Bar dataKey="value" radius={[8, 8, 0, 0]}>
@@ -127,7 +127,7 @@ export default function ComparativoChart({
               position="top"
               formatter={(v: number) => `${v.toFixed(1)}%`}
               style={{ fontSize: 12, fontWeight: 600, fill: "currentColor" }}
-              className="text-gray-700 dark:text-gray-300"
+              className="text-foreground"
             />
           </Bar>
         </BarChart>
@@ -144,7 +144,7 @@ export default function ComparativoChart({
                 opacity: r.elegivel ? 1 : 0.4,
               }}
             />
-            <span className="text-xs text-gray-600 dark:text-gray-400">
+            <span className="text-xs text-muted-foreground">
               {r.label}
               {r.regime === regimeRecomendado && (
                 <span className="ml-1 text-green-600 dark:text-green-400 font-semibold">
@@ -152,7 +152,7 @@ export default function ComparativoChart({
                 </span>
               )}
               {r.regime === regimeAtual && r.regime !== regimeRecomendado && (
-                <span className="ml-1 text-gray-400">(atual)</span>
+                <span className="ml-1 text-muted-foreground">(atual)</span>
               )}
             </span>
           </div>

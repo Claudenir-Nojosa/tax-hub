@@ -31,9 +31,9 @@ function inline(texto: string): React.ReactNode[] {
     if (m.index > ultimo) partes.push(texto.slice(ultimo, m.index));
     const bruto = m[0];
     if (bruto.startsWith("**")) {
-      partes.push(<strong key={key++} className="font-semibold text-gray-900 dark:text-white">{bruto.slice(2, -2)}</strong>);
+      partes.push(<strong key={key++} className="font-semibold text-foreground">{bruto.slice(2, -2)}</strong>);
     } else {
-      partes.push(<em key={key++} className="text-gray-600 dark:text-gray-300">{bruto.slice(1, -1)}</em>);
+      partes.push(<em key={key++} className="text-foreground">{bruto.slice(1, -1)}</em>);
     }
     ultimo = m.index + bruto.length;
   }
@@ -49,36 +49,36 @@ function MarkdownLeve({ conteudo }: { conteudo: string }) {
     const t = linha.trim();
     if (!t) continue;
     if (t.startsWith("### ")) {
-      blocos.push(<h4 key={key++} className="text-sm font-bold text-gray-900 dark:text-white mt-4 mb-1.5">{inline(t.slice(4))}</h4>);
+      blocos.push(<h4 key={key++} className="text-sm font-bold text-foreground mt-4 mb-1.5">{inline(t.slice(4))}</h4>);
     } else if (t.startsWith("## ")) {
       blocos.push(
-        <h3 key={key++} className="text-base font-bold text-gray-900 dark:text-white mt-5 mb-2 pb-1 border-b border-gray-100 dark:border-gray-700">
+        <h3 key={key++} className="text-base font-bold text-foreground mt-5 mb-2 pb-1 border-b border-border dark:border-border">
           {inline(t.slice(3))}
         </h3>
       );
     } else if (t.startsWith("# ")) {
-      blocos.push(<h3 key={key++} className="text-base font-bold text-gray-900 dark:text-white mt-5 mb-2">{inline(t.slice(2))}</h3>);
+      blocos.push(<h3 key={key++} className="text-base font-bold text-foreground mt-5 mb-2">{inline(t.slice(2))}</h3>);
     } else if (/^[-*•] /.test(t)) {
       blocos.push(
-        <div key={key++} className="flex gap-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed pl-1 mb-1">
-          <span className="text-blue-400 flex-shrink-0">•</span>
+        <div key={key++} className="flex gap-2 text-sm text-foreground leading-relaxed pl-1 mb-1">
+          <span className="text-primary flex-shrink-0">•</span>
           <span>{inline(t.slice(2))}</span>
         </div>
       );
     } else if (/^\d+[.)] /.test(t)) {
       const num = t.match(/^(\d+)[.)] /)![1];
       blocos.push(
-        <div key={key++} className="flex gap-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed pl-1 mb-1">
-          <span className="text-blue-400 flex-shrink-0 font-semibold">{num}.</span>
+        <div key={key++} className="flex gap-2 text-sm text-foreground leading-relaxed pl-1 mb-1">
+          <span className="text-primary flex-shrink-0 font-semibold">{num}.</span>
           <span>{inline(t.replace(/^\d+[.)] /, ""))}</span>
         </div>
       );
     } else if (t.startsWith("> ")) {
       blocos.push(
-        <p key={key++} className="text-sm text-gray-600 dark:text-gray-400 border-l-2 border-blue-300 pl-3 my-1.5 italic">{inline(t.slice(2))}</p>
+        <p key={key++} className="text-sm text-muted-foreground border-l-2 border-primary/40 pl-3 my-1.5 italic">{inline(t.slice(2))}</p>
       );
     } else {
-      blocos.push(<p key={key++} className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-1.5">{inline(t)}</p>);
+      blocos.push(<p key={key++} className="text-sm text-foreground leading-relaxed mb-1.5">{inline(t)}</p>);
     }
   }
   return <div>{blocos}</div>;
@@ -156,12 +156,12 @@ export default function ResumosTab({ materiasConcurso }: Props) {
   return (
     <div className="space-y-6">
       {/* Gerador */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
-        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+      <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
+        <h3 className="text-base font-semibold text-foreground mb-1 flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-violet-500" />
           Gerar resumo com IA
         </h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        <p className="text-xs text-muted-foreground mb-4">
           Suba um PDF do material: a IA extrai o que mais cai em prova, as pegadinhas clássicas e explica os conceitos
           com analogias do cotidiano. O resumo fica salvo na matéria/tópico escolhidos.
         </p>
@@ -170,7 +170,7 @@ export default function ResumosTab({ materiasConcurso }: Props) {
           <select
             value={materia}
             onChange={(e) => { setMateria(e.target.value); setTopico(""); }}
-            className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-white dark:bg-muted text-foreground dark:text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500"
           >
             <option value="">Matéria *</option>
             {MATERIAS_ATIVAS.map((m) => (
@@ -181,7 +181,7 @@ export default function ResumosTab({ materiasConcurso }: Props) {
             value={topico}
             onChange={(e) => setTopico(e.target.value)}
             disabled={!materia}
-            className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-50"
+            className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-white dark:bg-muted text-foreground dark:text-foreground focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-50"
           >
             <option value="">Tópico (opcional)</option>
             {topicoOptions.map((t) => (
@@ -197,7 +197,7 @@ export default function ResumosTab({ materiasConcurso }: Props) {
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border-2 border-dashed text-sm transition-colors ${
               arquivo
                 ? "border-violet-300 bg-violet-50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300"
-                : "border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-violet-300"
+                : "border-border dark:border-border text-muted-foreground hover:border-violet-300"
             }`}
           >
             <Upload className="h-4 w-4 flex-shrink-0" />
@@ -235,19 +235,19 @@ export default function ResumosTab({ materiasConcurso }: Props) {
 
       {/* Lista */}
       {carregando ? (
-        <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+        <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
       ) : resumos.length === 0 ? (
-        <div className="text-center py-10 text-sm text-gray-400 dark:text-gray-500">
+        <div className="text-center py-10 text-sm text-muted-foreground">
           <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
           Nenhum resumo ainda — suba o primeiro PDF acima.
         </div>
       ) : (
         [...materiasComResumo, ...foraDaLista].map((nomeMateria) => (
           <div key={nomeMateria}>
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2 mb-2">
-              <BookOpen className="h-4 w-4 text-blue-500" />
+            <h3 className="text-sm font-semibold text-foreground dark:text-foreground flex items-center gap-2 mb-2">
+              <BookOpen className="h-4 w-4 text-primary" />
               {nomeMateria}
-              <span className="text-xs font-normal text-gray-400">
+              <span className="text-xs font-normal text-muted-foreground">
                 · {resumos.filter((r) => r.materia === nomeMateria).length} resumo(s)
               </span>
             </h3>
@@ -257,7 +257,7 @@ export default function ResumosTab({ materiasConcurso }: Props) {
                 .map((r) => {
                   const expandido = aberto === r.id;
                   return (
-                    <div key={r.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                    <div key={r.id} className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                       <div className="flex items-center gap-2 px-4 py-3">
                         <button
                           type="button"
@@ -265,11 +265,11 @@ export default function ResumosTab({ materiasConcurso }: Props) {
                           className="flex-1 flex items-center gap-2 text-left min-w-0 group"
                         >
                           <ChevronDown
-                            className={`h-4 w-4 text-gray-400 flex-shrink-0 transition-transform group-hover:text-gray-600 dark:group-hover:text-gray-300 ${expandido ? "" : "-rotate-90"}`}
+                            className={`h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform group-hover:text-foreground dark:group-hover:text-muted-foreground ${expandido ? "" : "-rotate-90"}`}
                           />
                           <div className="min-w-0">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{r.titulo}</div>
-                            <div className="text-xs text-gray-400 truncate">
+                            <div className="text-sm font-medium text-foreground truncate">{r.titulo}</div>
+                            <div className="text-xs text-muted-foreground truncate">
                               {r.topico ? `${r.topico} · ` : ""}
                               {new Date(r.createdAt).toLocaleDateString("pt-BR")}
                             </div>
@@ -278,14 +278,14 @@ export default function ResumosTab({ materiasConcurso }: Props) {
                         <button
                           type="button"
                           onClick={() => handleExcluir(r.id)}
-                          className="p-1.5 text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 transition-colors flex-shrink-0"
+                          className="p-1.5 text-muted-foreground dark:text-muted-foreground hover:text-red-500 dark:hover:text-red-400 transition-colors flex-shrink-0"
                           title="Excluir resumo"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                       {expandido && (
-                        <div className="px-5 pb-5 pt-1 border-t border-gray-100 dark:border-gray-700">
+                        <div className="px-5 pb-5 pt-1 border-t border-border dark:border-border">
                           <MarkdownLeve conteudo={r.conteudo} />
                         </div>
                       )}

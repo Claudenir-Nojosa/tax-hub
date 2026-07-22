@@ -9,7 +9,7 @@ export function RedirectingScreen() {
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="fixed inset-0 bg-gradient-to-br from-white to-blue-50/30 dark:from-gray-900 dark:to-gray-950 z-50"
+      className="fixed inset-0 bg-gradient-to-br from-background to-primary/10 dark:from-card dark:to-background z-50"
     >
       <div className="container mx-auto h-full flex flex-col items-center justify-center px-4">
         {/* Conteúdo principal centralizado verticalmente */}
@@ -30,10 +30,10 @@ export function RedirectingScreen() {
             className="text-center space-y-4"
           >
             <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
+              <h2 className="text-2xl font-bold text-foreground">
                 Preparando sua jornada!
               </h2>
-              <p className="text-gray-600 dark:text-gray-300 text-base">
+              <p className="text-muted-foreground text-base">
                 Vamos conhecer você melhor para criar uma experiência personalizada
               </p>
             </div>
@@ -44,7 +44,7 @@ export function RedirectingScreen() {
                 {[1, 2, 3].map((dot) => (
                   <motion.div
                     key={dot}
-                    className="w-2 h-2 rounded-full bg-blue-200 dark:bg-gray-700"
+                    className="w-2 h-2 rounded-full bg-primary/30 dark:bg-muted"
                     animate={{ 
                       scale: [1, 1.2, 1],
                       backgroundColor: ["#bfdbfe", "#3b82f6", "#bfdbfe"]
@@ -57,7 +57,7 @@ export function RedirectingScreen() {
                   />
                 ))}
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              <p className="text-xs text-muted-foreground mt-2">
                 Redirecionando em breve...
               </p>
             </div>

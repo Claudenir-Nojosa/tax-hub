@@ -17,11 +17,11 @@ const CARTA_CONFIG = {
     texto: "CARTA MONSTRO",
     descricao: "Pergunta dissertativa aberta para testar compreensão profunda",
     icone: Swords,
-    cor: "from-blue-900 to-indigo-950",
-    borda: "border-blue-500",
-    sombra: "shadow-blue-500/20",
-    badge: "bg-blue-600",
-    glow: "shadow-blue-500/40",
+    cor: "from-primary to-emerald-950",
+    borda: "border-primary",
+    sombra: "shadow-primary/20",
+    badge: "bg-primary",
+    glow: "shadow-primary/40",
     imagem: "/icons/monstro 1.png",
   },
   armadilha: {
@@ -108,7 +108,7 @@ function CartaVisual({ carta, onExcluir, onEditar }: { carta: Carta; onExcluir: 
       {/* Botões de ação */}
       <button
         onClick={() => onEditar(carta)}
-        className="absolute top-2 right-8 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-blue-300"
+        className="absolute top-2 right-8 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-primary"
         title="Editar carta"
       >
         <Pencil className="h-3.5 w-3.5" />
@@ -220,17 +220,17 @@ function SessaoRevisao({
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-center px-4">
         <Trophy className="h-20 w-20 text-amber-400 mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Sessão concluída!</h2>
-        <p className="text-gray-500 dark:text-gray-400 mb-4">
+        <h2 className="text-2xl font-bold text-foreground mb-1">Sessão concluída!</h2>
+        <p className="text-muted-foreground mb-4">
           {fila.length} carta{fila.length !== 1 ? "s" : ""} revisada{fila.length !== 1 ? "s" : ""}
         </p>
         <div className="text-4xl font-bold text-amber-500 mb-2">+{xpGanho} XP ⚡</div>
-        <p className="text-sm text-gray-400 dark:text-gray-500 mb-8">
+        <p className="text-sm text-muted-foreground mb-8">
           {acertos} acerto{acertos !== 1 ? "s" : ""} · {fila.length - acertos} erro{fila.length - acertos !== 1 ? "s" : ""}
         </p>
         <button
           onClick={() => onConcluir(resultado)}
-          className="bg-[#007cca] hover:bg-[#006bb0] text-white px-8 py-3 rounded-xl font-semibold transition-all"
+          className="bg-[hsl(var(--primary))] hover:bg-[#006bb0] text-white px-8 py-3 rounded-xl font-semibold transition-all"
         >
           Ver Baralhos
         </button>
@@ -244,13 +244,13 @@ function SessaoRevisao({
   return (
     <div className="flex flex-col items-center px-2">
       <div className="w-full max-w-lg mb-6">
-        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1.5">
+        <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
           <span className="font-medium">{idx + 1} / {fila.length} cartas</span>
           <span className="text-amber-500 font-bold">+{xpGanho} XP</span>
         </div>
-        <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-2">
+        <div className="bg-muted dark:bg-muted rounded-full h-2">
           <div
-            className="bg-[#007cca] rounded-full h-2 transition-all duration-500"
+            className="bg-[hsl(var(--primary))] rounded-full h-2 transition-all duration-500"
             style={{ width: `${(idx / fila.length) * 100}%` }}
           />
         </div>
@@ -318,7 +318,7 @@ function SessaoRevisao({
             [
               { label: "Errei",   q: 0 as const, cor: "bg-red-600 hover:bg-red-500",         Icon: XCircle },
               { label: "Difícil", q: 2 as const, cor: "bg-orange-500 hover:bg-orange-400",   Icon: AlertTriangle },
-              { label: "Lembrei", q: 4 as const, cor: "bg-blue-600 hover:bg-blue-500",       Icon: CheckCircle2 },
+              { label: "Lembrei", q: 4 as const, cor: "bg-primary hover:bg-primary",       Icon: CheckCircle2 },
               { label: "Fácil",   q: 5 as const, cor: "bg-emerald-600 hover:bg-emerald-500", Icon: Star },
             ] as const
           ).map(({ label, q, cor, Icon: BtnIcon }) => (
@@ -427,16 +427,16 @@ function FormCriarCarta({
   return (
     <div className="max-w-lg mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onCancelar} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
+        <button onClick={onCancelar} className="text-muted-foreground hover:text-foreground dark:hover:text-foreground transition-colors">
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+        <h2 className="text-lg font-bold text-foreground">
           {cartaParaEditar ? "Editar Carta" : "Nova Carta"}
         </h2>
       </div>
 
       <div className="mb-6">
-        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-3">Tipo de Carta</label>
+        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-3">Tipo de Carta</label>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {(["monstro", "armadilha", "tesouro", "boss"] as TipoCarta[]).map((t) => {
             const cfg = CARTA_CONFIG[t];
@@ -450,25 +450,25 @@ function FormCriarCarta({
                 className={`rounded-xl border-2 p-3 flex flex-col items-center gap-2 transition-all ${
                   sel
                     ? `${cfg.borda} bg-gradient-to-b ${cfg.cor} shadow-lg ${cfg.sombra}`
-                    : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600"
+                    : "border-border bg-muted/50 hover:border-primary/40 dark:hover:border-primary/40"
                 }`}
               >
-                <Icon className={`h-6 w-6 ${sel ? "text-white" : "text-gray-400 dark:text-gray-500"}`} />
-                <span className={`text-xs font-bold ${sel ? "text-white" : "text-gray-500 dark:text-gray-400"}`}>{cfg.nome}</span>
+                <Icon className={`h-6 w-6 ${sel ? "text-white" : "text-muted-foreground"}`} />
+                <span className={`text-xs font-bold ${sel ? "text-white" : "text-muted-foreground"}`}>{cfg.nome}</span>
               </button>
             );
           })}
         </div>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">{CARTA_CONFIG[tipo].descricao}</p>
+        <p className="text-xs text-muted-foreground mt-2">{CARTA_CONFIG[tipo].descricao}</p>
       </div>
 
       <div className={`grid gap-3 mb-4 ${topicosDisponiveis.length > 0 ? "grid-cols-2" : "grid-cols-1"}`}>
         <div>
-          <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1.5">Matéria</label>
+          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Matéria</label>
           <select
             value={materia}
             onChange={(e) => { setMateria(e.target.value); setTopico(""); }}
-            className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-[#007cca]"
+            className="w-full bg-card border border-border text-foreground text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-[hsl(var(--primary))]"
           >
             <option value="">Geral (sem matéria)</option>
             {MATERIAS.map((m) => <option key={m.nome} value={m.nome}>{m.nome}</option>)}
@@ -476,11 +476,11 @@ function FormCriarCarta({
         </div>
         {topicosDisponiveis.length > 0 && (
           <div>
-            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1.5">Tópico</label>
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Tópico</label>
             <select
               value={topico}
               onChange={(e) => setTopico(e.target.value)}
-              className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-[#007cca]"
+              className="w-full bg-card border border-border text-foreground text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-[hsl(var(--primary))]"
             >
               <option value="">Todos os tópicos</option>
               {topicosDisponiveis.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -490,19 +490,19 @@ function FormCriarCarta({
       </div>
 
       <div className="mb-4">
-        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1.5">{frenteLabel}</label>
+        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">{frenteLabel}</label>
         <textarea
           value={frente}
           onChange={(e) => setFrente(e.target.value)}
           rows={3}
           placeholder={frentePlaceholder}
-          className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-lg px-3 py-2.5 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-[#007cca] resize-none"
+          className="w-full bg-card border border-border text-foreground text-sm rounded-lg px-3 py-2.5 placeholder:text-muted-foreground dark:placeholder:text-muted-foreground focus:outline-none focus:border-[hsl(var(--primary))] resize-none"
         />
       </div>
 
       {tipo === "armadilha" && (
         <div className="mb-4">
-          <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-2">Gabarito</label>
+          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">Gabarito</label>
           <div className="flex gap-3">
             {(["verdadeiro", "falso"] as const).map((g) => (
               <button
@@ -514,7 +514,7 @@ function FormCriarCarta({
                     ? g === "verdadeiro"
                       ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400"
                       : "border-red-500 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
-                    : "border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500"
+                    : "border-border text-muted-foreground"
                 }`}
               >
                 {g === "verdadeiro" ? "✓ Verdadeiro" : "✗ Falso"}
@@ -525,27 +525,27 @@ function FormCriarCarta({
       )}
 
       <div className="mb-6">
-        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1.5">{versoLabel}</label>
+        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">{versoLabel}</label>
         <textarea
           value={verso}
           onChange={(e) => setVerso(e.target.value)}
           rows={4}
           placeholder={versoPlaceholder}
-          className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-sm rounded-lg px-3 py-2.5 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-[#007cca] resize-none"
+          className="w-full bg-card border border-border text-foreground text-sm rounded-lg px-3 py-2.5 placeholder:text-muted-foreground dark:placeholder:text-muted-foreground focus:outline-none focus:border-[hsl(var(--primary))] resize-none"
         />
       </div>
 
       <button
         onClick={salvar}
         disabled={!podesSalvar}
-        className="w-full bg-[#007cca] hover:bg-[#006bb0] disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-sm transition-all"
+        className="w-full bg-[hsl(var(--primary))] hover:bg-[#006bb0] disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-sm transition-all"
       >
         {cartaParaEditar ? "Salvar Alterações" : salvasAgora > 0 ? "Criar Outra Carta" : "Criar Carta"}
       </button>
 
       {!cartaParaEditar && (flashSalva || salvasAgora > 0) && (
         <div className="mt-3 flex items-center justify-between gap-2">
-          <span className={`text-xs transition-opacity ${flashSalva ? "text-emerald-600 dark:text-emerald-400 opacity-100" : "text-gray-400 opacity-70"}`}>
+          <span className={`text-xs transition-opacity ${flashSalva ? "text-emerald-600 dark:text-emerald-400 opacity-100" : "text-muted-foreground opacity-70"}`}>
             {flashSalva
               ? "✓ Carta criada! Matéria e tópico mantidos pra próxima."
               : `${salvasAgora} carta${salvasAgora !== 1 ? "s" : ""} criada${salvasAgora !== 1 ? "s" : ""} nesta sessão.`}
@@ -553,7 +553,7 @@ function FormCriarCarta({
           <button
             type="button"
             onClick={onCancelar}
-            className="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline underline-offset-2 transition-colors flex-shrink-0"
+            className="text-xs font-medium text-muted-foreground hover:text-foreground dark:hover:text-foreground underline underline-offset-2 transition-colors flex-shrink-0"
           >
             Concluir e voltar
           </button>
@@ -589,16 +589,16 @@ function BaralhoItem({
   return (
     <div
       onClick={onEntrar}
-      className="flex items-center gap-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3.5 cursor-pointer hover:border-[#007cca] hover:shadow-sm transition-all group"
+      className="flex items-center gap-4 bg-card border border-border rounded-xl px-4 py-3.5 cursor-pointer hover:border-[hsl(var(--primary))] hover:shadow-sm transition-all group"
     >
-      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
-        <BookOpen className="h-5 w-5 text-white" />
+      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-emerald-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+        <BookOpen className="h-5 w-5 text-primary-foreground" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{displayName}</p>
+        <p className="text-sm font-semibold text-foreground truncate">{displayName}</p>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
-          <span className="text-xs text-gray-400">{cartas.length} carta{cartas.length !== 1 ? "s" : ""}</span>
-          {monstro > 0 && <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-full font-medium">{monstro}M</span>}
+          <span className="text-xs text-muted-foreground">{cartas.length} carta{cartas.length !== 1 ? "s" : ""}</span>
+          {monstro > 0 && <span className="text-[10px] bg-primary/10 dark:bg-primary/30 text-primary dark:text-primary px-1.5 py-0.5 rounded-full font-medium">{monstro}M</span>}
           {armadilha > 0 && <span className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded-full font-medium">{armadilha}A</span>}
           {tesouro > 0 && <span className="text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full font-medium">{tesouro}T</span>}
           {boss > 0 && <span className="text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded-full font-medium">{boss}B</span>}
@@ -619,13 +619,13 @@ function BaralhoItem({
             </span>
             <button
               onClick={(e) => { e.stopPropagation(); onRevisar(); }}
-              className="bg-[#007cca] hover:bg-[#006bb0] text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-all"
+              className="bg-[hsl(var(--primary))] hover:bg-[#006bb0] text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-all"
             >
               Revisar
             </button>
           </>
         )}
-        <ChevronRight className="h-4 w-4 text-gray-300 dark:text-gray-600 group-hover:text-[#007cca] transition-colors" />
+        <ChevronRight className="h-4 w-4 text-muted-foreground dark:text-muted-foreground group-hover:text-[hsl(var(--primary))] transition-colors" />
       </div>
     </div>
   );
@@ -651,20 +651,20 @@ function ImportReviewScreen({
   const todasSelecionadas = countSel === sugestoes.length;
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 min-h-[500px] flex flex-col">
+    <div className="bg-card rounded-2xl border border-border p-6 min-h-[500px] flex flex-col">
       <div className="flex items-start gap-3 mb-4">
-        <button onClick={onCancelar} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors mt-0.5">
+        <button onClick={onCancelar} className="text-muted-foreground hover:text-foreground dark:hover:text-foreground transition-colors mt-0.5">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex-1">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Cartas Geradas pela IA</h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          <h2 className="text-lg font-bold text-foreground">Cartas Geradas pela IA</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
             {sugestoes.length} sugestão{sugestoes.length !== 1 ? "ões" : ""} · Selecione as que deseja salvar
           </p>
         </div>
         <button
           onClick={() => onToggleAll(!todasSelecionadas)}
-          className="text-xs text-[#007cca] hover:underline font-medium flex-shrink-0"
+          className="text-xs text-[hsl(var(--primary))] hover:underline font-medium flex-shrink-0"
         >
           {todasSelecionadas ? "Desmarcar todas" : "Marcar todas"}
         </button>
@@ -682,11 +682,11 @@ function ImportReviewScreen({
               className={`flex gap-3 rounded-xl border-2 p-3.5 cursor-pointer transition-all ${
                 sel
                   ? `${cfg.borda} bg-gradient-to-r ${cfg.cor} shadow-lg`
-                  : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:border-gray-300 dark:hover:border-gray-600"
+                  : "border-border bg-muted/50 hover:border-primary/40 dark:hover:border-primary/40"
               }`}
             >
               <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                sel ? "border-white bg-white/20" : "border-gray-300 dark:border-gray-600"
+                sel ? "border-white bg-white/20" : "border-input"
               }`}>
                 {sel && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
               </div>
@@ -695,7 +695,7 @@ function ImportReviewScreen({
                   <Icon className="h-2.5 w-2.5 text-white" />
                   <span className="text-[9px] font-bold text-white tracking-wider">{cfg.texto}</span>
                 </div>
-                <p className={`text-sm font-medium leading-snug mb-1 ${sel ? "text-white" : "text-gray-800 dark:text-gray-200"}`}>
+                <p className={`text-sm font-medium leading-snug mb-1 ${sel ? "text-white" : "text-foreground dark:text-foreground"}`}>
                   {carta.frente}
                 </p>
                 {carta.tipo === "armadilha" && carta.gabarito && (
@@ -703,11 +703,11 @@ function ImportReviewScreen({
                     {carta.gabarito === "verdadeiro" ? "✓ VERDADEIRO" : "✗ FALSO"}
                   </p>
                 )}
-                <p className={`text-xs leading-relaxed line-clamp-2 ${sel ? "text-white/70" : "text-gray-500 dark:text-gray-400"}`}>
+                <p className={`text-xs leading-relaxed line-clamp-2 ${sel ? "text-white/70" : "text-muted-foreground"}`}>
                   {carta.verso}
                 </p>
                 {carta.materia && (
-                  <p className={`text-[10px] mt-1.5 font-medium ${sel ? "text-white/50" : "text-gray-400 dark:text-gray-500"}`}>
+                  <p className={`text-[10px] mt-1.5 font-medium ${sel ? "text-white/50" : "text-muted-foreground"}`}>
                     {carta.materia}{carta.topico ? ` · ${carta.topico}` : ""}
                   </p>
                 )}
@@ -717,11 +717,11 @@ function ImportReviewScreen({
         })}
       </div>
 
-      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="mt-4 pt-4 border-t border-border">
         <button
           onClick={onSalvar}
           disabled={countSel === 0}
-          className="w-full bg-[#007cca] hover:bg-[#006bb0] disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-sm transition-all"
+          className="w-full bg-[hsl(var(--primary))] hover:bg-[#006bb0] disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold text-sm transition-all"
         >
           Salvar {countSel} carta{countSel !== 1 ? "s" : ""} selecionada{countSel !== 1 ? "s" : ""}
         </button>
@@ -825,7 +825,7 @@ export default function CartasTab({
   // ── View: criar ──
   if (view === "criar") {
     return (
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 min-h-[500px]">
+      <div className="bg-card rounded-2xl border border-border p-6 min-h-[500px]">
         <FormCriarCarta
           onSalvar={cartaEditando ? handleSalvarEdicao : handleSalvarCarta}
           onCancelar={() => { setCartaEditando(null); setView("home"); }}
@@ -839,12 +839,12 @@ export default function CartasTab({
   // ── View: revisar ──
   if (view === "revisar") {
     return (
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 min-h-[500px]">
+      <div className="bg-card rounded-2xl border border-border p-6 min-h-[500px]">
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => setView("home")} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
+          <button onClick={() => setView("home")} className="text-muted-foreground hover:text-foreground dark:hover:text-foreground transition-colors">
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Sessão de Revisão</h2>
+          <h2 className="text-lg font-bold text-foreground">Sessão de Revisão</h2>
           <span className="ml-auto text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">
             {cartasParaRevisarAtual.length} cartas
           </span>
@@ -889,11 +889,11 @@ export default function CartasTab({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           {baralhoAtivo && (
-            <button onClick={() => setBaralhoAtivo(null)} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
+            <button onClick={() => setBaralhoAtivo(null)} className="text-muted-foreground hover:text-foreground dark:hover:text-foreground transition-colors">
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <h2 className="text-base font-bold text-gray-900 dark:text-white">
+          <h2 className="text-base font-bold text-foreground">
             {baralhoAtivo ? baralhoAtivoDisplay : "Meus Baralhos"}
           </h2>
         </div>
@@ -903,7 +903,7 @@ export default function CartasTab({
               setCriarComMateria(baralhoAtivo && baralhoAtivo !== "__geral__" ? baralhoAtivo : undefined);
               setView("criar");
             }}
-            className="flex items-center gap-2 bg-[#007cca] hover:bg-[#006bb0] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-md shadow-blue-500/20"
+            className="flex items-center gap-2 bg-[hsl(var(--primary))] hover:bg-[#006bb0] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-md shadow-primary/20"
           >
             <Plus className="h-4 w-4" />
             Nova Carta
@@ -917,17 +917,17 @@ export default function CartasTab({
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: "Total de Cartas", value: cartas.length, Icon: Layers, cor: "text-[#007cca]", bg: "bg-blue-50 dark:bg-blue-950/30" },
+              { label: "Total de Cartas", value: cartas.length, Icon: Layers, cor: "text-[hsl(var(--primary))]", bg: "bg-primary/10 dark:bg-primary/30" },
               { label: "Para Hoje", value: paraHoje.length, Icon: Flame, cor: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950/30" },
               { label: "XP de Cartas", value: `${xpCartas} XP`, Icon: Star, cor: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-950/30" },
               { label: "Acertos Totais", value: cartas.reduce((s, c) => s + c.acertos, 0), Icon: CheckCircle2, cor: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
             ].map((s) => (
-              <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center shadow-sm">
+              <div key={s.label} className="bg-card rounded-xl border border-border p-4 text-center shadow-sm">
                 <div className={`flex items-center justify-center w-9 h-9 rounded-lg mx-auto mb-2 ${s.bg}`}>
                   <s.Icon className={`h-5 w-5 ${s.cor}`} />
                 </div>
                 <div className={`text-xl font-bold ${s.cor}`}>{s.value}</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{s.label}</div>
+                <div className="text-xs text-muted-foreground mt-1">{s.label}</div>
               </div>
             ))}
           </div>
@@ -954,19 +954,19 @@ export default function CartasTab({
           {/* Baralhos */}
           {cartas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Layers className="h-14 w-14 text-gray-200 dark:text-gray-700 mb-3" />
-              <p className="text-gray-400 dark:text-gray-500 text-sm font-medium mb-1">Nenhum baralho criado ainda.</p>
-              <p className="text-gray-300 dark:text-gray-600 text-xs mb-6">Crie cartas para começar a revisão espaçada inteligente.</p>
+              <Layers className="h-14 w-14 text-foreground dark:text-foreground mb-3" />
+              <p className="text-muted-foreground text-sm font-medium mb-1">Nenhum baralho criado ainda.</p>
+              <p className="text-muted-foreground dark:text-muted-foreground text-xs mb-6">Crie cartas para começar a revisão espaçada inteligente.</p>
               <button
                 onClick={() => { setCriarComMateria(undefined); setView("criar"); }}
-                className="flex items-center gap-2 bg-[#007cca] text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md"
+                className="flex items-center gap-2 bg-[hsl(var(--primary))] text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md"
               >
                 <Plus className="h-4 w-4" /> Criar primeira carta
               </button>
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                 {baralhos.length} baralho{baralhos.length !== 1 ? "s" : ""}
               </p>
               {baralhos.map(({ nome, cartas: bc, displayName }) => (
@@ -1024,8 +1024,8 @@ export default function CartasTab({
 
           {cartasBaralho.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Layers className="h-14 w-14 text-gray-200 dark:text-gray-700 mb-3" />
-              <p className="text-gray-400 dark:text-gray-500 text-sm">Nenhuma carta neste baralho ainda.</p>
+              <Layers className="h-14 w-14 text-foreground dark:text-foreground mb-3" />
+              <p className="text-muted-foreground text-sm">Nenhuma carta neste baralho ainda.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

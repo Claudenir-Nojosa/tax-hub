@@ -55,13 +55,13 @@ function CadernoInput({
         const v = parseInt(e.target.value) || 0;
         onChange(Math.max(0, v));
       }}
-      className="w-10 text-center text-xs border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 py-0.5 px-0.5"
+      className="w-10 text-center text-xs border border-border rounded bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring py-0.5 px-0.5"
     />
   );
 }
 
 const GRUPO_COR: Record<Grupo, { badge: string; label: string }> = {
-  A: { badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300",   label: "text-blue-600 dark:text-blue-400 font-bold" },
+  A: { badge: "bg-primary/10 text-primary dark:bg-primary/60 dark:text-primary",   label: "text-primary dark:text-primary font-bold" },
   B: { badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300", label: "text-emerald-600 dark:text-emerald-400 font-bold" },
   C: { badge: "bg-violet-100 text-violet-700 dark:bg-violet-900/60 dark:text-violet-300",   label: "text-violet-600 dark:text-violet-400 font-bold" },
   D: { badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300",   label: "text-amber-600 dark:text-amber-400 font-bold" },
@@ -70,7 +70,7 @@ const GRUPO_COR: Record<Grupo, { badge: string; label: string }> = {
 function PercBadge({ perc }: { perc: number }) {
   const cor =
     perc === 0
-      ? "text-gray-400 dark:text-gray-500"
+      ? "text-muted-foreground"
       : perc >= 70
       ? "text-emerald-600 dark:text-emerald-400 font-semibold"
       : perc >= 50
@@ -90,7 +90,7 @@ const COR_BORDER: Record<string, string> = {
 
 export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = [], topicosExcluidos = [], onToggleTopicoExcluido, onDeleteTopico }: Props) {
   const materiasAtivas = materiasConcurso
-    ? materiasConcurso.map(m => ({ ...m, corBorder: COR_BORDER[m.cor] ?? "border-l-gray-400" }))
+    ? materiasConcurso.map(m => ({ ...m, corBorder: COR_BORDER[m.cor] ?? "border-l-border" }))
     : MATERIAS;
   const [busca, setBusca] = useState("");
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
@@ -152,18 +152,18 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
     <div className="space-y-4">
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input
           type="text"
           placeholder="Buscar tópico ou matéria..."
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full pl-10 pr-4 py-2.5 text-sm border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 
       {/* Header de colunas */}
-      <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 font-medium">
+      <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-muted rounded-lg border border-border text-xs text-muted-foreground font-medium">
         <div className="w-6" />
         <div className="flex-1">Tópico</div>
         <div className="w-20 text-center">Estudado</div>
@@ -172,7 +172,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
             <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${GRUPO_COR[g].badge}`}>
               Grupo {g}
             </span>
-            <span className="text-gray-400 dark:text-gray-500 text-xs">Acertos / Erros</span>
+            <span className="text-muted-foreground text-xs">Acertos / Erros</span>
           </div>
         ))}
         <div className="w-12 text-center">Média</div>
@@ -193,7 +193,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
           return (
             <div
               key={m.nome}
-              className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden"
+              className="bg-card rounded-xl border border-border shadow-sm overflow-hidden"
             >
               {/* Header da matéria — div (não button) porque contém os botões "Todos"/"Limpar" quando
                   aberto; <button> dentro de <button> é HTML inválido e causa erro de hidratação */}
@@ -204,21 +204,21 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpand(m.nome); }
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 border-l-4 ${m.corBorder} hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors cursor-pointer`}
+                className={`w-full flex items-center gap-3 px-4 py-3.5 border-l-4 ${m.corBorder} hover:bg-accent transition-colors cursor-pointer`}
               >
-                <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">
+                <span className="text-muted-foreground flex-shrink-0">
                   {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </span>
-                <span className="font-semibold text-sm flex-1 text-left text-gray-900 dark:text-white">{m.nome}</span>
+                <span className="font-semibold text-sm flex-1 text-left text-foreground">{m.nome}</span>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <div className="hidden sm:flex items-center gap-2">
-                    <div className="w-24 bg-gray-200 dark:bg-gray-600 rounded-full h-1.5">
+                    <div className="w-24 bg-muted rounded-full h-1.5">
                       <div
-                        className={`rounded-full h-1.5 transition-all ${perc === 100 ? "bg-emerald-500" : "bg-blue-500"}`}
+                        className={`rounded-full h-1.5 transition-all ${perc === 100 ? "bg-emerald-500" : "bg-primary"}`}
                         style={{ width: `${perc}%` }}
                       />
                     </div>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
                       {estudadoCount}/{totalTopicos}
                     </span>
                   </div>
@@ -234,7 +234,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                       <button
                         type="button"
                         onClick={() => marcarTodos(m.nome, false)}
-                        className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:opacity-80"
+                        className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground hover:opacity-80"
                       >
                         ✗ Limpar
                       </button>
@@ -245,7 +245,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
 
               {/* Tópicos */}
               {isOpen && (
-                <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                <div className="divide-y divide-border">
                   {m.topicos.map((t, idx) => {
                     const key = topicoKey(m.nome, t);
                     const estado = topicos[key];
@@ -255,21 +255,21 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                     return (
                       <div
                         key={t}
-                        className={`flex flex-col md:flex-row md:items-center gap-2 md:gap-2 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${
+                        className={`flex flex-col md:flex-row md:items-center gap-2 md:gap-2 px-4 py-2.5 hover:bg-accent transition-colors ${
                           excluido ? "opacity-50" : estado.estudado ? "bg-emerald-50/50 dark:bg-emerald-950/10" : ""
                         }`}
                       >
                         {/* Número */}
-                        <span className="hidden md:block text-xs text-gray-400 dark:text-gray-500 w-6 flex-shrink-0 text-right">
+                        <span className="hidden md:block text-xs text-muted-foreground w-6 flex-shrink-0 text-right">
                           {idx + 1}
                         </span>
 
                         {/* Nome do tópico (+ % de leitura dos PDFs da Biblioteca que o cobrem) */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+                          <p className="text-xs text-foreground leading-relaxed">
                             {t}
                             {excluido && (
-                              <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full align-middle bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                              <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full align-middle bg-muted text-muted-foreground">
                                 <EyeOff className="h-2.5 w-2.5" /> Oculto
                               </span>
                             )}
@@ -290,12 +290,12 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
 
                         {/* Estudado */}
                         <div className="flex md:w-20 md:justify-center items-center gap-2">
-                          <span className="md:hidden text-xs text-gray-500">Estudado:</span>
+                          <span className="md:hidden text-xs text-muted-foreground">Estudado:</span>
                           <button
                             type="button"
                             onClick={() => toggleEstudado(m.nome, t)}
                             className={`flex-shrink-0 transition-colors ${
-                              estado.estudado ? "text-emerald-600 dark:text-emerald-400" : "text-gray-300 dark:text-gray-600"
+                              estado.estudado ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"
                             }`}
                           >
                             {estado.estudado ? (
@@ -317,7 +317,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                                   value={cad.acertos}
                                   onChange={(v) => updateCaderno(m.nome, t, g, "acertos", v)}
                                 />
-                                <span className="text-gray-300 dark:text-gray-600 text-xs">/</span>
+                                <span className="text-muted-foreground text-xs">/</span>
                                 <CadernoInput
                                   value={cad.erros}
                                   onChange={(v) => updateCaderno(m.nome, t, g, "erros", v)}
@@ -332,7 +332,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                           <span
                             className={`text-xs font-semibold ${
                               media === 0
-                                ? "text-gray-400 dark:text-gray-500"
+                                ? "text-muted-foreground"
                                 : media >= 70
                                 ? "text-emerald-600 dark:text-emerald-400"
                                 : media >= 50
@@ -355,7 +355,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                                 className={`flex-shrink-0 p-1 rounded transition-colors ${
                                   excluido
                                     ? "text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                                    : "text-gray-300 dark:text-gray-600 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                                    : "text-muted-foreground hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30"
                                 }`}
                               >
                                 {excluido ? <RotateCcw className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
@@ -366,7 +366,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                                 type="button"
                                 onClick={() => excluirTopico(m.nome, t)}
                                 title="Excluir tópico definitivamente (apaga o progresso, não dá pra desfazer)"
-                                className="flex-shrink-0 p-1 rounded text-gray-300 dark:text-gray-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                className="flex-shrink-0 p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -384,7 +384,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
       </div>
 
       {materiasFiltradas.length === 0 && (
-        <div className="text-center py-12 text-gray-400 dark:text-gray-500">
+        <div className="text-center py-12 text-muted-foreground">
           Nenhum tópico encontrado para &quot;{busca}&quot;
         </div>
       )}

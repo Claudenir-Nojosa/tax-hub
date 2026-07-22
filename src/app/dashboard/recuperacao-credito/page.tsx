@@ -177,8 +177,8 @@ const PRIORIDADE_CONFIG = {
   },
   baixa: {
     label: "Baixa",
-    badge: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-    dot: "bg-blue-500",
+    badge: "bg-primary/10 text-primary dark:bg-primary/30 dark:text-primary",
+    dot: "bg-primary",
   },
 };
 
@@ -1002,11 +1002,11 @@ export default function RecuperacaoCreditoPage() {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-500 flex items-center justify-center">
               <FileSearch className="h-5 w-5 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-2xl font-bold text-foreground">
               Recuperação de Crédito
             </h1>
           </div>
-          <p className="text-gray-500 dark:text-gray-400 text-sm">
+          <p className="text-muted-foreground text-sm">
             Carregue os arquivos fiscais e contábeis — a IA identifica oportunidades de recuperação de créditos tributários.
           </p>
         </div>
@@ -1019,7 +1019,7 @@ export default function RecuperacaoCreditoPage() {
       </div>
 
       {/* Upload Section */}
-      <Card className="border-gray-200 dark:border-gray-800">
+      <Card className="border-border">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <div>
@@ -1039,8 +1039,8 @@ export default function RecuperacaoCreditoPage() {
         <CardContent className="space-y-4">
           {/* Cliente — necessário só para os PDFs do Simples Nacional */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-gray-500 dark:text-gray-400">
-              Cliente <span className="font-normal text-gray-400">(cliente + projeto são necessários para importar PDFs do Simples Nacional ou EFDs de ICMS/IPI)</span>
+            <Label className="text-xs text-muted-foreground">
+              Cliente <span className="font-normal text-muted-foreground">(cliente + projeto são necessários para importar PDFs do Simples Nacional ou EFDs de ICMS/IPI)</span>
             </Label>
             {modoNovoCliente ? (
               <div className="flex flex-col sm:flex-row gap-2">
@@ -1089,8 +1089,8 @@ export default function RecuperacaoCreditoPage() {
           {/* Projeto — escopo dos meses importados; um cliente pode ter vários projetos */}
           {clienteSelecionado && (
             <div className="space-y-1.5">
-              <Label className="text-xs text-gray-500 dark:text-gray-400">
-                Projeto <span className="font-normal text-gray-400">({clienteSelecionado.razaoSocial})</span>
+              <Label className="text-xs text-muted-foreground">
+                Projeto <span className="font-normal text-muted-foreground">({clienteSelecionado.razaoSocial})</span>
               </Label>
               {modoNovoProjeto ? (
                 <div className="flex flex-col sm:flex-row gap-2">
@@ -1180,20 +1180,20 @@ export default function RecuperacaoCreditoPage() {
             className={`border-2 border-dashed rounded-xl py-12 px-6 flex flex-col items-center justify-center cursor-pointer transition-all duration-200 ${
               isDragging
                 ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20"
-                : "border-gray-200 dark:border-gray-700 hover:border-emerald-300 dark:hover:border-emerald-800 hover:bg-gray-50 dark:hover:bg-gray-900/50"
+                : "border-border hover:border-emerald-300 dark:hover:border-emerald-800 hover:bg-accent dark:hover:bg-muted/50"
             }`}
           >
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-colors ${
-              isDragging ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-gray-100 dark:bg-gray-800"
+              isDragging ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-muted"
             }`}>
               <Upload className={`h-6 w-6 transition-colors ${
-                isDragging ? "text-emerald-600" : "text-gray-400 dark:text-gray-500"
+                isDragging ? "text-emerald-600" : "text-muted-foreground"
               }`} />
             </div>
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 text-center">
+            <p className="text-sm font-medium text-foreground text-center">
               Clique ou arraste os arquivos aqui
             </p>
-            <p className="text-xs text-gray-400 mt-1 text-center">
+            <p className="text-xs text-muted-foreground mt-1 text-center">
               .xlsx · .xls · .csv · .pdf · .txt — sem limite de quantidade
             </p>
             <input
@@ -1226,24 +1226,24 @@ export default function RecuperacaoCreditoPage() {
               }
               acaoDireita={
                 cadastro ? (
-                  <button onClick={handleExcluirCadastro} title="Remover dados cadastrais" className="text-gray-400 hover:text-red-500">
+                  <button onClick={handleExcluirCadastro} title="Remover dados cadastrais" className="text-muted-foreground hover:text-red-500">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 ) : undefined
               }
             >
               {carregandoCadastro ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
                 cadastro && (
                   <div className="space-y-3 px-1 text-sm">
                     {cadastro.dados.consultaCnpj && (
                       <div className="space-y-1">
-                        <p className="font-medium text-gray-900 dark:text-white">
+                        <p className="font-medium text-foreground">
                           {cadastro.dados.consultaCnpj.nomeEmpresarial}
-                          <span className="font-normal text-gray-400"> · {cadastro.dados.consultaCnpj.cnpj}</span>
+                          <span className="font-normal text-muted-foreground"> · {cadastro.dados.consultaCnpj.cnpj}</span>
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                        <p className="text-xs text-muted-foreground">
                           {[
                             cadastro.dados.consultaCnpj.situacaoCadastral && `Situação: ${cadastro.dados.consultaCnpj.situacaoCadastral}`,
                             cadastro.dados.consultaCnpj.porte && `Porte: ${cadastro.dados.consultaCnpj.porte}`,
@@ -1255,13 +1255,13 @@ export default function RecuperacaoCreditoPage() {
                             .join(" · ")}
                         </p>
                         {cadastro.dados.consultaCnpj.cnaePrincipal && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <p className="text-xs text-muted-foreground">
                             <span className="font-medium">CNAE principal:</span> {cadastro.dados.consultaCnpj.cnaePrincipal.codigo} —{" "}
                             {cadastro.dados.consultaCnpj.cnaePrincipal.descricao}
                           </p>
                         )}
                         {cadastro.dados.consultaCnpj.cnaesSecundarios.length > 0 && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <p className="text-xs text-muted-foreground">
                             <span className="font-medium">Secundários:</span>{" "}
                             {cadastro.dados.consultaCnpj.cnaesSecundarios.map((c) => `${c.codigo} — ${c.descricao}`).join(" · ")}
                           </p>
@@ -1271,20 +1271,20 @@ export default function RecuperacaoCreditoPage() {
                     {cadastro.dados.simplesNacional && (
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="text-xs">Simples Nacional</Badge>
-                        <span className="text-xs text-gray-600 dark:text-gray-300">{resumoSimples(cadastro.dados.simplesNacional)}</span>
+                        <span className="text-xs text-foreground">{resumoSimples(cadastro.dados.simplesNacional)}</span>
                       </div>
                     )}
                     {cadastro.dados.qsa && cadastro.dados.qsa.socios.length > 0 && (
                       <div className="space-y-1">
-                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">QSA</p>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">QSA</p>
                         {cadastro.dados.qsa.socios.map((s) => (
-                          <p key={s.cpf} className="text-xs text-gray-600 dark:text-gray-300">
-                            {s.nome} <span className="text-gray-400">· {s.qualificacao} · capital {s.capitalSocial} · CPF {s.cpf}</span>
+                          <p key={s.cpf} className="text-xs text-foreground">
+                            {s.nome} <span className="text-muted-foreground">· {s.qualificacao} · capital {s.capitalSocial} · CPF {s.cpf}</span>
                           </p>
                         ))}
                       </div>
                     )}
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-muted-foreground">
                       Essas informações viram a aba <span className="font-medium">Menu</span> (primeira aba) do Excel.
                       {cadastro.dados.simplesNacional?.extraidoPorIA &&
                         " A Consulta Optantes foi lida por IA (documento escaneado) — confira contra o original."}
@@ -1302,7 +1302,7 @@ export default function RecuperacaoCreditoPage() {
               resumo={carregandoDeclaracoes ? "carregando…" : `${mesesAgrupados.length} ${mesesAgrupados.length === 1 ? "competência" : "competências"}`}
             >
               {carregandoDeclaracoes ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
                 <>
                   <Table>
@@ -1334,7 +1334,7 @@ export default function RecuperacaoCreditoPage() {
                                     key={d.id}
                                     onClick={() => handleExcluirDeclaracao(d.id)}
                                     title={`Remover ${d.tipoDocumento === "DECLARACAO" ? "Declaração" : "Extrato"}`}
-                                    className="text-gray-400 hover:text-red-500"
+                                    className="text-muted-foreground hover:text-red-500"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>
@@ -1363,7 +1363,7 @@ export default function RecuperacaoCreditoPage() {
               resumo={carregandoDeclaracoesEfd ? "carregando…" : `${mesesEfdOrdenados.length} ${mesesEfdOrdenados.length === 1 ? "competência" : "competências"}`}
             >
               {carregandoDeclaracoesEfd ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
                 <>
                   {mesesEfdOrdenados.length > 0 && (
@@ -1396,7 +1396,7 @@ export default function RecuperacaoCreditoPage() {
                             <button
                               onClick={() => handleExcluirDeclaracaoEfd(d.id)}
                               title="Remover"
-                              className="text-gray-400 hover:text-red-500"
+                              className="text-muted-foreground hover:text-red-500"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
@@ -1418,7 +1418,7 @@ export default function RecuperacaoCreditoPage() {
               resumo={carregandoDeclaracoesEfdContrib ? "carregando…" : `${mesesEfdContribOrdenados.length} ${mesesEfdContribOrdenados.length === 1 ? "competência" : "competências"}`}
             >
               {carregandoDeclaracoesEfdContrib ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
                 <>
                   {mesesEfdContribOrdenados.length > 0 && (
@@ -1455,7 +1455,7 @@ export default function RecuperacaoCreditoPage() {
                             <button
                               onClick={() => handleExcluirDeclaracaoEfdContrib(d.id)}
                               title="Remover"
-                              className="text-gray-400 hover:text-red-500"
+                              className="text-muted-foreground hover:text-red-500"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
@@ -1477,7 +1477,7 @@ export default function RecuperacaoCreditoPage() {
               resumo={carregandoDeclaracoesEcf ? "carregando…" : `${anosEcfOrdenados.length} ${anosEcfOrdenados.length === 1 ? "ano" : "anos"}`}
             >
               {carregandoDeclaracoesEcf ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
                 <>
                   {anosEcfOrdenados.length > 0 && (
@@ -1515,7 +1515,7 @@ export default function RecuperacaoCreditoPage() {
                             <button
                               onClick={() => handleExcluirDeclaracaoEcf(d.id)}
                               title="Remover"
-                              className="text-gray-400 hover:text-red-500"
+                              className="text-muted-foreground hover:text-red-500"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
@@ -1537,7 +1537,7 @@ export default function RecuperacaoCreditoPage() {
               resumo={carregandoDctf ? "carregando…" : `${dctfWebOrdenadas.length} ${dctfWebOrdenadas.length === 1 ? "período" : "períodos"}`}
             >
               {carregandoDctf ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
                 dctfWebOrdenadas.length > 0 && (
                   <Table>
@@ -1561,7 +1561,7 @@ export default function RecuperacaoCreditoPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex justify-end">
-                              <button onClick={() => handleExcluirDctfWeb(d.id)} title="Remover" className="text-gray-400 hover:text-red-500">
+                              <button onClick={() => handleExcluirDctfWeb(d.id)} title="Remover" className="text-muted-foreground hover:text-red-500">
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>
@@ -1582,7 +1582,7 @@ export default function RecuperacaoCreditoPage() {
               resumo={carregandoDctf ? "carregando…" : `${dctfOrdenadas.length} ${dctfOrdenadas.length === 1 ? "competência" : "competências"}`}
             >
               {carregandoDctf ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
                 dctfOrdenadas.length > 0 && (
                   <Table>
@@ -1604,7 +1604,7 @@ export default function RecuperacaoCreditoPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex justify-end">
-                              <button onClick={() => handleExcluirDctf(d.id)} title="Remover" className="text-gray-400 hover:text-red-500">
+                              <button onClick={() => handleExcluirDctf(d.id)} title="Remover" className="text-muted-foreground hover:text-red-500">
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>
@@ -1625,7 +1625,7 @@ export default function RecuperacaoCreditoPage() {
               resumo={carregandoEcd ? "carregando…" : `${ecdOrdenadas.length} ${ecdOrdenadas.length === 1 ? "ano" : "anos"}`}
             >
               {carregandoEcd ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
                 ecdOrdenadas.length > 0 && (
                   <Table>
@@ -1643,7 +1643,7 @@ export default function RecuperacaoCreditoPage() {
                           <TableCell className="text-right">{d.qtdContas}</TableCell>
                           <TableCell>
                             <div className="flex justify-end">
-                              <button onClick={() => handleExcluirEcd(d.id)} title="Remover" className="text-gray-400 hover:text-red-500">
+                              <button onClick={() => handleExcluirEcd(d.id)} title="Remover" className="text-muted-foreground hover:text-red-500">
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>
@@ -1664,7 +1664,7 @@ export default function RecuperacaoCreditoPage() {
               resumo={carregandoFontes ? "carregando…" : `${fontesOrdenadas.length} ${fontesOrdenadas.length === 1 ? "ano" : "anos"}`}
             >
               {carregandoFontes ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
                 fontesOrdenadas.length > 0 && (
                   <>
@@ -1692,7 +1692,7 @@ export default function RecuperacaoCreditoPage() {
                           <TableCell className="text-right">{formatCurrency(d.totalImposto)}</TableCell>
                           <TableCell>
                             <div className="flex justify-end">
-                              <button onClick={() => handleExcluirFontes(d.id)} title="Remover" className="text-gray-400 hover:text-red-500">
+                              <button onClick={() => handleExcluirFontes(d.id)} title="Remover" className="text-muted-foreground hover:text-red-500">
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>
@@ -1718,7 +1718,7 @@ export default function RecuperacaoCreditoPage() {
                   <button
                     onClick={handleExcluirComprovantes}
                     title={`Remover todos os ${declaracoesComprovante.length} DARF(s) importados`}
-                    className="text-gray-400 hover:text-red-500"
+                    className="text-muted-foreground hover:text-red-500"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -1726,7 +1726,7 @@ export default function RecuperacaoCreditoPage() {
               }
             >
               {carregandoDeclaracoesComprovante ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : (
                 <>
                   {comprovantesPorAno.length > 0 && (
@@ -1769,7 +1769,7 @@ export default function RecuperacaoCreditoPage() {
                           <TableCell className="text-right font-medium">{formatCurrency(linha.total)}</TableCell>
                         </TableRow>
                       ))}
-                      <TableRow className="border-t-2 border-gray-200 dark:border-gray-700">
+                      <TableRow className="border-t-2 border-border">
                         <TableCell className="font-semibold">Total</TableCell>
                         <TableCell className="text-right font-semibold">{formatCurrency(comprovantesTotalGeral.PIS)}</TableCell>
                         <TableCell className="text-right font-semibold">{formatCurrency(comprovantesTotalGeral.COFINS)}</TableCell>
@@ -1779,7 +1779,7 @@ export default function RecuperacaoCreditoPage() {
                       </TableRow>
                     </TableBody>
                   </Table>
-                  <p className="text-xs text-gray-400 px-1">
+                  <p className="text-xs text-muted-foreground px-1">
                     {declaracoesComprovante.length} DARF(s) importado(s) · valores por ano do período de apuração,
                     somando apenas PIS, COFINS, IRPJ e CSLL — o detalhamento completo (incluindo INSS, multas etc.)
                     sai no Excel.
@@ -1812,9 +1812,9 @@ export default function RecuperacaoCreditoPage() {
 
       {/* Info banner (shown before first analysis) */}
       {!resultado && arquivos.length === 0 && (
-        <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900">
-          <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-          <p className="text-sm text-blue-700 dark:text-blue-300">
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-primary/10 dark:bg-primary/20 border border-primary/20">
+          <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-primary dark:text-primary">
             <span className="font-semibold">Como funciona:</span> carregue os arquivos Excel com dados fiscais e
             contábeis da empresa (DRE, notas fiscais, etc.), os PDFs de Declaração/Extrato do Simples Nacional,
             Comprovante de Arrecadação de DARF, DCTFWeb ou Fontes Pagadoras (DIRF), os .txt de EFD ICMS/IPI, EFD
@@ -1879,7 +1879,7 @@ export default function RecuperacaoCreditoPage() {
 
           {/* Oportunidades */}
           {resultado.oportunidades.length > 0 && (
-            <Card className="border-gray-200 dark:border-gray-800">
+            <Card className="border-border">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                   <Lightbulb className="h-5 w-5 text-amber-500" />
@@ -1900,7 +1900,7 @@ export default function RecuperacaoCreditoPage() {
                         <div className={`w-2 h-2 rounded-full ${cfg.dot} mt-2 flex-shrink-0`} />
                         <div className="flex-1 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                            <p className="text-sm font-semibold text-foreground">
                               {op.tipo}
                             </p>
                             <Badge className={`text-xs ${cfg.badge}`}>
@@ -1912,10 +1912,10 @@ export default function RecuperacaoCreditoPage() {
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-gray-700 dark:text-gray-300">
+                          <p className="text-sm text-foreground">
                             {op.descricao}
                           </p>
-                          <p className="text-xs text-gray-400 italic">
+                          <p className="text-xs text-muted-foreground italic">
                             {op.fundamentacao}
                           </p>
                         </div>
@@ -1945,7 +1945,7 @@ export default function RecuperacaoCreditoPage() {
                     {resultado.alertas.map((a, i) => (
                       <li key={i} className="flex items-start gap-2.5">
                         <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">{a}</span>
+                        <span className="text-sm text-foreground">{a}</span>
                       </li>
                     ))}
                   </ul>
@@ -1954,10 +1954,10 @@ export default function RecuperacaoCreditoPage() {
             )}
 
             {resultado.proximosPassos.length > 0 && (
-              <Card className="border-blue-200 dark:border-blue-900/50">
+              <Card className="border-primary/20">
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-2">
-                    <CheckCircle className="h-5 w-5 text-blue-500" />
+                    <CheckCircle className="h-5 w-5 text-primary" />
                     <CardTitle className="text-base">Próximos Passos</CardTitle>
                   </div>
                 </CardHeader>
@@ -1965,10 +1965,10 @@ export default function RecuperacaoCreditoPage() {
                   <ol className="space-y-2">
                     {resultado.proximosPassos.map((p, i) => (
                       <li key={i} className="flex items-start gap-2.5">
-                        <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="w-5 h-5 rounded-full bg-primary/10 dark:bg-primary/30 text-primary dark:text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
                           {i + 1}
                         </span>
-                        <span className="text-sm text-gray-700 dark:text-gray-300">{p}</span>
+                        <span className="text-sm text-foreground">{p}</span>
                       </li>
                     ))}
                   </ol>
@@ -1977,7 +1977,7 @@ export default function RecuperacaoCreditoPage() {
             )}
           </div>
 
-          <p className="text-xs text-gray-400 text-center">
+          <p className="text-xs text-muted-foreground text-center">
             * A análise é baseada nos arquivos fornecidos e nas normas vigentes. Recomenda-se validação com contador ou advogado tributarista antes de iniciar o processo de recuperação.
           </p>
         </div>

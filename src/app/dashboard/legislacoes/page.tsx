@@ -52,10 +52,10 @@ export default function LegislacoesPage() {
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+        <h1 className="text-3xl font-bold text-foreground">
           Legislações
         </h1>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+        <p className="mt-2 text-sm text-muted-foreground">
           Textos legais comentados: análise própria artigo a artigo.
         </p>
       </div>
@@ -65,34 +65,34 @@ export default function LegislacoesPage() {
           <Link
             key={leg.href}
             href={leg.href}
-            className="group block rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 hover:border-[#007cca] dark:hover:border-[#007cca] hover:shadow-md transition-all duration-200"
+            className="group block rounded-xl border border-border bg-card p-6 hover:border-primary hover:shadow-md transition-all duration-200"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-4">
-                <div className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/40 text-[#007cca]">
+                <div className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <BookOpen className="h-5 w-5" />
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-semibold uppercase tracking-widest text-[#007cca]">
+                    <span className="text-xs font-semibold uppercase tracking-widest text-primary">
                       {leg.numero}
                     </span>
                     {leg.escopo.map((tag) => (
                       <span
                         key={tag}
-                        className="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs text-gray-600 dark:text-gray-400"
+                        className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                       >
                         {tag}
                       </span>
                     ))}
                   </div>
-                  <h2 className="text-base font-semibold text-gray-900 dark:text-white leading-snug">
+                  <h2 className="text-base font-semibold text-foreground leading-snug">
                     {leg.nome}
                   </h2>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                  <p className="text-sm text-muted-foreground leading-relaxed">
                     {leg.descricao}
                   </p>
-                  <div className="flex items-center gap-4 text-xs text-gray-400 dark:text-gray-500">
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5" />
                       {leg.publicacao}
@@ -102,7 +102,7 @@ export default function LegislacoesPage() {
                   </div>
                 </div>
               </div>
-              <ArrowRight className="h-5 w-5 flex-shrink-0 text-gray-300 dark:text-gray-700 group-hover:text-[#007cca] transition-colors mt-1" />
+              <ArrowRight className="h-5 w-5 flex-shrink-0 text-muted-foreground group-hover:text-primary transition-colors mt-1" />
             </div>
           </Link>
         ))}

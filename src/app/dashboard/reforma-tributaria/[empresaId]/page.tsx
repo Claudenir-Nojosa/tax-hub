@@ -46,7 +46,7 @@ const defaultEmpresa: EmpresaData = {
 
 export default function EmpresaWizardPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-20 text-gray-400 text-sm">Carregando...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center py-20 text-muted-foreground text-sm">Carregando...</div>}>
       <EmpresaWizardInner />
     </Suspense>
   )
@@ -218,13 +218,13 @@ function EmpresaWizardInner() {
       <div className="flex items-center gap-2 mb-6">
         <Link
           href="/dashboard/reforma-tributaria"
-          className="shrink-0 h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-500/10 transition-colors"
+          className="shrink-0 h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
           title="Voltar para a listagem"
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <Scale className="h-5 w-5 text-blue-500" />
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+        <Scale className="h-5 w-5 text-primary" />
+        <h1 className="text-xl font-bold text-foreground">
           {isNova ? "Nova Empresa" : empresa.razaoSocial || "Empresa"}
         </h1>
       </div>
@@ -238,28 +238,28 @@ function EmpresaWizardInner() {
                 onClick={() => canNavigate && setStep(i)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                   i === step
-                    ? "bg-blue-600 text-white"
+                    ? "bg-primary text-white"
                     : canNavigate
-                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 cursor-pointer hover:bg-blue-200"
-                    : "bg-gray-100 text-gray-400 dark:bg-gray-800 cursor-default"
+                    ? "bg-primary/10 text-primary dark:bg-primary/30 dark:text-primary cursor-pointer hover:bg-primary/20"
+                    : "bg-muted text-muted-foreground dark:bg-muted cursor-default"
                 }`}
               >
                 <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                  i === step ? "bg-white/20" : i < step ? "bg-blue-200" : "bg-gray-200 dark:bg-gray-700"
+                  i === step ? "bg-white/20" : i < step ? "bg-primary/20" : "bg-muted dark:bg-muted"
                 }`}>
                   {i + 1}
                 </span>
                 {label}
               </button>
-              {i < STEPS.length - 1 && <ChevronRight className="h-3 w-3 text-gray-300" />}
+              {i < STEPS.length - 1 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
             </div>
           )
         })}
       </div>
 
-      <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-6">
+      <div className="rounded-xl border border-border bg-card p-6">
         {loadingEmpresa ? (
-          <div className="flex items-center justify-center py-20 text-gray-400 text-sm">Carregando...</div>
+          <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">Carregando...</div>
         ) : step === 0 ? (
           <Step1Empresa data={empresa} onChange={setEmpresa} onNext={avancarDoPasso1} />
         ) : step === 1 ? (
@@ -312,7 +312,7 @@ function EmpresaWizardInner() {
       </div>
 
       {savedEmpresaId && (
-        <p className="text-xs text-center text-gray-400 mt-4">
+        <p className="text-xs text-center text-muted-foreground mt-4">
           ID da empresa: {savedEmpresaId} {saving && "— salvando..."}
         </p>
       )}

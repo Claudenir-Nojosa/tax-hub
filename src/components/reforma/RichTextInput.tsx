@@ -62,7 +62,7 @@ export default function RichTextInput({ value, onChange, placeholder, disabled, 
             title={titulo}
             // onMouseDown + preventDefault: não rouba o foco/seleção do editor
             onMouseDown={(e) => { e.preventDefault(); exec(cmd) }}
-            className="h-7 w-7 rounded flex items-center justify-center text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:text-accent-foreground hover:bg-accent transition-colors"
           >
             <Icon className="h-3.5 w-3.5" />
           </button>
@@ -74,7 +74,7 @@ export default function RichTextInput({ value, onChange, placeholder, disabled, 
         suppressContentEditableWarning
         onInput={() => ref.current && onChange(ref.current.innerHTML)}
         data-placeholder={placeholder}
-        className={`${minHeightClass} max-h-64 overflow-y-auto px-3 py-2 text-sm outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:pointer-events-none`}
+        className={`${minHeightClass} max-h-64 overflow-y-auto px-3 py-2 text-sm outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground empty:before:pointer-events-none`}
       />
     </div>
   )

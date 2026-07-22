@@ -201,26 +201,26 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
 
       {/* Dados empresa */}
       {data.razaoSocial && (
-        <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-4 bg-gray-50 dark:bg-gray-800/50">
+        <div className="rounded-lg border border-border p-4 space-y-4 bg-muted">
           <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-blue-500" />
+            <Building2 className="h-4 w-4 text-primary" />
             <span className="font-semibold text-sm">{data.razaoSocial}</span>
             {data.nomeFantasia && (
-              <span className="text-xs text-gray-500">({data.nomeFantasia})</span>
+              <span className="text-xs text-muted-foreground">({data.nomeFantasia})</span>
             )}
             <Badge variant={isSimples ? "default" : "outline"} className="ml-auto text-xs">
               {REGIMES.find((r) => r.value === data.regime)?.label ?? (isSimples ? "Simples Nacional" : "Regime Regular")}
             </Badge>
           </div>
           {data.cnaePrincipal && (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               {data.cnaePrincipalCodigo && <span className="font-mono">{data.cnaePrincipalCodigo}</span>} {data.cnaePrincipal}
             </p>
           )}
           {data.cnaesSecundarios.length > 0 && (
             <div className="space-y-1">
-              <p className="text-xs font-medium text-gray-600 dark:text-gray-400">CNAEs secundários</p>
-              <ul className="text-xs text-gray-500 space-y-0.5">
+              <p className="text-xs font-medium text-muted-foreground">CNAEs secundários</p>
+              <ul className="text-xs text-muted-foreground space-y-0.5">
                 {data.cnaesSecundarios.map((c) => (
                   <li key={c.codigo}>
                     <span className="font-mono">{c.codigo}</span> {c.descricao}
@@ -229,9 +229,9 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
               </ul>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-            <span>UF: <span className="text-gray-700 dark:text-gray-300 font-medium">{data.uf}</span></span>
-            <span>Município: <span className="text-gray-700 dark:text-gray-300 font-medium">{data.municipio}</span></span>
+          <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+            <span>UF: <span className="text-foreground font-medium">{data.uf}</span></span>
+            <span>Município: <span className="text-foreground font-medium">{data.municipio}</span></span>
           </div>
         </div>
       )}
@@ -273,7 +273,7 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
       {/* Logo da empresa (opcional) */}
       <div className="space-y-2">
         <Label>A empresa possui logo?</Label>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted-foreground">
           Se tiver, envie aqui (PNG ou JPG, até 1MB) — ela aparece em todas as abas do Excel
           gerado. Sem logo, usamos a logo padrão do TaxHub.
         </p>
@@ -289,12 +289,12 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
           }}
         />
         {data.logoDataUrl ? (
-          <div className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-3 py-2">
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-muted px-3 py-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={data.logoDataUrl} alt="Logo da empresa" className="h-10 max-w-[160px] object-contain" />
-            <span className="text-xs text-gray-500 flex-1">Logo da empresa carregada</span>
+            <span className="text-xs text-muted-foreground flex-1">Logo da empresa carregada</span>
             <Button variant="outline" size="sm" onClick={() => logoInputRef.current?.click()}>Trocar</Button>
-            <button onClick={() => onChange({ ...data, logoDataUrl: null })} className="text-gray-400 hover:text-red-500">
+            <button onClick={() => onChange({ ...data, logoDataUrl: null })} className="text-muted-foreground hover:text-destructive">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -308,7 +308,7 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
       {/* Filiais / grupo comercial */}
       <div className="space-y-2">
         <Label>Outros CNPJs (matriz/filiais ou grupo comercial)</Label>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted-foreground">
           Se a simulação envolve mais de um CNPJ (matriz + filiais, ou empresas do mesmo grupo),
           adicione aqui — cada um vira um estabelecimento nos filtros do Excel final (Valor Total
           NF-e, Quadro Comparativo), com seu próprio regime tributário. O CNPJ buscado acima
@@ -332,12 +332,12 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
             {data.estabelecimentosAdicionais.map((e) => (
               <li
                 key={e.cnpj}
-                className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-3 py-2"
+                className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted px-3 py-2"
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <Landmark className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                  <Landmark className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <span className="text-xs font-medium truncate">{e.razaoSocial}</span>
-                  <span className="text-xs font-mono text-gray-400 shrink-0">{formatCNPJ(e.cnpj)}</span>
+                  <span className="text-xs font-mono text-muted-foreground shrink-0">{formatCNPJ(e.cnpj)}</span>
                 </div>
                 <Select value={e.regime} onValueChange={(v) => alterarRegimeEstabelecimento(e.cnpj, v)}>
                   <SelectTrigger className="h-7 w-44 text-xs shrink-0">
@@ -349,7 +349,7 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
                     ))}
                   </SelectContent>
                 </Select>
-                <button onClick={() => removerEstabelecimento(e.cnpj)} className="text-gray-400 hover:text-red-500 shrink-0">
+                <button onClick={() => removerEstabelecimento(e.cnpj)} className="text-muted-foreground hover:text-destructive shrink-0">
                   <X className="h-4 w-4" />
                 </button>
               </li>
@@ -359,7 +359,7 @@ export default function Step1Empresa({ data, onChange, onNext }: Props) {
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={onNext} disabled={!canProceed} className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button onClick={onNext} disabled={!canProceed} className="bg-primary hover:bg-primary/90 text-primary-foreground">
           Próximo: Premissas →
         </Button>
       </div>

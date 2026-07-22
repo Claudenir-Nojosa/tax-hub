@@ -35,15 +35,15 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-        <span className="ml-3 text-gray-500">Calculando simulação...</span>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-3 text-muted-foreground">Calculando simulação...</span>
       </div>
     )
   }
 
   if (!resultados.length) {
     return (
-      <div className="text-center py-10 text-gray-500">
+      <div className="text-center py-10 text-muted-foreground">
         <p>Nenhum resultado disponível. Volte e configure as premissas.</p>
         <Button variant="outline" onClick={onBack} className="mt-4">← Voltar</Button>
       </div>
@@ -57,28 +57,28 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
     <div className="space-y-8">
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-          <p className="text-xs text-gray-500 mb-1">Delta acumulado 2026–2033</p>
+        <div className="rounded-lg border border-border p-4">
+          <p className="text-xs text-muted-foreground mb-1">Delta acumulado 2026–2033</p>
           <p className={`text-lg font-bold ${deltaAcumulado < 0 ? "text-green-600" : "text-red-600"}`}>
             {formatarMoeda(deltaAcumulado)}
           </p>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {deltaAcumulado < 0 ? "Economia com a reforma" : "Custo adicional com a reforma"}
           </p>
         </div>
         {temFCBF && (
-          <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-            <p className="text-xs text-gray-500 mb-1">Economia FCBF 2026–2032</p>
+          <div className="rounded-lg border border-border p-4">
+            <p className="text-xs text-muted-foreground mb-1">Economia FCBF 2026–2032</p>
             <p className="text-lg font-bold text-green-600">{formatarMoeda(economiaFCBF)}</p>
-            <p className="text-xs text-gray-400">Crédito presumido acumulado</p>
+            <p className="text-xs text-muted-foreground">Crédito presumido acumulado</p>
           </div>
         )}
-        <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-          <p className="text-xs text-gray-500 mb-1">Carga em 2033 (pós-reforma)</p>
-          <p className="text-lg font-bold text-blue-600">
+        <div className="rounded-lg border border-border p-4">
+          <p className="text-xs text-muted-foreground mb-1">Carga em 2033 (pós-reforma)</p>
+          <p className="text-lg font-bold text-primary">
             {formatarPorcentagem(resultados[resultados.length - 1].cargaReformaPct)}
           </p>
-          <p className="text-xs text-gray-400">Da receita bruta</p>
+          <p className="text-xs text-muted-foreground">Da receita bruta</p>
         </div>
       </div>
 
@@ -87,13 +87,13 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
         <div className="flex items-center gap-2 mb-4">
           <h3 className="font-semibold text-sm">Evolução da Carga Tributária 2026–2033</h3>
           {usouXml && (
-            <Badge className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border-blue-300">
+            <Badge className="text-xs bg-primary/10 text-primary border-primary/30">
               Dados reais (NF-e)
             </Badge>
           )}
         </div>
         <TransicaoChart resultados={resultados} temFCBF={temFCBF} />
-        <p className="text-xs text-gray-400 mt-2 text-center">
+        <p className="text-xs text-muted-foreground mt-2 text-center">
           Barras empilhadas = composição da carga reforma | Linha amarela = carga atual (baseline)
           {temFCBF && " | Linha verde = carga líquida com FCBF"}
         </p>
@@ -105,18 +105,18 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
         <div className="overflow-x-auto">
           <table className="w-full text-xs border-collapse">
             <thead>
-              <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+              <tr className="border-b border-border bg-muted">
                 <th className="text-left py-2 px-3 font-medium">Ano</th>
                 <th className="text-right py-2 px-3 font-medium">Carga Atual</th>
                 <th className="text-right py-2 px-3 font-medium">CBS</th>
                 <th className="text-right py-2 px-3 font-medium">IBS</th>
-                <th className="text-center py-2 px-3 font-medium text-gray-400">ICMS %</th>
+                <th className="text-center py-2 px-3 font-medium text-muted-foreground">ICMS %</th>
                 <th className="text-right py-2 px-3 font-medium">ICMS</th>
                 <th className="text-right py-2 px-3 font-medium">
                   <div className="flex items-center justify-end gap-1">
                     Crédito IBS/CBS
                     {resultados[0]?.usouEfd && (
-                      <span className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-1 py-0.5 rounded font-medium">EFD</span>
+                      <span className="text-xs bg-primary/10 text-primary px-1 py-0.5 rounded font-medium">EFD</span>
                     )}
                   </div>
                 </th>
@@ -128,21 +128,21 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
             </thead>
             <tbody>
               {resultados.map((r) => (
-                <tr key={r.ano} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <tr key={r.ano} className="border-b border-border hover:bg-muted/50">
                   <td className="py-2 px-3 font-medium">{r.ano}</td>
                   <td className="py-2 px-3 text-right">
                     <div>{fmt(r.cargaAtualTotal)}</div>
-                    <div className="text-gray-400">{formatarPorcentagem(r.cargaAtualPct)}</div>
+                    <div className="text-muted-foreground">{formatarPorcentagem(r.cargaAtualPct)}</div>
                   </td>
-                  <td className="py-2 px-3 text-right text-blue-600">
+                  <td className="py-2 px-3 text-right text-primary">
                     {fmt(r.cbs)}
-                    {r.ano === 2026 && <div className="text-xs text-gray-400 italic">teste</div>}
+                    {r.ano === 2026 && <div className="text-xs text-muted-foreground italic">teste</div>}
                   </td>
-                  <td className="py-2 px-3 text-right text-blue-500">
+                  <td className="py-2 px-3 text-right text-primary">
                     {fmt(r.ibsTotal)}
-                    {r.ano === 2026 && <div className="text-xs text-gray-400 italic">teste</div>}
+                    {r.ano === 2026 && <div className="text-xs text-muted-foreground italic">teste</div>}
                   </td>
-                  <td className="py-2 px-3 text-center text-gray-400 text-xs">
+                  <td className="py-2 px-3 text-center text-muted-foreground text-xs">
                     {(r.icmsReducaoFator * 100).toFixed(0)}%
                   </td>
                   <td className="py-2 px-3 text-right">{fmt(r.icmsReforma)}</td>
@@ -151,7 +151,7 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
                   </td>
                   <td className="py-2 px-3 text-right font-medium">
                     {fmt(r.cargaReformaTotal)}
-                    <div className="text-gray-400">{formatarPorcentagem(r.cargaReformaPct)}</div>
+                    <div className="text-muted-foreground">{formatarPorcentagem(r.cargaReformaPct)}</div>
                   </td>
                   {temFCBF && (
                     <td className="py-2 px-3 text-right text-green-600">
@@ -192,7 +192,7 @@ export default function Step3Simulacao({ resultados, temFCBF, loading, usouXml, 
             <FileSpreadsheet className="h-4 w-4" />
             Exportar Excel
           </Button>
-          <Button onClick={onNext} className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Button onClick={onNext} className="bg-primary hover:bg-primary/90 text-primary-foreground">
             Ver Análise Comparativa →
           </Button>
         </div>

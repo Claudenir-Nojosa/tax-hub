@@ -77,10 +77,10 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 space-y-5">
-      <div className="flex items-center gap-3 pb-3 border-b border-gray-100 dark:border-gray-800">
+    <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+      <div className="flex items-center gap-3 pb-3 border-b border-border">
         <div className={`w-1 h-5 ${color} rounded-full flex-shrink-0`} />
-        <h3 className="font-semibold text-gray-900 dark:text-white text-sm">{title}</h3>
+        <h3 className="font-semibold text-foreground text-sm">{title}</h3>
       </div>
       {children}
     </div>
@@ -89,7 +89,7 @@ function SectionCard({
 
 function FL({ children }: { children: React.ReactNode }) {
   return (
-    <Label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
       {children}
     </Label>
   );
@@ -111,8 +111,8 @@ function RatingPicker({
           onClick={() => onChange(n)}
           className={`w-10 h-10 rounded-lg border text-sm font-semibold transition-colors ${
             value === n
-              ? "bg-blue-600 text-white border-blue-600"
-              : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-blue-400"
+              ? "bg-primary text-primary-foreground border-primary"
+              : "border-border text-muted-foreground hover:border-primary"
           }`}
         >
           {n}
@@ -129,7 +129,7 @@ export default function BriefingInterna({ data, onChange }: Props) {
   return (
     <div className="space-y-6">
       {/* Business */}
-      <SectionCard title="Business" color="bg-blue-500">
+      <SectionCard title="Business" color="bg-primary">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <FL>Regime Atual — Federal</FL>

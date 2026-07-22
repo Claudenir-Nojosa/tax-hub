@@ -29,8 +29,8 @@ export default function LogoutButtonSimple({ isCollapsed = false }: LogoutButton
     <Button
       variant="ghost"
       className={`
-        w-full rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 
-        text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white 
+        w-full rounded-xl hover:bg-sidebar-accent/60
+        text-sidebar-foreground hover:text-sidebar-accent-foreground
         transition-all duration-200
         ${isCollapsed ? "justify-center p-3" : "justify-start p-3"}
         ${isLoading ? "opacity-50 cursor-not-allowed" : ""}

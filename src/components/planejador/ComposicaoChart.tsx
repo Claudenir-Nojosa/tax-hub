@@ -48,18 +48,18 @@ const CustomTooltip = ({
     const data = payload[0];
     const total = data.payload.valor;
     return (
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-xl">
-        <p className="font-semibold text-gray-900 dark:text-white mb-1">
+      <div className="bg-card border border-border rounded-xl p-4 shadow-xl">
+        <p className="font-semibold text-foreground mb-1">
           {data.name}
         </p>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
+        <p className="text-sm text-muted-foreground">
           Valor:{" "}
-          <span className="font-bold text-gray-900 dark:text-white">
+          <span className="font-bold text-foreground">
             {formatCurrency(total)}
           </span>
         </p>
         {data.payload.aliquota > 0 && (
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-muted-foreground">
             Alíquota:{" "}
             <span className="font-bold">{data.payload.aliquota.toFixed(2)}%</span>
           </p>
@@ -110,7 +110,7 @@ export default function ComposicaoChart({ impostos }: Props) {
 
   if (data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400">
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
         Sem dados para exibir
       </div>
     );

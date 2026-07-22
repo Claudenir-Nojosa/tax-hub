@@ -92,7 +92,7 @@ export default function RegisterForm() {
       case "weak": return "bg-red-500";
       case "medium": return "bg-orange-500";
       case "strong": return "bg-green-500";
-      default: return "bg-gray-300 dark:bg-gray-700";
+      default: return "bg-muted dark:bg-muted";
     }
   };
 
@@ -157,7 +157,7 @@ export default function RegisterForm() {
     <Form action={handleFormAction}>
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Nome</Label>
+          <Label className="text-sm font-medium text-foreground">Nome</Label>
           <Input
             type="text"
             name="name"
@@ -169,7 +169,7 @@ export default function RegisterForm() {
         </div>
 
         <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Email</Label>
+          <Label className="text-sm font-medium text-foreground">Email</Label>
           <Input
             type="email"
             name="email"
@@ -181,7 +181,7 @@ export default function RegisterForm() {
         </div>
 
         <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Senha</Label>
+          <Label className="text-sm font-medium text-foreground">Senha</Label>
           <Input
             type="password"
             name="password"
@@ -196,14 +196,14 @@ export default function RegisterForm() {
 
           {formData.password && (
             <div className="mt-2 space-y-1">
-              <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div className="h-2 w-full bg-muted dark:bg-muted rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all duration-300 ${getStrengthBarColor()}`}
                   style={{ width: `${getStrengthPercentage()}%` }}
                 />
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-600 dark:text-gray-400">Força da senha:</span>
+                <span className="text-xs text-muted-foreground">Força da senha:</span>
                 <span className={`text-xs font-medium ${getStrengthBarColor().replace("bg-", "text-")}`}>
                   {getStrengthText()}
                 </span>
@@ -214,13 +214,13 @@ export default function RegisterForm() {
           {passwordError && (
             <p className="text-xs text-red-500 dark:text-red-400 mt-1">{passwordError}</p>
           )}
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Mínimo 6 caracteres com pelo menos um número e um caractere especial
           </p>
         </div>
 
         <div className="space-y-2">
-          <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <Label className="text-sm font-medium text-foreground">
             Confirmar Senha
           </Label>
           <Input
@@ -240,7 +240,7 @@ export default function RegisterForm() {
         </div>
 
         <Button
-          className="w-full mt-4 bg-gradient-to-r from-[#00cfec] to-[#007cca] hover:from-[#00cfec]/90 hover:to-[#007cca]/90 text-white font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full mt-4 bg-gradient-to-r from-[hsl(var(--chart-4))] to-[hsl(var(--primary))] hover:from-[hsl(var(--chart-4))]/90 hover:to-[hsl(var(--primary))]/90 text-white font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
           type="submit"
           disabled={isPending || passwordError !== "" || confirmPasswordError !== "" || passwordStrength === "weak"}
         >

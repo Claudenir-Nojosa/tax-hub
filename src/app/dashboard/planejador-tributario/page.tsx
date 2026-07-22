@@ -46,7 +46,7 @@ const ComparativoChart = dynamic(
     ssr: false,
     loading: () => (
       <div className="h-80 flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     ),
   }
@@ -57,7 +57,7 @@ const ComposicaoChart = dynamic(
     ssr: false,
     loading: () => (
       <div className="h-64 flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     ),
   }
@@ -110,7 +110,7 @@ const REGIME_LABELS: Record<string, string> = {
 };
 
 const REGIME_COLORS: Record<string, string> = {
-  simples: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  simples: "bg-primary/10 text-primary",
   lucro_presumido: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
   lucro_real: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
 };
@@ -201,14 +201,14 @@ export default function PlanejadorPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center">
-              <Target className="h-5 w-5 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
+              <Target className="h-5 w-5 text-primary-foreground" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h1 className="text-2xl font-bold text-foreground">
               Planejador Tributário
             </h1>
           </div>
-          <p className="text-gray-500 dark:text-gray-400 text-sm ml-13">
+          <p className="text-muted-foreground text-sm ml-13">
             Preencha o briefing e gere um planejamento tributário completo com IA.
           </p>
         </div>
@@ -226,7 +226,7 @@ export default function PlanejadorPage() {
           <div
             className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
               fase === "briefing"
-                ? "bg-blue-600 text-white ring-4 ring-blue-100 dark:ring-blue-900"
+                ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
                 : "bg-green-500 text-white"
             }`}
           >
@@ -234,26 +234,26 @@ export default function PlanejadorPage() {
           </div>
           <span
             className={`text-sm font-medium ${
-              fase === "briefing" ? "text-blue-600 dark:text-blue-400" : "text-green-600 dark:text-green-400"
+              fase === "briefing" ? "text-primary" : "text-green-600 dark:text-green-400"
             }`}
           >
             Briefing
           </span>
         </div>
-        <div className={`h-px flex-1 max-w-16 ${fase === "resultado" ? "bg-green-400" : "bg-gray-200 dark:bg-gray-700"}`} />
+        <div className={`h-px flex-1 max-w-16 ${fase === "resultado" ? "bg-green-400" : "bg-border"}`} />
         <div className="flex items-center gap-2">
           <div
             className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
               fase === "resultado"
-                ? "bg-blue-600 text-white ring-4 ring-blue-100 dark:ring-blue-900"
-                : "bg-gray-100 dark:bg-gray-800 text-gray-400"
+                ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
+                : "bg-muted text-muted-foreground"
             }`}
           >
             2
           </div>
           <span
             className={`text-sm font-medium ${
-              fase === "resultado" ? "text-blue-600 dark:text-blue-400" : "text-gray-400"
+              fase === "resultado" ? "text-primary" : "text-muted-foreground"
             }`}
           >
             Resultado
@@ -265,10 +265,10 @@ export default function PlanejadorPage() {
       {fase === "briefing" && (
         <div className="max-w-3xl mx-auto space-y-6">
           {/* Identificação */}
-          <Card className="border-gray-200 dark:border-gray-800">
+          <Card className="border-border">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-blue-600" />
+                <Building2 className="h-5 w-5 text-primary" />
                 <CardTitle className="text-base">Identificação</CardTitle>
               </div>
             </CardHeader>
@@ -311,20 +311,20 @@ export default function PlanejadorPage() {
 
           {/* Legenda das seções */}
           <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex items-start gap-2.5 flex-1 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900">
-              <Users className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+            <div className="flex items-start gap-2.5 flex-1 p-3 rounded-lg bg-primary/10 border border-primary/20">
+              <Users className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-xs font-semibold text-blue-800 dark:text-blue-300">Seção Cliente</p>
-                <p className="text-xs text-blue-600 dark:text-blue-400">
+                <p className="text-xs font-semibold text-primary">Seção Cliente</p>
+                <p className="text-xs text-primary/80">
                   Dados fornecidos pelo cliente durante a reunião de briefing
                 </p>
               </div>
             </div>
-            <div className="flex items-start gap-2.5 flex-1 p-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-              <Info className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+            <div className="flex items-start gap-2.5 flex-1 p-3 rounded-lg bg-muted border border-border">
+              <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">Seção Interna</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs font-semibold text-foreground">Seção Interna</p>
+                <p className="text-xs text-muted-foreground">
                   Dados levantados internamente pela equipe técnica
                 </p>
               </div>
@@ -333,14 +333,14 @@ export default function PlanejadorPage() {
 
           {/* Custom Tabs */}
           <div>
-            <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6">
+            <div className="flex border-b border-border mb-6">
               <button
                 type="button"
                 onClick={() => setActiveTab("cliente")}
                 className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
                   activeTab === "cliente"
-                    ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                    : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Users className="h-4 w-4" />
@@ -351,8 +351,8 @@ export default function PlanejadorPage() {
                 onClick={() => setActiveTab("interna")}
                 className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
                   activeTab === "interna"
-                    ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                    : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Building2 className="h-4 w-4" />
@@ -373,7 +373,7 @@ export default function PlanejadorPage() {
             <Button
               onClick={handleAnalyze}
               disabled={loading || !identificacao.nomeEmpresa.trim()}
-              className="bg-blue-600 hover:bg-blue-700 text-white h-11 px-8 font-semibold"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground h-11 px-8 font-semibold"
             >
               {loading ? (
                 <>
@@ -401,7 +401,7 @@ export default function PlanejadorPage() {
               variant="ghost"
               size="sm"
               onClick={() => setFase("briefing")}
-              className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 -ml-2"
+              className="text-muted-foreground hover:text-foreground -ml-2"
             >
               <ArrowLeft className="h-4 w-4 mr-1" />
               Voltar ao Briefing
@@ -434,36 +434,36 @@ export default function PlanejadorPage() {
             <Card
               className={`border sm:col-span-1 ${
                 analise.economiaEstimada > 0
-                  ? "border-blue-200 dark:border-blue-900 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/30 dark:to-cyan-950/20"
-                  : "border-gray-200 dark:border-gray-800"
+                  ? "border-primary/20 bg-gradient-to-br from-primary/10 to-primary/5"
+                  : "border-border"
               }`}
             >
               <CardContent className="pt-5 pb-5">
                 <div className="flex items-start justify-between mb-3">
                   {analise.economiaEstimada > 0 ? (
-                    <TrendingDown className="h-5 w-5 text-blue-600" />
+                    <TrendingDown className="h-5 w-5 text-primary" />
                   ) : (
                     <TrendingUp className="h-5 w-5 text-amber-500" />
                   )}
                   <Badge
                     className={
                       analise.economiaEstimada > 0
-                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 text-xs"
+                        ? "bg-primary/10 text-primary text-xs"
                         : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 text-xs"
                     }
                   >
                     vs. regime atual
                   </Badge>
                 </div>
-                <p className="text-xs text-blue-700 dark:text-blue-400 font-medium mb-1">
+                <p className="text-xs text-primary/80 font-medium mb-1">
                   {analise.economiaEstimada > 0 ? "Economia Anual Estimada" : "Diferença Anual"}
                 </p>
-                <p className="text-xl font-bold text-blue-900 dark:text-blue-200">
+                <p className="text-xl font-bold text-foreground">
                   {analise.economiaEstimada > 0 ? "" : "-"}
                   {formatCurrency(Math.abs(analise.economiaEstimada))}
                 </p>
                 {analise.economiaPercentual !== 0 && (
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                  <p className="text-xs text-primary/80 mt-1">
                     {Math.abs(analise.economiaPercentual).toFixed(1)}% de{" "}
                     {analise.economiaEstimada > 0 ? "redução" : "aumento"}
                   </p>
@@ -471,22 +471,22 @@ export default function PlanejadorPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-gray-200 dark:border-gray-800 sm:col-span-1">
+            <Card className="border-border sm:col-span-1">
               <CardContent className="pt-5 pb-5">
                 <div className="flex items-start justify-between mb-3">
-                  <BarChart2 className="h-5 w-5 text-gray-500" />
-                  <Badge className="bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 text-xs">
+                  <BarChart2 className="h-5 w-5 text-muted-foreground" />
+                  <Badge className="bg-muted text-muted-foreground text-xs">
                     Estimativa
                   </Badge>
                 </div>
-                <p className="text-xs text-gray-500 font-medium mb-1">Carga Tributária Estimada</p>
-                <p className="text-xl font-bold text-gray-900 dark:text-white">
+                <p className="text-xs text-muted-foreground font-medium mb-1">Carga Tributária Estimada</p>
+                <p className="text-xl font-bold text-foreground">
                   {analise.comparativo
                     .find((r) => r.regime === analise.regimeRecomendado)
                     ?.cargaPercentual.toFixed(1)}
                   % do faturamento
                 </p>
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   {formatCurrency(
                     analise.comparativo.find((r) => r.regime === analise.regimeRecomendado)
                       ?.totalAnual || 0
@@ -498,7 +498,7 @@ export default function PlanejadorPage() {
           </div>
 
           {/* Justificativa */}
-          <Card className="border-gray-200 dark:border-gray-800">
+          <Card className="border-border">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
                 <Lightbulb className="h-5 w-5 text-amber-500" />
@@ -506,7 +506,7 @@ export default function PlanejadorPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+              <p className="text-sm text-foreground leading-relaxed">
                 {analise.justificativa}
               </p>
             </CardContent>
@@ -514,10 +514,10 @@ export default function PlanejadorPage() {
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2 border-gray-200 dark:border-gray-800">
+            <Card className="lg:col-span-2 border-border">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
-                  <BarChart2 className="h-5 w-5 text-blue-600" />
+                  <BarChart2 className="h-5 w-5 text-primary" />
                   <CardTitle className="text-base">Comparativo por Regime</CardTitle>
                 </div>
                 <CardDescription className="text-xs">
@@ -533,7 +533,7 @@ export default function PlanejadorPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-gray-200 dark:border-gray-800">
+            <Card className="border-border">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <PieChart className="h-5 w-5 text-green-600" />
@@ -555,7 +555,7 @@ export default function PlanejadorPage() {
           </div>
 
           {/* Tabela Detalhada */}
-          <Card className="border-gray-200 dark:border-gray-800">
+          <Card className="border-border">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Detalhamento por Regime</CardTitle>
               <CardDescription className="text-xs">
@@ -567,7 +567,7 @@ export default function PlanejadorPage() {
                 {analise.comparativo.map((regime) => (
                   <div key={regime.regime}>
                     <div className="flex items-center gap-3 mb-3">
-                      <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
+                      <h3 className="font-semibold text-foreground text-sm">
                         {regime.label}
                       </h3>
                       {regime.regime === analise.regimeRecomendado && (
@@ -576,35 +576,35 @@ export default function PlanejadorPage() {
                         </Badge>
                       )}
                       {!regime.elegivel && (
-                        <Badge variant="outline" className="text-xs text-red-500 border-red-300">
+                        <Badge variant="outline" className="text-xs text-destructive border-destructive/40">
                           Não elegível
                         </Badge>
                       )}
-                      <span className="ml-auto text-sm font-bold text-gray-700 dark:text-gray-300">
+                      <span className="ml-auto text-sm font-bold text-foreground">
                         {regime.cargaPercentual.toFixed(1)}% ={" "}
                         {formatCurrency(regime.totalAnual)}/ano
                       </span>
                     </div>
 
                     {regime.motivoInelegivel && (
-                      <p className="text-xs text-red-500 mb-2">{regime.motivoInelegivel}</p>
+                      <p className="text-xs text-destructive mb-2">{regime.motivoInelegivel}</p>
                     )}
 
                     {regime.impostos && regime.impostos.length > 0 && (
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="border-b border-gray-100 dark:border-gray-800">
-                              <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">
+                            <tr className="border-b border-border">
+                              <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">
                                 Tributo
                               </th>
-                              <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">
+                              <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">
                                 Base de Cálculo
                               </th>
-                              <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">
+                              <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">
                                 Alíquota
                               </th>
-                              <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">
+                              <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">
                                 Valor Anual
                               </th>
                             </tr>
@@ -613,30 +613,30 @@ export default function PlanejadorPage() {
                             {regime.impostos.map((imp, idx) => (
                               <tr
                                 key={idx}
-                                className="border-b border-gray-50 dark:border-gray-900 hover:bg-gray-50 dark:hover:bg-gray-900/30"
+                                className="border-b border-border hover:bg-muted"
                               >
-                                <td className="py-2 px-3 font-medium text-gray-900 dark:text-white">
+                                <td className="py-2 px-3 font-medium text-foreground">
                                   {imp.nome}
                                 </td>
-                                <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">
+                                <td className="py-2 px-3 text-right text-muted-foreground">
                                   {formatCurrency(imp.baseCalculo)}
                                 </td>
-                                <td className="py-2 px-3 text-right text-gray-600 dark:text-gray-400">
+                                <td className="py-2 px-3 text-right text-muted-foreground">
                                   {imp.aliquota.toFixed(2)}%
                                 </td>
-                                <td className="py-2 px-3 text-right font-semibold text-gray-900 dark:text-white">
+                                <td className="py-2 px-3 text-right font-semibold text-foreground">
                                   {formatCurrency(imp.valor)}
                                 </td>
                               </tr>
                             ))}
-                            <tr className="bg-gray-50 dark:bg-gray-900/40">
+                            <tr className="bg-muted">
                               <td
                                 colSpan={3}
-                                className="py-2 px-3 text-xs font-bold text-gray-700 dark:text-gray-300"
+                                className="py-2 px-3 text-xs font-bold text-foreground"
                               >
                                 Total estimado
                               </td>
-                              <td className="py-2 px-3 text-right font-bold text-gray-900 dark:text-white">
+                              <td className="py-2 px-3 text-right font-bold text-foreground">
                                 {formatCurrency(regime.totalAnual)}
                               </td>
                             </tr>
@@ -667,7 +667,7 @@ export default function PlanejadorPage() {
                   {analise.oportunidades.map((op, i) => (
                     <li key={i} className="flex items-start gap-2.5">
                       <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{op}</span>
+                      <span className="text-sm text-foreground">{op}</span>
                     </li>
                   ))}
                 </ul>
@@ -686,21 +686,21 @@ export default function PlanejadorPage() {
                   {analise.riscos.map((r, i) => (
                     <li key={i} className="flex items-start gap-2.5">
                       <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{r}</span>
+                      <span className="text-sm text-foreground">{r}</span>
                     </li>
                   ))}
                 </ul>
                 {analise.consideracoes && analise.consideracoes.length > 0 && (
                   <>
                     <Separator className="my-3" />
-                    <p className="text-xs font-semibold text-gray-500 mb-2">
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">
                       Considerações adicionais
                     </p>
                     <ul className="space-y-2">
                       {analise.consideracoes.map((c, i) => (
                         <li key={i} className="flex items-start gap-2.5">
-                          <CheckCircle className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                          <span className="text-sm text-gray-600 dark:text-gray-400">{c}</span>
+                          <CheckCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                          <span className="text-sm text-muted-foreground">{c}</span>
                         </li>
                       ))}
                     </ul>
@@ -711,7 +711,7 @@ export default function PlanejadorPage() {
           </div>
 
           {/* Export */}
-          <Card className="border-gray-200 dark:border-gray-800">
+          <Card className="border-border">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Exportar Relatório</CardTitle>
               <CardDescription className="text-xs">
@@ -723,7 +723,7 @@ export default function PlanejadorPage() {
             </CardContent>
           </Card>
 
-          <p className="text-xs text-gray-400 text-center">
+          <p className="text-xs text-muted-foreground text-center">
             * As estimativas são baseadas nas informações fornecidas e nas alíquotas vigentes em
             2025. Consulte sempre um contador ou advogado tributarista antes de tomar decisões
             fiscais.

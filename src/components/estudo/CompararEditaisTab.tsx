@@ -87,14 +87,14 @@ export default function CompararEditaisTab() {
   }
 
   if (loading) return (
-    <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-blue-400" /></div>
+    <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
   )
 
   if (concursos.length < 2) return (
-    <div className="text-center py-16 border-2 border-dashed border-gray-700 rounded-xl">
-      <BookOpen className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-      <p className="text-gray-400 mb-2">Você precisa de pelo menos 2 concursos para comparar.</p>
-      <Link href="/dashboard/estudo/concursos" className="text-blue-400 text-sm hover:underline">
+    <div className="text-center py-16 border-2 border-dashed border-border rounded-xl">
+      <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+      <p className="text-muted-foreground mb-2">Você precisa de pelo menos 2 concursos para comparar.</p>
+      <Link href="/dashboard/estudo/concursos" className="text-primary text-sm hover:underline">
         Gerenciar concursos →
       </Link>
     </div>
@@ -109,11 +109,11 @@ export default function CompararEditaisTab() {
           { label: "Concurso B", value: idB, set: setIdB, excluir: idA },
         ].map(({ label, value, set, excluir }) => (
           <div key={label} className="space-y-1">
-            <label className="text-xs text-gray-400 font-medium">{label}</label>
+            <label className="text-xs text-muted-foreground font-medium">{label}</label>
             <select
               value={value}
               onChange={e => set(e.target.value)}
-              className="w-full text-sm bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full text-sm bg-muted border border-border text-foreground rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Selecionar...</option>
               {concursos
@@ -128,34 +128,34 @@ export default function CompararEditaisTab() {
       {resultado && (
         <>
           {/* Badge similaridade */}
-          <div className="flex items-center justify-center gap-4 py-4 bg-gray-800/50 rounded-xl border border-gray-700">
+          <div className="flex items-center justify-center gap-4 py-4 bg-muted/50 rounded-xl border border-border">
             <div className="text-center">
               <div className={`text-4xl font-bold ${resultado.similaridade >= 70 ? "text-emerald-400" : resultado.similaridade >= 40 ? "text-amber-400" : "text-red-400"}`}>
                 {resultado.similaridade}%
               </div>
-              <div className="text-xs text-gray-400 mt-1">Similaridade de matérias</div>
+              <div className="text-xs text-muted-foreground mt-1">Similaridade de matérias</div>
             </div>
-            <div className="h-16 w-px bg-gray-700" />
+            <div className="h-16 w-px bg-muted" />
             <div className="flex gap-6 text-xs">
               <div className="text-center">
                 <div className="text-lg font-semibold text-emerald-400">{resultado.linhas.filter(l => l.emA && l.emB).length}</div>
-                <div className="text-gray-400">Comuns</div>
+                <div className="text-muted-foreground">Comuns</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-semibold text-blue-400">{resultado.linhas.filter(l => l.emA && !l.emB).length}</div>
-                <div className="text-gray-400">Só em A</div>
+                <div className="text-lg font-semibold text-primary">{resultado.linhas.filter(l => l.emA && !l.emB).length}</div>
+                <div className="text-muted-foreground">Só em A</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-orange-400">{resultado.linhas.filter(l => !l.emA && l.emB).length}</div>
-                <div className="text-gray-400">Só em B</div>
+                <div className="text-muted-foreground">Só em B</div>
               </div>
             </div>
           </div>
 
           {/* Legenda */}
-          <div className="flex gap-4 text-xs text-gray-400">
+          <div className="flex gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500/50 inline-block" /> Ambos os concursos</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-500/30 border border-blue-500/50 inline-block" /> Só em {concursoA?.nome}</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-primary/30 border border-primary/50 inline-block" /> Só em {concursoA?.nome}</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-orange-500/30 border border-orange-500/50 inline-block" /> Só em {concursoB?.nome}</span>
           </div>
 
@@ -165,9 +165,9 @@ export default function CompararEditaisTab() {
               const cor = l.emA && l.emB
                 ? "border-emerald-700/50 bg-emerald-900/10"
                 : l.emA
-                ? "border-blue-700/50 bg-blue-900/10"
+                ? "border-primary/50 bg-primary/10"
                 : "border-orange-700/50 bg-orange-900/10"
-              const dotCor = l.emA && l.emB ? "bg-emerald-500" : l.emA ? "bg-blue-500" : "bg-orange-500"
+              const dotCor = l.emA && l.emB ? "bg-emerald-500" : l.emA ? "bg-primary" : "bg-orange-500"
               const isOpen = expandidos.has(l.nome)
 
               return (
@@ -178,8 +178,8 @@ export default function CompararEditaisTab() {
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/5 transition-colors"
                   >
                     <span className={`w-2 h-2 rounded-full shrink-0 ${dotCor}`} />
-                    <span className="text-sm text-gray-100 flex-1">{l.nome}</span>
-                    <div className="flex gap-3 text-xs text-gray-500 shrink-0">
+                    <span className="text-sm text-foreground flex-1">{l.nome}</span>
+                    <div className="flex gap-3 text-xs text-muted-foreground shrink-0">
                       {l.emA && <span>{l.topicosA.length} tóp. A</span>}
                       {l.emB && <span>{l.topicosB.length} tóp. B</span>}
                       {l.emA && l.emB && l.topicosExclusivosB.length > 0 && (
@@ -189,13 +189,13 @@ export default function CompararEditaisTab() {
                   </button>
 
                   {isOpen && (l.emA && l.emB) && l.topicosExclusivosB.length > 0 && (
-                    <div className="px-4 pb-3 border-t border-gray-700/50">
+                    <div className="px-4 pb-3 border-t border-border/50">
                       <p className="text-xs text-orange-400 font-medium mt-2 mb-1.5">
                         Tópicos exclusivos de {concursoB?.nome}:
                       </p>
                       <div className="space-y-0.5">
                         {l.topicosExclusivosB.map((t, i) => (
-                          <div key={i} className="text-xs text-gray-300 flex items-start gap-2">
+                          <div key={i} className="text-xs text-muted-foreground flex items-start gap-2">
                             <span className="text-orange-400 mt-0.5">+</span>
                             <span>{t}</span>
                           </div>
@@ -205,11 +205,11 @@ export default function CompararEditaisTab() {
                   )}
 
                   {isOpen && !l.emA && l.emB && (
-                    <div className="px-4 pb-3 border-t border-gray-700/50">
+                    <div className="px-4 pb-3 border-t border-border/50">
                       <p className="text-xs text-orange-400 font-medium mt-2 mb-1.5">Tópicos a estudar a mais:</p>
                       <div className="space-y-0.5">
                         {l.topicosB.map((t, i) => (
-                          <div key={i} className="text-xs text-gray-300 flex items-start gap-2">
+                          <div key={i} className="text-xs text-muted-foreground flex items-start gap-2">
                             <span className="text-orange-400 mt-0.5">+</span>
                             <span>{t}</span>
                           </div>
@@ -230,8 +230,8 @@ export default function CompararEditaisTab() {
               </h3>
               <div className="space-y-1">
                 {resultado.linhas.filter(l => !l.emA && l.emB).map(l => (
-                  <div key={l.nome} className="text-sm text-gray-300">
-                    • {l.nome} <span className="text-xs text-gray-500">({l.topicosB.length} tópicos)</span>
+                  <div key={l.nome} className="text-sm text-muted-foreground">
+                    • {l.nome} <span className="text-xs text-muted-foreground">({l.topicosB.length} tópicos)</span>
                   </div>
                 ))}
               </div>

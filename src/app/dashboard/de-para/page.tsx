@@ -343,7 +343,7 @@ export default function DeParaPage() {
   };
 const clearAllMappings = () => {
   toast.custom((t) => (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4 max-w-md">
+    <div className="bg-card rounded-lg shadow-lg border border-border p-4 max-w-md">
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0">
           <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
@@ -351,10 +351,10 @@ const clearAllMappings = () => {
           </div>
         </div>
         <div className="flex-1">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+          <h3 className="text-sm font-semibold text-foreground mb-1">
             Limpar todos os mapeamentos?
           </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="text-xs text-muted-foreground">
             Esta ação irá remover todos os {mappings.length} mapeamentos definidos. Esta ação não pode ser desfeita.
           </p>
           <div className="flex gap-2 mt-4">
@@ -647,10 +647,10 @@ const clearAllMappings = () => {
     return (
       <div className="max-w-2xl mx-auto py-12 px-4">
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-semibold text-foreground">
             De-Para de Produtos
           </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-sm text-muted-foreground">
             Importe o arquivo EFD ICMS IPI para iniciar o processo de de-para.
           </p>
         </div>
@@ -664,19 +664,19 @@ const clearAllMappings = () => {
             group cursor-pointer rounded-xl border-2 border-dashed px-8 py-16
             flex flex-col items-center justify-center gap-4 transition-colors
             ${dragging
-              ? "border-blue-400 bg-blue-50 dark:bg-blue-950/20"
-              : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/40"
+              ? "border-primary bg-primary/10"
+              : "border-border hover:border-primary/40 hover:bg-accent/40"
             }
           `}
         >
-          <div className="p-4 rounded-full bg-gray-100 dark:bg-gray-800 group-hover:bg-gray-200 dark:group-hover:bg-gray-700 transition-colors">
-            <Upload className="h-7 w-7 text-gray-500 dark:text-gray-400" />
+          <div className="p-4 rounded-full bg-muted group-hover:bg-accent transition-colors">
+            <Upload className="h-7 w-7 text-muted-foreground" />
           </div>
           <div className="text-center">
-            <p className="font-medium text-gray-900 dark:text-white">
+            <p className="font-medium text-foreground">
               Importar arquivo EFD ICMS IPI
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Clique ou arraste o arquivo <span className="font-mono">.txt</span> aqui
             </p>
           </div>
@@ -704,10 +704,10 @@ const clearAllMappings = () => {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-semibold text-foreground">
             De-Para de Produtos
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1.5">
+          <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-1.5">
             <FileText className="h-3.5 w-3.5" />
             {fileName}
           </p>
@@ -719,17 +719,17 @@ const clearAllMappings = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200 dark:border-gray-800">
+      <div className="flex gap-1 mb-6 border-b border-border">
         <button
           onClick={() => setView("products")}
           className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
             view === "products"
-              ? "border-gray-900 dark:border-white text-gray-900 dark:text-white"
-              : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              ? "border-foreground text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
           Produtos
-          <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">
+          <span className="ml-2 text-xs text-muted-foreground">
             {displayedProducts.length.toLocaleString("pt-BR")}
             {filteredProducts.length !== products.length && 
               ` / ${products.length.toLocaleString("pt-BR")}`
@@ -740,14 +740,14 @@ const clearAllMappings = () => {
           onClick={() => setView("manual")}
           className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 ${
             view === "manual"
-              ? "border-gray-900 dark:border-white text-gray-900 dark:text-white"
-              : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              ? "border-foreground text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
           <Pencil className="h-3.5 w-3.5" />
           De-Para Manual
           {mappings.length > 0 && (
-            <Badge className="ml-1 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-0 text-xs h-5">
+            <Badge className="ml-1 bg-primary/15 text-primary border-0 text-xs h-5">
               {mappings.length}
             </Badge>
           )}
@@ -756,8 +756,8 @@ const clearAllMappings = () => {
           onClick={() => setView("auto")}
           className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 ${
             view === "auto"
-              ? "border-gray-900 dark:border-white text-gray-900 dark:text-white"
-              : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              ? "border-foreground text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
           <Sparkles className="h-3.5 w-3.5" />
@@ -770,7 +770,7 @@ const clearAllMappings = () => {
         <>
           <div className="flex gap-3 mb-4">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por código ou descrição..."
                 value={search}
@@ -804,13 +804,13 @@ const clearAllMappings = () => {
           </div>
 
           {filterCodes.size > 0 && (
-            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="mb-4 p-3 bg-primary/10 rounded-lg border border-primary/20">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+                  <p className="text-sm font-medium text-foreground mb-1">
                     Filtro ativo
                   </p>
-                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                  <p className="text-xs text-muted-foreground">
                     Mostrando {filteredProducts.length} de {products.length} produtos
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1">
@@ -831,7 +831,7 @@ const clearAllMappings = () => {
           )}
 
           {displayedProducts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-600">
+            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
               <PackageSearch className="h-10 w-10 mb-3" />
               <p className="text-sm">Nenhum produto encontrado.</p>
               {filterCodes.size > 0 && (
@@ -845,13 +845,13 @@ const clearAllMappings = () => {
               )}
             </div>
           ) : (
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
+            <div className="rounded-lg border border-border overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-50 dark:hover:bg-gray-800/60">
-                    <TableHead className="w-44 font-medium text-gray-600 dark:text-gray-400">Código</TableHead>
-                    <TableHead className="font-medium text-gray-600 dark:text-gray-400">Descrição</TableHead>
-                    <TableHead className="w-32 text-right font-medium text-gray-600 dark:text-gray-400">Ação</TableHead>
+                  <TableRow className="bg-muted hover:bg-accent/60">
+                    <TableHead className="w-44 font-medium text-muted-foreground">Código</TableHead>
+                    <TableHead className="font-medium text-muted-foreground">Descrição</TableHead>
+                    <TableHead className="w-32 text-right font-medium text-muted-foreground">Ação</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -860,29 +860,29 @@ const clearAllMappings = () => {
                     return (
                       <TableRow
                         key={product.code}
-                        className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
+                        className="hover:bg-accent/60 transition-colors"
                       >
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm text-gray-900 dark:text-white">
+                            <span className="font-mono text-sm text-foreground">
                               {product.code}
                             </span>
                             {mapped && (
-                              <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+                              <span className="flex items-center gap-1 text-xs text-primary">
                                 <ArrowRight className="h-3 w-3" />
                                 <span className="font-mono">{mapped.toCode}</span>
                               </span>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm text-gray-600 dark:text-gray-300">
+                        <TableCell className="text-sm text-foreground">
                           {product.desc}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white"
+                            className="h-7 text-xs text-muted-foreground hover:text-foreground"
                             onClick={() => openModal(product)}
                           >
                             <Pencil className="h-3 w-3 mr-1" />
@@ -894,8 +894,8 @@ const clearAllMappings = () => {
                   })}
                 </TableBody>
               </Table>
-              <div className="px-4 py-2.5 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">
-                <p className="text-xs text-gray-400 dark:text-gray-500">
+              <div className="px-4 py-2.5 border-t border-border bg-muted">
+                <p className="text-xs text-muted-foreground">
                   {displayedProducts.length.toLocaleString("pt-BR")} de{" "}
                   {filteredProducts.length.toLocaleString("pt-BR")} produtos exibidos
                 </p>
@@ -942,9 +942,9 @@ const clearAllMappings = () => {
     </div>
 
     {mappings.length === 0 ? (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-600">
+      <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
         <Wand2 className="h-10 w-10 mb-3" />
-        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+        <p className="text-sm font-medium text-muted-foreground">
           Nenhum mapeamento definido ainda.
         </p>
         <p className="text-xs mt-1">
@@ -953,27 +953,27 @@ const clearAllMappings = () => {
       </div>
     ) : (
       <>
-        <div className="rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden mb-4">
+        <div className="rounded-lg border border-border overflow-hidden mb-4">
           <Table>
             <TableHeader>
-              <TableRow className="bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-50 dark:hover:bg-gray-800/60">
-                <TableHead className="font-medium text-gray-600 dark:text-gray-400">Código atual</TableHead>
-                <TableHead className="font-medium text-gray-600 dark:text-gray-400">Descrição atual</TableHead>
+              <TableRow className="bg-muted hover:bg-accent/60">
+                <TableHead className="font-medium text-muted-foreground">Código atual</TableHead>
+                <TableHead className="font-medium text-muted-foreground">Descrição atual</TableHead>
                 <TableHead className="w-8"></TableHead>
-                <TableHead className="font-medium text-gray-600 dark:text-gray-400">Novo código</TableHead>
-                <TableHead className="w-20 text-right font-medium text-gray-600 dark:text-gray-400">Ação</TableHead>
+                <TableHead className="font-medium text-muted-foreground">Novo código</TableHead>
+                <TableHead className="w-20 text-right font-medium text-muted-foreground">Ação</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {mappings.map((m) => (
-                <TableRow key={m.fromCode} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
-                  <TableCell className="font-mono text-sm text-gray-500 dark:text-gray-400 line-through">
+                <TableRow key={m.fromCode} className="hover:bg-accent/60 transition-colors">
+                  <TableCell className="font-mono text-sm text-muted-foreground line-through">
                     {m.fromCode}
                   </TableCell>
-                  <TableCell className="text-sm text-gray-500 dark:text-gray-400">
+                  <TableCell className="text-sm text-muted-foreground">
                     {m.fromDesc}
                   </TableCell>
-                  <TableCell className="text-gray-400">
+                  <TableCell className="text-muted-foreground">
                     <ArrowRight className="h-4 w-4" />
                   </TableCell>
                   <TableCell className="font-mono text-sm font-medium text-green-600 dark:text-green-400">
@@ -993,8 +993,8 @@ const clearAllMappings = () => {
               ))}
             </TableBody>
           </Table>
-          <div className="px-4 py-2.5 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 flex justify-between items-center">
-            <p className="text-xs text-gray-400 dark:text-gray-500">
+          <div className="px-4 py-2.5 border-t border-border bg-muted flex justify-between items-center">
+            <p className="text-xs text-muted-foreground">
               {mappings.length} mapeamento{mappings.length !== 1 ? "s" : ""} definido{mappings.length !== 1 ? "s" : ""}
             </p>
           </div>
@@ -1004,13 +1004,13 @@ const clearAllMappings = () => {
     )}
 
     {/* Opções de exportação — sempre visíveis na aba */}
-    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
-      <label className="flex items-center gap-2.5 text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border">
+      <label className="flex items-center gap-2.5 text-sm text-muted-foreground cursor-pointer select-none">
         <input
           type="checkbox"
           checked={stripSig}
           onChange={(e) => setStripSig(e.target.checked)}
-          className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 accent-[#007cca]"
+          className="h-4 w-4 rounded border-input accent-primary"
         />
         Excluir assinatura digital do arquivo
       </label>
@@ -1027,11 +1027,11 @@ const clearAllMappings = () => {
       {/* ── Tab: De-Para Automático ── */}
       {view === "auto" && (
         <div className="space-y-6">
-          <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+          <div className="rounded-lg border border-border p-4">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <Settings className="h-5 w-5 text-gray-500" />
-                <h3 className="font-medium text-gray-900 dark:text-white">
+                <Settings className="h-5 w-5 text-muted-foreground" />
+                <h3 className="font-medium text-foreground">
                   Configuração da IA
                 </h3>
               </div>
@@ -1046,7 +1046,7 @@ const clearAllMappings = () => {
 
             {showAISettings && (
               <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label className="text-sm font-medium text-foreground">
                   Regras personalizadas (opcional)
                 </label>
                 <Textarea
@@ -1059,17 +1059,17 @@ const clearAllMappings = () => {
                   rows={6}
                   className="font-mono text-sm"
                 />
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Descreva as regras que a IA deve seguir para sugerir os mapeamentos.
                 </p>
               </div>
             )}
           </div>
 
-          <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+          <div className="bg-primary/10 rounded-lg p-4 border border-primary/20">
             <div className="flex gap-3">
-              <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-blue-900 dark:text-blue-100">
+              <AlertCircle className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-foreground">
                 <p className="font-medium mb-1">Como funciona:</p>
                 <ul className="list-disc list-inside space-y-1 text-xs">
                   <li>A IA analisará todos os produtos carregados</li>
@@ -1114,23 +1114,23 @@ const clearAllMappings = () => {
 
           {products.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4 text-center">
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              <div className="rounded-lg border border-border p-4 text-center">
+                <p className="text-2xl font-bold text-foreground">
                   {products.length}
                 </p>
-                <p className="text-xs text-gray-500">Total de produtos</p>
+                <p className="text-xs text-muted-foreground">Total de produtos</p>
               </div>
-              <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4 text-center">
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              <div className="rounded-lg border border-border p-4 text-center">
+                <p className="text-2xl font-bold text-foreground">
                   {mappings.length}
                 </p>
-                <p className="text-xs text-gray-500">Mapeamentos já definidos</p>
+                <p className="text-xs text-muted-foreground">Mapeamentos já definidos</p>
               </div>
-              <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4 text-center">
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              <div className="rounded-lg border border-border p-4 text-center">
+                <p className="text-2xl font-bold text-foreground">
                   {products.length - mappings.length}
                 </p>
-                <p className="text-xs text-gray-500">Pendentes de mapeamento</p>
+                <p className="text-xs text-muted-foreground">Pendentes de mapeamento</p>
               </div>
             </div>
           )}
@@ -1146,7 +1146,7 @@ const clearAllMappings = () => {
           
           <div className="space-y-4">
             <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <p className="text-sm font-medium text-foreground mb-2">
                 Opção 1: Enviar arquivo Excel
               </p>
               <div className="flex items-center gap-2">
@@ -1171,29 +1171,29 @@ const clearAllMappings = () => {
                   Selecionar arquivo
                 </Button>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-muted-foreground mt-2">
                 O arquivo deve ter uma coluna com os códigos dos produtos
               </p>
             </div>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
+                <div className="w-full border-t border-border"></div>
               </div>
               <div className="relative flex justify-center text-xs">
-                <span className="px-2 bg-white dark:bg-gray-900 text-gray-500">ou</span>
+                <span className="px-2 bg-background text-muted-foreground">ou</span>
               </div>
             </div>
 
             <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <p className="text-sm font-medium text-foreground mb-2">
                 Opção 2: Colar códigos manualmente
               </p>
               <textarea
                 placeholder="Cole os códigos aqui, um por linha&#10;Exemplo:&#10;3127&#10;GET3127&#10;4567"
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
-                className="w-full min-h-[150px] rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400"
+                className="w-full min-h-[150px] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <Button
                 onClick={processPastedText}
@@ -1231,33 +1231,33 @@ const clearAllMappings = () => {
             {aiSuggestions.map((suggestion) => (
               <div
                 key={suggestion.fromCode}
-                className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
+                className="rounded-lg border border-border p-4 hover:bg-accent/60 transition-colors"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <Badge variant="outline" className="bg-blue-50 dark:bg-blue-950/20">
+                      <Badge variant="outline" className="bg-primary/10">
                         Confiança: {Math.round(suggestion.confidence * 100)}%
                       </Badge>
                     </div>
                     <div className="flex items-center gap-4 mb-2">
                       <div className="flex-1">
-                        <p className="text-xs text-gray-500 mb-1">Código atual</p>
-                        <p className="font-mono text-sm font-medium text-gray-900 dark:text-white">
+                        <p className="text-xs text-muted-foreground mb-1">Código atual</p>
+                        <p className="font-mono text-sm font-medium text-foreground">
                           {suggestion.fromCode}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">{suggestion.fromDesc}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{suggestion.fromDesc}</p>
                       </div>
-                      <ArrowRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                      <ArrowRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                       <div className="flex-1">
-                        <p className="text-xs text-gray-500 mb-1">Sugestão de novo código</p>
+                        <p className="text-xs text-muted-foreground mb-1">Sugestão de novo código</p>
                         <p className="font-mono text-sm font-medium text-green-600 dark:text-green-400">
                           {suggestion.suggestedToCode}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">{suggestion.suggestedToDesc}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{suggestion.suggestedToDesc}</p>
                       </div>
                     </div>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                    <p className="text-xs text-muted-foreground mt-2">
                       <span className="font-medium">Motivo:</span> {suggestion.reason}
                     </p>
                   </div>
@@ -1295,20 +1295,20 @@ const clearAllMappings = () => {
 
           {selectedProduct && (
             <div className="space-y-4">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/60">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted">
                 <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">Código atual</p>
-                  <p className="font-mono text-sm font-medium text-gray-900 dark:text-white">
+                  <p className="text-xs text-muted-foreground mb-0.5">Código atual</p>
+                  <p className="font-mono text-sm font-medium text-foreground">
                     {selectedProduct.code}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     {selectedProduct.desc}
                   </p>
                 </div>
               </div>
 
               <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <p className="text-sm font-medium text-foreground mb-2">
                   Novo código
                 </p>
                 <Input
@@ -1318,11 +1318,11 @@ const clearAllMappings = () => {
                   className="font-mono mb-3"
                 />
 
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                <p className="text-xs text-muted-foreground mb-2">
                   Ou selecione um código existente:
                 </p>
                 <div className="relative mb-2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
                     placeholder="Buscar produto..."
                     value={newCodeSearch}
@@ -1330,7 +1330,7 @@ const clearAllMappings = () => {
                     className="pl-8 text-sm h-8"
                   />
                 </div>
-                <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
                   {modalProducts
                     .filter((p) => p.code !== selectedProduct.code)
                     .slice(0, 50)
@@ -1338,15 +1338,15 @@ const clearAllMappings = () => {
                       <button
                         key={p.code}
                         onClick={() => setNewCode(p.code)}
-                        className={`w-full text-left px-3 py-2 text-sm flex items-center gap-3 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/60 ${
-                          newCode === p.code ? "bg-blue-50 dark:bg-blue-950/20" : ""
+                        className={`w-full text-left px-3 py-2 text-sm flex items-center gap-3 transition-colors hover:bg-accent/60 ${
+                          newCode === p.code ? "bg-primary/10" : ""
                         }`}
                       >
                         {newCode === p.code && (
-                          <CheckCircle2 className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                          <CheckCircle2 className="h-3.5 w-3.5 text-primary flex-shrink-0" />
                         )}
-                        <span className="font-mono text-gray-900 dark:text-white">{p.code}</span>
-                        <span className="text-gray-500 dark:text-gray-400 truncate text-xs">{p.desc}</span>
+                        <span className="font-mono text-foreground">{p.code}</span>
+                        <span className="text-muted-foreground truncate text-xs">{p.desc}</span>
                       </button>
                     ))}
                 </div>

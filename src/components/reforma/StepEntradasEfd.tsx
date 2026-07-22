@@ -115,8 +115,8 @@ export default function StepEntradasEfd({ data, onChange, onBack, onNext }: Prop
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Entradas — EFD ICMS/IPI</h3>
-        <p className="text-xs text-gray-500 mt-1">
+        <h3 className="text-sm font-semibold text-foreground">Entradas — EFD ICMS/IPI</h3>
+        <p className="text-xs text-muted-foreground mt-1">
           Envie os arquivos .txt do EFD ICMS/IPI com as compras do período. Cada fornecedor único é
           classificado automaticamente como Simples Nacional ou Regime Regular — usado depois pra
           calcular o crédito de IBS/CBS (Simples Nacional não gera crédito).
@@ -125,14 +125,14 @@ export default function StepEntradasEfd({ data, onChange, onBack, onNext }: Prop
 
       <div
         className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-          dragging ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20" : "border-gray-200 dark:border-gray-700"
+          dragging ? "border-primary bg-primary/10" : "border-border"
         }`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files.length) processarArquivos(e.dataTransfer.files) }}
       >
-        <FileText className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-        <p className="text-sm text-gray-500 mb-3">
+        <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+        <p className="text-sm text-muted-foreground mb-3">
           {loading ? "Processando..." : "Arraste um ou mais arquivos .txt do EFD ICMS/IPI aqui"}
         </p>
         <Button variant="outline" size="sm" disabled={loading} onClick={() => inputRef.current?.click()}>
@@ -156,23 +156,23 @@ export default function StepEntradasEfd({ data, onChange, onBack, onNext }: Prop
               <div className="flex items-center gap-2 min-w-0">
                 <FileText className="h-4 w-4 text-green-600 shrink-0" />
                 <span className="text-sm text-green-700 dark:text-green-400 truncate">{a.nome}</span>
-                <span className="text-xs text-gray-400 shrink-0">— {a.linhas.length} itens</span>
+                <span className="text-xs text-muted-foreground shrink-0">— {a.linhas.length} itens</span>
               </div>
-              <button onClick={() => remover(a.nome)} className="text-gray-400 hover:text-red-500 shrink-0">
+              <button onClick={() => remover(a.nome)} className="text-muted-foreground hover:text-destructive shrink-0">
                 <X className="h-4 w-4" />
               </button>
             </div>
           ))}
-          <p className="text-xs text-gray-500 text-right">
+          <p className="text-xs text-muted-foreground text-right">
             Total: {todasLinhas.length} linhas de item — {cnpjsUnicos.length} fornecedores únicos
           </p>
         </div>
       )}
 
       {classificando && progresso && (
-        <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-4 flex items-center gap-3">
-          <Loader2 className="h-4 w-4 text-blue-600 animate-spin shrink-0" />
-          <p className="text-xs text-blue-700 dark:text-blue-400">
+        <div className="rounded-lg border border-primary/20 bg-primary/10 p-4 flex items-center gap-3">
+          <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
+          <p className="text-xs text-primary">
             Classificando fornecedores ({progresso.atual}/{progresso.total})...
           </p>
         </div>
@@ -182,17 +182,17 @@ export default function StepEntradasEfd({ data, onChange, onBack, onNext }: Prop
         <div
           className={`rounded-lg border p-4 flex items-start gap-3 ${
             cnpjsComErro.length > 0
-              ? "border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30"
+              ? "border-destructive/20 bg-destructive/10"
               : "border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30"
           }`}
         >
           {cnpjsComErro.length > 0 ? (
-            <ShieldAlert className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+            <ShieldAlert className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
           ) : (
             <ShieldCheck className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
           )}
           <div className="flex-1 space-y-1">
-            <p className={`text-xs ${cnpjsComErro.length > 0 ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}>
+            <p className={`text-xs ${cnpjsComErro.length > 0 ? "text-destructive" : "text-emerald-700 dark:text-emerald-400"}`}>
               {cnpjsComErro.length > 0
                 ? `${cnpjsComErro.length} fornecedor(es) não classificados — a geração do Excel fica bloqueada até reclassificar`
                 : `${regularCount} Regime Regular, ${simplesCount} Simples Nacional`}
@@ -208,7 +208,7 @@ export default function StepEntradasEfd({ data, onChange, onBack, onNext }: Prop
 
       <div className="flex justify-between">
         <Button variant="outline" onClick={onBack}>← Voltar</Button>
-        <Button onClick={onNext} disabled={!podeAvancar} className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button onClick={onNext} disabled={!podeAvancar} className="bg-primary hover:bg-primary/90 text-primary-foreground">
           Próximo: Revisão →
         </Button>
       </div>

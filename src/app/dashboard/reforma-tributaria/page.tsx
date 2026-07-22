@@ -49,16 +49,16 @@ export default function ReformaTributariaPage() {
       <div className="flex items-start justify-between mb-8 gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Scale className="h-6 w-6 text-blue-500" />
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Reforma Tributária</h1>
+            <Scale className="h-6 w-6 text-primary" />
+            <h1 className="text-2xl font-bold text-foreground">Reforma Tributária</h1>
           </div>
-          <p className="text-sm text-gray-500 max-w-xl">
+          <p className="text-sm text-muted-foreground max-w-xl">
             Simule o impacto da EC 132/2023 e LC 214/2025 para cada empresa: IBS, CBS, extinção
             progressiva do ICMS (2029–2033), fim do IPI (2027) e impacto nos benefícios fiscais.
           </p>
         </div>
         <Link href="/dashboard/reforma-tributaria/nova">
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white shrink-0">
+          <Button className="bg-primary hover:bg-primary/90 text-white shrink-0">
             <Plus className="h-4 w-4 mr-2" /> Nova Empresa
           </Button>
         </Link>
@@ -72,9 +72,9 @@ export default function ReformaTributariaPage() {
           { label: "2029–32", desc: "IBS+CBS cresce gradual" },
           { label: "2033", desc: "IBS+CBS 26,5% — ICMS 0%" },
         ].map((item) => (
-          <div key={item.label} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-center">
-            <p className="font-bold text-blue-600 text-sm">{item.label}</p>
-            <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
+          <div key={item.label} className="rounded-lg border border-border p-3 text-center">
+            <p className="font-bold text-primary text-sm">{item.label}</p>
+            <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
           </div>
         ))}
       </div>
@@ -82,14 +82,14 @@ export default function ReformaTributariaPage() {
       {/* Empresas */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : empresas.length === 0 ? (
-        <div className="text-center py-16 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
-          <Scale className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 mb-4">Nenhuma empresa cadastrada ainda.</p>
+        <div className="text-center py-16 border-2 border-dashed border-border rounded-xl">
+          <Scale className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground mb-4">Nenhuma empresa cadastrada ainda.</p>
           <Link href="/dashboard/reforma-tributaria/nova">
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button className="bg-primary hover:bg-primary/90 text-white">
               <Plus className="h-4 w-4 mr-2" /> Cadastrar primeira empresa
             </Button>
           </Link>

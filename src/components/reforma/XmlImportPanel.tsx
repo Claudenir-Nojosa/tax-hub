@@ -95,7 +95,7 @@ export default function XmlImportPanel({ empresaId, dadosXml, onDadosXml }: Prop
             variant="ghost"
             size="sm"
             onClick={handleRemover}
-            className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50"
+            className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
           >
             <X className="h-3 w-3 mr-1" /> Remover
           </Button>
@@ -103,22 +103,22 @@ export default function XmlImportPanel({ empresaId, dadosXml, onDadosXml }: Prop
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           <div>
-            <p className="text-gray-500">vProd total</p>
+            <p className="text-muted-foreground">vProd total</p>
             <p className="font-semibold">{formatarMoeda(dadosXml.totalVProd)}</p>
-            {fator > 1 && <p className="text-gray-400">{formatarMoeda(dadosXml.totalVProd * fator)}/ano (×{fator.toFixed(1)})</p>}
+            {fator > 1 && <p className="text-muted-foreground">{formatarMoeda(dadosXml.totalVProd * fator)}/ano (×{fator.toFixed(1)})</p>}
           </div>
           <div>
-            <p className="text-gray-500">ICMS total</p>
+            <p className="text-muted-foreground">ICMS total</p>
             <p className="font-semibold">{formatarMoeda(dadosXml.totalVICMS)}</p>
-            <p className="text-gray-400">{pct(dadosXml.aliquotaICMSEfetiva)} efetivo</p>
+            <p className="text-muted-foreground">{pct(dadosXml.aliquotaICMSEfetiva)} efetivo</p>
           </div>
           <div>
-            <p className="text-gray-500">Base IBS/CBS</p>
-            <p className="font-semibold text-blue-700 dark:text-blue-400">{formatarMoeda(dadosXml.totalBaseIbsCbs)}</p>
-            <p className="text-gray-400">vProd − ICMS − PIS − COF</p>
+            <p className="text-muted-foreground">Base IBS/CBS</p>
+            <p className="font-semibold text-primary">{formatarMoeda(dadosXml.totalBaseIbsCbs)}</p>
+            <p className="text-muted-foreground">vProd − ICMS − PIS − COF</p>
           </div>
           <div>
-            <p className="text-gray-500">Períodos</p>
+            <p className="text-muted-foreground">Períodos</p>
             <p className="font-semibold">{dadosXml.periodos.join(", ")}</p>
             {fator !== 1 && <p className="text-amber-600">Fator ×{fator.toFixed(1)}</p>}
           </div>
@@ -128,16 +128,16 @@ export default function XmlImportPanel({ empresaId, dadosXml, onDadosXml }: Prop
         <div>
           <button
             onClick={() => setShowTable((v) => !v)}
-            className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 dark:hover:text-gray-200"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
             {showTable ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             {showTable ? "Ocultar" : "Ver"} detalhamento por item ({fmt(dadosXml.totalItens)} itens)
           </button>
           {showTable && (
-            <div className="mt-2 max-h-72 overflow-auto rounded border border-gray-200 dark:border-gray-700">
+            <div className="mt-2 max-h-72 overflow-auto rounded border border-border">
               <table className="w-full text-xs border-collapse">
-                <thead className="sticky top-0 bg-gray-50 dark:bg-gray-800">
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                <thead className="sticky top-0 bg-muted">
+                  <tr className="border-b border-border">
                     <th className="text-left py-1.5 px-2">NF</th>
                     <th className="text-left py-1.5 px-2">Mês</th>
                     <th className="text-left py-1.5 px-2">Produto</th>
@@ -148,12 +148,12 @@ export default function XmlImportPanel({ empresaId, dadosXml, onDadosXml }: Prop
                     <th className="text-right py-1.5 px-2">PIS</th>
                     <th className="text-right py-1.5 px-2">COFINS</th>
                     <th className="text-right py-1.5 px-2">IPI</th>
-                    <th className="text-right py-1.5 px-2 text-blue-600">Base IBS/CBS</th>
+                    <th className="text-right py-1.5 px-2 text-primary">Base IBS/CBS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {dadosXml.itens.slice(0, 500).map((item, i) => (
-                    <tr key={i} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <tr key={i} className="border-b border-border hover:bg-muted">
                       <td className="py-1 px-2 font-mono">{item.nNF}</td>
                       <td className="py-1 px-2">{item.dhEmi}</td>
                       <td className="py-1 px-2 max-w-[160px] truncate" title={item.xProd}>{item.xProd}</td>
@@ -164,12 +164,12 @@ export default function XmlImportPanel({ empresaId, dadosXml, onDadosXml }: Prop
                       <td className="py-1 px-2 text-right">{formatarMoeda(item.vPIS)}</td>
                       <td className="py-1 px-2 text-right">{formatarMoeda(item.vCOFINS)}</td>
                       <td className="py-1 px-2 text-right">{item.vIPI > 0 ? formatarMoeda(item.vIPI) : "—"}</td>
-                      <td className="py-1 px-2 text-right font-semibold text-blue-600">{formatarMoeda(item.baseIbsCbs)}</td>
+                      <td className="py-1 px-2 text-right font-semibold text-primary">{formatarMoeda(item.baseIbsCbs)}</td>
                     </tr>
                   ))}
                   {dadosXml.itens.length > 500 && (
                     <tr>
-                      <td colSpan={11} className="py-2 px-2 text-center text-gray-400">
+                      <td colSpan={11} className="py-2 px-2 text-center text-muted-foreground">
                         Mostrando 500 de {fmt(dadosXml.totalItens)} itens
                       </td>
                     </tr>
@@ -187,8 +187,8 @@ export default function XmlImportPanel({ empresaId, dadosXml, onDadosXml }: Prop
     <div
       className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
         dragging
-          ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20"
-          : "border-gray-300 dark:border-gray-600 hover:border-gray-400"
+          ? "border-primary bg-primary/10"
+          : "border-border hover:border-primary/40"
       }`}
       onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
       onDragLeave={() => setDragging(false)}
@@ -206,24 +206,24 @@ export default function XmlImportPanel({ empresaId, dadosXml, onDadosXml }: Prop
       />
       {loading ? (
         <div className="flex flex-col items-center gap-2">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-sm text-gray-600">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">
             Processando {progress.atual}/{progress.total} {saving ? "· salvando..." : ""}
           </p>
         </div>
       ) : (
         <div className="flex flex-col items-center gap-2">
           <div className="flex gap-2">
-            <Upload className="h-6 w-6 text-gray-400" />
-            <FileText className="h-6 w-6 text-gray-400" />
+            <Upload className="h-6 w-6 text-muted-foreground" />
+            <FileText className="h-6 w-6 text-muted-foreground" />
           </div>
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <p className="text-sm font-medium text-foreground">
             Arraste XMLs ou ZIPs aqui
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted-foreground">
             Aceita <strong>.xml</strong> individual ou <strong>.zip</strong> com múltiplas NF-es
           </p>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             Arquivo .rar? Extraia primeiro (clique direito → Extrair aqui) e importe como .zip ou .xml
           </p>
           <Button variant="outline" size="sm" className="mt-1 pointer-events-none">

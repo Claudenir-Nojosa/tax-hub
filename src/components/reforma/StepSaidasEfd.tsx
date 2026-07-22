@@ -66,8 +66,8 @@ export default function StepSaidasEfd({ data, onChange, onBack, onNext }: Props)
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Saídas — EFD Contribuições</h3>
-        <p className="text-xs text-gray-500 mt-1">
+        <h3 className="text-sm font-semibold text-foreground">Saídas — EFD Contribuições</h3>
+        <p className="text-xs text-muted-foreground mt-1">
           Envie os arquivos .txt do EFD Contribuições (PIS/COFINS) dos períodos que serão simulados.
           Cada item de nota (C170), NFC-e consolidada (C175), serviço (A170), demais operações (F100)
           e consolidação por competência (F550) vira uma linha nas abas de ano, com o CNPJ do
@@ -78,14 +78,14 @@ export default function StepSaidasEfd({ data, onChange, onBack, onNext }: Props)
 
       <div
         className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-          dragging ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20" : "border-gray-200 dark:border-gray-700"
+          dragging ? "border-primary bg-primary/10" : "border-border"
         }`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files.length) processarArquivos(e.dataTransfer.files) }}
       >
-        <FileText className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-        <p className="text-sm text-gray-500 mb-3">
+        <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+        <p className="text-sm text-muted-foreground mb-3">
           {loading ? "Processando..." : "Arraste um ou mais arquivos .txt do EFD Contribuições aqui"}
         </p>
         <Button variant="outline" size="sm" disabled={loading} onClick={() => inputRef.current?.click()}>
@@ -109,20 +109,20 @@ export default function StepSaidasEfd({ data, onChange, onBack, onNext }: Props)
               <div className="flex items-center gap-2 min-w-0">
                 <FileText className="h-4 w-4 text-green-600 shrink-0" />
                 <span className="text-sm text-green-700 dark:text-green-400 truncate">{a.nome}</span>
-                <span className="text-xs text-gray-400 shrink-0">— {a.linhas.length} itens</span>
+                <span className="text-xs text-muted-foreground shrink-0">— {a.linhas.length} itens</span>
               </div>
-              <button onClick={() => remover(a.nome)} className="text-gray-400 hover:text-red-500 shrink-0">
+              <button onClick={() => remover(a.nome)} className="text-muted-foreground hover:text-destructive shrink-0">
                 <X className="h-4 w-4" />
               </button>
             </div>
           ))}
-          <p className="text-xs text-gray-500 text-right">Total: {totalLinhas} linhas de item</p>
+          <p className="text-xs text-muted-foreground text-right">Total: {totalLinhas} linhas de item</p>
         </div>
       )}
 
       <div className="flex justify-between">
         <Button variant="outline" onClick={onBack}>← Voltar</Button>
-        <Button onClick={onNext} disabled={data.arquivos.length === 0} className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button onClick={onNext} disabled={data.arquivos.length === 0} className="bg-primary hover:bg-primary/90 text-primary-foreground">
           Próximo: Entradas →
         </Button>
       </div>

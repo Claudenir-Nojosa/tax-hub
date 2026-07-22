@@ -99,30 +99,30 @@ export default function ConcursosPage() {
       <div className="flex items-start justify-between mb-8">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <BookOpen className="h-6 w-6 text-blue-400" />
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Meus Concursos</h1>
+            <BookOpen className="h-6 w-6 text-primary" />
+            <h1 className="text-2xl font-bold text-foreground">Meus Concursos</h1>
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Gerencie seus concursos e acesse o módulo de estudos de cada um.</p>
+          <p className="text-sm text-muted-foreground">Gerencie seus concursos e acesse o módulo de estudos de cada um.</p>
         </div>
-        <Button onClick={() => { setEditando(null); setModalAberto(true) }} className="bg-blue-600 hover:bg-blue-700 text-white shrink-0">
+        <Button onClick={() => { setEditando(null); setModalAberto(true) }} className="bg-primary hover:bg-primary/90 text-white shrink-0">
           <Plus className="h-4 w-4 mr-2" /> Novo Concurso
         </Button>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-blue-400" /></div>
+        <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
       ) : concursos.length === 0 ? (
-        <div className="text-center py-16 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl">
-          <BookOpen className="h-12 w-12 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400 mb-4">Nenhum concurso ainda. Crie o primeiro!</p>
-          <Button onClick={() => { setEditando(null); setModalAberto(true) }} className="bg-blue-600 hover:bg-blue-700 text-white">
+        <div className="text-center py-16 border-2 border-dashed border-input rounded-xl">
+          <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground mb-4">Nenhum concurso ainda. Crie o primeiro!</p>
+          <Button onClick={() => { setEditando(null); setModalAberto(true) }} className="bg-primary hover:bg-primary/90 text-white">
             <Plus className="h-4 w-4 mr-2" /> Criar Concurso
           </Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {concursos.map(c => (
-            <div key={c.id} className={`rounded-xl border p-5 bg-white dark:bg-gray-900 flex flex-col gap-3 transition-all ${c.isPrincipal ? "border-blue-500 shadow-blue-500/20 shadow-lg" : "border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500"}`}>
+            <div key={c.id} className={`rounded-xl border p-5 bg-card flex flex-col gap-3 transition-all ${c.isPrincipal ? "border-primary shadow-primary/20 shadow-lg" : "border-border hover:border-border dark:hover:border-primary/40"}`}>
               {/* Header */}
               <div className="flex items-start gap-3">
                 {c.foto ? (
@@ -130,28 +130,28 @@ export default function ConcursosPage() {
                     <img src={c.foto} alt={c.nome} className="max-w-[56px] max-h-[56px] w-auto h-auto rounded-lg object-contain" />
                   </div>
                 ) : (
-                  <div className="w-14 h-14 rounded-lg bg-blue-600/20 flex items-center justify-center shrink-0">
-                    <BookOpen className="h-7 w-7 text-blue-400" />
+                  <div className="w-14 h-14 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+                    <BookOpen className="h-7 w-7 text-primary" />
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1 flex-wrap">
-                    <h3 className="font-semibold text-gray-900 dark:text-white text-sm leading-tight">{c.nome}</h3>
-                    {c.isPrincipal && <Badge className="text-xs bg-blue-600/20 text-blue-600 dark:text-blue-300 border-blue-600/40">Principal</Badge>}
+                    <h3 className="font-semibold text-foreground text-sm leading-tight">{c.nome}</h3>
+                    {c.isPrincipal && <Badge className="text-xs bg-primary/20 text-primary dark:text-primary border-primary/40">Principal</Badge>}
                   </div>
-                  {c.orgao && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{c.orgao}</p>}
+                  {c.orgao && <p className="text-xs text-muted-foreground mt-0.5">{c.orgao}</p>}
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <button onClick={() => { setEditando(c); setModalAberto(true) }} className="text-gray-400 hover:text-blue-500 p-1" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => handleResetarProgresso(c.id, c.nome)} disabled={resetando === c.id} className="text-gray-400 hover:text-amber-500 p-1" title="Resetar progresso">
+                  <button onClick={() => { setEditando(c); setModalAberto(true) }} className="text-muted-foreground hover:text-primary p-1" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleResetarProgresso(c.id, c.nome)} disabled={resetando === c.id} className="text-muted-foreground hover:text-amber-500 p-1" title="Resetar progresso">
                     {resetando === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                   </button>
-                  <button onClick={() => handleExcluir(c.id)} className="text-gray-400 hover:text-red-500 p-1" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => handleExcluir(c.id)} className="text-muted-foreground hover:text-red-500 p-1" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
 
               {/* Info */}
-              <div className="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 <span>{c.materias?.length ?? 0} matérias</span>
                 {c.dataProva && (
                   <span className="flex items-center gap-1">
@@ -162,7 +162,7 @@ export default function ConcursosPage() {
 
               {/* Actions */}
               <div className="flex gap-2 mt-auto">
-                <Button onClick={() => handleEstudar(c)} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-8">
+                <Button onClick={() => handleEstudar(c)} className="flex-1 bg-primary hover:bg-primary/90 text-white text-xs h-8">
                   Estudar
                 </Button>
                 {!c.isPrincipal && (

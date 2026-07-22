@@ -41,10 +41,10 @@ interface Props {
 function LinhaResumo({ icon: Icon, titulo, valor }: { icon: React.ElementType; titulo: string; valor: string }) {
   return (
     <div className="flex items-start gap-3 py-2">
-      <Icon className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+      <Icon className="h-4 w-4 text-primary mt-0.5 shrink-0" />
       <div>
-        <p className="text-xs text-gray-500">{titulo}</p>
-        <p className="text-sm text-gray-900 dark:text-white">{valor}</p>
+        <p className="text-xs text-muted-foreground">{titulo}</p>
+        <p className="text-sm text-foreground">{valor}</p>
       </div>
     </div>
   )
@@ -111,11 +111,11 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Revisão</h3>
-        <p className="text-xs text-gray-500 mt-1">Confira os dados coletados antes de gerar o Excel.</p>
+        <h3 className="text-sm font-semibold text-foreground">Revisão</h3>
+        <p className="text-xs text-muted-foreground mt-1">Confira os dados coletados antes de gerar o Excel.</p>
       </div>
 
-      <div className="rounded-lg border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-800 px-4">
+      <div className="rounded-lg border border-border divide-y divide-border px-4">
         <LinhaResumo icon={Building2} titulo="Empresa" valor={`${empresa.razaoSocial} — ${empresa.regime}${premissasReforma.reducao60 ? " — redução 60% IBS/CBS ativa" : ""}`} />
         <LinhaResumo icon={Percent} titulo="Premissas" valor={`Alíquotas ${premissasReforma.reducao60 ? "com" : "sem"} redução de 60%, ISS 2026 = ${(premissasReforma.premissasPorAno[2026]?.aliquotaISS * 100).toFixed(2)}%`} />
         <LinhaResumo icon={ScrollText} titulo="Legislação" valor={legislacao.buscaFeita ? (legislacao.encontrado ? `${legislacao.achados.length} trecho(s) relevante(s) encontrado(s)` : "Nenhum tratamento específico encontrado") : "Busca não realizada"} />
@@ -131,7 +131,7 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
           onChange={(e) => onNomeProjetoChange(e.target.value)}
           placeholder={`Reforma Tributária - ${empresa.razaoSocial || "Empresa"}`}
         />
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted-foreground">
           Este nome será o nome do arquivo Excel gerado (a versão do cliente ganha o sufixo
           &quot;(Cliente)&quot;). Se ficar em branco, usa o padrão acima.
         </p>
@@ -162,14 +162,14 @@ export default function StepRevisao({ empresa, premissasReforma, legislacao, bas
       )}
 
       {gerando && progresso && (
-        <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-4 space-y-2">
+        <div className="rounded-lg border border-primary/20 bg-primary/10 p-4 space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-blue-700 dark:text-blue-400 font-medium truncate">{progresso.etapa}</span>
-            <span className="text-blue-700 dark:text-blue-400 font-semibold shrink-0 ml-2">{progresso.pct}%</span>
+            <span className="text-primary font-medium truncate">{progresso.etapa}</span>
+            <span className="text-primary font-semibold shrink-0 ml-2">{progresso.pct}%</span>
           </div>
-          <div className="h-2 rounded-full bg-blue-100 dark:bg-blue-900/50 overflow-hidden">
+          <div className="h-2 rounded-full bg-primary/20 overflow-hidden">
             <div
-              className="h-full bg-blue-600 transition-all duration-150 ease-out"
+              className="h-full bg-primary transition-all duration-150 ease-out"
               style={{ width: `${progresso.pct}%` }}
             />
           </div>

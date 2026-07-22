@@ -220,7 +220,7 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
   return (
     <div className="space-y-4">
       {/* header com totais + ETA */}
-      <div className="bg-gradient-to-r from-sky-600 to-blue-600 rounded-2xl p-5 text-white shadow-lg">
+      <div className="bg-gradient-to-r from-sky-600 to-primary rounded-2xl p-5 text-white shadow-lg">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <Library className="h-6 w-6" />
@@ -271,10 +271,10 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
       )}
 
       {pdfs.length === 0 && !formAberto ? (
-        <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-10 text-center">
+        <div className="rounded-2xl border border-dashed border-input p-10 text-center">
           <BookOpen className="h-8 w-8 mx-auto mb-3 text-sky-400" />
-          <p className="text-sm text-gray-600 dark:text-gray-300 font-medium mb-1">Nenhum PDF na biblioteca ainda.</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 max-w-md mx-auto mb-4">
+          <p className="text-sm text-foreground font-medium mb-1">Nenhum PDF na biblioteca ainda.</p>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto mb-4">
             Anexe as aulas em PDF que você estuda: elas ficam salvas na sua conta (Supabase
             Storage privado), você lê aqui dentro do site em qualquer dispositivo e a biblioteca
             acompanha o % lido e quanto tempo de leitura falta.
@@ -294,15 +294,15 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
           const lidas = lista.reduce((s, p) => s + Math.min(p.paginaAtual, p.totalPaginas), 0);
           const perc = tot > 0 ? Math.round((lidas / tot) * 100) : 0;
           return (
-            <div key={materia} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+            <div key={materia} className="bg-card rounded-xl border border-border overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border dark:border-border bg-muted/50">
                 <span className={`w-2.5 h-2.5 rounded-full ${cor.dot}`} />
-                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex-1">{materia}</span>
-                <span className="text-[11px] text-gray-400">
+                <span className="text-sm font-semibold text-foreground dark:text-foreground flex-1">{materia}</span>
+                <span className="text-[11px] text-muted-foreground">
                   {lista.length} PDF{lista.length !== 1 ? "s" : ""} · {perc}% lido
                 </span>
               </div>
-              <div className="divide-y divide-gray-100 dark:divide-gray-700">
+              <div className="divide-y divide-border dark:divide-border">
                 {lista.map((p) => (
                   <PdfRow
                     key={p.id}
@@ -448,27 +448,27 @@ function LeitorPdf({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-gray-950 flex flex-col">
+    <div className="fixed inset-0 z-[100] bg-background flex flex-col">
       {/* barra fina: voltar · nome · parei na pág. · cronômetro */}
-      <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-4 h-12 flex-shrink-0 bg-gray-900 text-white">
+      <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-4 h-12 flex-shrink-0 bg-muted text-white">
         <button
           type="button"
           onClick={encerrarSessao}
           title="Fechar o leitor (a sessão do cronômetro é salva na matéria/tópico)"
-          className="h-8 w-8 rounded-md flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+          className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium truncate">{pdf.nome}</div>
-          <div className="text-[10px] text-gray-400 truncate">{pdf.materia}{pdf.topicos?.[0] ? ` · ${pdf.topicos[0]}` : ""}</div>
+          <div className="text-[10px] text-muted-foreground truncate">{pdf.materia}{pdf.topicos?.[0] ? ` · ${pdf.topicos[0]}` : ""}</div>
         </div>
 
         <button
           type="button"
           onClick={() => onAtualizarPagina(paginaVisivel)}
           title={`Marcar que você parou na página visível (${paginaVisivel})`}
-          className="hidden sm:flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-white/5 text-gray-300 hover:bg-white/15 transition-colors flex-shrink-0"
+          className="hidden sm:flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-white/5 text-muted-foreground hover:bg-white/15 transition-colors flex-shrink-0"
         >
           pág. {paginaVisivel} · Parei aqui
         </button>
@@ -483,7 +483,7 @@ function LeitorPdf({
                 type="button"
                 onClick={() => setCartaForm(tipo)}
                 title={`Criar cartão ${cfg.label}`}
-                className="h-8 w-8 rounded-md flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+                className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
               >
                 <cfg.Icon className="h-4 w-4" />
               </button>
@@ -491,13 +491,13 @@ function LeitorPdf({
           </div>
         )}
 
-        <label className="hidden sm:block text-[11px] text-gray-400 flex-shrink-0">Parei na pág.</label>
+        <label className="hidden sm:block text-[11px] text-muted-foreground flex-shrink-0">Parei na pág.</label>
         <InputPaginaLeitor
           key={`${pdf.id}:${pdf.paginaAtual}`}
           pdf={pdf}
           onCommit={onAtualizarPagina}
         />
-        <span className="hidden sm:block text-[11px] text-gray-400 flex-shrink-0">de {pdf.totalPaginas}</span>
+        <span className="hidden sm:block text-[11px] text-muted-foreground flex-shrink-0">de {pdf.totalPaginas}</span>
 
         <div
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg flex-shrink-0 font-mono text-sm ${
@@ -512,7 +512,7 @@ function LeitorPdf({
           type="button"
           onClick={() => setPausado((v) => !v)}
           title={pausado ? "Retomar cronômetro" : "Pausar cronômetro"}
-          className="h-8 w-8 rounded-md flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+          className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
         >
           {pausado ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
         </button>
@@ -574,13 +574,13 @@ function NovoCartaoForm({
     <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4" onClick={onCancelar}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg p-4 space-y-3 max-h-[85vh] overflow-y-auto"
+        className="bg-muted border border-border rounded-2xl w-full max-w-lg p-4 space-y-3 max-h-[85vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-semibold text-white">
             <cfg.Icon className="h-4 w-4 text-sky-400" /> Novo cartão {cfg.label}
           </div>
-          <button type="button" onClick={onCancelar} className="h-7 w-7 rounded-md flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+          <button type="button" onClick={onCancelar} className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -590,19 +590,19 @@ function NovoCartaoForm({
         </div>
 
         <div>
-          <label className="text-[11px] font-medium text-gray-400 block mb-1">{frenteLabel}</label>
+          <label className="text-[11px] font-medium text-muted-foreground block mb-1">{frenteLabel}</label>
           <textarea
             value={frente}
             onChange={(e) => setFrente(e.target.value)}
             rows={3}
             autoFocus={tipo === "monstro"}
-            className="w-full text-sm border border-gray-700 rounded-lg px-3 py-2 bg-gray-800 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-sky-500 resize-none"
+            className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-sky-500 resize-none"
           />
         </div>
 
         {tipo === "armadilha" && (
           <div>
-            <label className="text-[11px] font-medium text-gray-400 block mb-1.5">Gabarito</label>
+            <label className="text-[11px] font-medium text-muted-foreground block mb-1.5">Gabarito</label>
             <div className="flex gap-2">
               {(["verdadeiro", "falso"] as const).map((g) => (
                 <button
@@ -614,7 +614,7 @@ function NovoCartaoForm({
                       ? g === "verdadeiro"
                         ? "border-emerald-500 bg-emerald-950/40 text-emerald-300"
                         : "border-red-500 bg-red-950/40 text-red-300"
-                      : "border-gray-700 text-gray-500"
+                      : "border-border text-muted-foreground"
                   }`}
                 >
                   {g === "verdadeiro" ? "✓ Verdadeiro" : "✗ Falso"}
@@ -625,13 +625,13 @@ function NovoCartaoForm({
         )}
 
         <div>
-          <label className="text-[11px] font-medium text-gray-400 block mb-1">{versoLabel}</label>
+          <label className="text-[11px] font-medium text-muted-foreground block mb-1">{versoLabel}</label>
           <textarea
             value={verso}
             onChange={(e) => setVerso(e.target.value)}
             rows={4}
             autoFocus={tipo === "armadilha"}
-            className="w-full text-sm border border-gray-700 rounded-lg px-3 py-2 bg-gray-800 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-sky-500 resize-none"
+            className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-sky-500 resize-none"
           />
         </div>
 
@@ -644,7 +644,7 @@ function NovoCartaoForm({
           >
             Criar cartão
           </button>
-          <button type="button" onClick={onCancelar} className="px-4 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 text-xs font-medium transition-colors">
+          <button type="button" onClick={onCancelar} className="px-4 py-2 rounded-lg text-muted-foreground hover:text-white hover:bg-white/5 text-xs font-medium transition-colors">
             Cancelar
           </button>
         </div>
@@ -672,7 +672,7 @@ function InputPaginaLeitor({ pdf, onCommit }: { pdf: PdfEstudo; onCommit: (pag: 
       onChange={(e) => setValor(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-      className="w-16 text-xs border border-gray-600 rounded-md px-1.5 py-1 bg-gray-800 text-gray-100 focus:outline-none focus:border-sky-500 flex-shrink-0"
+      className="w-16 text-xs border border-border rounded-md px-1.5 py-1 bg-muted text-foreground focus:outline-none focus:border-sky-500 flex-shrink-0"
     />
   );
 }
@@ -713,7 +713,7 @@ function PdfRow({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{pdf.nome}</span>
+            <span className="text-sm font-medium text-foreground dark:text-foreground">{pdf.nome}</span>
             {concluido && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 flex items-center gap-0.5">
                 <CheckCircle2 className="h-2.5 w-2.5" /> concluído
@@ -723,7 +723,7 @@ function PdfRow({
           {(pdf.topicos?.length ?? 0) > 0 && (
             <div className="flex flex-wrap gap-1 mt-1">
               {pdf.topicos!.map((t) => (
-                <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 max-w-[240px] truncate" title={t}>
+                <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground max-w-[240px] truncate" title={t}>
                   {t}
                 </span>
               ))}
@@ -770,7 +770,7 @@ function PdfRow({
             type="button"
             onClick={onEditar}
             title="Editar PDF"
-            className="h-7 w-7 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground dark:hover:text-foreground hover:bg-muted dark:hover:bg-accent transition-colors"
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
@@ -778,7 +778,7 @@ function PdfRow({
             type="button"
             onClick={onExcluir}
             title="Excluir PDF"
-            className="h-7 w-7 rounded-md flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+            className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -787,20 +787,20 @@ function PdfRow({
 
       <div className="flex items-center gap-3 mt-2">
         <div className="flex-1">
-          <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-2">
+          <div className="bg-muted dark:bg-muted rounded-full h-2">
             <div
               className={`rounded-full h-2 transition-all duration-500 ${concluido ? "bg-emerald-500" : "bg-sky-500"}`}
               style={{ width: `${perc}%` }}
             />
           </div>
         </div>
-        <span className="text-[11px] text-gray-500 dark:text-gray-400 whitespace-nowrap w-24 text-right">
+        <span className="text-[11px] text-muted-foreground whitespace-nowrap w-24 text-right">
           {Math.min(pdf.paginaAtual, pdf.totalPaginas)}/{pdf.totalPaginas} pág · {perc}%
         </span>
       </div>
 
       <div className="flex items-center gap-2 mt-2 flex-wrap">
-        <label className="text-[11px] text-gray-400">Parei na pág.</label>
+        <label className="text-[11px] text-muted-foreground">Parei na pág.</label>
         <input
           type="number"
           min={0}
@@ -809,7 +809,7 @@ function PdfRow({
           onChange={(e) => setPaginaInput(e.target.value)}
           onBlur={commitPagina}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-          className="w-20 text-xs border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:border-sky-500"
+          className="w-20 text-xs border border-border dark:border-border rounded-md px-2 py-1 bg-card text-foreground focus:outline-none focus:border-sky-500"
         />
         {!concluido && (
           <button
@@ -821,7 +821,7 @@ function PdfRow({
           </button>
         )}
         {eta && !concluido && (
-          <span className="text-[11px] text-gray-400 flex items-center gap-1 ml-auto">
+          <span className="text-[11px] text-muted-foreground flex items-center gap-1 ml-auto">
             <Clock className="h-3 w-3" /> ~{eta} restantes
           </span>
         )}
@@ -914,15 +914,15 @@ function FormPdf({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+    <div className="bg-card rounded-xl border border-border p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+        <h3 className="text-sm font-semibold text-foreground">
           {pdfParaEditar ? "Editar PDF" : "Adicionar PDF"}
         </h3>
         <button
           type="button"
           onClick={onFechar}
-          className="h-7 w-7 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground dark:hover:text-foreground hover:bg-muted dark:hover:bg-accent transition-colors"
         >
           <X className="h-4 w-4" />
         </button>
@@ -950,41 +950,41 @@ function FormPdf({
         }`}
       >
         <FileUp className={`h-5 w-5 mx-auto mb-1 ${arquivo ? "text-emerald-500" : "text-sky-500"}`} />
-        <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
+        <div className="text-xs font-medium text-foreground">
           {arquivo
             ? `✓ ${arquivo.name} (${(arquivo.size / 1024 / 1024).toFixed(1)} MB)`
             : pdfParaEditar
             ? "Anexar/substituir o arquivo PDF (opcional)"
             : "Clique pra escolher o arquivo PDF"}
         </div>
-        <div className="text-[10px] text-gray-400 mt-0.5">
+        <div className="text-[10px] text-muted-foreground mt-0.5">
           {arquivo ? "Clique pra trocar" : "O arquivo vai pra sua biblioteca na nuvem — você lê aqui dentro, em qualquer dispositivo"}
         </div>
       </button>
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_240px_110px] gap-3 mb-3">
         <div>
-          <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400 block mb-1">Nome do PDF</label>
+          <label className="text-[11px] font-medium text-muted-foreground block mb-1">Nome do PDF</label>
           <input
             type="text"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
             placeholder="Ex: Aula 05 — ICMS: fato gerador"
-            className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-sky-500"
+            className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-sky-500"
           />
         </div>
         <div>
-          <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400 block mb-1">Matéria</label>
+          <label className="text-[11px] font-medium text-muted-foreground block mb-1">Matéria</label>
           <select
             value={materia}
             onChange={(e) => { setMateria(e.target.value); setTopicosSel(new Set()); }}
-            className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:border-sky-500"
+            className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-card text-foreground focus:outline-none focus:border-sky-500"
           >
             {materiasAtivas.map((m) => <option key={m.nome} value={m.nome}>{m.nome}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400 block mb-1">
+          <label className="text-[11px] font-medium text-muted-foreground block mb-1">
             Total de págs.{paginasDetectadas && <span className="text-emerald-500"> ✓ auto</span>}
           </label>
           <input
@@ -993,7 +993,7 @@ function FormPdf({
             value={totalPaginas}
             onChange={(e) => { setTotalPaginas(e.target.value); setPaginasDetectadas(false); }}
             placeholder="120"
-            className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-sky-500"
+            className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-sky-500"
           />
         </div>
       </div>
@@ -1003,13 +1003,13 @@ function FormPdf({
           <button
             type="button"
             onClick={() => setMostrarTopicos((v) => !v)}
-            className="text-[11px] font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+            className="text-[11px] font-medium text-muted-foreground flex items-center gap-1 hover:text-foreground dark:hover:text-foreground transition-colors"
           >
             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${mostrarTopicos ? "rotate-180" : ""}`} />
             Tópicos do edital cobertos (opcional{topicosSel.size > 0 ? ` — ${topicosSel.size} marcado(s)` : ""})
           </button>
           {mostrarTopicos && (
-            <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-gray-100 dark:border-gray-700 divide-y divide-gray-50 dark:divide-gray-700/50">
+            <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-border dark:border-border divide-y divide-border/50">
               {topicosDaMateria.map((t) => {
                 const sel = topicosSel.has(t);
                 return (
@@ -1025,10 +1025,10 @@ function FormPdf({
                       })
                     }
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
-                      sel ? "bg-sky-50 dark:bg-sky-950/30 text-sky-800 dark:text-sky-200" : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900/40"
+                      sel ? "bg-sky-50 dark:bg-sky-950/30 text-sky-800 dark:text-sky-200" : "text-muted-foreground hover:bg-accent dark:hover:bg-muted/40"
                     }`}
                   >
-                    <span className={`h-3.5 w-3.5 rounded border flex-shrink-0 ${sel ? "bg-sky-600 border-sky-600" : "border-gray-300 dark:border-gray-600"}`} />
+                    <span className={`h-3.5 w-3.5 rounded border flex-shrink-0 ${sel ? "bg-sky-600 border-sky-600" : "border-input"}`} />
                     <span className="leading-snug">{t}</span>
                   </button>
                 );
@@ -1055,7 +1055,7 @@ function FormPdf({
             : "Adicionar PDF"}
         </button>
         {!pdfParaEditar && !enviando && (flash || salvasAgora > 0) && (
-          <span className={`text-xs transition-opacity ${flash ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 opacity-70"}`}>
+          <span className={`text-xs transition-opacity ${flash ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground opacity-70"}`}>
             {flash ? "✓ PDF adicionado! Matéria mantida pro próximo." : `${salvasAgora} PDF${salvasAgora !== 1 ? "s" : ""} adicionado${salvasAgora !== 1 ? "s" : ""} agora.`}
           </span>
         )}

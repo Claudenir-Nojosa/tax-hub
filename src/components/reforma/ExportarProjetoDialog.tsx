@@ -37,13 +37,13 @@ function formatCNPJ(cnpj: string) {
 
 function StatCard({ icon: Icon, valor, rotulo }: { icon: React.ElementType; valor: string; rotulo: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/60 px-3 py-2.5 flex items-center gap-2.5">
-      <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-        <Icon className="h-4 w-4 text-blue-500" />
+    <div className="rounded-xl border border-border bg-muted px-3 py-2.5 flex items-center gap-2.5">
+      <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+        <Icon className="h-4 w-4 text-primary" />
       </div>
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-gray-900 dark:text-white leading-tight truncate">{valor}</p>
-        <p className="text-[11px] text-gray-500 leading-tight truncate">{rotulo}</p>
+        <p className="text-sm font-semibold text-foreground leading-tight truncate">{valor}</p>
+        <p className="text-[11px] text-muted-foreground leading-tight truncate">{rotulo}</p>
       </div>
     </div>
   )
@@ -151,29 +151,29 @@ export default function ExportarProjetoDialog({ empresa, open, onOpenChange }: P
           </DialogTitle>
           <DialogDescription className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-xs">{formatCNPJ(empresa.cnpj)}</span>
-            <span className="text-gray-300 dark:text-gray-700">•</span>
+            <span className="text-muted-foreground">•</span>
             <span className="text-xs">{empresa.uf}</span>
           </DialogDescription>
         </DialogHeader>
 
         {carregando ? (
           <div className="flex items-center justify-center py-10">
-            <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
         ) : !projeto ? (
           <div className="text-center py-6 space-y-3">
             <div className="mx-auto h-12 w-12 rounded-2xl bg-amber-500/10 flex items-center justify-center">
               <FolderOpen className="h-6 w-6 text-amber-500" />
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-300 font-medium">
+            <p className="text-sm text-foreground font-medium">
               Os dados do estudo não estão salvos neste navegador
             </p>
-            <p className="text-xs text-gray-500 max-w-xs mx-auto">
+            <p className="text-xs text-muted-foreground max-w-xs mx-auto">
               Os arquivos de EFD ficam guardados localmente no navegador em que o estudo foi
               feito. Abra o projeto para importá-los e gerar o Excel.
             </p>
             <Link href={`/dashboard/reforma-tributaria/${empresa.id}?edit=true`}>
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white mt-1">
+              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground mt-1">
                 <FolderOpen className="h-4 w-4 mr-2" /> Abrir projeto
               </Button>
             </Link>
@@ -192,13 +192,13 @@ export default function ExportarProjetoDialog({ empresa, open, onOpenChange }: P
             </div>
 
             {gerando && progresso ? (
-              <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 p-3.5 space-y-2">
+              <div className="rounded-xl border border-primary/20 bg-primary/10 p-3.5 space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-blue-700 dark:text-blue-400 font-medium truncate">{progresso.etapa}</span>
-                  <span className="text-blue-700 dark:text-blue-400 font-semibold shrink-0 ml-2">{progresso.pct}%</span>
+                  <span className="text-primary font-medium truncate">{progresso.etapa}</span>
+                  <span className="text-primary font-semibold shrink-0 ml-2">{progresso.pct}%</span>
                 </div>
-                <div className="h-1.5 rounded-full bg-blue-100 dark:bg-blue-900/50 overflow-hidden">
-                  <div className="h-full bg-blue-600 transition-all duration-150 ease-out" style={{ width: `${progresso.pct}%` }} />
+                <div className="h-1.5 rounded-full bg-primary/20 overflow-hidden">
+                  <div className="h-full bg-primary transition-all duration-150 ease-out" style={{ width: `${progresso.pct}%` }} />
                 </div>
               </div>
             ) : (
@@ -221,14 +221,14 @@ export default function ExportarProjetoDialog({ empresa, open, onOpenChange }: P
                 <button
                   onClick={() => exportar("cliente")}
                   disabled={gerando !== null}
-                  className="w-full group rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/60 hover:bg-gray-100 dark:hover:bg-gray-800/80 transition-colors px-4 py-3 flex items-center gap-3 text-left"
+                  className="w-full group rounded-xl border border-border bg-muted hover:bg-accent transition-colors px-4 py-3 flex items-center gap-3 text-left"
                 >
-                  <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-                    <ShieldCheck className="h-5 w-5 text-blue-500" />
+                  <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <ShieldCheck className="h-5 w-5 text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Excel do cliente</p>
-                    <p className="text-[11px] text-gray-500">
+                    <p className="text-sm font-semibold text-foreground">Excel do cliente</p>
+                    <p className="text-[11px] text-muted-foreground">
                       Sem fórmulas, só valores — pronto para enviar ao cliente
                     </p>
                   </div>
@@ -252,12 +252,12 @@ export default function ExportarProjetoDialog({ empresa, open, onOpenChange }: P
             )}
 
             <div className="flex items-center justify-between pt-1">
-              <p className="text-[11px] text-gray-400 flex items-center gap-1">
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                 <Sparkles className="h-3 w-3" /> Gerado com premissas e legislação salvas
               </p>
               <Link
                 href={`/dashboard/reforma-tributaria/${empresa.id}?edit=true`}
-                className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                className="text-xs font-medium text-primary hover:underline"
               >
                 Editar projeto →
               </Link>

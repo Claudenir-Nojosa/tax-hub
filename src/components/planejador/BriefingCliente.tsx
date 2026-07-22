@@ -137,10 +137,10 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 space-y-5">
-      <div className="flex items-center gap-3 pb-3 border-b border-gray-100 dark:border-gray-800">
+    <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+      <div className="flex items-center gap-3 pb-3 border-b border-border">
         <div className={`w-1 h-5 ${color} rounded-full flex-shrink-0`} />
-        <h3 className="font-semibold text-gray-900 dark:text-white text-sm">{title}</h3>
+        <h3 className="font-semibold text-foreground text-sm">{title}</h3>
       </div>
       {children}
     </div>
@@ -149,7 +149,7 @@ function SectionCard({
 
 function FL({ children }: { children: React.ReactNode }) {
   return (
-    <Label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
       {children}
     </Label>
   );
@@ -166,7 +166,7 @@ function SwitchRow({
 }) {
   return (
     <div className="flex items-center justify-between py-1.5">
-      <span className="text-sm text-gray-700 dark:text-gray-300 pr-4">{label}</span>
+      <span className="text-sm text-foreground pr-4">{label}</span>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   );
@@ -188,8 +188,8 @@ function RatingPicker({
           onClick={() => onChange(n)}
           className={`w-10 h-10 rounded-lg border text-sm font-semibold transition-colors ${
             value === n
-              ? "bg-blue-600 text-white border-blue-600"
-              : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-blue-400"
+              ? "bg-primary text-primary-foreground border-primary"
+              : "border-border text-muted-foreground hover:border-primary"
           }`}
         >
           {n}
@@ -206,7 +206,7 @@ export default function BriefingCliente({ data, onChange }: Props) {
   return (
     <div className="space-y-6">
       {/* Business — Operacional */}
-      <SectionCard title="Business — Operacional" color="bg-blue-500">
+      <SectionCard title="Business — Operacional" color="bg-primary">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <FL>Atividade</FL>
@@ -281,7 +281,7 @@ export default function BriefingCliente({ data, onChange }: Props) {
           </div>
         </div>
 
-        <div className="space-y-1 pt-2 border-t border-gray-100 dark:border-gray-800">
+        <div className="space-y-1 pt-2 border-t border-border">
           <SwitchRow
             label="Possui site institucional?"
             checked={data.possuiSite}
@@ -319,7 +319,7 @@ export default function BriefingCliente({ data, onChange }: Props) {
             <FL>% Vendas — Interestadual / Interna / Exportação</FL>
             <div className="grid grid-cols-3 gap-3 mt-2">
               <div className="space-y-1">
-                <span className="text-xs text-gray-400">Interestadual</span>
+                <span className="text-xs text-muted-foreground">Interestadual</span>
                 <Input
                   value={data.percVendasInterestadual}
                   onChange={(e) => set("percVendasInterestadual", e.target.value)}
@@ -327,7 +327,7 @@ export default function BriefingCliente({ data, onChange }: Props) {
                 />
               </div>
               <div className="space-y-1">
-                <span className="text-xs text-gray-400">Interna</span>
+                <span className="text-xs text-muted-foreground">Interna</span>
                 <Input
                   value={data.percVendasInternas}
                   onChange={(e) => set("percVendasInternas", e.target.value)}
@@ -335,7 +335,7 @@ export default function BriefingCliente({ data, onChange }: Props) {
                 />
               </div>
               <div className="space-y-1">
-                <span className="text-xs text-gray-400">Exportação</span>
+                <span className="text-xs text-muted-foreground">Exportação</span>
                 <Input
                   value={data.percVendasExportacao}
                   onChange={(e) => set("percVendasExportacao", e.target.value)}
@@ -349,7 +349,7 @@ export default function BriefingCliente({ data, onChange }: Props) {
             <FL>% Compras — Interestadual / Interna / Importação</FL>
             <div className="grid grid-cols-3 gap-3 mt-2">
               <div className="space-y-1">
-                <span className="text-xs text-gray-400">Interestadual</span>
+                <span className="text-xs text-muted-foreground">Interestadual</span>
                 <Input
                   value={data.percComprasInterestadual}
                   onChange={(e) => set("percComprasInterestadual", e.target.value)}
@@ -357,7 +357,7 @@ export default function BriefingCliente({ data, onChange }: Props) {
                 />
               </div>
               <div className="space-y-1">
-                <span className="text-xs text-gray-400">Interna</span>
+                <span className="text-xs text-muted-foreground">Interna</span>
                 <Input
                   value={data.percComprasInternas}
                   onChange={(e) => set("percComprasInternas", e.target.value)}
@@ -365,7 +365,7 @@ export default function BriefingCliente({ data, onChange }: Props) {
                 />
               </div>
               <div className="space-y-1">
-                <span className="text-xs text-gray-400">Importação</span>
+                <span className="text-xs text-muted-foreground">Importação</span>
                 <Input
                   value={data.percComprasImportacao}
                   onChange={(e) => set("percComprasImportacao", e.target.value)}
@@ -379,7 +379,7 @@ export default function BriefingCliente({ data, onChange }: Props) {
             <FL>% Vendas por Perfil de Cliente — PF / PJ</FL>
             <div className="grid grid-cols-2 gap-3 mt-2">
               <div className="space-y-1">
-                <span className="text-xs text-gray-400">Pessoa Física</span>
+                <span className="text-xs text-muted-foreground">Pessoa Física</span>
                 <Input
                   value={data.percVendasPF}
                   onChange={(e) => set("percVendasPF", e.target.value)}
@@ -387,7 +387,7 @@ export default function BriefingCliente({ data, onChange }: Props) {
                 />
               </div>
               <div className="space-y-1">
-                <span className="text-xs text-gray-400">Pessoa Jurídica</span>
+                <span className="text-xs text-muted-foreground">Pessoa Jurídica</span>
                 <Input
                   value={data.percVendasPJ}
                   onChange={(e) => set("percVendasPJ", e.target.value)}
@@ -447,7 +447,7 @@ export default function BriefingCliente({ data, onChange }: Props) {
             </Select>
           </div>
 
-          <div className="space-y-1 pt-1 border-t border-gray-100 dark:border-gray-800">
+          <div className="space-y-1 pt-1 border-t border-border">
             <SwitchRow
               label="Possui retenção na fonte?"
               checked={data.retencaoFonte}
@@ -559,7 +559,7 @@ export default function BriefingCliente({ data, onChange }: Props) {
           />
         </div>
 
-        <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-gray-800">
+        <div className="space-y-1.5 pt-2 border-t border-border">
           <FL>Pagamentos / Recebimentos sem NF</FL>
           <Textarea
             value={data.pagamentosSemNF}
@@ -633,7 +633,7 @@ export default function BriefingCliente({ data, onChange }: Props) {
         />
 
         {data.possuiHolding && (
-          <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-gray-800">
+          <div className="space-y-4 pt-2 border-t border-border">
             <div className="space-y-1.5">
               <FL>Composição de Ativos</FL>
               <Textarea

@@ -71,8 +71,8 @@ export default function StepLegislacaoIA({ data, onChange, cnaePrincipal, cnaesS
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Legislação específica por CNAE</h3>
-        <p className="text-xs text-gray-500 mt-1">
+        <h3 className="text-sm font-semibold text-foreground">Legislação específica por CNAE</h3>
+        <p className="text-xs text-muted-foreground mt-1">
           A IA procura, nas 3 legislações da reforma, trechos que tragam tratamento diferenciado para a
           atividade "{cnaePrincipal.codigo} - {cnaePrincipal.descricao}". Revise o resultado — só o que
           você confirmar/escrever abaixo vai para a aba "Legislações" do Excel final.
@@ -80,7 +80,7 @@ export default function StepLegislacaoIA({ data, onChange, cnaePrincipal, cnaesS
       </div>
 
       {!data.buscaFeita && (
-        <Button onClick={buscar} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button onClick={buscar} disabled={loading} className="bg-primary hover:bg-primary/90 text-primary-foreground">
           {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
           Buscar legislação com IA
         </Button>
@@ -92,26 +92,26 @@ export default function StepLegislacaoIA({ data, onChange, cnaePrincipal, cnaesS
             className={`rounded-lg border p-4 flex items-start gap-3 ${
               data.encontrado
                 ? "border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30"
-                : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50"
+                : "border-border bg-muted"
             }`}
           >
             {data.encontrado ? (
               <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
             ) : (
-              <XCircle className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+              <XCircle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
             )}
-            <p className="text-sm text-gray-700 dark:text-gray-300">{data.resumoIA}</p>
+            <p className="text-sm text-foreground">{data.resumoIA}</p>
           </div>
 
           {data.achados.length > 0 && (
             <div className="space-y-2">
               {data.achados.map((a, i) => (
-                <div key={i} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-1">
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-400">
+                <div key={i} className="rounded-lg border border-border p-3 space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                     <ScrollText className="h-3.5 w-3.5" />
                     {a.fonte} — {a.artigoOuTrecho}
                   </div>
-                  <p className="text-xs text-gray-500">{a.resumo}</p>
+                  <p className="text-xs text-muted-foreground">{a.resumo}</p>
                 </div>
               ))}
             </div>
@@ -136,7 +136,7 @@ export default function StepLegislacaoIA({ data, onChange, cnaePrincipal, cnaesS
 
       <div className="flex justify-between">
         <Button variant="outline" onClick={onBack}>← Voltar</Button>
-        <Button onClick={onNext} disabled={!data.buscaFeita} className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button onClick={onNext} disabled={!data.buscaFeita} className="bg-primary hover:bg-primary/90 text-primary-foreground">
           Próximo: Base NCM →
         </Button>
       </div>

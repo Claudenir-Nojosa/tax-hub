@@ -6,13 +6,13 @@ import { MATERIAS, ATIVIDADE_CONFIG, type AtividadeTipo, type Grupo } from "@/li
 
 const GRUPOS: Grupo[] = ["A", "B", "C", "D"];
 const GRUPO_PILL: Record<Grupo, string> = {
-  A: "bg-blue-500 text-white",
+  A: "bg-primary text-white",
   B: "bg-emerald-500 text-white",
   C: "bg-violet-500 text-white",
   D: "bg-amber-500 text-white",
 };
 const GRUPO_OUTLINE: Record<Grupo, string> = {
-  A: "border-blue-400 text-blue-600 dark:text-blue-400",
+  A: "border-primary text-primary dark:text-primary",
   B: "border-emerald-400 text-emerald-600 dark:text-emerald-400",
   C: "border-violet-400 text-violet-600 dark:text-violet-400",
   D: "border-amber-400 text-amber-600 dark:text-amber-400",
@@ -382,8 +382,8 @@ export default function TimerEstudo({ onSalvar }: Props) {
     : isPaused
     ? "bg-amber-500"
     : elapsed > 0
-    ? "bg-blue-400"
-    : "bg-gray-300 dark:bg-gray-600";
+    ? "bg-sky-400"
+    : "bg-muted dark:bg-muted";
 
   const phasePerc = pomodoroMode && status !== "idle"
     ? Math.min(100, Math.round((elapsed / (pomodoroPhase === "work" ? WORK_SECS : BREAK_SECS)) * 100))
@@ -396,10 +396,10 @@ export default function TimerEstudo({ onSalvar }: Props) {
   const clockColor = isRunning
     ? pomodoroMode
       ? pomodoroPhase === "work" ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
-      : "text-gray-900 dark:text-white"
+      : "text-foreground"
     : isPaused
     ? "text-amber-600 dark:text-amber-400"
-    : "text-gray-400 dark:text-gray-500";
+    : "text-muted-foreground";
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">
@@ -413,19 +413,19 @@ export default function TimerEstudo({ onSalvar }: Props) {
 
       {/* Expanded card */}
       {expanded && (
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl w-72 overflow-hidden">
+        <div className="bg-card border border-border rounded-2xl shadow-2xl w-72 overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border dark:border-border">
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDot}`} />
-              <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+              <span className="text-sm font-semibold text-foreground dark:text-foreground">
                 Timer de Estudo
               </span>
             </div>
             <button
               type="button"
               onClick={() => setExpanded(false)}
-              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-accent hover:text-accent-foreground text-muted-foreground transition-colors"
             >
               <ChevronDown className="h-4 w-4" />
             </button>
@@ -434,14 +434,14 @@ export default function TimerEstudo({ onSalvar }: Props) {
           {/* Mode toggle — só quando idle */}
           {status === "idle" && !showSave && (
             <div className="px-4 pt-3">
-              <div className="flex rounded-lg bg-gray-100 dark:bg-gray-800 p-0.5 gap-0.5">
+              <div className="flex rounded-lg bg-muted p-0.5 gap-0.5">
                 <button
                   type="button"
                   onClick={() => setPomodoroMode(false)}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
                     !pomodoroMode
-                      ? "bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm"
-                      : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                      ? "bg-white dark:bg-muted text-foreground dark:text-white shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <Timer className="h-3.5 w-3.5" /> Cronômetro
@@ -451,15 +451,15 @@ export default function TimerEstudo({ onSalvar }: Props) {
                   onClick={() => { setPomodoroMode(true); setPomodoroPhase("work"); setPomodoroCount(0); setTipo("estudo"); setGrupo(null); }}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${
                     pomodoroMode
-                      ? "bg-white dark:bg-gray-700 text-red-600 dark:text-red-400 shadow-sm"
-                      : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                      ? "bg-white dark:bg-muted text-red-600 dark:text-red-400 shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <Zap className="h-3.5 w-3.5" /> Pomodoro
                 </button>
               </div>
               {pomodoroMode && (
-                <p className="mt-1.5 text-center text-[10px] text-gray-400 dark:text-gray-500">
+                <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
                   25min trabalho · 5min pausa · salva automático
                 </p>
               )}
@@ -486,7 +486,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                 </span>
               </div>
               {pomodoroCount > 0 && (
-                <span className="flex items-center gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                <span className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
                   <Zap className="h-3 w-3" /> × {pomodoroCount}
                 </span>
               )}
@@ -497,13 +497,13 @@ export default function TimerEstudo({ onSalvar }: Props) {
           {!showSave && (status === "idle" || pomodoroMode) && (
             <div className="px-4 pt-3 space-y-2">
               <div>
-                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  Matéria <span className="text-gray-400">(opcional)</span>
+                <label className="block text-xs text-muted-foreground mb-1">
+                  Matéria <span className="text-muted-foreground">(opcional)</span>
                 </label>
                 <select
                   value={materia}
                   onChange={(e) => { setMateria(e.target.value); setTopico(""); }}
-                  className="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-xs border border-border dark:border-border rounded-lg px-2.5 py-1.5 bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">— Só marcar o tempo —</option>
                   {MATERIAS.map((m) => (
@@ -514,11 +514,11 @@ export default function TimerEstudo({ onSalvar }: Props) {
 
               {materia && (
                 <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Tópico</label>
+                  <label className="block text-xs text-muted-foreground mb-1">Tópico</label>
                   <select
                     value={topico}
                     onChange={(e) => setTopico(e.target.value)}
-                    className="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full text-xs border border-border dark:border-border rounded-lg px-2.5 py-1.5 bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="">Tópico geral</option>
                     {topicoOptions.map((t) => (
@@ -531,8 +531,8 @@ export default function TimerEstudo({ onSalvar }: Props) {
               {/* Páginas lidas — no Pomodoro dá pra digitar durante o bloco (salva e zera a cada
                   work); no cronômetro também dá pra ajustar na hora de salvar */}
               <div>
-                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  Páginas lidas <span className="text-gray-400">(opcional)</span>
+                <label className="block text-xs text-muted-foreground mb-1">
+                  Páginas lidas <span className="text-muted-foreground">(opcional)</span>
                 </label>
                 <input
                   type="number"
@@ -541,7 +541,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                   value={paginas}
                   onChange={(e) => setPaginas(e.target.value)}
                   placeholder="ex.: 12"
-                  className="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-xs border border-border dark:border-border rounded-lg px-2.5 py-1.5 bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
 
@@ -549,7 +549,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
               {!pomodoroMode && status === "idle" && (
                 <>
                   <div>
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Tipo de atividade</label>
+                    <label className="block text-xs text-muted-foreground mb-1">Tipo de atividade</label>
                     <div className="grid grid-cols-2 gap-1">
                       {(["estudo", "questoes", "recall", "caderno_erros", "bateria", "cartas"] as AtividadeTipo[]).map((t) => (
                         <button
@@ -559,7 +559,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                           className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all ${
                             tipo === t
                               ? ATIVIDADE_CONFIG[t].cor + " border-current font-semibold"
-                              : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"
+                              : "border-border dark:border-border text-muted-foreground hover:border-primary/40 dark:hover:border-primary/40"
                           }`}
                         >
                           {(() => { const Icon = ATIVIDADE_CONFIG[t].icone; return <Icon className="h-3.5 w-3.5 flex-shrink-0" />; })()}
@@ -571,8 +571,8 @@ export default function TimerEstudo({ onSalvar }: Props) {
 
                   {(tipo === "questoes" || tipo === "bateria") && (
                     <div>
-                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                        Grupo <span className="text-gray-400">(opcional)</span>
+                      <label className="block text-xs text-muted-foreground mb-1">
+                        Grupo <span className="text-muted-foreground">(opcional)</span>
                       </label>
                       <div className="flex gap-1.5">
                         {GRUPOS.map((g) => (
@@ -600,13 +600,13 @@ export default function TimerEstudo({ onSalvar }: Props) {
           {/* Info panel — cronômetro rodando */}
           {!showSave && !pomodoroMode && isRunning && elapsed > 0 && (materia || grupo) && (
             <div className="px-4 pt-3">
-              <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg px-3 py-2">
-                {materia && <div className="text-xs font-medium text-blue-700 dark:text-blue-300 truncate">{materia}</div>}
+              <div className="bg-primary/10 dark:bg-primary/30 rounded-lg px-3 py-2">
+                {materia && <div className="text-xs font-medium text-primary dark:text-primary truncate">{materia}</div>}
                 {topico && (
-                  <div className="text-xs text-blue-500 dark:text-blue-400 truncate mt-0.5">{topico}</div>
+                  <div className="text-xs text-primary dark:text-primary truncate mt-0.5">{topico}</div>
                 )}
                 {grupo && (
-                  <div className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">Grupo {grupo}</div>
+                  <div className="text-xs text-primary dark:text-primary mt-0.5">Grupo {grupo}</div>
                 )}
               </div>
             </div>
@@ -620,7 +620,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
             {/* Barra de progresso no modo Pomodoro */}
             {phasePerc !== null && (
               <div className="mt-2 mx-2">
-                <div className="bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                <div className="bg-muted dark:bg-muted rounded-full h-1.5">
                   <div
                     className={`rounded-full h-1.5 transition-all ${
                       pomodoroPhase === "work" ? "bg-red-500" : "bg-emerald-500"
@@ -631,12 +631,12 @@ export default function TimerEstudo({ onSalvar }: Props) {
               </div>
             )}
             {!pomodoroMode && elapsed > 0 && (
-              <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+              <div className="text-xs text-muted-foreground mt-1">
                 {Math.round(elapsed / 60)} min líquidos
               </div>
             )}
             {pagPorHora !== null && (
-              <div className="text-xs text-blue-500 dark:text-blue-400 mt-0.5 font-medium">
+              <div className="text-xs text-primary dark:text-primary mt-0.5 font-medium">
                 📖 {paginasNum} pág · {pagPorHora.toFixed(1)} pág/h
               </div>
             )}
@@ -651,7 +651,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-white text-sm font-medium rounded-xl transition-colors shadow-sm ${
                   pomodoroMode
                     ? "bg-red-600 hover:bg-red-700"
-                    : "bg-blue-600 hover:bg-blue-700"
+                    : "bg-primary hover:bg-primary/90"
                 }`}
               >
                 <Play className="h-4 w-4 fill-white" />
@@ -681,7 +681,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                   <button
                     type="button"
                     onClick={handleStop}
-                    className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors"
+                    className="p-2.5 bg-muted dark:bg-muted hover:bg-accent dark:hover:bg-muted text-foreground rounded-xl transition-colors"
                     title="Parar e salvar"
                   >
                     <Square className="h-4 w-4 fill-current" />
@@ -708,7 +708,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                     className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-white text-sm font-medium rounded-xl transition-colors ${
                       pomodoroMode && pomodoroPhase === "work"
                         ? "bg-red-600 hover:bg-red-700"
-                        : "bg-blue-600 hover:bg-blue-700"
+                        : "bg-primary hover:bg-primary/90"
                     }`}
                   >
                     <Play className="h-4 w-4 fill-white" />
@@ -717,7 +717,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                   <button
                     type="button"
                     onClick={handleStop}
-                    className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-xl transition-colors"
+                    className="p-2.5 bg-muted dark:bg-muted hover:bg-accent dark:hover:bg-muted text-foreground rounded-xl transition-colors"
                     title="Parar e salvar"
                   >
                     <Square className="h-4 w-4 fill-current" />
@@ -725,7 +725,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                   <button
                     type="button"
                     onClick={handleReset}
-                    className="flex items-center gap-1 px-3 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 dark:hover:text-red-400 text-gray-500 dark:text-gray-400 text-xs font-medium rounded-xl transition-colors"
+                    className="flex items-center gap-1 px-3 py-2.5 bg-muted dark:bg-muted hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 dark:hover:text-red-400 text-muted-foreground text-xs font-medium rounded-xl transition-colors"
                     title="Zerar timer e descartar sessão atual"
                   >
                     <RotateCcw className="h-3.5 w-3.5" /> Zerar
@@ -737,13 +737,13 @@ export default function TimerEstudo({ onSalvar }: Props) {
 
           {/* Save prompt */}
           {showSave && (
-            <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 text-center">
-                Sessão de <span className="font-semibold text-gray-700 dark:text-gray-200">{Math.round(elapsed / 60)} min</span> concluída. Salvar no calendário?
+            <div className="px-4 pb-4 border-t border-border dark:border-border pt-3">
+              <div className="text-xs text-muted-foreground mb-2 text-center">
+                Sessão de <span className="font-semibold text-foreground dark:text-foreground">{Math.round(elapsed / 60)} min</span> concluída. Salvar no calendário?
               </div>
               <div className="mb-2">
-                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  Páginas lidas nessa sessão <span className="text-gray-400">(opcional)</span>
+                <label className="block text-xs text-muted-foreground mb-1">
+                  Páginas lidas nessa sessão <span className="text-muted-foreground">(opcional)</span>
                 </label>
                 <input
                   type="number"
@@ -752,10 +752,10 @@ export default function TimerEstudo({ onSalvar }: Props) {
                   value={paginas}
                   onChange={(e) => setPaginas(e.target.value)}
                   placeholder="ex.: 12"
-                  className="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-xs border border-border dark:border-border rounded-lg px-2.5 py-1.5 bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 />
                 {pagPorHora !== null && (
-                  <p className="mt-1 text-center text-[10px] text-blue-500 dark:text-blue-400 font-medium">
+                  <p className="mt-1 text-center text-[10px] text-primary dark:text-primary font-medium">
                     📖 {pagPorHora.toFixed(1)} páginas/hora nessa sessão
                   </p>
                 )}
@@ -771,7 +771,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                 <button
                   type="button"
                   onClick={handleReset}
-                  className="px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  className="px-3 py-2 bg-muted dark:bg-muted text-muted-foreground text-xs rounded-lg hover:bg-accent dark:hover:bg-muted transition-colors"
                 >
                   Descartar
                 </button>
@@ -791,15 +791,15 @@ export default function TimerEstudo({ onSalvar }: Props) {
               ? pomodoroPhase === "work"
                 ? "bg-red-600 border-red-600 text-white"
                 : "bg-emerald-600 border-emerald-600 text-white"
-              : "bg-blue-600 border-blue-600 text-white"
+              : "bg-primary border-primary text-primary-foreground"
             : isPaused
             ? "bg-amber-500 border-amber-500 text-white"
-            : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200"
+            : "bg-card border-border text-foreground dark:text-foreground"
         }`}
       >
         <div
           className={`w-2 h-2 rounded-full flex-shrink-0 ${
-            isRunning ? "bg-white animate-pulse" : isPaused ? "bg-white opacity-80" : "bg-gray-300 dark:bg-gray-500"
+            isRunning ? "bg-white animate-pulse" : isPaused ? "bg-white opacity-80" : "bg-muted dark:bg-muted"
           }`}
         />
         {pomodoroMode && status !== "idle" ? (
@@ -816,7 +816,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
           <span className="hidden sm:block text-xs opacity-80">× {pomodoroCount}</span>
         )}
         {materia && !expanded && status === "idle" && (
-          <span className="hidden sm:block text-xs max-w-[120px] truncate text-gray-400 dark:text-gray-500">
+          <span className="hidden sm:block text-xs max-w-[120px] truncate text-muted-foreground">
             · {materia.split(" ")[0]}
           </span>
         )}
