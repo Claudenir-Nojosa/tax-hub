@@ -16,7 +16,7 @@ const COR = {
   branco: "FFFFFFFF",
 }
 
-const LOGO_URL = "/icons/taxhub_logo_principal_claro_transparente.png"
+const LOGO_URL = "/icons/taxhub_logo_full.png"
 
 function sc(
   cell: ExcelJS.Cell,

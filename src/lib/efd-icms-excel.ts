@@ -15,7 +15,7 @@ const COR = {
   azulClaro: "FFB4C6E7",
 }
 
-const LOGO_URL = "/icons/taxhub_logo_principal_claro_transparente.png"
+const LOGO_URL = "/icons/taxhub_logo_full.png"
 
 function sanitizarNomeArquivo(nome: string): string {
   return nome.replace(/[\\/:*?"<>|]/g, "").trim()

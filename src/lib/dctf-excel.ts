@@ -10,7 +10,7 @@ const DATA_FMT = "mm-dd-yy"
 const COR_HEADER_BG = "FF0E2841"
 const COR_HEADER_TEXTO = "FFFFFFFF"
 const TAB_COLOR = "FF1F3864"
-const LOGO_URL = "/icons/taxhub_logo_principal_claro_transparente.png"
+const LOGO_URL = "/icons/taxhub_logo_full.png"
 
 function sanitizarNomeArquivo(nome: string): string {
   return nome.replace(/[\\/:*?"<>|]/g, "").trim()

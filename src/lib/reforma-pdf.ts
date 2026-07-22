@@ -136,7 +136,7 @@ async function carregarLogo(logoDataUrl?: string | null): Promise<{ dataUrl: str
   try {
     let dataUrl = logoDataUrl ?? null
     if (!dataUrl) {
-      const res = await fetch("/icons/taxhub_logo_principal_claro_transparente.png")
+      const res = await fetch("/icons/taxhub_logo_full.png")
       if (!res.ok) return null
       const blob = await res.blob()
       dataUrl = await new Promise<string>((resolve, reject) => {

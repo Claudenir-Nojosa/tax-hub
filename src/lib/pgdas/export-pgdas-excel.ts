@@ -18,7 +18,7 @@ const COR = {
   azulClaro: "FFB4C6E7",
 }
 
-const LOGO_URL = "/icons/taxhub_logo_principal_claro_transparente.png"
+const LOGO_URL = "/icons/taxhub_logo_full.png"
 
 // Remove só os caracteres inválidos em nome de arquivo no Windows/macOS — mantém acentos,
 // espaços e hífen pra ficar legível (ex.: "Diagnóstico Tributário - EMS Comercio.xlsx").

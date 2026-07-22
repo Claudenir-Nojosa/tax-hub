@@ -24,19 +24,21 @@ export default async function RootPage() {
         {/* Logo */}
         <div className="flex items-center">
           <Image
-            src="/icons/taxhub_logo_principal_claro_transparente.png"
+            src="/icons/taxhub_logo_claro.svg"
             alt="TAX Hub"
             width={180}
-            height={50}
+            height={53}
             className="block dark:hidden"
+            unoptimized
             priority
           />
           <Image
-            src="/icons/taxhub_logo_principal_escuro_transparente.png"
+            src="/icons/taxhub_logo_escuro.svg"
             alt="TAX Hub"
             width={180}
-            height={50}
+            height={53}
             className="hidden dark:block"
+            unoptimized
             priority
           />
         </div>

@@ -60,7 +60,7 @@ const ABAS_REMOVER_CLIENTE = ["Base IBS-CBS", "Análise Fornecedores"]
 // Âncora por aba (coluna/linha 0-based do canto superior esquerdo) — o padrão A1 serve pras abas
 // largas (anos, Entradas, Quadro), mas as abas com título/filtros no topo-esquerdo ganham uma
 // âncora à direita do conteúdo pra logo não cobrir nada.
-const LOGO_TAXHUB_URL = "/icons/taxhub_logo_principal_claro_transparente.png"
+const LOGO_TAXHUB_URL = "/icons/taxhub_logo_full.png"
 const ANCORA_LOGO: Record<string, { col: number; row: number }> = {
   "Premissas": { col: 12, row: 0 },        // depois das colunas de ano (C..K)
   "Legislações": { col: 3, row: 0 },       // depois da coluna C (largura 110)

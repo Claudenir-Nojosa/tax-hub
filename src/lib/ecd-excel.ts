@@ -8,7 +8,7 @@ const BRL = '_-"R$"* #,##0.00_-;-"R$"* #,##0.00_-;_-"R$"* "-"??_-;_-@_-'
 const COR_HEADER_BG = "FF0E2841"
 const COR_HEADER_TEXTO = "FFFFFFFF"
 const TAB_COLOR = "FF1F3864"
-const LOGO_URL = "/icons/taxhub_logo_principal_claro_transparente.png"
+const LOGO_URL = "/icons/taxhub_logo_full.png"
 const MESES_ABREV = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"] as const
 
 function sanitizarNomeArquivo(nome: string): string {

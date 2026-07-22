@@ -36,7 +36,7 @@ const COR_HEADER_TEXTO = "FFFFFFFF"
 const COR_VERDE_CLARO = "FFC6EFCE"
 const COR_VERMELHO_CLARO = "FFFFC7CE"
 const TAB_COLOR = "FF1F3864"
-const LOGO_URL = "/icons/taxhub_logo_principal_claro_transparente.png"
+const LOGO_URL = "/icons/taxhub_logo_full.png"
 
 const NOME_ABA_DCTF = "DCTF"
 const NOME_ABA_DCTFWEB = "DCTFWeb"

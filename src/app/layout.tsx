@@ -23,11 +23,11 @@ export const metadata: Metadata = {
   description: "tax-hub",
   icons: {
     icon: [
-      { url: "/icons/taxhub_icone_claro_favicon.png", media: "(prefers-color-scheme: light)", type: "image/png", sizes: "64x64" },
-      { url: "/icons/taxhub_icone_escuro_favicon.png", media: "(prefers-color-scheme: dark)", type: "image/png", sizes: "64x64" },
+      { url: "/icons/taxhub_icone_claro.svg", media: "(prefers-color-scheme: light)", type: "image/svg+xml" },
+      { url: "/icons/taxhub_icone_escuro.svg", media: "(prefers-color-scheme: dark)", type: "image/svg+xml" },
     ],
     apple: [
-      { url: "/icons/taxhub_icone_claro_favicon.png", sizes: "180x180" },
+      { url: "/icons/taxhub_apple_icon.png", sizes: "180x180" },
     ],
   },
 };

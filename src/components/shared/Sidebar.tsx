@@ -91,19 +91,21 @@ export default function Sidebar({ onClose }: SidebarProps) {
         {!isCollapsed && (
           <div className="flex items-center">
             <Image
-              src="/icons/taxhub_logo_principal_claro_transparente.png"
+              src="/icons/taxhub_logo_claro.svg"
               alt="TAX Hub"
               width={130}
-              height={36}
+              height={38}
               className="block dark:hidden"
+              unoptimized
               priority
             />
             <Image
-              src="/icons/taxhub_logo_principal_escuro_transparente.png"
+              src="/icons/taxhub_logo_escuro.svg"
               alt="TAX Hub"
               width={130}
-              height={36}
+              height={38}
               className="hidden dark:block"
+              unoptimized
               priority
             />
           </div>
@@ -132,19 +134,21 @@ export default function Sidebar({ onClose }: SidebarProps) {
       {isCollapsed && (
         <div className="flex items-center justify-center py-4">
           <Image
-            src="/icons/taxhub_icone_claro_transparente.png"
+            src="/icons/taxhub_icone_claro.svg"
             alt="TAX Hub"
             width={56}
             height={56}
             className="block dark:hidden"
+            unoptimized
             priority
           />
           <Image
-            src="/icons/taxhub_icone_escuro_transparente.png"
+            src="/icons/taxhub_icone_escuro.svg"
             alt="TAX Hub"
             width={56}
             height={56}
             className="hidden dark:block"
+            unoptimized
             priority
           />
         </div>

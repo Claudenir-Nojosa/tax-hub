@@ -15,7 +15,7 @@ import ExcelJS from "exceljs"
 // colunas D e G: 🌟 quando o tópico indicar oportunidade/contingência real para aquele cliente,
 // ☠️ quando não indicar. Ver docs/recuperacao-credito.md.
 
-const LOGO_URL = "/icons/taxhub_logo_principal_claro_transparente.png"
+const LOGO_URL = "/icons/taxhub_logo_full.png"
 
 const COR = {
   navy: "FF0E2841",
