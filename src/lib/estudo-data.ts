@@ -261,7 +261,7 @@ export const CORES_MATERIA: Record<string, { dot: string; badge: string; border:
   green:   { dot: "bg-green-500",   badge: "bg-green-100 text-green-700 dark:bg-green-400/20 dark:text-green-200",     border: "border-l-green-500" },
   yellow:  { dot: "bg-yellow-500",  badge: "bg-yellow-100 text-yellow-700 dark:bg-yellow-400/20 dark:text-yellow-200",   border: "border-l-yellow-500" },
 };
-export const COR_MATERIA_PADRAO = { dot: "bg-gray-400", badge: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300", border: "border-l-gray-400" };
+export const COR_MATERIA_PADRAO = { dot: "bg-muted-foreground", badge: "bg-muted text-muted-foreground", border: "border-l-border" };
 
 export interface NivelConfig {
   titulo: string;
@@ -341,7 +341,7 @@ export const CONQUISTAS: ConquistaConfig[] = [
 ];
 
 export const ATIVIDADE_CONFIG: Record<AtividadeTipo, { label: string; icone: LucideIcon; cor: string; corDot: string }> = {
-  estudo:            { label: "Estudo de Matéria",  icone: BookOpen,      cor: "bg-blue-100 text-blue-700 dark:bg-blue-400/20 dark:text-blue-200",         corDot: "bg-blue-500"    },
+  estudo:            { label: "Estudo de Matéria",  icone: BookOpen,      cor: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary",         corDot: "bg-primary"    },
   questoes:          { label: "Questões",            icone: HelpCircle,    cor: "bg-purple-100 text-purple-700 dark:bg-purple-400/20 dark:text-purple-200",  corDot: "bg-purple-500"  },
   recall:            { label: "Recall",              icone: RotateCcw,     cor: "bg-amber-100 text-amber-700 dark:bg-amber-400/20 dark:text-amber-200",      corDot: "bg-amber-500"   },
   caderno_erros:     { label: "Caderno de Erros",    icone: NotebookPen,   cor: "bg-red-100 text-red-700 dark:bg-red-400/20 dark:text-red-200",              corDot: "bg-red-500"     },

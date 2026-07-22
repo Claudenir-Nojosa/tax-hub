@@ -475,7 +475,7 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
                 </button>
               </div>
               {parseInt(formPaginasStr) > 0 && parseInt(formDuracaoStr) > 0 && (
-                <p className="text-[11px] text-cyan-600 dark:text-cyan-400 text-right font-medium">
+                <p className="text-[11px] text-primary text-right font-medium">
                   📖 {(parseInt(formPaginasStr) / (parseInt(formDuracaoStr) / 60)).toFixed(1)} pág/h
                 </p>
               )}

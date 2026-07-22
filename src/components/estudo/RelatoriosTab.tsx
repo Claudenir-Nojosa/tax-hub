@@ -841,7 +841,7 @@ export default function RelatoriosTab({ state, materiasConcurso }: { state: Estu
           LEITURA — Páginas por Hora (matéria/tópico)
       ════════════════════════════════════════════════ */}
       <div>
-        <SectionTitle icon={BookOpen} color="bg-cyan-500">Leitura — Páginas por Hora</SectionTitle>
+        <SectionTitle icon={BookOpen} color="bg-primary">Leitura — Páginas por Hora</SectionTitle>
         <div className="bg-card rounded-xl border border-border p-5 shadow-sm mt-3">
           {leitura.length === 0 ? (
             <EmptyState msg="Registre as páginas lidas no Timer de Estudo para ver sua velocidade de leitura" />
@@ -851,7 +851,7 @@ export default function RelatoriosTab({ state, materiasConcurso }: { state: Estu
                 <span className="text-xs text-muted-foreground">
                   {leituraPaginas} páginas em {Math.round((leituraMinutos / 60) * 10) / 10}h de leitura registrada
                 </span>
-                <span className="text-sm font-bold text-cyan-600 dark:text-cyan-400">
+                <span className="text-sm font-bold text-primary">
                   {leituraPagHora !== null ? `${leituraPagHora.toFixed(1)} pág/h no geral` : "—"}
                 </span>
               </div>
@@ -862,7 +862,7 @@ export default function RelatoriosTab({ state, materiasConcurso }: { state: Estu
                       <span className="text-xs font-semibold text-foreground dark:text-foreground truncate max-w-[60%]">{m.materia}</span>
                       <span className="text-xs text-muted-foreground">
                         {m.paginas} pág · {Math.round((m.minutos / 60) * 10) / 10}h ·{" "}
-                        <span className="font-bold text-cyan-600 dark:text-cyan-400">{m.pagHora.toFixed(1)} pág/h</span>
+                        <span className="font-bold text-primary">{m.pagHora.toFixed(1)} pág/h</span>
                       </span>
                     </div>
                     {m.topicos.length > 0 && (
@@ -871,7 +871,7 @@ export default function RelatoriosTab({ state, materiasConcurso }: { state: Estu
                           <div key={t.topico} className="flex items-center justify-between pl-4">
                             <span className="text-[11px] text-muted-foreground truncate max-w-[60%]">↳ {t.topico}</span>
                             <span className="text-[11px] text-muted-foreground">
-                              {t.paginas} pág · <span className="font-semibold text-cyan-600/80 dark:text-cyan-400/80">{t.pagHora.toFixed(1)} pág/h</span>
+                              {t.paginas} pág · <span className="font-semibold text-primary/80">{t.pagHora.toFixed(1)} pág/h</span>
                             </span>
                           </div>
                         ))}

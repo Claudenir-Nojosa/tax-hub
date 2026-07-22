@@ -220,13 +220,13 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
   return (
     <div className="space-y-4">
       {/* header com totais + ETA */}
-      <div className="bg-gradient-to-r from-sky-600 to-primary rounded-2xl p-5 text-white shadow-lg">
+      <div className="bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-600 rounded-2xl p-5 sm:p-6 text-white shadow-lg">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <Library className="h-6 w-6" />
             <div>
               <div className="text-lg font-bold">Biblioteca de PDFs</div>
-              <div className="text-xs text-sky-100">
+              <div className="text-xs text-emerald-100">
                 {pdfs.length === 0
                   ? "Anexe seus PDFs (Estratégia etc.), leia aqui dentro em qualquer dispositivo e acompanhe até onde chegou."
                   : `${pdfs.length} PDF${pdfs.length !== 1 ? "s" : ""} · ${paginasLidas.toLocaleString("pt-BR")}/${totalPaginas.toLocaleString("pt-BR")} páginas lidas` +
@@ -249,10 +249,10 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
         </div>
         {pdfs.length > 0 && (
           <div className="mt-3">
-            <div className="bg-sky-900/40 rounded-full h-2.5">
+            <div className="bg-white/15 backdrop-blur-sm rounded-full h-2.5">
               <div className="bg-white rounded-full h-2.5 transition-all duration-500" style={{ width: `${percGeral}%` }} />
             </div>
-            <div className="flex justify-between mt-1 text-xs text-sky-100">
+            <div className="flex justify-between mt-1 text-xs text-emerald-100">
               <span>leitura geral</span>
               <span>{percGeral}%</span>
             </div>
@@ -272,7 +272,7 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
 
       {pdfs.length === 0 && !formAberto ? (
         <div className="rounded-2xl border border-dashed border-input p-10 text-center">
-          <BookOpen className="h-8 w-8 mx-auto mb-3 text-sky-400" />
+          <BookOpen className="h-8 w-8 mx-auto mb-3 text-primary" />
           <p className="text-sm text-foreground font-medium mb-1">Nenhum PDF na biblioteca ainda.</p>
           <p className="text-xs text-muted-foreground max-w-md mx-auto mb-4">
             Anexe as aulas em PDF que você estuda: elas ficam salvas na sua conta (Supabase
@@ -282,7 +282,7 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
           <button
             type="button"
             onClick={() => setFormAberto(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors"
           >
             <Plus className="h-3.5 w-3.5" /> Adicionar primeiro PDF
           </button>
@@ -578,14 +578,14 @@ function NovoCartaoForm({
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-semibold text-white">
-            <cfg.Icon className="h-4 w-4 text-sky-400" /> Novo cartão {cfg.label}
+            <cfg.Icon className="h-4 w-4 text-primary" /> Novo cartão {cfg.label}
           </div>
           <button type="button" onClick={onCancelar} className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="text-[11px] text-sky-300 bg-sky-950/40 border border-sky-800/60 rounded-lg px-2.5 py-1.5">
+        <div className="text-[11px] text-primary bg-primary/10 border border-primary/20 rounded-lg px-2.5 py-1.5">
           {materia}{topico ? ` · ${topico}` : ""}
         </div>
 
@@ -596,7 +596,7 @@ function NovoCartaoForm({
             onChange={(e) => setFrente(e.target.value)}
             rows={3}
             autoFocus={tipo === "monstro"}
-            className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-sky-500 resize-none"
+            className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
           />
         </div>
 
@@ -631,7 +631,7 @@ function NovoCartaoForm({
             onChange={(e) => setVerso(e.target.value)}
             rows={4}
             autoFocus={tipo === "armadilha"}
-            className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-sky-500 resize-none"
+            className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
           />
         </div>
 
@@ -640,7 +640,7 @@ function NovoCartaoForm({
             type="button"
             onClick={() => onSalvar(frente, verso, gabarito)}
             disabled={!podeSalvar}
-            className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Criar cartão
           </button>
@@ -672,7 +672,7 @@ function InputPaginaLeitor({ pdf, onCommit }: { pdf: PdfEstudo; onCommit: (pag: 
       onChange={(e) => setValor(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-      className="w-16 text-xs border border-border rounded-md px-1.5 py-1 bg-muted text-foreground focus:outline-none focus:border-sky-500 flex-shrink-0"
+      className="w-16 text-xs border border-border rounded-md px-1.5 py-1 bg-muted text-foreground focus:outline-none focus:border-primary flex-shrink-0"
     />
   );
 }
@@ -736,7 +736,7 @@ function PdfRow({
               type="button"
               onClick={onLer}
               disabled={carregando}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition-colors disabled:opacity-60 disabled:cursor-wait"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors disabled:opacity-60 disabled:cursor-wait"
             >
               {carregando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BookOpen className="h-3.5 w-3.5" />}
               {carregando ? "Abrindo…" : "Ler PDF"}
@@ -759,7 +759,7 @@ function PdfRow({
                 onClick={() => anexoRef.current?.click()}
                 disabled={enviando}
                 title="O arquivo ainda não foi enviado — anexe o PDF pra ler aqui dentro (fica salvo na nuvem)"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-300 dark:border-sky-700 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30 text-xs font-medium transition-colors disabled:opacity-60 disabled:cursor-wait"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 text-xs font-medium transition-colors disabled:opacity-60 disabled:cursor-wait"
               >
                 {enviando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileUp className="h-3.5 w-3.5" />}
                 {enviando ? "Enviando…" : "Anexar"}
@@ -789,7 +789,7 @@ function PdfRow({
         <div className="flex-1">
           <div className="bg-muted dark:bg-muted rounded-full h-2">
             <div
-              className={`rounded-full h-2 transition-all duration-500 ${concluido ? "bg-emerald-500" : "bg-sky-500"}`}
+              className={`rounded-full h-2 transition-all duration-500 ${concluido ? "bg-emerald-500" : "bg-primary/40"}`}
               style={{ width: `${perc}%` }}
             />
           </div>
@@ -809,7 +809,7 @@ function PdfRow({
           onChange={(e) => setPaginaInput(e.target.value)}
           onBlur={commitPagina}
           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-          className="w-20 text-xs border border-border dark:border-border rounded-md px-2 py-1 bg-card text-foreground focus:outline-none focus:border-sky-500"
+          className="w-20 text-xs border border-border dark:border-border rounded-md px-2 py-1 bg-card text-foreground focus:outline-none focus:border-primary"
         />
         {!concluido && (
           <button
@@ -946,10 +946,10 @@ function FormPdf({
         className={`w-full mb-3 rounded-xl border-2 border-dashed px-4 py-4 text-center transition-colors ${
           arquivo
             ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/20"
-            : "border-sky-300 dark:border-sky-800 hover:border-sky-500 bg-sky-50/50 dark:bg-sky-950/10"
+            : "border-primary/30 hover:border-primary bg-primary/5"
         }`}
       >
-        <FileUp className={`h-5 w-5 mx-auto mb-1 ${arquivo ? "text-emerald-500" : "text-sky-500"}`} />
+        <FileUp className={`h-5 w-5 mx-auto mb-1 ${arquivo ? "text-emerald-500" : "text-primary/60"}`} />
         <div className="text-xs font-medium text-foreground">
           {arquivo
             ? `✓ ${arquivo.name} (${(arquivo.size / 1024 / 1024).toFixed(1)} MB)`
@@ -970,7 +970,7 @@ function FormPdf({
             value={nome}
             onChange={(e) => setNome(e.target.value)}
             placeholder="Ex: Aula 05 — ICMS: fato gerador"
-            className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-sky-500"
+            className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
           />
         </div>
         <div>
@@ -978,7 +978,7 @@ function FormPdf({
           <select
             value={materia}
             onChange={(e) => { setMateria(e.target.value); setTopicosSel(new Set()); }}
-            className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-card text-foreground focus:outline-none focus:border-sky-500"
+            className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-card text-foreground focus:outline-none focus:border-primary"
           >
             {materiasAtivas.map((m) => <option key={m.nome} value={m.nome}>{m.nome}</option>)}
           </select>
@@ -993,7 +993,7 @@ function FormPdf({
             value={totalPaginas}
             onChange={(e) => { setTotalPaginas(e.target.value); setPaginasDetectadas(false); }}
             placeholder="120"
-            className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-sky-500"
+            className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
           />
         </div>
       </div>
@@ -1025,10 +1025,10 @@ function FormPdf({
                       })
                     }
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
-                      sel ? "bg-sky-50 dark:bg-sky-950/30 text-sky-800 dark:text-sky-200" : "text-muted-foreground hover:bg-accent dark:hover:bg-muted/40"
+                      sel ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent dark:hover:bg-muted/40"
                     }`}
                   >
-                    <span className={`h-3.5 w-3.5 rounded border flex-shrink-0 ${sel ? "bg-sky-600 border-sky-600" : "border-input"}`} />
+                    <span className={`h-3.5 w-3.5 rounded border flex-shrink-0 ${sel ? "bg-primary border-primary" : "border-input"}`} />
                     <span className="leading-snug">{t}</span>
                   </button>
                 );
@@ -1043,7 +1043,7 @@ function FormPdf({
           type="button"
           onClick={salvar}
           disabled={!podeSalvar || enviando}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-wait"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-wait"
         >
           {enviando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {enviando

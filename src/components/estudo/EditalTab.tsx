@@ -279,7 +279,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                                 className={`ml-1.5 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full align-middle ${
                                   percPdf >= 100
                                     ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
-                                    : "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+                                    : "bg-primary/10 text-primary dark:bg-primary/20"
                                 }`}
                               >
                                 <BookOpen className="h-2.5 w-2.5" /> {percPdf}%

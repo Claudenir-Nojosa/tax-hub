@@ -51,7 +51,7 @@ const GRUPO_COR: Record<Grupo, string> = {
 
 type TipoPasso = "estudo" | "questoes" | "revisao" | "cartas";
 const TIPO_ITEM: Record<TipoPasso, string> = {
-  estudo: "bg-sky-100 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400",
+  estudo: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary",
   questoes: "bg-violet-100 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400",
   revisao: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400",
   cartas: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400",
@@ -349,13 +349,13 @@ function CorpoBloco({
         <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={b.topico}>tópico atual: {b.topico}</div>
         <div className="mt-1.5 flex items-center gap-2">
           <div className="flex-1 bg-muted dark:bg-muted rounded-full h-1.5 overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-500 ${b.concluido ? "bg-emerald-500" : "bg-sky-500"}`} style={{ width: `${perc}%` }} />
+            <div className={`h-full rounded-full transition-all duration-500 ${b.concluido ? "bg-emerald-500" : "bg-primary/50"}`} style={{ width: `${perc}%` }} />
           </div>
           <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{b.minutosFeitos}/{b.minutosAlvo}min</span>
         </div>
       </div>
       {!b.concluido && onIrParaBiblioteca && (
-        <button type="button" onClick={onIrParaBiblioteca} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-medium flex items-center gap-1">
+        <button type="button" onClick={onIrParaBiblioteca} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-medium flex items-center gap-1">
           Ler PDF <ArrowRight className="h-3 w-3" />
         </button>
       )}
@@ -520,7 +520,7 @@ function Intro({
   onIrParaCiclo?: () => void;
 }) {
   const regras: { icone: LucideIcon; cor: string; texto: string }[] = [
-    { icone: Clock, cor: "bg-sky-100 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400", texto: "Cada dia pertence a um grupo do ciclo (A/B/C). As horas do dia são divididas entre as matérias do grupo — ex.: 3h e 3 matérias = 1h de PDF em cada, no tópico atual. O tempo é monitorado pelo leitor de PDF." },
+    { icone: Clock, cor: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary", texto: "Cada dia pertence a um grupo do ciclo (A/B/C). As horas do dia são divididas entre as matérias do grupo — ex.: 3h e 3 matérias = 1h de PDF em cada, no tópico atual. O tempo é monitorado pelo leitor de PDF." },
     { icone: ListChecks, cor: "bg-violet-100 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400", texto: "Concluir um tópico libera questões dos anteriores: grupo A do último, B do penúltimo, C do antepenúltimo, D do anterior a esse — até fechar os 4 grupos de todos os tópicos." },
     { icone: Trophy, cor: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400", texto: "Matéria 100% (teoria + todos os grupos) entra em modo revisão: no dia seguinte, 30 questões englobando todos os tópicos dela." },
     { icone: Layers, cor: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400", texto: "A cada 2 domingos, revisão das cartas." },

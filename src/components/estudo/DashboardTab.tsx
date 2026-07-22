@@ -373,8 +373,8 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
             value: pagPorHora !== null ? pagPorHora.toFixed(1) : "—",
             sub: pagPorHora !== null ? `${totalPaginas} pág registradas` : "registre páginas no timer",
             Icon: Gauge,
-            color: "text-cyan-600 dark:text-cyan-400",
-            bg: "bg-cyan-50 dark:bg-cyan-950/30",
+            color: "text-primary dark:text-primary",
+            bg: "bg-primary/10 dark:bg-primary/20",
           },
           ...(pdfs.length > 0
             ? [{
@@ -382,8 +382,8 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
                 value: `${percPdfs}%` as string | number,
                 sub: `${pdfLidasPag.toLocaleString("pt-BR")}/${pdfTotalPag.toLocaleString("pt-BR")} páginas` as string | null,
                 Icon: Library,
-                color: "text-sky-600 dark:text-sky-400",
-                bg: "bg-sky-50 dark:bg-sky-950/30",
+                color: "text-emerald-600 dark:text-emerald-400",
+                bg: "bg-emerald-50 dark:bg-emerald-950/30",
               }]
             : []),
         ];
