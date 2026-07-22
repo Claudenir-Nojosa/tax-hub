@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FlipHorizontal2, HeartPulse, BadgeCheck, ArrowRight } from "lucide-react";
+import { FlipHorizontal2, HeartPulse, BadgeCheck, Percent, ArrowRight } from "lucide-react";
 
 const automacoes = [
   {
@@ -25,6 +25,14 @@ const automacoes = [
       "Verifica em lote, por CNPJ, se a empresa é optante do Simples Nacional — via upload de Excel com a coluna de CNPJ ou colando a lista, com exportação do resultado.",
     tags: ["Simples Nacional", "CNPJ"],
     icon: BadgeCheck,
+  },
+  {
+    href: "/dashboard/automacoes/antecipacao-icms-st",
+    nome: "Antecipação ICMS-ST (Ceará)",
+    descricao:
+      "Importa o EFD ICMS/IPI e calcula, item a item, a antecipação parcial de ICMS/FECOP devida sobre entradas interestaduais e mercadoria de origem estrangeira, conforme a IN CE nº 17/2013 e a Resolução SF nº 13/2012.",
+    tags: ["EFD", "ICMS-ST", "Ceará"],
+    icon: Percent,
   },
 ];
 
