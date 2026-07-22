@@ -34,11 +34,15 @@ export const REGIAO_UF: Record<string, Regiao> = {
 // código que bate aqui NÃO tem dígito de origem utilizável (é uma tabela totalmente diferente do
 // CST de regime normal) — tratado como origem nacional, sem adicional (decisão confirmada com o
 // usuário: não dá pra identificar importação só pelo CSOSN).
-const CODIGOS_CSOSN = new Set(["101", "102", "103", "201", "202", "203", "300", "400", "500", "900"])
+// Exportada (não só usada aqui): o export Excel precisa da mesma lista pra montar a tabela
+// auxiliar que a fórmula da coluna "Origem Estrangeira" consulta (COUNTIF) — fonte única, pra
+// não arriscar a lista divergir entre o cálculo em JS e a fórmula do Excel.
+export const CODIGOS_CSOSN = ["101", "102", "103", "201", "202", "203", "300", "400", "500", "900"]
+const SET_CSOSN = new Set(CODIGOS_CSOSN)
 
 // true só quando o CST é de regime normal (não-CSOSN) com dígito de origem 1, 2, 3 ou 8.
 export function origemEstrangeira(cstIcms: string): boolean {
-  if (!cstIcms || CODIGOS_CSOSN.has(cstIcms)) return false
+  if (!cstIcms || SET_CSOSN.has(cstIcms)) return false
   return ["1", "2", "3", "8"].includes(cstIcms.charAt(0))
 }
 
@@ -58,7 +62,7 @@ function aliquotaBase(situacao: Situacao, dataEntrada: Date): number {
   return novaFaixa ? 0.0333 : 0.03
 }
 
-function adicionalRegiao(ufFornecedor: string): number {
+export function adicionalRegiao(ufFornecedor: string): number {
   const regiao = REGIAO_UF[ufFornecedor]
   if (!regiao) return 0
   if (regiao === "sul" || regiao === "sudeste") return ufFornecedor === "ES" ? 0.08 : 0.03

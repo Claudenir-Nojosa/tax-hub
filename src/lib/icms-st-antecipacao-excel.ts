@@ -1,9 +1,26 @@
 import ExcelJS from "exceljs"
 import type { LinhaEntradaEfd } from "./efd-icms-ipi-entradas-parser"
-import { calcularAntecipacaoItem, type ResultadoAntecipacaoItem, type Situacao } from "./icms-st-antecipacao-ce"
+import {
+  calcularAntecipacaoItem,
+  adicionalRegiao,
+  parseDataBr,
+  REGIAO_UF,
+  CODIGOS_CSOSN,
+  type ResultadoAntecipacaoItem,
+  type Situacao,
+} from "./icms-st-antecipacao-ce"
 
 // Export da automação "Antecipação ICMS-ST (Ceará)" — mesma convenção visual usada em todo o
 // projeto (helpers duplicados de propósito, ver docs/recuperacao-credito.md seção 12).
+//
+// Colunas de I a S (Situação, Origem Estrangeira, Base de Cálculo, Alíquota Base, Adicional
+// Região, Alíquota Total, Valor Antecipação ICMS-ST) saem em FÓRMULA, não como valor estático —
+// pedido explícito do usuário, mesmo padrão já usado nas abas de consolidação (PIS e COFINS /
+// IRPJ e CSLL) da Recuperação de Crédito: o analista pode corrigir um CFOP, um CST ou um valor de
+// item na planilha e o resto recalcula sozinho. As fórmulas consultam duas tabelas auxiliares
+// (fora da área visível/impressa, colunas U em diante): lista de códigos CSOSN e a tabela
+// UF→Adicional — mesma técnica (tabela auxiliar + VLOOKUP/IF) já usada na aba "Entradas - EFD
+// ICMS IPI" da Reforma Tributária (src/lib/reforma-excel/entradas-efd.ts).
 const BRL = '_-"R$"* #,##0.00_-;-"R$"* #,##0.00_-;_-"R$"* "-"??_-;_-@_-'
 const COR_HEADER_BG = "FF0E2841"
 const COR_HEADER_TEXTO = "FFFFFFFF"
@@ -62,7 +79,17 @@ function paParaData(pa: string): Date | string {
   return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1)) : pa
 }
 
+function f(formula: string, result: ExcelJS.CellValue): ExcelJS.CellFormulaValue {
+  return { formula, result } as unknown as ExcelJS.CellFormulaValue
+}
+
 const LINHA_HEADER = 6
+// Tabelas auxiliares — fora da área visível/impressa da tabela principal (que termina em S).
+const COL_CSOSN = "U" // U2:U11 — lista de códigos CSOSN
+const LINHA_CSOSN_INICIO = 2
+const COL_UF = "V" // V2:V28 — UF
+const COL_ADICIONAL_UF = "W" // W2:W28 — Adicional se origem estrangeira
+const LINHA_UF_INICIO = 2
 
 // Todo item de toda nota entra na listagem (decisão confirmada com o usuário) — só os itens com
 // CFOP 1403/2403 têm `resultado` preenchido; os demais aparecem com as colunas de ICMS-ST em
@@ -84,7 +111,7 @@ export async function montarAbaAntecipacaoIcmsSt(wb: ExcelJS.Workbook, linhas: L
     { nome: "Situação", largura: 20 },
     { nome: "CST ICMS", largura: 10 },
     { nome: "Origem Estrangeira", largura: 16 },
-    { nome: "Data Entrada", largura: 14 },
+    { nome: "Data Entrada", largura: 14, data: true },
     { nome: "Vlr Item", largura: 16, monetaria: true },
     { nome: "Vlr Desconto Item", largura: 16, monetaria: true },
     { nome: "Base de Cálculo", largura: 16, monetaria: true },
@@ -93,6 +120,16 @@ export async function montarAbaAntecipacaoIcmsSt(wb: ExcelJS.Workbook, linhas: L
     { nome: "Alíquota Total", largura: 14 },
     { nome: "Valor Antecipação ICMS-ST", largura: 20, monetaria: true },
   ]
+  // índice (0-based) de cada coluna, pra montar as fórmulas por letra sem números mágicos
+  const idx = Object.fromEntries(colunas.map((c, i) => [c.nome, i])) as Record<string, number>
+  const letra = (nome: string) => {
+    const n = idx[nome] + 2 // B = 2 (col A é a margem)
+    return String.fromCharCode(64 + n) // funciona até Z, suficiente aqui (última é S)
+  }
+  const cH = letra("CFOP"), cI = letra("Situação"), cJ = letra("CST ICMS"), cK = letra("Origem Estrangeira"),
+    cL = letra("Data Entrada"), cM = letra("Vlr Item"), cN = letra("Vlr Desconto Item"),
+    cO = letra("Base de Cálculo"), cP = letra("Alíquota Base"), cQ = letra("Adicional Região"),
+    cR = letra("Alíquota Total")
 
   ws.columns = [{ width: 3 }, ...colunas.map((c) => ({ width: c.largura }))]
 
@@ -105,6 +142,22 @@ export async function montarAbaAntecipacaoIcmsSt(wb: ExcelJS.Workbook, linhas: L
 
   const nomeCurto = nomeEmpresa.trim().split(/\s+/)[0] || nomeEmpresa
   sc(ws.getCell(3, 2), { value: `Antecipação ICMS-ST (Ceará) - ${nomeCurto}`, bold: true, size: 12 })
+
+  // Tabelas auxiliares que as fórmulas consultam (COUNTIF/VLOOKUP) — mesma fonte de dados que o
+  // cálculo em JS usa (CODIGOS_CSOSN, REGIAO_UF, adicionalRegiao), pra nunca divergir.
+  sc(ws.getCell(`${COL_CSOSN}1`), { value: "CSOSN", bold: true })
+  CODIGOS_CSOSN.forEach((codigo, i) => {
+    ws.getCell(`${COL_CSOSN}${LINHA_CSOSN_INICIO + i}`).value = codigo
+  })
+  sc(ws.getCell(`${COL_UF}1`), { value: "UF", bold: true })
+  sc(ws.getCell(`${COL_ADICIONAL_UF}1`), { value: "Adicional", bold: true })
+  const ufs = Object.keys(REGIAO_UF)
+  ufs.forEach((uf, i) => {
+    const r = LINHA_UF_INICIO + i
+    ws.getCell(`${COL_UF}${r}`).value = uf
+    ws.getCell(`${COL_ADICIONAL_UF}${r}`).value = adicionalRegiao(uf)
+  })
+  const linhaUfFim = LINHA_UF_INICIO + ufs.length - 1
 
   ws.addTable({
     name: "AntecipacaoIcmsSt",
@@ -121,23 +174,54 @@ export async function montarAbaAntecipacaoIcmsSt(wb: ExcelJS.Workbook, linhas: L
       linha.cnpjFornecedor || linha.cpfFornecedor || null,
       linha.ufFornecedor || null,
       linha.cfop,
-      resultado ? LABEL_SITUACAO[resultado.situacao] : null,
+      resultado ? LABEL_SITUACAO[resultado.situacao] : null, // sobrescrito com fórmula abaixo
       linha.cstIcms || null,
-      resultado ? (resultado.origemEstrangeira ? "Sim" : "Não") : null,
-      linha.dataEntradaSaida,
+      resultado ? (resultado.origemEstrangeira ? "Sim" : "Não") : null, // idem
+      parseDataBr(linha.dataEntradaSaida) ?? linha.dataEntradaSaida,
       linha.vlrItem,
       linha.vlrDescontoItem,
-      resultado ? resultado.base : null,
-      resultado ? resultado.aliquotaBase : null,
-      resultado ? resultado.adicionalRegiao : null,
-      resultado ? resultado.aliquotaTotal : null,
-      resultado ? resultado.valor : null,
+      resultado ? resultado.base : null, // idem
+      resultado ? resultado.aliquotaBase : null, // idem
+      resultado ? resultado.adicionalRegiao : null, // idem
+      resultado ? resultado.aliquotaTotal : null, // idem
+      resultado ? resultado.valor : null, // idem
     ]),
   })
 
-  const ROW_SUBTOTAL = LINHA_HEADER - 1
+  // Sobrescreve as colunas calculadas (I, K, O, P, Q, R, S) com fórmulas — o addTable acima só
+  // serviu pra criar a estrutura da tabela com um valor inicial; a partir daqui cada célula vira
+  // {formula, result}, com o result pré-calculado em JS (mesma técnica de
+  // consolidacao-pis-cofins-excel.ts) pra visualizadores sem recálculo automático.
   const primeiraLinhaDados = LINHA_HEADER + 1
   const ultimaLinhaDados = LINHA_HEADER + Math.max(calculadas.length, 1)
+  calculadas.forEach(({ resultado }, i) => {
+    const r = primeiraLinhaDados + i
+
+    ws.getCell(`${cI}${r}`).value = f(
+      `IF(${cH}${r}="1403","Dentro do Estado",IF(${cH}${r}="2403","Fora do Estado",""))`,
+      resultado ? LABEL_SITUACAO[resultado.situacao] : ""
+    )
+    ws.getCell(`${cK}${r}`).value = f(
+      `IF(${cI}${r}="","",IF(AND(${cI}${r}="Fora do Estado",COUNTIF($${COL_CSOSN}$${LINHA_CSOSN_INICIO}:$${COL_CSOSN}$${LINHA_CSOSN_INICIO + CODIGOS_CSOSN.length - 1},${cJ}${r})=0,OR(LEFT(${cJ}${r},1)="1",LEFT(${cJ}${r},1)="2",LEFT(${cJ}${r},1)="3",LEFT(${cJ}${r},1)="8")),"Sim","Não"))`,
+      resultado ? (resultado.origemEstrangeira ? "Sim" : "Não") : ""
+    )
+    ws.getCell(`${cO}${r}`).value = f(`IF(${cI}${r}="","",${cM}${r}-${cN}${r})`, resultado ? resultado.base : "")
+    ws.getCell(`${cP}${r}`).value = f(
+      `IF(${cI}${r}="","",IF(${cI}${r}="Fora do Estado",IF(${cL}${r}>=DATE(2024,1,1),0.089,0.08),IF(${cL}${r}>=DATE(2024,1,1),0.0333,0.03)))`,
+      resultado ? resultado.aliquotaBase : ""
+    )
+    ws.getCell(`${cQ}${r}`).value = f(
+      `IF(${cK}${r}="Sim",IFERROR(VLOOKUP(${letra("UF Fornecedor")}${r},$${COL_UF}$${LINHA_UF_INICIO}:$${COL_ADICIONAL_UF}$${linhaUfFim},2,0),0),0)`,
+      resultado ? resultado.adicionalRegiao : 0
+    )
+    ws.getCell(`${cR}${r}`).value = f(`IF(${cI}${r}="","",${cP}${r}+${cQ}${r})`, resultado ? resultado.aliquotaTotal : "")
+    ws.getCell(`${letra("Valor Antecipação ICMS-ST")}${r}`).value = f(
+      `IF(${cI}${r}="","",ROUND(${cO}${r}*${cR}${r},2))`,
+      resultado ? resultado.valor : ""
+    )
+  })
+
+  const ROW_SUBTOTAL = LINHA_HEADER - 1
   colunas.forEach((c, i) => {
     if (!c.monetaria) return
     const col = i + 2

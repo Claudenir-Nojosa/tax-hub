@@ -72,9 +72,21 @@ cruza com nenhum pagamento/GNRE já feito — o EFD ICMS/IPI sozinho não traz e
 - **Excel**: `src/lib/icms-st-antecipacao-excel.ts`, aba "Antecipação ICMS-ST" — **1 linha por
   item de TODA nota** (não só as com CFOP 1403/2403), `ws.addTable` com `SUBTOTAL` nas colunas
   monetárias (mesmo padrão de `comprovante-pagamento-excel.ts` e da aba "Entradas" da Recuperação
-  de Crédito). Coluna "Competência" é um `Date` de verdade (1º dia do mês, mesma conversão
-  `paParaData` da aba "Entradas") — necessário pro AutoFilter do Excel agrupar por ano/mês em vez
-  de listar cada "YYYY-MM" como texto solto.
+  de Crédito). Colunas "Competência" e "Data Entrada" são `Date` de verdade (não texto) —
+  necessário tanto pro AutoFilter do Excel agrupar "Competência" por ano/mês quanto pro corte de
+  01/01/2024 da fórmula de "Alíquota Base" comparar `>=DATE(2024,1,1)` corretamente (comparar
+  texto com uma data em Excel sempre dá `TRUE`, o que quebraria silenciosamente o corte de data).
+- **Colunas calculadas saem em FÓRMULA, não em valor estático** (pedido explícito do usuário) —
+  Situação, Origem Estrangeira, Base de Cálculo, Alíquota Base, Adicional Região, Alíquota Total e
+  Valor Antecipação ICMS-ST são todas `{formula, result}` (mesma técnica de
+  `consolidacao-pis-cofins-excel.ts`: `result` pré-calculado em JS pra visualizadores sem
+  recálculo automático, o Excel recalcula de verdade ao abrir). As fórmulas consultam duas
+  tabelas auxiliares fora da área visível (colunas U em diante, mesma técnica de tabela auxiliar +
+  VLOOKUP já usada em `reforma-excel/entradas-efd.ts`): lista de códigos CSOSN (`COUNTIF`) e
+  UF→Adicional (`VLOOKUP`) — ambas geradas a partir de `CODIGOS_CSOSN`/`REGIAO_UF`/
+  `adicionalRegiao()` de `icms-st-antecipacao-ce.ts`, fonte única com o cálculo em JS. Validado:
+  fórmula escrita + `result` em cache batem exatamente com `calcularAntecipacaoItem()` numa
+  amostra real (CFOP 2403, adicional +3%, R$ 591,91).
 
 ## Bug corrigido — logo achatada no Excel
 
