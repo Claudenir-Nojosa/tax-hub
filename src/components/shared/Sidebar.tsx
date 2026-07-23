@@ -87,7 +87,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
       className={`flex flex-col h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-all duration-300 ${isCollapsed ? "w-20" : "w-64"}`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-4">
+      <div className="flex items-center justify-center gap-3 p-4">
         {!isCollapsed && (
           <div className="flex items-center">
             <Image
