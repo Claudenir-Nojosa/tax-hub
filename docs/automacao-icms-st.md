@@ -72,21 +72,34 @@ cruza com nenhum pagamento/GNRE já feito — o EFD ICMS/IPI sozinho não traz e
 - **Excel**: `src/lib/icms-st-antecipacao-excel.ts`, aba "Antecipação ICMS-ST" — **1 linha por
   item de TODA nota** (não só as com CFOP 1403/2403), `ws.addTable` com `SUBTOTAL` nas colunas
   monetárias (mesmo padrão de `comprovante-pagamento-excel.ts` e da aba "Entradas" da Recuperação
-  de Crédito). Colunas "Competência" e "Data Entrada" são `Date` de verdade (não texto) —
+  de Crédito). Colunas "Competência" e "Data Entrada/Saída" são `Date` de verdade (não texto) —
   necessário tanto pro AutoFilter do Excel agrupar "Competência" por ano/mês quanto pro corte de
-  01/01/2024 da fórmula de "Alíquota Base" comparar `>=DATE(2024,1,1)` corretamente (comparar
-  texto com uma data em Excel sempre dá `TRUE`, o que quebraria silenciosamente o corte de data).
+  01/01/2024 da fórmula de "Alíquota Base Antecipação" comparar `>=DATE(2024,1,1)` corretamente
+  (comparar texto com uma data em Excel sempre dá `TRUE`, o que quebraria silenciosamente o corte
+  de data — bug real encontrado e corrigido nesta sessão).
+- **64 colunas — o mesmo conjunto completo da aba "Entradas"** (`entradas-icms-excel.ts`,
+  duplicado de propósito), não um recorte enxuto: CNPJ, Competência, Empresa, Registros, Situação
+  (da nota), Participante, **Número Documento, Série, Modelo, Chave NF-e**, datas, valores do
+  documento (Vlr Documento/Frete/Seguro etc.), item completo (Código/Descrição/Tipo/NCM/Qtde),
+  natureza do crédito, CFOP + descrição, e CST/base/alíquota/valor de ICMS, ICMS-ST (como
+  reportado pelo EFD), IPI, PIS e COFINS — **pedido explícito do usuário** depois de ver a 1ª
+  versão (que só tinha ~11 colunas) e apontar que faltava, por exemplo, Chave de Acesso e Número
+  da Nota. As 7 colunas de ICMS-ST vêm no final, com sufixo "Antecipação" nas que colidiriam de
+  nome com uma coluna bruta homônima (ex.: "Situação Antecipação" vs. "Situação" da nota).
 - **Colunas calculadas saem em FÓRMULA, não em valor estático** (pedido explícito do usuário) —
-  Situação, Origem Estrangeira, Base de Cálculo, Alíquota Base, Adicional Região, Alíquota Total e
-  Valor Antecipação ICMS-ST são todas `{formula, result}` (mesma técnica de
-  `consolidacao-pis-cofins-excel.ts`: `result` pré-calculado em JS pra visualizadores sem
-  recálculo automático, o Excel recalcula de verdade ao abrir). As fórmulas consultam duas
-  tabelas auxiliares fora da área visível (colunas U em diante, mesma técnica de tabela auxiliar +
-  VLOOKUP já usada em `reforma-excel/entradas-efd.ts`): lista de códigos CSOSN (`COUNTIF`) e
-  UF→Adicional (`VLOOKUP`) — ambas geradas a partir de `CODIGOS_CSOSN`/`REGIAO_UF`/
+  Situação Antecipação, Origem Estrangeira, Base Cálculo Antecipação, Alíquota Base Antecipação,
+  Adicional Região, Alíquota Total Antecipação e Valor Antecipação ICMS-ST são todas
+  `{formula, result}` (mesma técnica de `consolidacao-pis-cofins-excel.ts`: `result` pré-calculado
+  em JS pra visualizadores sem recálculo automático, o Excel recalcula de verdade ao abrir). As
+  fórmulas consultam duas tabelas auxiliares bem depois da última coluna de dados (fora da área
+  visível/impressa, letra calculada com `colLetra()` de `reforma-excel/coluna-letra.ts` — a
+  tabela agora é larga demais pra um `String.fromCharCode` de uma letra só), mesma técnica de
+  tabela auxiliar + VLOOKUP já usada em `reforma-excel/entradas-efd.ts`: lista de códigos CSOSN
+  (`COUNTIF`) e UF→Adicional (`VLOOKUP`) — ambas geradas a partir de `CODIGOS_CSOSN`/`REGIAO_UF`/
   `adicionalRegiao()` de `icms-st-antecipacao-ce.ts`, fonte única com o cálculo em JS. Validado:
   fórmula escrita + `result` em cache batem exatamente com `calcularAntecipacaoItem()` numa
-  amostra real (CFOP 2403, adicional +3%, R$ 591,91).
+  amostra real (CFOP 2403, adicional +3%, R$ 591,91), com Chave NF-e e Número Documento reais
+  presentes na linha.
 
 ## Bug corrigido — logo achatada no Excel
 
