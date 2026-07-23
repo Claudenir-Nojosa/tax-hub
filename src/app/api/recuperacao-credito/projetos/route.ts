@@ -24,9 +24,31 @@ export async function GET(req: NextRequest) {
   const projetos = await db.projetoRecuperacaoCredito.findMany({
     where: { clienteId },
     orderBy: { updatedAt: "desc" },
+    include: {
+      _count: {
+        select: {
+          declaracoes: true,
+          declaracoesEfd: true,
+          declaracoesEfdContrib: true,
+          comprovantesPagamento: true,
+          declaracoesEcf: true,
+          declaracoesDctfWeb: true,
+          declaracoesDctf: true,
+          declaracoesFontesPagadoras: true,
+          declaracoesEcd: true,
+        },
+      },
+    },
   })
 
-  return NextResponse.json(projetos)
+  // soma todos os tipos de declaração num único número — o card do projeto só precisa mostrar
+  // "quantos documentos já foram importados", não o detalhe por tipo
+  return NextResponse.json(
+    projetos.map(({ _count, ...p }) => ({
+      ...p,
+      totalDocumentos: Object.values(_count).reduce((s, n) => s + n, 0),
+    }))
+  )
 }
 
 // POST { clienteId, nome } — cria um novo projeto para o cliente

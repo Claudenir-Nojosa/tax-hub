@@ -12,9 +12,12 @@ export async function GET() {
   const clientes = await db.clienteRecuperacaoCredito.findMany({
     where: { userId: session.user.id },
     orderBy: { updatedAt: "desc" },
+    include: { _count: { select: { projetos: true } } },
   })
 
-  return NextResponse.json(clientes)
+  // achata o _count pro front não precisar saber da forma aninhada do Prisma — só interessa o
+  // número de projetos pra mostrar como badge no card do cliente
+  return NextResponse.json(clientes.map(({ _count, ...c }) => ({ ...c, totalProjetos: _count.projetos })))
 }
 
 // POST — cria ou atualiza (upsert por CNPJ) um cliente

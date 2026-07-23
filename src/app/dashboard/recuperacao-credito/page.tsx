@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { exportarPgdasExcel, type DeclaracaoPgdasRegistro } from "@/lib/pgdas/export-pgdas-excel";
 import type { DadosPgdas, TipoDocumentoPgdas } from "@/lib/pgdas/types";
 import type { DeclaracaoEfdRegistro } from "@/lib/efd-icms-excel";
@@ -48,6 +48,10 @@ import {
   Trash2,
   Pencil,
   Check,
+  Users,
+  Building2,
+  FolderOpen,
+  ArrowRight,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -79,12 +83,16 @@ interface Cliente {
   id: string;
   cnpj: string;
   razaoSocial: string;
+  updatedAt: string;
+  totalProjetos: number;
 }
 
 interface Projeto {
   id: string;
   clienteId: string;
   nome: string;
+  updatedAt: string;
+  totalDocumentos: number;
 }
 
 interface DeclaracaoRow {
@@ -166,6 +174,11 @@ function formatarCompetencia(comp: string): string {
   return `${MESES_ABREV[parseInt(mes, 10) - 1] ?? mes}/${ano}`;
 }
 
+// "atualizado em" nos cards de cliente/projeto — data curta, sem hora
+function formatarDataCurta(iso: string): string {
+  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 const PRIORIDADE_CONFIG = {
   alta: {
     label: "Alta",
@@ -244,21 +257,26 @@ export default function RecuperacaoCreditoPage() {
   // cada projeto tem seu próprio conjunto de meses importados, pra não colidir/sobrescrever
   // quando o mesmo cliente tem mais de um diagnóstico/reverificação em andamento)
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [carregandoClientes, setCarregandoClientes] = useState(true);
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<string | null>(null);
   const [modoNovoCliente, setModoNovoCliente] = useState(false);
   const [novoCnpj, setNovoCnpj] = useState("");
   const [novaRazaoSocial, setNovaRazaoSocial] = useState("");
   const [criandoCliente, setCriandoCliente] = useState(false);
+  const [excluindoClienteId, setExcluindoClienteId] = useState<string | null>(null);
 
   const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [carregandoProjetos, setCarregandoProjetos] = useState(false);
   const [projetoSelecionadoId, setProjetoSelecionadoId] = useState<string | null>(null);
   const [modoNovoProjeto, setModoNovoProjeto] = useState(false);
   const [novoNomeProjeto, setNovoNomeProjeto] = useState("");
   const [criandoProjeto, setCriandoProjeto] = useState(false);
-  const [modoRenomearProjeto, setModoRenomearProjeto] = useState(false);
+  // id do card em edição de nome — null quando nenhum projeto está sendo renomeado (rename agora
+  // acontece direto no card da galeria, não precisa mais o projeto estar "aberto")
+  const [projetoEditandoId, setProjetoEditandoId] = useState<string | null>(null);
   const [nomeRenomeado, setNomeRenomeado] = useState("");
   const [renomeandoProjeto, setRenomeandoProjeto] = useState(false);
-  const [excluindoProjeto, setExcluindoProjeto] = useState(false);
+  const [excluindoProjetoId, setExcluindoProjetoId] = useState<string | null>(null);
 
   const [declaracoesPgdas, setDeclaracoesPgdas] = useState<DeclaracaoRow[]>([]);
   const [carregandoDeclaracoes, setCarregandoDeclaracoes] = useState(false);
@@ -293,11 +311,14 @@ export default function RecuperacaoCreditoPage() {
   const projetoSelecionado = projetos.find((p) => p.id === projetoSelecionadoId) ?? null;
 
   const carregarClientes = useCallback(async () => {
+    setCarregandoClientes(true);
     try {
       const res = await fetch("/api/recuperacao-credito/clientes");
       setClientes(await res.json());
     } catch {
       toast.error("Erro ao carregar clientes");
+    } finally {
+      setCarregandoClientes(false);
     }
   }, []);
 
@@ -306,11 +327,14 @@ export default function RecuperacaoCreditoPage() {
   }, [carregarClientes]);
 
   const carregarProjetos = useCallback(async (clienteId: string) => {
+    setCarregandoProjetos(true);
     try {
       const res = await fetch(`/api/recuperacao-credito/projetos?clienteId=${clienteId}`);
       setProjetos(await res.json());
     } catch {
       toast.error("Erro ao carregar projetos");
+    } finally {
+      setCarregandoProjetos(false);
     }
   }, []);
 
@@ -536,23 +560,25 @@ export default function RecuperacaoCreditoPage() {
     }
   };
 
-  const handleRenomearProjeto = async () => {
-    if (!projetoSelecionadoId || !clienteSelecionadoId) return;
-    if (!nomeRenomeado.trim()) {
+  // recebe o id explicitamente (não mais o "projeto aberto") — a galeria de cards permite
+  // renomear qualquer projeto da lista, não só o que está selecionado/aberto no momento
+  const handleRenomearProjeto = async (projetoId: string, novoNome: string) => {
+    if (!clienteSelecionadoId) return;
+    if (!novoNome.trim()) {
       toast.error("Dê um nome ao projeto");
       return;
     }
     setRenomeandoProjeto(true);
     try {
-      const res = await fetch(`/api/recuperacao-credito/projetos/${projetoSelecionadoId}`, {
+      const res = await fetch(`/api/recuperacao-credito/projetos/${projetoId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: nomeRenomeado.trim() }),
+        body: JSON.stringify({ nome: novoNome.trim() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Erro ao renomear projeto");
       toast.success("Projeto renomeado!");
-      setModoRenomearProjeto(false);
+      setProjetoEditandoId(null);
       await carregarProjetos(clienteSelecionadoId);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao renomear projeto");
@@ -561,20 +587,36 @@ export default function RecuperacaoCreditoPage() {
     }
   };
 
-  const handleExcluirProjeto = async () => {
-    if (!projetoSelecionado || !clienteSelecionadoId) return;
-    if (!confirm(`Excluir o projeto "${projetoSelecionado.nome}" e todas as declarações importadas nele?`)) return;
-    setExcluindoProjeto(true);
+  const handleExcluirProjeto = async (projeto: Projeto) => {
+    if (!clienteSelecionadoId) return;
+    if (!confirm(`Excluir o projeto "${projeto.nome}" e todas as declarações importadas nele?`)) return;
+    setExcluindoProjetoId(projeto.id);
     try {
-      const res = await fetch(`/api/recuperacao-credito/projetos/${projetoSelecionado.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/recuperacao-credito/projetos/${projeto.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Erro ao excluir projeto");
       toast.success("Projeto excluído");
-      setProjetoSelecionadoId(null);
+      if (projetoSelecionadoId === projeto.id) setProjetoSelecionadoId(null);
       await carregarProjetos(clienteSelecionadoId);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao excluir projeto");
     } finally {
-      setExcluindoProjeto(false);
+      setExcluindoProjetoId(null);
+    }
+  };
+
+  const handleExcluirCliente = async (cliente: Cliente) => {
+    if (!confirm(`Excluir o cliente "${cliente.razaoSocial}" e todos os projetos/declarações associados? Essa ação não pode ser desfeita.`)) return;
+    setExcluindoClienteId(cliente.id);
+    try {
+      const res = await fetch(`/api/recuperacao-credito/clientes/${cliente.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Erro ao excluir cliente");
+      toast.success("Cliente excluído");
+      if (clienteSelecionadoId === cliente.id) setClienteSelecionadoId(null);
+      await carregarClientes();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao excluir cliente");
+    } finally {
+      setExcluindoClienteId(null);
     }
   };
 
@@ -1024,30 +1066,324 @@ export default function RecuperacaoCreditoPage() {
   );
 
   // ── Render ──────────────────────────────────────────────────────────────────
+
+  const hero = (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-500 flex items-center justify-center">
+            <FileSearch className="h-5 w-5 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-foreground">
+            Recuperação de Crédito
+          </h1>
+        </div>
+        <p className="text-muted-foreground text-sm">
+          Carregue os arquivos fiscais e contábeis — a IA identifica oportunidades de recuperação de créditos tributários.
+        </p>
+      </div>
+      {resultado && (
+        <Button variant="outline" onClick={handleReset} size="sm">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Nova análise
+        </Button>
+      )}
+    </div>
+  );
+
+  // Diálogos de criação (Novo Cliente / Novo Projeto) — usados tanto na galeria quanto reabertos
+  // de dentro de um projeto já aberto (breadcrumb), por isso ficam fora do "if" abaixo.
+  const dialogos = (
+    <>
+      <Dialog
+        open={modoNovoCliente}
+        onOpenChange={(open) => {
+          setModoNovoCliente(open);
+          if (!open) { setNovoCnpj(""); setNovaRazaoSocial(""); }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Novo cliente</DialogTitle>
+            <DialogDescription>Cadastre o CNPJ e a razão social do cliente.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">CNPJ</Label>
+              <Input placeholder="00.000.000/0000-00" value={novoCnpj} onChange={(e) => setNovoCnpj(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Razão Social</Label>
+              <Input
+                autoFocus={false}
+                placeholder="Nome da empresa"
+                value={novaRazaoSocial}
+                onChange={(e) => setNovaRazaoSocial(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCriarCliente()}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setModoNovoCliente(false)}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={handleCriarCliente} disabled={criandoCliente} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              {criandoCliente ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar cliente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={modoNovoProjeto}
+        onOpenChange={(open) => {
+          setModoNovoProjeto(open);
+          if (!open) setNovoNomeProjeto("");
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Novo projeto</DialogTitle>
+            <DialogDescription>
+              {clienteSelecionado ? `Novo projeto para ${clienteSelecionado.razaoSocial}` : "Dê um nome ao projeto"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Nome do projeto</Label>
+            <Input
+              autoFocus
+              placeholder="ex.: Reverificação 2026"
+              value={novoNomeProjeto}
+              onChange={(e) => setNovoNomeProjeto(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCriarProjeto()}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setModoNovoProjeto(false)}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={handleCriarProjeto} disabled={criandoProjeto} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              {criandoProjeto ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar projeto"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+
+  // Cartão de projeto reutilizado tanto na galeria de projetos quanto (se um dia precisar) fora
+  // dela — mantém a lógica de edição/exclusão inline num só lugar.
+  const cartaoProjeto = (p: Projeto) => (
+    <div
+      key={p.id}
+      className="group relative rounded-2xl border border-border bg-card overflow-hidden transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 flex flex-col"
+    >
+      <div className="h-1 bg-gradient-to-r from-primary via-primary/70 to-emerald-400" />
+      <div className="p-5 flex flex-col gap-3 flex-1">
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <FolderOpen className="h-4.5 w-4.5 text-primary" />
+          </div>
+          <div className="min-w-0 flex-1">
+            {projetoEditandoId === p.id ? (
+              <div className="flex items-center gap-1.5">
+                <Input
+                  autoFocus
+                  value={nomeRenomeado}
+                  onChange={(e) => setNomeRenomeado(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleRenomearProjeto(p.id, nomeRenomeado);
+                    if (e.key === "Escape") setProjetoEditandoId(null);
+                  }}
+                  className="h-7 text-sm"
+                />
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleRenomearProjeto(p.id, nomeRenomeado); }}
+                  disabled={renomeandoProjeto}
+                  className="shrink-0 h-7 w-7 rounded-lg flex items-center justify-center text-primary hover:bg-primary/10 transition-colors"
+                  title="Salvar"
+                >
+                  {renomeandoProjeto ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-foreground truncate" title={p.nome}>{p.nome}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Atualizado em {formatarDataCurta(p.updatedAt)}</p>
+              </>
+            )}
+          </div>
+          {projetoEditandoId !== p.id && (
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+              <button
+                onClick={(e) => { e.stopPropagation(); setNomeRenomeado(p.nome); setProjetoEditandoId(p.id); }}
+                className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title="Renomear projeto"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleExcluirProjeto(p); }}
+                disabled={excluindoProjetoId === p.id}
+                className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title="Excluir projeto"
+              >
+                {excluindoProjetoId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-border bg-muted/50 px-3 py-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <FileSearch className="h-3.5 w-3.5 shrink-0" />
+          {p.totalDocumentos} documento{p.totalDocumentos === 1 ? "" : "s"} importado{p.totalDocumentos === 1 ? "" : "s"}
+        </div>
+
+        <button
+          onClick={() => setProjetoSelecionadoId(p.id)}
+          className="mt-auto h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+        >
+          Abrir projeto <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+
+  // Antes de um projeto estar aberto: mostra a galeria de Clientes (nível 1) ou, com um cliente
+  // selecionado, a galeria de Projetos dele (nível 2) — navegação em cards pedida pelo usuário,
+  // no lugar dos <Select> antigos. O botão "+" no topo direito troca de alvo (cliente/projeto)
+  // conforme o nível em que o usuário está.
+  if (!projetoSelecionado) {
+    return (
+      <div className="space-y-8 pb-16">
+        {hero}
+
+        {clienteSelecionado ? (
+          <div className="space-y-5">
+            <button
+              onClick={() => setClienteSelecionadoId(null)}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Users className="h-3.5 w-3.5" /> Clientes
+            </button>
+
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-foreground truncate">{clienteSelecionado.razaoSocial}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5 font-mono">{clienteSelecionado.cnpj}</p>
+              </div>
+              <Button onClick={() => setModoNovoProjeto(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0">
+                <Plus className="h-4 w-4 mr-2" /> Novo projeto
+              </Button>
+            </div>
+
+            {carregandoProjetos ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : projetos.length === 0 ? (
+              <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl">
+                <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground mb-4">Nenhum projeto ainda para este cliente.</p>
+                <Button onClick={() => setModoNovoProjeto(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                  <Plus className="h-4 w-4 mr-2" /> Criar primeiro projeto
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {projetos.map((p) => cartaoProjeto(p))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Clientes</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Escolha um cliente para ver os projetos, ou cadastre um novo</p>
+              </div>
+              <Button onClick={() => setModoNovoCliente(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0">
+                <Plus className="h-4 w-4 mr-2" /> Novo cliente
+              </Button>
+            </div>
+
+            {carregandoClientes ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : clientes.length === 0 ? (
+              <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground mb-4">Nenhum cliente cadastrado ainda.</p>
+                <Button onClick={() => setModoNovoCliente(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                  <Plus className="h-4 w-4 mr-2" /> Cadastrar primeiro cliente
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {clientes.map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => setClienteSelecionadoId(c.id)}
+                    className="group relative rounded-2xl border border-border bg-card overflow-hidden cursor-pointer transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 flex flex-col"
+                  >
+                    <div className="h-1 bg-gradient-to-r from-primary via-primary/70 to-emerald-400" />
+                    <div className="p-5 flex flex-col gap-3 flex-1">
+                      <div className="flex items-start gap-3">
+                        <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                          <Building2 className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-foreground truncate" title={c.razaoSocial}>{c.razaoSocial}</p>
+                          <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{c.cnpj}</p>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleExcluirCliente(c); }}
+                          disabled={excluindoClienteId === c.id}
+                          className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-colors shrink-0"
+                          title="Excluir cliente"
+                        >
+                          {excluindoClienteId === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                      <div className="mt-auto flex items-center justify-between text-xs">
+                        <Badge variant="outline" className="text-[11px] font-normal">
+                          {c.totalProjetos} projeto{c.totalProjetos === 1 ? "" : "s"}
+                        </Badge>
+                        <span className="text-muted-foreground flex items-center gap-1 group-hover:text-primary transition-colors">
+                          Ver projetos <ArrowRight className="h-3 w-3" />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {dialogos}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 pb-16">
-      {/* Hero */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-500 flex items-center justify-center">
-              <FileSearch className="h-5 w-5 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-foreground">
-              Recuperação de Crédito
-            </h1>
-          </div>
-          <p className="text-muted-foreground text-sm">
-            Carregue os arquivos fiscais e contábeis — a IA identifica oportunidades de recuperação de créditos tributários.
-          </p>
-        </div>
-        {resultado && (
-          <Button variant="outline" onClick={handleReset} size="sm">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Nova análise
-          </Button>
-        )}
+      {/* Breadcrumb — só aparece com um projeto aberto; leva de volta pra galeria de cards */}
+      <div className="flex items-center gap-1.5 text-sm flex-wrap">
+        <button onClick={() => setClienteSelecionadoId(null)} className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+          <Users className="h-3.5 w-3.5" /> Clientes
+        </button>
+        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <button onClick={() => setProjetoSelecionadoId(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+          {clienteSelecionado?.razaoSocial}
+        </button>
+        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <span className="font-medium text-foreground">{projetoSelecionado.nome}</span>
       </div>
+
+      {hero}
 
       {/* Upload Section */}
       <Card className="border-border">
@@ -1068,140 +1404,6 @@ export default function RecuperacaoCreditoPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Cliente — necessário só para os PDFs do Simples Nacional */}
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">
-              Cliente <span className="font-normal text-muted-foreground">(cliente + projeto são necessários para importar PDFs do Simples Nacional ou EFDs de ICMS/IPI)</span>
-            </Label>
-            {modoNovoCliente ? (
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Input
-                  placeholder="CNPJ"
-                  value={novoCnpj}
-                  onChange={(e) => setNovoCnpj(e.target.value)}
-                  className="sm:max-w-[200px]"
-                />
-                <Input
-                  placeholder="Razão Social"
-                  value={novaRazaoSocial}
-                  onChange={(e) => setNovaRazaoSocial(e.target.value)}
-                  className="flex-1"
-                />
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={handleCriarCliente} disabled={criandoCliente}>
-                    {criandoCliente ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar"}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setModoNovoCliente(false)}>
-                    Cancelar
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <Select value={clienteSelecionadoId ?? undefined} onValueChange={setClienteSelecionadoId}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Selecione um cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clientes.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.razaoSocial} — {c.cnpj}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" size="icon" onClick={() => setModoNovoCliente(true)} title="Novo cliente">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* Projeto — escopo dos meses importados; um cliente pode ter vários projetos */}
-          {clienteSelecionado && (
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">
-                Projeto <span className="font-normal text-muted-foreground">({clienteSelecionado.razaoSocial})</span>
-              </Label>
-              {modoNovoProjeto ? (
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <Input
-                    placeholder="Nome do projeto (ex.: Reverificação 2026)"
-                    value={novoNomeProjeto}
-                    onChange={(e) => setNovoNomeProjeto(e.target.value)}
-                    className="flex-1"
-                  />
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleCriarProjeto} disabled={criandoProjeto}>
-                      {criandoProjeto ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar"}
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setModoNovoProjeto(false)}>
-                      Cancelar
-                    </Button>
-                  </div>
-                </div>
-              ) : modoRenomearProjeto ? (
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <Input
-                    autoFocus
-                    placeholder="Novo nome do projeto"
-                    value={nomeRenomeado}
-                    onChange={(e) => setNomeRenomeado(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleRenomearProjeto()}
-                    className="flex-1"
-                  />
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleRenomearProjeto} disabled={renomeandoProjeto}>
-                      {renomeandoProjeto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setModoRenomearProjeto(false)}>
-                      Cancelar
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <Select value={projetoSelecionadoId ?? undefined} onValueChange={setProjetoSelecionadoId}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Selecione um projeto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projetos.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {projetoSelecionado && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => { setNomeRenomeado(projetoSelecionado.nome); setModoRenomearProjeto(true); }}
-                        title="Renomear projeto"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={handleExcluirProjeto}
-                        disabled={excluindoProjeto}
-                        title="Excluir projeto"
-                      >
-                        {excluindoProjeto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                      </Button>
-                    </>
-                  )}
-                  <Button variant="outline" size="icon" onClick={() => setModoNovoProjeto(true)} title="Novo projeto">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Drop zone */}
           <div
             onDrop={handleDrop}
