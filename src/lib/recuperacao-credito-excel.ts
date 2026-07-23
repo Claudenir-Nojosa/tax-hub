@@ -23,6 +23,8 @@ import type { AnaliseChecklist } from "./checklist-excel"
 import { compararRetencoes, type ComparativoRetencao, type TributoRetencao } from "./retencoes-analise"
 import { analisarEstoqueAbertura } from "./estoque-abertura-analise"
 import { montarAbaSelic } from "./selic-excel"
+import { montarAbaAntecipacaoIcmsStCabecalho, finalizarExcelComAntecipacaoIcmsSt, type PendenteAbaAntecipacaoIcmsSt } from "./icms-st-antecipacao-excel"
+import { elegivelAntecipacaoIcmsSt } from "./icms-st-antecipacao-ce"
 
 const BRL_FMT = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
 
@@ -187,6 +189,7 @@ export interface IncluirAbas {
   fontes?: boolean
   ecd?: boolean
   cadastro?: boolean
+  antecipacaoIcmsSt?: boolean
 }
 
 // Monta um único Excel com uma aba por tipo de declaração fiscal presente no projeto (ICMS/IPI,
@@ -234,6 +237,13 @@ export async function exportarDeclaracaoFiscalExcel(
   const wsMenu = temCadastro ? criarAbaMenu(wb) : null
   const wsChecklist = criarAbaChecklist(wb)
 
+  // Antecipação ICMS-ST (Ceará) usa geração híbrida (ExcelJS só pro cabeçalho + linhas de dado
+  // injetadas via XML/jszip, ver icms-st-antecipacao-excel.ts) pra não estourar memória do
+  // navegador com EFDs grandes — por isso o `wb.xlsx.writeBuffer()` final não pode ser feito
+  // direto aqui: precisa passar por `finalizarExcelComAntecipacaoIcmsSt` (abaixo), que só faz o
+  // round-trip extra pelo jszip quando essa aba de fato entrou (`pendenteIcmsSt !== null`).
+  let pendenteIcmsSt: PendenteAbaAntecipacaoIcmsSt | null = null
+
   if (temIcms) {
     await montarAbaIcms(wb, dados.icms!, nomeCliente)
     await montarAbaEntradas(
@@ -241,6 +251,13 @@ export async function exportarDeclaracaoFiscalExcel(
       dados.icms!.map((d) => ({ competencia: d.competencia, linhasEntrada: d.dados.linhasEntrada })),
       nomeCliente
     )
+    // Antecipação ICMS-ST (Ceará) — só entra quando o cliente é elegível (UF CE + CNAE têxtil no
+    // Cartão CNPJ, ver elegivelAntecipacaoIcmsSt) e a aba não foi desmarcada no diálogo de export.
+    if (elegivelAntecipacaoIcmsSt(dados.cadastro?.consultaCnpj) && (incluir?.antecipacaoIcmsSt ?? true)) {
+      const linhasEntradaTodas = dados.icms!.flatMap((d) => d.dados.linhasEntrada ?? [])
+      const resultado = await montarAbaAntecipacaoIcmsStCabecalho(wb, linhasEntradaTodas, nomeCliente)
+      pendenteIcmsSt = resultado.pendente
+    }
   }
   const refsDebito = temPisCofins ? await montarAbasPisCofins(wb, dados.pisCofins!, nomeCliente) : null
   const refsDebitoEcf = temEcf ? await montarAbasEcf(wb, dados.ecf!, nomeCliente) : null
@@ -319,8 +336,7 @@ export async function exportarDeclaracaoFiscalExcel(
   // só cadastro importado → arquivo ainda precisa de um contexto no nome
   const contexto = contextos.join(", ") || "Cadastro"
 
-  const buffer = await wb.xlsx.writeBuffer()
-  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+  const blob = await finalizarExcelComAntecipacaoIcmsSt(wb, pendenteIcmsSt)
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url

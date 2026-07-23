@@ -123,8 +123,10 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
     específica daquele cliente/produto/UF/período. Isso não é generalizável a partir do EFD
     sozinho, então ficou de fora da aba "Entradas" — confirmado com o usuário. Essa mesma regra
     de ICMS-ST, na sua forma **genérica** (baseada em legislação, não numa tabela manual por
-    cliente), está prevista para virar uma automação própria em `/dashboard/automacoes` — ver
-    `docs/automacao-icms-st.md` — implementada em `/dashboard/automacoes/antecipacao-icms-st`.
+    cliente), existe como automação própria em `/dashboard/automacoes/antecipacao-icms-st` — ver
+    `docs/automacao-icms-st.md` — e, quando o cliente do projeto é elegível, também entra
+    **automaticamente** na Recuperação de Crédito (seção própria na tela + aba no Excel
+    combinado) — ver seção 18.
   - **BUG CORRIGIDO — notas sem `C170` desapareciam da listagem**: `parseEntradasEfdIcmsIpi`
     originalmente só emitia linha quando via um `C170` (item) filho do `C100`. Validado com um
     EFD real (GIGI Tecidos, competência 2025-01): 28 notas de devolução de venda (CFOP 1202,
@@ -729,3 +731,47 @@ determinístico.
   "Débito Apurado X **Créditos Pagamento: Y** Saldo a Pagar Z") eram silenciosamente pulados
   pelo regex (bug real: 1º tri/2025 da CORE sem IRPJ/CSLL). Grupo opcional adicionado; o texto
   dos créditos fica em `creditosVinculados`. **Reimportar os PDFs de DCTFWeb afetados.**
+
+## 18. Antecipação ICMS-ST (Ceará) — inclusão automática no projeto
+
+- **Pedido do usuário**: a automação de Antecipação ICMS-ST/FECOP do Ceará (§4, gap conhecido, e
+  `docs/automacao-icms-st.md`) hoje exige upload manual de EFDs num fluxo separado
+  (`/dashboard/automacoes/antecipacao-icms-st`). Quando o **cliente do projeto** atende os
+  critérios de elegibilidade, a mesma análise passa a aparecer **sozinha** dentro do projeto de
+  Recuperação de Crédito, sem nenhum upload extra — reaproveita os itens que a aba "Entradas"
+  (§4) já lê de todo EFD ICMS/IPI importado no projeto.
+- **Critério de elegibilidade** — `elegivelAntecipacaoIcmsSt(consultaCnpj)` em
+  `src/lib/icms-st-antecipacao-ce.ts`, usado tanto na UI quanto no orquestrador do Excel (fonte
+  única, sem duplicar a regra):
+  1. UF do cliente = **CE**, lida do Cartão CNPJ (`ConsultaCnpjDados.uf`, aba Cadastro — §15).
+  2. CNAE **47.55-5-01** (Comércio varejista de tecidos) presente como `cnaePrincipal` **OU**
+     algum item de `cnaesSecundarios` — decisão confirmada com o usuário: conta qualquer um dos
+     dois, não só o principal, pra não deixar de fora quem atua com têxtil mas declarou outra
+     atividade como principal.
+  - **Sem Cartão CNPJ ainda importado no projeto** (`consultaCnpj` nulo): não dá pra checar a
+    elegibilidade, então a seção/aba **fica de fora silenciosamente** — sem banner nem aviso
+    pedindo o documento (decisão confirmada com o usuário, mesmo comportamento de outras seções
+    do módulo quando falta um documento).
+- **Onde aparece** (decisão confirmada com o usuário: as duas coisas, não uma ou outra):
+  - **Seção própria na tela** (`recuperacao-credito/page.tsx`, logo após a seção "ICMS / IPI"),
+    mesmo padrão visual (`SecaoColapsavel` + `GraficoBarras` por competência) — mostra total
+    geral de antecipação devida e quantos itens são sujeitos (CFOP 1403/2403) dos itens de
+    entrada já importados. Sem botão de baixar Excel próprio: a aba já sai junto no botão
+    "Baixar Excel" combinado da seção de declarações fiscais.
+  - **Aba a mais no Excel combinado** — `exportarDeclaracaoFiscalExcel`
+    (`src/lib/recuperacao-credito-excel.ts`) chama `montarAbaAntecipacaoIcmsSt` (mesma função da
+    automação standalone, `src/lib/icms-st-antecipacao-excel.ts`, sem nenhuma mudança nela)
+    dentro do bloco `if (temIcms)`, só quando `elegivelAntecipacaoIcmsSt(dados.cadastro
+    ?.consultaCnpj)` bate — a checagem lê `dados.cadastro` direto (não o cadastro já filtrado
+    pelo toggle "Cadastro" do diálogo de export), porque são duas decisões independentes: incluir
+    a aba Menu/Cadastro é uma coisa, checar a elegibilidade do cliente pra outra aba é outra.
+  - **Diálogo "quais abas exportar"** (`SelecionarAbasExportDialog`, §2/UI): ganha a opção
+    "Antecipação ICMS-ST (Ceará)" (`key: "antecipacaoIcmsSt"` em `IncluirAbas`) só quando o
+    cliente é elegível, marcada por padrão como as demais.
+- **Fora de escopo, de propósito**: o export "standalone" de ICMS/IPI isolado
+  (`exportarEfdIcmsExcel`, sem acesso a dados de Cadastro do projeto) **não** ganha essa aba — não
+  tem como checar elegibilidade ali. A automação em `/dashboard/automacoes/antecipacao-icms-st`
+  continua existindo sem alteração, pra quem quer rodar avulso fora do fluxo de projeto.
+- **Validado**: `elegivelAntecipacaoIcmsSt` com 8 casos sintéticos (UF≠CE, CNAE ausente, CNAE só
+  principal, CNAE só secundário, CNAE parecido mas diferente, múltiplos secundários, `null`/
+  `undefined`) — todos corretos. `npx tsc --noEmit` limpo.

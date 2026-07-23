@@ -1,4 +1,5 @@
 import type { LinhaEntradaEfd } from "./efd-icms-ipi-entradas-parser"
+import type { ConsultaCnpjDados } from "./cadastro-parser"
 
 // Antecipação parcial de ICMS/FECOP do Ceará sobre entradas de mercadoria — Instrução Normativa
 // CE n° 17/2013, com o critério de "origem estrangeira" da Resolução do Senado Federal n° 13/2012
@@ -101,4 +102,25 @@ export function calcularAntecipacaoItem(linha: LinhaEntradaEfd): ResultadoAnteci
   const valor = Math.round(base * aliquotaTotal * 100) / 100
 
   return { situacao, origemEstrangeira: estrangeira, base, aliquotaBase: aliqBase, adicionalRegiao: adicional, aliquotaTotal, valor }
+}
+
+// CNAE alvo pra inclusão automática na Recuperação de Crédito — "47.55-5-01 — Comércio varejista
+// de tecidos". Decisão confirmada com o usuário: conta tanto se for o CNAE principal quanto se
+// for um dos secundários do cliente (mais abrangente).
+const CNAE_TEXTIL = "4755501"
+
+function normalizarCnae(codigo: string): string {
+  return codigo.replace(/\D/g, "")
+}
+
+// Determina se a Recuperação de Crédito deve mostrar a seção/aba de Antecipação ICMS-ST pra um
+// cliente automaticamente: precisa ser do Ceará e ter o CNAE de comércio varejista de tecidos
+// (principal ou secundário) no Cartão CNPJ (Consulta CNPJ) do projeto. Sem Consulta CNPJ ainda
+// importada (`consultaCnpj` null/undefined), não há como checar — fica de fora silenciosamente
+// (decisão confirmada com o usuário, mesmo comportamento de outras seções sem documento).
+export function elegivelAntecipacaoIcmsSt(consultaCnpj: ConsultaCnpjDados | null | undefined): boolean {
+  if (!consultaCnpj) return false
+  if (consultaCnpj.uf !== "CE") return false
+  const cnaes = [consultaCnpj.cnaePrincipal, ...consultaCnpj.cnaesSecundarios].filter((c): c is NonNullable<typeof c> => !!c)
+  return cnaes.some((c) => normalizarCnae(c.codigo) === CNAE_TEXTIL)
 }

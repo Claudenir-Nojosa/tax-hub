@@ -215,16 +215,27 @@ export async function montarAbaEntradas(
 
   // Formatação das linhas de dados: contábil nas colunas monetárias, data nas colunas de
   // data/PA, tudo centralizado exceto colunas de texto longo (alinhadas à esquerda).
+  // Objetos de estilo COMPARTILHADOS entre todas as células de dados — criar um `{...}` novo por
+  // célula (linha × coluna) é o que estoura a memória do navegador em EFDs grandes (mesmo bug
+  // corrigido em icms-st-antecipacao-excel.ts): ExcelJS guarda a referência que recebe (não
+  // clona), então reusar a mesma referência custa O(colunas) objetos em vez de O(linhas ×
+  // colunas) — sem mudar o resultado (o writer do .xlsx dedupe os estilos por conteúdo na hora
+  // de gravar, com ou sem reuso de referência em memória).
+  const FONTE_DADOS = { name: "Calibri", size: 10 }
+  const ALIGN_ESQUERDA: Partial<ExcelJS.Alignment> = { horizontal: "left", vertical: "middle" }
+  const ALIGN_CENTRO: Partial<ExcelJS.Alignment> = { horizontal: "center", vertical: "middle" }
   const COLS_ESQUERDA = new Set(["Empresa", "Nome Fornecedor", "Descrição Item", "Natureza Crédito", "Descrição CFOP"])
+  const alinhamentoPorColuna = COLUNAS.map((c) => (COLS_ESQUERDA.has(c.nome) ? ALIGN_ESQUERDA : ALIGN_CENTRO))
+  const numFmtPorColuna = COLUNAS.map((c) => (c.monetaria ? BRL : c.nome === "PA" ? "mm-dd-yy" : undefined))
   for (let r = primeiraLinhaDados; r <= ultimaLinhaDados; r++) {
     const row = ws.getRow(r)
-    COLUNAS.forEach((c, i) => {
+    COLUNAS.forEach((_c, i) => {
       const col = i + 2
       const cell = row.getCell(col)
-      cell.font = { name: "Calibri", size: 10 }
-      cell.alignment = { horizontal: COLS_ESQUERDA.has(c.nome) ? "left" : "center", vertical: "middle" }
-      if (c.monetaria) cell.numFmt = BRL
-      if (c.nome === "PA") cell.numFmt = "mm-dd-yy"
+      cell.font = FONTE_DADOS
+      cell.alignment = alinhamentoPorColuna[i]
+      const numFmt = numFmtPorColuna[i]
+      if (numFmt) cell.numFmt = numFmt
     })
   }
 

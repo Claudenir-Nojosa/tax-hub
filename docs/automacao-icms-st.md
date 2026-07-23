@@ -3,6 +3,11 @@
 Ferramenta em `/dashboard/automacoes/antecipacao-icms-st`: importa EFD ICMS/IPI e calcula, item a
 item, a antecipação parcial de ICMS/FECOP devida sobre as entradas — regra específica do Ceará.
 
+Essa mesma análise também entra **automaticamente** dentro de um projeto de Recuperação de
+Crédito quando o cliente é elegível (UF CE + CNAE 47.55-5-01 no Cartão CNPJ), sem upload manual
+separado — ver `docs/recuperacao-credito.md` seção 18. Esta página standalone continua existindo
+sem alteração, pra quem quer rodar avulso fora do fluxo de projeto.
+
 ## Origem
 
 Nasceu como um desdobramento da aba "Entradas" da Recuperação de Crédito (ver
@@ -108,6 +113,48 @@ O `taxhub_logo_full.png` (trocado no redesign "Fintech Verde" desta sessão) tem
 `width: 140, height: 74` (proporção ~1,9:1) — esticando ela verticalmente em todo Excel gerado
 pelo site, não só nesta automação. Corrigido para `height: 41` (mantém a proporção real) nos 13
 arquivos de uma vez.
+
+## Bug corrigido — "Out of Memory" no navegador com EFDs grandes
+
+Reportado pelo usuário: exportar o Excel travava a aba e o Chrome mostrava "Out of Memory".
+Causa raiz, em duas camadas (a mesma classe de problema já resolvida uma vez na Reforma
+Tributária, ver `docs/reforma-tributaria-v2.md` — aqui reaplicada e resolvida uma segunda vez):
+
+1. **Objeto de célula do ExcelJS por linha × coluna**: `ws.addTable({ rows: [...] })` (Excel
+   Table/ListObject) + um laço que criava um objeto `{font, alignment, numFmt}` **novo** por
+   célula de dado — com 71 colunas, um EFD de algumas dezenas/centenas de milhares de itens
+   virava milhões de objetos de célula no heap da aba. Corrigido com **geração híbrida**, mesma
+   técnica de `reforma-excel/gerar-excel-reforma.ts` + `reforma-excel/anos.ts`: o ExcelJS monta
+   só o CABEÇALHO da aba (linhas 1-6, largura/estilo por COLUNA — não por célula — via
+   `ws.columns[i].style`), sem `addTable`/`autoFilter` manual em vez de Table (mesmo resultado
+   visual de filtro, sem forçar materialização de linha); as linhas de dado são geradas como XML
+   de planilha puro (`gerarLinhasXmlAntecipacaoIcmsSt`) e injetadas no `.xlsx` via `jszip`,
+   carimbando o id de estilo de cada coluna (extraído do `<col style="N">` do stub) em cada
+   célula gerada — nunca passam pelo modelo de objeto `Cell` do ExcelJS.
+2. **Limite de tamanho de string do V8**: mesmo gerando o XML das linhas em lotes pequenos (1000
+   linhas por vez, sem nunca materializar uma célula do ExcelJS), a implementação inicial ainda
+   juntava todos os lotes numa única STRING JS gigante no final (`chunks.join("")`) — e uma
+   string JS tem um teto absoluto de ~536 milhões de caracteres no V8, **independente de quanta
+   memória está disponível**. Um EFD grande o bastante estourava esse teto com
+   `RangeError: Invalid string length`, mesmo depois do fix acima. Corrigido codificando cada
+   lote pra bytes (`TextEncoder`) assim que é gerado e concatenando só `Uint8Array`s no final —
+   sem esse teto — e fazendo o "splice" no XML do stub (em volta de `</sheetData>`) também em
+   bytes, não em string.
+- **Validado**: teste sintético com 150.000 linhas (71 colunas, ~47 mil aplicáveis a ICMS-ST) —
+  antes do fix, `Out of Memory` mesmo com 2 GB de heap disponível; depois do fix, ~140 MB de heap
+  usado, arquivo de 46 MB gerado em ~27s. Um arquivo de 40.000 linhas foi reaberto por completo
+  com ExcelJS (round-trip escrever → injetar → ler) e todas as fórmulas/valores conferidos batem
+  exatamente com `calcularAntecipacaoItem()` calculado à parte (inclusive a soma `SUBTOTAL` de
+  uma coluna inteira). **Gap de validação**: não foi possível abrir o arquivo gerado no Excel de
+  verdade nesta sessão (automação COM do Excel indisponível no ambiente) — se o Excel real
+  mostrar algum aviso de reparo em arquivos muito grandes, o próximo passo é investigar o
+  "splice" de bytes em `finalizarExcelComAntecipacaoIcmsSt` (`icms-st-antecipacao-excel.ts`).
+- A mesma técnica de objeto-de-estilo-por-célula (primeira causa acima) também existia em
+  `entradas-icms-excel.ts` (aba "Entradas", 57 colunas, sem geração híbrida) — recebeu só o fix
+  mais simples (reusar objetos de estilo compartilhados por coluna) nesta sessão, não a geração
+  híbrida completa, porque ela não tem as 7 colunas de fórmula que empurravam o tamanho do XML
+  pro teto de string. Se um EFD real algum dia estourar memória nela também, a mesma técnica
+  híbrida deste arquivo é o caminho.
 
 ## Validação
 

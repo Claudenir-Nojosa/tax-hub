@@ -29,6 +29,7 @@ import type { DeclaracaoEcdRegistro } from "@/lib/ecd-excel";
 import { exportarDeclaracaoFiscalExcel, type IncluirAbas } from "@/lib/recuperacao-credito-excel";
 import type { DadosCadastroEmpresa } from "@/lib/cadastro-parser";
 import { resumoSimples } from "@/lib/cadastro-excel";
+import { calcularAntecipacaoItem, elegivelAntecipacaoIcmsSt, parseDataBr } from "@/lib/icms-st-antecipacao-ce";
 import { SecaoColapsavel, GraficoBarras, GraficoSeries, ListaArquivosColapsavel } from "@/components/recuperacao-credito/painel-importados";
 import SelecionarAbasExportDialog, { type OpcaoAbaExport } from "@/components/recuperacao-credito/SelecionarAbasExportDialog";
 import {
@@ -902,6 +903,7 @@ export default function RecuperacaoCreditoPage() {
   const opcoesAbasExport = (): OpcaoAbaExport[] => {
     const opcoes: OpcaoAbaExport[] = [];
     if (declaracoesEfd.length > 0) opcoes.push({ key: "icms", label: "ICMS e IPI (inclui Entradas)" });
+    if (declaracoesEfd.length > 0 && elegivelIcmsSt) opcoes.push({ key: "antecipacaoIcmsSt", label: "Antecipação ICMS-ST (Ceará)" });
     if (declaracoesEfdContrib.length > 0) opcoes.push({ key: "pisCofins", label: "PIS e COFINS" });
     if (declaracoesEcf.length > 0) opcoes.push({ key: "ecf", label: "IRPJ e CSLL" });
     if (declaracoesEcd.length > 0) opcoes.push({ key: "ecd", label: "Balanço Patrimonial (ECD)" });
@@ -942,6 +944,25 @@ export default function RecuperacaoCreditoPage() {
 
   const mesesEfdOrdenados = [...declaracoesEfd].sort((a, b) => a.competencia.localeCompare(b.competencia));
   const mesesEfdContribOrdenados = [...declaracoesEfdContrib].sort((a, b) => a.competencia.localeCompare(b.competencia));
+
+  // Antecipação ICMS-ST (Ceará) — só calcula quando o cliente é elegível (UF CE + CNAE têxtil no
+  // Cartão CNPJ). Reaproveita os itens já lidos das abas Entradas de todos os EFDs ICMS/IPI do
+  // projeto (linhasEntrada), sem precisar de upload separado.
+  const elegivelIcmsSt = elegivelAntecipacaoIcmsSt(cadastro?.dados.consultaCnpj ?? null);
+  const linhasEntradaTodas = elegivelIcmsSt ? declaracoesEfd.flatMap((d) => d.dados.linhasEntrada ?? []) : [];
+  const resultadosAntecipacaoIcmsSt = linhasEntradaTodas.map((linha) => ({ linha, resultado: calcularAntecipacaoItem(linha) }));
+  const aplicaveisAntecipacaoIcmsSt = resultadosAntecipacaoIcmsSt.filter((r) => r.resultado);
+  const totalGeralAntecipacaoIcmsSt = aplicaveisAntecipacaoIcmsSt.reduce((s, r) => s + r.resultado!.valor, 0);
+  const totalPorCompetenciaAntecipacaoIcmsSt = Array.from(
+    aplicaveisAntecipacaoIcmsSt
+      .reduce((mapa, r) => {
+        const d = parseDataBr(r.linha.dataEntradaSaida);
+        const chave = d ? `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}` : "?";
+        mapa.set(chave, (mapa.get(chave) ?? 0) + r.resultado!.valor);
+        return mapa;
+      }, new Map<string, number>())
+      .entries()
+  ).sort(([a], [b]) => a.localeCompare(b));
 
   // Anos de ECF, com IRPJ/CSLL "a pagar" somados dos períodos (P300 código 15 / P500 código 13)
   const anosEcfOrdenados = [...declaracoesEcf]
@@ -1416,6 +1437,63 @@ export default function RecuperacaoCreditoPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </>
+              )}
+            </SecaoColapsavel>
+          )}
+
+          {/* Antecipação ICMS-ST (Ceará) — só aparece quando o cliente é elegível (UF CE + CNAE
+              têxtil no Cartão CNPJ) e já tem EFD ICMS/IPI importado no projeto. Sem Cartão CNPJ
+              ainda importado, fica de fora silenciosamente (decisão confirmada com o usuário). */}
+          {projetoSelecionado && elegivelIcmsSt && (carregandoDeclaracoesEfd || mesesEfdOrdenados.length > 0) && (
+            <SecaoColapsavel
+              titulo="Antecipação ICMS-ST (Ceará)"
+              resumo={
+                carregandoDeclaracoesEfd
+                  ? "carregando…"
+                  : `${aplicaveisAntecipacaoIcmsSt.length} ${aplicaveisAntecipacaoIcmsSt.length === 1 ? "item sujeito" : "itens sujeitos"}`
+              }
+            >
+              {carregandoDeclaracoesEfd ? (
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Card className="border-border">
+                      <CardContent className="pt-5 pb-4 text-center">
+                        <p className="text-2xl font-bold text-foreground">{formatCurrency(totalGeralAntecipacaoIcmsSt)}</p>
+                        <p className="text-xs text-muted-foreground">Total de antecipação devida</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="border-border">
+                      <CardContent className="pt-5 pb-4 text-center">
+                        <p className="text-2xl font-bold text-foreground">{aplicaveisAntecipacaoIcmsSt.length}</p>
+                        <p className="text-xs text-muted-foreground">Itens sujeitos (CFOP 1403/2403) de {linhasEntradaTodas.length}</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {totalPorCompetenciaAntecipacaoIcmsSt.length > 0 && (
+                    <GraficoBarras
+                      dados={totalPorCompetenciaAntecipacaoIcmsSt.map(([competencia, valor]) => ({
+                        mes: formatarCompetencia(competencia),
+                        valor,
+                      }))}
+                      chaveX="mes"
+                      chaveValor="valor"
+                      nome="Antecipação ICMS-ST"
+                      cor="#f59e0b"
+                    />
+                  )}
+
+                  <div className="flex items-start gap-3 p-4 rounded-xl bg-muted/50 border border-border">
+                    <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-muted-foreground">
+                      Cliente do Ceará com CNAE de comércio varejista de tecidos (47.55-5-01) — a análise de
+                      antecipação parcial do ICMS/FECOP (IN CE nº 17/2013) sai automaticamente na aba própria
+                      do Excel combinado, com os itens de entrada de todos os EFDs ICMS/IPI já importados.
+                    </p>
+                  </div>
                 </>
               )}
             </SecaoColapsavel>
