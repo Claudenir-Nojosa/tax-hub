@@ -156,6 +156,29 @@ Tributária, ver `docs/reforma-tributaria-v2.md` — aqui reaplicada e resolvida
   pro teto de string. Se um EFD real algum dia estourar memória nela também, a mesma técnica
   híbrida deste arquivo é o caminho.
 
+## Bug corrigido — linhas vazias logo após o cabeçalho
+
+Reportado pelo usuário logo depois do fix de memória acima: algumas linhas apareciam vazias no
+Excel gerado, logo após o cabeçalho (linha 6). Causa raiz: as tabelas auxiliares (CSOSN e
+UF→Adicional, ver seção de fórmulas acima) eram escritas com `ws.getCell(...)` do ExcelJS num
+intervalo de linhas FIXO (2 até ~28) — mesmo intervalo onde as linhas de DADO (7 em diante,
+geradas como XML puro e injetadas via jszip, ver bug de OOM acima) também caem. Isso fazia o
+ExcelJS criar objetos `<row>` de verdade no stub para as linhas 2–28 (só com as células das
+tabelas auxiliares, lá nas colunas BP/BQ/BR, bem à direita, fora da área visível) — e quando a
+injeção de XML acrescentava um SEGUNDO `<row r="N">` pras mesmas linhas (agora com os dados de
+verdade nas colunas B–BM), o arquivo final ficava com `<row>` duplicado por linha nesse
+cruzamento. O Excel descarta uma das duas ao abrir — na prática, a que tinha os dados visíveis
+sumia, sobrando só a linha "vazia" (sem nada nas colunas visíveis).
+
+**Corrigido**: as tabelas auxiliares agora são posicionadas SEMPRE abaixo da última linha de
+dado (`ultimaLinhaDados + 2`), calculado dinamicamente a partir da quantidade real de itens —
+nunca mais num intervalo fixo que pudesse colidir com os dados. `linhaCsosnInicio`/
+`linhaUfInicio`/`linhaUfFim` viraram parte do `PendenteAbaAntecipacaoIcmsSt` (calculados uma vez
+no cabeçalho, usados de novo na geração do XML das fórmulas), em vez de constantes fixas do
+módulo. **Validado**: teste com 5/30/50 linhas sintéticas (cruzando o antigo intervalo fixo de
+2–28) — zero `<row>` duplicado no XML final em todos os casos, e a primeira linha de dado (r=7)
+sempre com a célula de CNPJ presente.
+
 ## Validação
 
 Testado (via `tsx`, fora do navegador) contra os 3 EFDs ICMS/IPI reais da GIGI Tecidos (CE,

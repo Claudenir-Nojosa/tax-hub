@@ -227,8 +227,6 @@ const COLUNAS_CALCULADAS: Coluna[] = [
 const COLUNAS = [...COLUNAS_BRUTAS, ...COLUNAS_CALCULADAS]
 const COL_INICIO = 2 // B — coluna A é a margem
 const LINHA_HEADER = 6
-const LINHA_CSOSN_INICIO = 2
-const LINHA_UF_INICIO = 2
 
 const IDX = Object.fromEntries(COLUNAS.map((c, i) => [c.nome, i])) as Record<string, number>
 const letraDaColuna = (nome: string) => colLetra(COL_INICIO + IDX[nome])
@@ -250,7 +248,6 @@ const colAux1 = colLetra(COL_INICIO + COLUNAS.length + 2)
 const colAux2 = colLetra(COL_INICIO + COLUNAS.length + 3)
 const colAux3 = colLetra(COL_INICIO + COLUNAS.length + 4)
 const UFS_REGIAO = Object.keys(REGIAO_UF)
-const linhaUfFim = LINHA_UF_INICIO + UFS_REGIAO.length - 1
 
 // Descritor do que falta gerar como XML depois que o ExcelJS grava o stub (cabeçalho) — tudo que
 // `gerarLinhasXmlAntecipacaoIcmsSt` precisa pra montar as linhas de dado sem depender do
@@ -259,6 +256,9 @@ export interface PendenteAbaAntecipacaoIcmsSt {
   sheetName: string
   calculadas: LinhaCalculada[]
   dimensaoRef: string
+  linhaCsosnInicio: number
+  linhaUfInicio: number
+  linhaUfFim: number
 }
 
 function estiloColunaDados(c: Coluna): Partial<ExcelJS.Style> {
@@ -304,20 +304,6 @@ export async function montarAbaAntecipacaoIcmsStCabecalho(
   const nomeCurto = nomeEmpresa.trim().split(/\s+/)[0] || nomeEmpresa
   sc(ws.getCell(3, 2), { value: `Antecipação ICMS-ST (Ceará) - ${nomeCurto}`, bold: true, size: 12 })
 
-  // Tabelas auxiliares — mesma fonte de dados que o cálculo em JS (CODIGOS_CSOSN, REGIAO_UF,
-  // adicionalRegiao), pra nunca divergir.
-  sc(ws.getCell(`${colAux1}1`), { value: "CSOSN", bold: true })
-  CODIGOS_CSOSN.forEach((codigo, i) => {
-    ws.getCell(`${colAux1}${LINHA_CSOSN_INICIO + i}`).value = codigo
-  })
-  sc(ws.getCell(`${colAux2}1`), { value: "UF", bold: true })
-  sc(ws.getCell(`${colAux3}1`), { value: "Adicional", bold: true })
-  UFS_REGIAO.forEach((uf, i) => {
-    const r = LINHA_UF_INICIO + i
-    ws.getCell(`${colAux2}${r}`).value = uf
-    ws.getCell(`${colAux3}${r}`).value = adicionalRegiao(uf)
-  })
-
   // Cabeçalho da tabela — escrito manualmente (sem addTable: um Excel Table/ListObject força o
   // ExcelJS a materializar um objeto de célula por linha de dado, o que é exatamente a causa do
   // "Out of Memory"). AutoFilter dá as setinhas de filtro sem esse custo (é 1 atributo no XML da
@@ -357,11 +343,39 @@ export async function montarAbaAntecipacaoIcmsStCabecalho(
 
   if (calculadas.length === 0) return { calculadas, pendente: null }
 
+  // Tabelas auxiliares — mesma fonte de dados que o cálculo em JS (CODIGOS_CSOSN, REGIAO_UF,
+  // adicionalRegiao), pra nunca divergir. Posicionadas ALGUMAS LINHAS ABAIXO da última linha de
+  // dado (não num intervalo fixo tipo "linha 2 em diante"): escrever essas células via ExcelJS
+  // cria objetos de `<row>` de verdade no stub pras linhas que elas tocam — se esse intervalo
+  // caísse dentro do intervalo das linhas de dado (que entram DEPOIS, como XML puro), o arquivo
+  // final ficaria com `<row r="N">` DUPLICADO pra cada linha nesse cruzamento (uma vinda do stub,
+  // só com as células da tabela auxiliar, e outra vinda da injeção, com os dados de verdade) — o
+  // Excel some com uma delas, aparecendo como "linhas vazias" logo após o cabeçalho (bug real
+  // reportado pelo usuário nesta sessão). Por isso o início das tabelas auxiliares é sempre
+  // calculado a partir de `ultimaLinhaDados`, nunca fixo.
+  const linhaCsosnInicio = ultimaLinhaDados + 2
+  const linhaUfInicio = ultimaLinhaDados + 2
+  const linhaUfFim = linhaUfInicio + UFS_REGIAO.length - 1
+  sc(ws.getCell(`${colAux1}${linhaCsosnInicio - 1}`), { value: "CSOSN", bold: true })
+  CODIGOS_CSOSN.forEach((codigo, i) => {
+    ws.getCell(`${colAux1}${linhaCsosnInicio + i}`).value = codigo
+  })
+  sc(ws.getCell(`${colAux2}${linhaUfInicio - 1}`), { value: "UF", bold: true })
+  sc(ws.getCell(`${colAux3}${linhaUfInicio - 1}`), { value: "Adicional", bold: true })
+  UFS_REGIAO.forEach((uf, i) => {
+    const r = linhaUfInicio + i
+    ws.getCell(`${colAux2}${r}`).value = uf
+    ws.getCell(`${colAux3}${r}`).value = adicionalRegiao(uf)
+  })
+
   const colFim = colLetra(COL_INICIO + COLUNAS.length - 1)
   const pendente: PendenteAbaAntecipacaoIcmsSt = {
     sheetName,
     calculadas,
-    dimensaoRef: `B1:${colFim}${ultimaLinhaDados}`,
+    dimensaoRef: `B1:${colAux3}${Math.max(ultimaLinhaDados, linhaUfFim)}`,
+    linhaCsosnInicio,
+    linhaUfInicio,
+    linhaUfFim,
   }
   return { calculadas, pendente }
 }
@@ -453,6 +467,7 @@ export async function gerarLinhasXmlAntecipacaoIcmsSt(
     iBaseAntec = IDX["Base Cálculo Antecipação"], iAliqBaseAntec = IDX["Alíquota Base Antecipação"],
     iAdicional = IDX["Adicional Região"], iAliqTotalAntec = IDX["Alíquota Total Antecipação"],
     iValorAntec = IDX["Valor Antecipação ICMS-ST"]
+  const { linhaCsosnInicio, linhaUfInicio, linhaUfFim } = pendente
 
   const encoder = new TextEncoder()
   const partesBytes: Uint8Array[] = []
@@ -476,7 +491,7 @@ export async function gerarLinhasXmlAntecipacaoIcmsSt(
     )
     cells[iOrigem] = celulaFormula(
       `${cOrigem}${r}`, S_ATTR[iOrigem],
-      `IF(${cSituacaoAntec}${r}="","",IF(AND(${cSituacaoAntec}${r}="Fora do Estado",COUNTIF($${colAux1}$${LINHA_CSOSN_INICIO}:$${colAux1}$${LINHA_CSOSN_INICIO + CODIGOS_CSOSN.length - 1},${cCst}${r})=0,OR(LEFT(${cCst}${r},1)="1",LEFT(${cCst}${r},1)="2",LEFT(${cCst}${r},1)="3",LEFT(${cCst}${r},1)="8")),"Sim","Não"))`,
+      `IF(${cSituacaoAntec}${r}="","",IF(AND(${cSituacaoAntec}${r}="Fora do Estado",COUNTIF($${colAux1}$${linhaCsosnInicio}:$${colAux1}$${linhaCsosnInicio + CODIGOS_CSOSN.length - 1},${cCst}${r})=0,OR(LEFT(${cCst}${r},1)="1",LEFT(${cCst}${r},1)="2",LEFT(${cCst}${r},1)="3",LEFT(${cCst}${r},1)="8")),"Sim","Não"))`,
       resultado ? (resultado.origemEstrangeira ? "Sim" : "Não") : ""
     )
     cells[iBaseAntec] = celulaFormula(
@@ -491,7 +506,7 @@ export async function gerarLinhasXmlAntecipacaoIcmsSt(
     )
     cells[iAdicional] = celulaFormula(
       `${cAdicional}${r}`, S_ATTR[iAdicional],
-      `IF(${cOrigem}${r}="Sim",IFERROR(VLOOKUP(${cUfFornecedor}${r},$${colAux2}$${LINHA_UF_INICIO}:$${colAux3}$${linhaUfFim},2,0),0),0)`,
+      `IF(${cOrigem}${r}="Sim",IFERROR(VLOOKUP(${cUfFornecedor}${r},$${colAux2}$${linhaUfInicio}:$${colAux3}$${linhaUfFim},2,0),0),0)`,
       resultado ? resultado.adicionalRegiao : 0
     )
     cells[iAliqTotalAntec] = celulaFormula(
