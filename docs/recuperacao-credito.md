@@ -108,8 +108,8 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   de ITEM (um `C170` por linha), diferente da aba "ICMS e IPI" (agregada por CFOP+CST+alíquota
   via `C190`). As linhas vêm de `parseEntradasEfdIcmsIpi()`
   (`src/lib/efd-icms-ipi-entradas-parser.ts`) — parser já existente, construído originalmente
-  para a Reforma Tributária (aba "Entradas - EFD ICMS IPI" de crédito IBS/CBS) e **reaproveitado
-  aqui sem alteração**; o upload route (`efd/upload/route.ts`) roda esse parser em paralelo ao
+  para a Reforma Tributária (aba "Entradas - EFD ICMS IPI" de crédito IBS/CBS); o upload route
+  (`efd/upload/route.ts`) roda esse parser em paralelo ao
   `processarArquivosEfd` e grava o resultado em `DadosEfdIcmsIpi.linhasEntrada` (mesmo campo
   `Json`, sem migração de schema). Estilo Excel Table (1 linha = 1 item), igual à aba
   "Comprovante de Pagamentos" (seção 6): `SUBTOTAL` em todas as colunas monetárias, filtro,
@@ -125,6 +125,15 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
     de ICMS-ST, na sua forma **genérica** (baseada em legislação, não numa tabela manual por
     cliente), está prevista para virar uma automação própria em `/dashboard/automacoes` — ver
     `docs/automacao-icms-st.md` — implementada em `/dashboard/automacoes/antecipacao-icms-st`.
+  - **BUG CORRIGIDO — notas sem `C170` desapareciam da listagem**: `parseEntradasEfdIcmsIpi`
+    originalmente só emitia linha quando via um `C170` (item) filho do `C100`. Validado com um
+    EFD real (GIGI Tecidos, competência 2025-01): 28 notas de devolução de venda (CFOP 1202,
+    R$ 4.460,90 em Vlr Item) vinham no arquivo só com `C100`+`C190` — o ERP de origem não detalha
+    item pra devolução, só o agregado por CST+CFOP+alíquota — e sumiam inteiras, sem nenhum
+    aviso. Corrigido com um fallback: quando um `C100` de entrada termina sem nenhum `C170`, o
+    parser sintetiza 1 linha por `C190` daquele bloco, com os campos de item (código, descrição,
+    NCM, qtde, unidade) em branco e `Registros = "C100/190 - Nota Fiscal (sem detalhe de item no
+    EFD)"` pra deixar claro a origem — não inventa item que não está na fonte.
 
 ## 5. PIS/COFINS (EFD Contribuições)
 

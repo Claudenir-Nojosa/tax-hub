@@ -18,6 +18,16 @@
 //         f18=VL_ICMS_ST f20=CST_IPI f22=VL_BC_IPI f23=ALIQ_IPI f24=VL_IPI f25=CST_PIS
 //         f26=VL_BC_PIS f27=ALIQ_PIS f30=VL_PIS f31=CST_COFINS f32=VL_BC_COFINS f33=ALIQ_COFINS
 //         f36=VL_COFINS f37=COD_CTA
+//   C190: f2=CST_ICMS f3=CFOP f4=ALIQ_ICMS f5=VL_OPR f6=VL_BC_ICMS f7=VL_ICMS f8=VL_BC_ICMS_ST
+//         f9=VL_ICMS_ST f11=VL_IPI — usado só como FALLBACK (ver GAP abaixo)
+//
+// GAP/decisão deliberada: algumas notas (validado em dado real — devoluções de venda, CFOP
+// 1202/2202) chegam no EFD só com C100+C190, sem nenhum C170 filho — o ERP de origem não detalha
+// item pra essas notas, só o agregado por CST+CFOP+alíquota. Sem fallback, a nota inteira
+// desaparecia da aba "Entradas"/automação de ICMS-ST. Quando um C100 de entrada termina sem
+// nenhum C170, sintetiza 1 linha por registro C190 daquele bloco (1 nota pode ter mais de um
+// C190 se tiver mais de uma combinação CST+CFOP+alíquota) — campos de item (código, descrição,
+// NCM, qtde, unidade) ficam em branco por não existirem na fonte; `registros` avisa a origem.
 
 const IBGE_UF: Record<string, string> = {
   "11": "RO", "12": "AC", "13": "AM", "14": "RR", "15": "PA", "16": "AP", "17": "TO",
@@ -227,6 +237,28 @@ export function parseEntradasEfdIcmsIpi(texto: string): DadosEntradasEfdIcmsIpi 
 
   const resultado: LinhaEntradaEfd[] = []
   let c100Atual: string[] | null = null
+  let c170EncontradoNoBloco = false
+
+  // Monta os campos comuns (cabeçalho do documento) de uma linha — usados tanto no caminho
+  // C170 (item real) quanto no fallback C190 (nota sem detalhe de item).
+  function camposDocumento(h: string[]) {
+    const codPart = h[4]
+    const part = participantes.get(codPart)
+    const indEmit = h[3]?.trim() ?? ""
+    return {
+      cnpj, pa: yyyymm(h[10]), empresa, ufPropria,
+      indicadorEmitente: indEmit === "0" ? "0 - Emissão própria" : "1 - Terceiros",
+      situacao: h[6]?.trim() ?? "",
+      codigoParticipante: codPart ?? "",
+      cnpjFornecedor: part?.cnpj ?? "", cpfFornecedor: part?.cpf ?? "", nomeFornecedor: part?.nome ?? "",
+      ufFornecedor: part?.uf ?? "",
+      numeroDocumento: h[8]?.trim() ?? "", serie: h[7]?.trim() ?? "", modelo: h[5]?.trim() ?? "",
+      chaveNFe: h[9]?.trim() ?? "",
+      dataDocumento: ddmmaaaa(h[10]), dataEntradaSaida: ddmmaaaa(h[11]),
+      vlrDocumento: num(h[12]), vlrDescontoNF: num(h[14]), vlrMercadoria: num(h[16]),
+      vlrFrete: num(h[18]), vlrSeguro: num(h[19]), vlrOutrasDA: num(h[20]),
+    }
+  }
 
   for (const linha of linhas) {
     if (!linha.startsWith("|")) continue
@@ -236,6 +268,7 @@ export function parseEntradasEfdIcmsIpi(texto: string): DadosEntradasEfdIcmsIpi 
     if (tipo === "C100") {
       // IND_OPER: 0=entrada, 1=saída (EFD ICMS/IPI)
       c100Atual = f[2] === "0" ? f : null
+      c170EncontradoNoBloco = false
       continue
     }
 
@@ -243,25 +276,13 @@ export function parseEntradasEfdIcmsIpi(texto: string): DadosEntradasEfdIcmsIpi 
       const h = c100Atual
       const cfop = f[11]?.trim() ?? ""
       if (classificarCfop(cfop) !== "entrada") continue
+      c170EncontradoNoBloco = true
 
-      const codPart = h[4]
-      const part = participantes.get(codPart)
       const item = itens.get(f[3])
-      const indEmit = h[3]?.trim() ?? ""
 
       resultado.push({
-        cnpj, pa: yyyymm(h[10]), empresa, ufPropria,
+        ...camposDocumento(h),
         registros: "C100/170/190 - Nota Fiscal",
-        indicadorEmitente: indEmit === "0" ? "0 - Emissão própria" : "1 - Terceiros",
-        situacao: h[6]?.trim() ?? "",
-        codigoParticipante: codPart ?? "",
-        cnpjFornecedor: part?.cnpj ?? "", cpfFornecedor: part?.cpf ?? "", nomeFornecedor: part?.nome ?? "",
-        ufFornecedor: part?.uf ?? "",
-        numeroDocumento: h[8]?.trim() ?? "", serie: h[7]?.trim() ?? "", modelo: h[5]?.trim() ?? "",
-        chaveNFe: h[9]?.trim() ?? "",
-        dataDocumento: ddmmaaaa(h[10]), dataEntradaSaida: ddmmaaaa(h[11]),
-        vlrDocumento: num(h[12]), vlrDescontoNF: num(h[14]), vlrMercadoria: num(h[16]),
-        vlrFrete: num(h[18]), vlrSeguro: num(h[19]), vlrOutrasDA: num(h[20]),
         numeroItem: f[2] ?? "", codigoItem: f[3] ?? "",
         descricaoItem: item?.descricao ?? "", tipoItem: formatarTipoItem(item?.tipoItem ?? ""),
         codigoBarra: item?.codigoBarra ?? "", ncm: item?.ncm ?? "",
@@ -279,6 +300,39 @@ export function parseEntradasEfdIcmsIpi(texto: string): DadosEntradasEfdIcmsIpi 
         cstCofins: f[31]?.trim() ?? "",
         vlrBaseCalculoCofins: num(f[32]), aliquotaCofins: num(f[33]), vlrCofins: num(f[36]),
         contaContabil: f[37]?.trim() ?? "",
+      })
+      continue
+    }
+
+    // Fallback: nota de entrada sem NENHUM C170 (só agregado C190) — ver GAP no topo do arquivo.
+    if (tipo === "C190" && c100Atual && !c170EncontradoNoBloco) {
+      const h = c100Atual
+      const cfop = f[3]?.trim() ?? ""
+      if (classificarCfop(cfop) !== "entrada") continue
+      const cst = f[2]?.trim() ?? ""
+      const vlrBaseIcmsSt = num(f[8])
+      const vlrIcmsSt = num(f[9])
+
+      resultado.push({
+        ...camposDocumento(h),
+        registros: "C100/190 - Nota Fiscal (sem detalhe de item no EFD)",
+        numeroItem: "", codigoItem: "",
+        descricaoItem: "", tipoItem: "",
+        codigoBarra: "", ncm: "",
+        vlrItem: num(f[5]), vlrDescontoItem: 0, qtde: 0, unidadeMedida: "",
+        indicadorMovimento: "",
+        naturezaCredito: naturezaCreditoDoCfop(cfop),
+        cfop,
+        cstIcms: cst,
+        vlrBaseCalculoIcms: num(f[6]), aliquotaIcms: num(f[4]) / 100, vlrIcms: num(f[7]),
+        vlrBaseCalculoIcmsSt: vlrBaseIcmsSt, aliquotaIcmsSt: vlrBaseIcmsSt > 0 ? vlrIcmsSt / vlrBaseIcmsSt : 0, vlrIcmsSt,
+        cstIpi: "",
+        vlrBaseCalculoIpi: 0, aliquotaIpi: 0, vlrIpi: num(f[11]),
+        cstPis: "",
+        vlrBaseCalculoPis: 0, aliquotaPis: 0, vlrPis: 0,
+        cstCofins: "",
+        vlrBaseCalculoCofins: 0, aliquotaCofins: 0, vlrCofins: 0,
+        contaContabil: "",
       })
       continue
     }
