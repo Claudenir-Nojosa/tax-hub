@@ -178,6 +178,28 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
   const paginaVisivelRef = useRef(0);
   const janelaRef = useRef(janela);
   janelaRef.current = janela;
+  // página + fração de scroll dentro dela, capturada ANTES de um clique de zoom — sem isso, mudar
+  // o zoom reflui a altura de todas as páginas mas o scrollTop (um valor em pixel absoluto) fica
+  // parado, então o mesmo pixel passa a apontar pra outra página ("sair da página" ao dar zoom,
+  // reportado pelo usuário)
+  const ancoraZoomRef = useRef<{ pagina: number; fracao: number } | null>(null);
+
+  // acha a página que contém o topo da viewport agora, e a que fração da altura DELA o scroll
+  // está — usado só pra restaurar a posição relativa depois que o zoom muda a altura das páginas
+  const capturarAncora = useCallback((): { pagina: number; fracao: number } | null => {
+    const c = containerRef.current;
+    if (!c) return null;
+    const wrappers = c.querySelectorAll<HTMLElement>("[data-pagina]");
+    for (const w of wrappers) {
+      const topo = w.offsetTop;
+      const altura = w.clientHeight;
+      if (altura <= 0) continue;
+      if (c.scrollTop < topo + altura) {
+        return { pagina: Number(w.dataset.pagina), fracao: Math.max(0, (c.scrollTop - topo) / altura) };
+      }
+    }
+    return null;
+  }, []);
 
   // carrega o documento — só a página 1 bloqueia o "Abrindo PDF...", as demais entram em
   // background (ver comentário abaixo)
@@ -223,9 +245,9 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
         const dimPadrao = { w: vp1.width, h: vp1.height };
         setDoc(d);
         setDims(new Array(d.numPages).fill(dimPadrao));
-        // ajustar à largura do container (com folga pras margens)
-        const larguraDisponivel = (containerRef.current?.clientWidth ?? 900) - 48;
-        setScale(Math.min(2.5, Math.max(0.5, larguraDisponivel / dimPadrao.w)));
+        // zoom inicial sempre 100% (pedido do usuário — antes era "ajustar à largura", que dava
+        // um zoom inicial imprevisível dependendo do tamanho da janela/PDF)
+        setScale(1);
 
         // corrige em segundo plano só as páginas cuja dimensão real divergir da estimativa
         for (let i = 2; i <= d.numPages; i++) {
@@ -278,8 +300,9 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
     }
   }, [onPaginaVisivel]);
 
-  // rola até a página onde o usuário parou — uma vez, quando o layout fica pronto — e dispara o
-  // primeiro cálculo da janela (também re-executa quando o zoom muda, pois as alturas mudam)
+  // rola até a página onde o usuário parou — uma vez, quando o layout fica pronto — e RESTAURA a
+  // âncora de zoom (página + fração) sempre que o zoom muda, já que as alturas das páginas mudam
+  // e o scrollTop em pixel absoluto passaria a apontar pra outra página
   useEffect(() => {
     if (!doc || scale === null) return;
     // setTimeout(0) em vez de requestAnimationFrame: em abas ocultas/sem foco o compositor pode
@@ -291,6 +314,11 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
           const alvo = containerRef.current?.querySelector<HTMLElement>(`[data-pagina="${Math.min(paginaInicial, doc.numPages)}"]`);
           if (alvo && containerRef.current) containerRef.current.scrollTop = alvo.offsetTop - 8;
         }
+      } else if (ancoraZoomRef.current) {
+        const { pagina, fracao } = ancoraZoomRef.current;
+        ancoraZoomRef.current = null;
+        const alvo = containerRef.current?.querySelector<HTMLElement>(`[data-pagina="${pagina}"]`);
+        if (alvo && containerRef.current) containerRef.current.scrollTop = alvo.offsetTop + fracao * alvo.clientHeight;
       }
       recalcular();
     }, 0);
@@ -332,7 +360,10 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
           <div className="sticky bottom-4 float-right mr-4 -mt-14 flex items-center gap-0.5 bg-muted/90 border border-border rounded-lg p-1 shadow-lg">
             <button
               type="button"
-              onClick={() => setScale((s) => Math.max(0.5, Math.round(((s ?? 1) - 0.15) * 100) / 100))}
+              onClick={() => {
+                ancoraZoomRef.current = capturarAncora();
+                setScale((s) => Math.max(0.5, Math.round(((s ?? 1) - 0.15) * 100) / 100));
+              }}
               className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
               title="Diminuir zoom"
             >
@@ -341,7 +372,10 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
             <span className="text-[11px] text-muted-foreground w-10 text-center font-mono">{Math.round(scale * 100)}%</span>
             <button
               type="button"
-              onClick={() => setScale((s) => Math.min(3, Math.round(((s ?? 1) + 0.15) * 100) / 100))}
+              onClick={() => {
+                ancoraZoomRef.current = capturarAncora();
+                setScale((s) => Math.min(3, Math.round(((s ?? 1) + 0.15) * 100) / 100));
+              }}
               className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
               title="Aumentar zoom"
             >
