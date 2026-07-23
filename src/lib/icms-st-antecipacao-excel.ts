@@ -78,6 +78,15 @@ function paParaData(pa: string): Date | string {
   return m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1)) : pa
 }
 
+// Competência da coluna "Competência" = mês/ano da Data de Entrada/Saída (não o PA do EFD) —
+// decisão confirmada com o usuário: uma nota emitida num mês pode entrar no estabelecimento no
+// mês seguinte, e a antecipação é devida na entrada, não na competência declarada do EFD.
+function competenciaDaEntrada(dataEntradaSaida: string): Date | null {
+  const d = parseDataBr(dataEntradaSaida)
+  if (!d) return null
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1))
+}
+
 // Descrições de CFOP de entrada — mesma lista da aba "Entradas" (entradas-icms-excel.ts) e da
 // Reforma Tributária (reforma-excel/entradas-efd.ts), duplicada de propósito.
 const CFOP_ENTRADA_DESCRICOES: Record<string, string> = {
@@ -123,7 +132,7 @@ interface Coluna {
 // Colunas brutas — mesmo conjunto/ordem da aba "Entradas" (src/lib/entradas-icms-excel.ts).
 const COLUNAS_BRUTAS: Coluna[] = [
   { nome: "CNPJ", valor: (l) => l.cnpj, largura: 17 },
-  { nome: "Competência", valor: (l) => paParaData(l.pa), largura: 12, data: true },
+  { nome: "Competência", valor: (l) => competenciaDaEntrada(l.dataEntradaSaida) ?? paParaData(l.pa), largura: 12, data: true },
   { nome: "Empresa", valor: (l) => l.empresa, largura: 26 },
   { nome: "UF Própria", valor: (l) => l.ufPropria, largura: 10 },
   { nome: "Registros", valor: (l) => l.registros, largura: 24 },
