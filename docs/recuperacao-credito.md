@@ -134,6 +134,14 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
     parser sintetiza 1 linha por `C190` daquele bloco, com os campos de item (código, descrição,
     NCM, qtde, unidade) em branco e `Registros = "C100/190 - Nota Fiscal (sem detalhe de item no
     EFD)"` pra deixar claro a origem — não inventa item que não está na fonte.
+  - **D100/D190 — Conhecimento de Transporte (frete)**: além de `C100/C170/C190` (mercadoria),
+    o parser agora também lê o bloco `D100/D190` (frete contratado como documento próprio —
+    CT-e/Conhecimento de Transporte, diferente do `VL_FRT` que já vem embutido no `C100` de uma
+    compra de mercadoria). Mesmo padrão do fallback acima (D100 nunca tem item filho no leiaute
+    EFD ICMS/IPI, só o agregado `D190`), com `Registros = "D100/190 - Conhecimento de
+    Transporte"` — mesmo rótulo que a planilha de referência do usuário já usava pra essas linhas.
+    Pedido explícito do usuário; validado com um EFD real: 12 de 12 registros `D100` de entrada
+    (transportadora, CFOP, chave do CT-e, valores) capturados corretamente.
 
 ## 5. PIS/COFINS (EFD Contribuições)
 

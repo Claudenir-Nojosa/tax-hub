@@ -20,6 +20,9 @@
 //         f36=VL_COFINS f37=COD_CTA
 //   C190: f2=CST_ICMS f3=CFOP f4=ALIQ_ICMS f5=VL_OPR f6=VL_BC_ICMS f7=VL_ICMS f8=VL_BC_ICMS_ST
 //         f9=VL_ICMS_ST f11=VL_IPI — usado só como FALLBACK (ver GAP abaixo)
+//   D100: f2=IND_OPER(0=entrada) f3=IND_EMIT f4=COD_PART f5=COD_MOD f6=COD_SIT f7=SER f8=SUB
+//         f9=NUM_DOC f10=CHV_CTE f11=DT_DOC f12=DT_A_P f15=VL_DOC f16=VL_DESC f18=VL_SERV
+//   D190: f2=CST_ICMS f3=CFOP f4=ALIQ_ICMS f5=VL_OPR f6=VL_BC_ICMS f7=VL_ICMS f8=VL_RED_BC
 //
 // GAP/decisão deliberada: algumas notas (validado em dado real — devoluções de venda, CFOP
 // 1202/2202) chegam no EFD só com C100+C190, sem nenhum C170 filho — o ERP de origem não detalha
@@ -28,6 +31,13 @@
 // nenhum C170, sintetiza 1 linha por registro C190 daquele bloco (1 nota pode ter mais de um
 // C190 se tiver mais de uma combinação CST+CFOP+alíquota) — campos de item (código, descrição,
 // NCM, qtde, unidade) ficam em branco por não existirem na fonte; `registros` avisa a origem.
+//
+// D100/D190 — Conhecimento de Transporte (frete como documento próprio, não o VL_FRT embutido
+// numa compra de mercadoria): layout confirmado em EFD real + na planilha de referência do
+// usuário (mesmo formato de linha da aba "Entradas", `Registros = "D100/190 - Conhecimento de
+// Transporte"`). D100 nunca tem registro de item filho (não existe "D170" pra isso no bloco
+// D deste leiaute) — sempre trata como o mesmo padrão "documento sem detalhe de item" do
+// fallback C190 acima, não como exceção.
 
 const IBGE_UF: Record<string, string> = {
   "11": "RO", "12": "AC", "13": "AM", "14": "RR", "15": "PA", "16": "AP", "17": "TO",
@@ -238,6 +248,7 @@ export function parseEntradasEfdIcmsIpi(texto: string): DadosEntradasEfdIcmsIpi 
   const resultado: LinhaEntradaEfd[] = []
   let c100Atual: string[] | null = null
   let c170EncontradoNoBloco = false
+  let d100Atual: string[] | null = null
 
   // Monta os campos comuns (cabeçalho do documento) de uma linha — usados tanto no caminho
   // C170 (item real) quanto no fallback C190 (nota sem detalhe de item).
@@ -257,6 +268,28 @@ export function parseEntradasEfdIcmsIpi(texto: string): DadosEntradasEfdIcmsIpi 
       dataDocumento: ddmmaaaa(h[10]), dataEntradaSaida: ddmmaaaa(h[11]),
       vlrDocumento: num(h[12]), vlrDescontoNF: num(h[14]), vlrMercadoria: num(h[16]),
       vlrFrete: num(h[18]), vlrSeguro: num(h[19]), vlrOutrasDA: num(h[20]),
+    }
+  }
+
+  // Mesma ideia de camposDocumento(), mas pros índices de campo do D100 (Conhecimento de
+  // Transporte) — não é o mesmo layout do C100 (D100 tem um campo SUB a mais entre SER e
+  // NUM_DOC, então tudo desloca 1 posição a partir daí).
+  function camposDocumentoD100(h: string[]) {
+    const codPart = h[4]
+    const part = participantes.get(codPart)
+    const indEmit = h[3]?.trim() ?? ""
+    return {
+      cnpj, pa: yyyymm(h[11]), empresa, ufPropria,
+      indicadorEmitente: indEmit === "0" ? "0 - Emissão própria" : "1 - Terceiros",
+      situacao: h[6]?.trim() ?? "",
+      codigoParticipante: codPart ?? "",
+      cnpjFornecedor: part?.cnpj ?? "", cpfFornecedor: part?.cpf ?? "", nomeFornecedor: part?.nome ?? "",
+      ufFornecedor: part?.uf ?? "",
+      numeroDocumento: h[9]?.trim() ?? "", serie: h[7]?.trim() ?? "", modelo: h[5]?.trim() ?? "",
+      chaveNFe: h[10]?.trim() ?? "",
+      dataDocumento: ddmmaaaa(h[11]), dataEntradaSaida: ddmmaaaa(h[12]),
+      vlrDocumento: num(h[15]), vlrDescontoNF: num(h[16]), vlrMercadoria: num(h[18]),
+      vlrFrete: 0, vlrSeguro: 0, vlrOutrasDA: 0,
     }
   }
 
@@ -328,6 +361,43 @@ export function parseEntradasEfdIcmsIpi(texto: string): DadosEntradasEfdIcmsIpi 
         vlrBaseCalculoIcmsSt: vlrBaseIcmsSt, aliquotaIcmsSt: vlrBaseIcmsSt > 0 ? vlrIcmsSt / vlrBaseIcmsSt : 0, vlrIcmsSt,
         cstIpi: "",
         vlrBaseCalculoIpi: 0, aliquotaIpi: 0, vlrIpi: num(f[11]),
+        cstPis: "",
+        vlrBaseCalculoPis: 0, aliquotaPis: 0, vlrPis: 0,
+        cstCofins: "",
+        vlrBaseCalculoCofins: 0, aliquotaCofins: 0, vlrCofins: 0,
+        contaContabil: "",
+      })
+      continue
+    }
+
+    if (tipo === "D100") {
+      // IND_OPER: 0=entrada (aquisição do serviço), 1=saída (prestação)
+      d100Atual = f[2] === "0" ? f : null
+      continue
+    }
+
+    // D100 nunca tem item filho — o D190 (agregado por CST+CFOP+alíquota) é sempre o caminho.
+    if (tipo === "D190" && d100Atual) {
+      const h = d100Atual
+      const cfop = f[3]?.trim() ?? ""
+      if (classificarCfop(cfop) !== "entrada") continue
+      const cst = f[2]?.trim() ?? ""
+
+      resultado.push({
+        ...camposDocumentoD100(h),
+        registros: "D100/190 - Conhecimento de Transporte",
+        numeroItem: "", codigoItem: "",
+        descricaoItem: "", tipoItem: "",
+        codigoBarra: "", ncm: "",
+        vlrItem: 0, vlrDescontoItem: 0, qtde: 0, unidadeMedida: "",
+        indicadorMovimento: "",
+        naturezaCredito: naturezaCreditoDoCfop(cfop),
+        cfop,
+        cstIcms: cst,
+        vlrBaseCalculoIcms: num(f[6]), aliquotaIcms: num(f[4]) / 100, vlrIcms: num(f[7]),
+        vlrBaseCalculoIcmsSt: 0, aliquotaIcmsSt: 0, vlrIcmsSt: 0,
+        cstIpi: "",
+        vlrBaseCalculoIpi: 0, aliquotaIpi: 0, vlrIpi: 0,
         cstPis: "",
         vlrBaseCalculoPis: 0, aliquotaPis: 0, vlrPis: 0,
         cstCofins: "",
