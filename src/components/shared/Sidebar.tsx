@@ -5,8 +5,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Home,
-  Menu,
   X,
+  ChevronLeft,
+  ChevronRight,
   Sparkles,
   BookOpen,
   Target,
@@ -84,10 +85,20 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
   return (
     <div
-      className={`flex flex-col h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-all duration-300 ${isCollapsed ? "w-20" : "w-64"}`}
+      className={`relative flex flex-col h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-all duration-300 ${isCollapsed ? "w-20" : "w-64"}`}
     >
+      {/* botão de recolher/expandir — flutuante na borda, padrão de app shell moderno (Linear/Notion/Vercel) */}
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        title={isCollapsed ? "Expandir menu" : "Recolher menu"}
+        className="hidden lg:flex absolute -right-3 top-7 h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground hover:text-sidebar-primary hover:border-sidebar-primary/50 shadow-sm transition-colors z-10"
+      >
+        {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+      </button>
+
       {/* Header */}
-      <div className="flex items-center justify-center gap-3 p-4">
+      <div className="flex items-center justify-between px-4 py-5">
         {!isCollapsed && (
           <div className="flex items-center">
             <Image
@@ -110,34 +121,24 @@ export default function Sidebar({ onClose }: SidebarProps) {
             />
           </div>
         )}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="lg:hidden hover:bg-sidebar-accent text-sidebar-foreground hover:text-sidebar-accent-foreground h-10 w-10"
-          >
-            <X className="h-5 w-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleSidebar}
-            className="hidden lg:flex hover:bg-sidebar-accent text-sidebar-foreground hover:text-sidebar-accent-foreground h-10 w-10"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          className="lg:hidden hover:bg-sidebar-accent text-sidebar-foreground hover:text-sidebar-accent-foreground h-10 w-10"
+        >
+          <X className="h-5 w-5" />
+        </Button>
       </div>
 
       {/* Ícone quando colapsado */}
       {isCollapsed && (
-        <div className="flex items-center justify-center py-4">
+        <div className="flex items-center justify-center py-2">
           <Image
             src="/icons/taxhub_icone_claro.svg"
             alt="TAX Hub"
-            width={56}
-            height={56}
+            width={44}
+            height={44}
             className="block dark:hidden"
             unoptimized
             priority
@@ -145,8 +146,8 @@ export default function Sidebar({ onClose }: SidebarProps) {
           <Image
             src="/icons/taxhub_icone_escuro.svg"
             alt="TAX Hub"
-            width={56}
-            height={56}
+            width={44}
+            height={44}
             className="hidden dark:block"
             unoptimized
             priority
@@ -156,7 +157,12 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-2 overflow-y-auto">
-        <ul className="space-y-1">
+        {!isCollapsed && (
+          <div className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+            Menu
+          </div>
+        )}
+        <ul className="space-y-0.5">
         {[
   { href: "/dashboard", label: "Início", icon: Home },
   { href: "/dashboard/automacoes", label: "Automações", icon: Sparkles },
@@ -171,16 +177,28 @@ export default function Sidebar({ onClose }: SidebarProps) {
   <li key={item.href}>
     <Link
       href={createLink(item.href)}
-      className={`flex items-center rounded-xl transition-all duration-200 ${isCollapsed ? "justify-center p-3.5" : "px-3.5 py-3"} ${
+      title={item.label}
+      className={`group relative flex items-center rounded-xl transition-all duration-200 ${isCollapsed ? "justify-center p-2" : "gap-3 px-2.5 py-2"} ${
         active
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+          : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
       }`}
       onClick={handleLinkClick}
     >
-      <item.icon className={`h-5 w-5 flex-shrink-0 ${active ? "text-sidebar-primary" : ""}`} />
+      {active && (
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-sidebar-primary" />
+      )}
+      <span
+        className={`flex items-center justify-center h-8 w-8 rounded-lg flex-shrink-0 transition-colors ${
+          active
+            ? "bg-sidebar-primary/15 text-sidebar-primary shadow-[0_0_12px_hsl(var(--sidebar-primary)/0.35)]"
+            : "text-sidebar-foreground/70 group-hover:text-sidebar-accent-foreground"
+        }`}
+      >
+        <item.icon className="h-[18px] w-[18px]" />
+      </span>
       {!isCollapsed && (
-        <span className="ml-3 text-sm font-medium truncate">{item.label}</span>
+        <span className="text-sm font-medium truncate">{item.label}</span>
       )}
     </Link>
   </li>
@@ -190,28 +208,32 @@ export default function Sidebar({ onClose }: SidebarProps) {
       </nav>
 
       {/* Usuário */}
-      <div className="p-3 space-y-2">
+      <div className="border-t border-sidebar-border/60 p-3 space-y-2">
         <Link
           href={createLink("/dashboard/perfil")}
-          className={`flex items-center rounded-xl p-3 hover:bg-sidebar-accent/60 transition-all duration-200 cursor-pointer ${isCollapsed ? "justify-center" : ""}`}
+          title="Meu perfil"
+          className={`flex items-center rounded-xl p-2.5 border border-transparent hover:border-sidebar-border hover:bg-sidebar-accent/40 transition-all duration-200 ${isCollapsed ? "justify-center" : ""}`}
           onClick={handleLinkClick}
         >
-          <Avatar className="h-8 w-8 flex-shrink-0 ring-2 ring-sidebar-primary/30">
-            <AvatarImage
-              src={session?.user?.image || ""}
-              alt={session?.user?.name || "Usuário"}
-              className="object-cover"
-            />
-            <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-sm font-semibold">
-              {getInitials(session?.user?.name)}
-            </AvatarFallback>
-          </Avatar>
+          <div className="relative flex-shrink-0">
+            <Avatar className="h-9 w-9 ring-2 ring-sidebar-primary/25">
+              <AvatarImage
+                src={session?.user?.image || ""}
+                alt={session?.user?.name || "Usuário"}
+                className="object-cover"
+              />
+              <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-sm font-semibold">
+                {getInitials(session?.user?.name)}
+              </AvatarFallback>
+            </Avatar>
+            <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-sidebar-primary ring-2 ring-sidebar" />
+          </div>
           {!isCollapsed && (
             <div className="ml-3 min-w-0 flex-1">
               <p className="text-sm font-medium text-foreground truncate">
                 {session?.user?.name}
               </p>
-              <p className="text-xs text-sidebar-foreground/70 truncate">
+              <p className="text-xs text-sidebar-foreground/60 truncate">
                 {session?.user?.email}
               </p>
             </div>
