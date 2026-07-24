@@ -155,6 +155,32 @@ export default function Sidebar({ onClose }: SidebarProps) {
         </div>
       )}
 
+      {/* Usuário — avatar com círculo destacado + nome, no topo (estilo app shell) */}
+      <Link
+        href={createLink("/dashboard/perfil")}
+        title="Meu perfil"
+        onClick={handleLinkClick}
+        className={`flex flex-col items-center gap-2 pb-4 mb-2 border-b border-sidebar-border/60 hover:opacity-90 transition-opacity ${isCollapsed ? "px-2" : "px-4"}`}
+      >
+        <Avatar
+          className={`ring-[3px] ring-sidebar-primary shadow-[0_0_16px_hsl(var(--sidebar-primary)/0.45)] ${isCollapsed ? "h-10 w-10" : "h-16 w-16"}`}
+        >
+          <AvatarImage
+            src={session?.user?.image || ""}
+            alt={session?.user?.name || "Usuário"}
+            className="object-cover"
+          />
+          <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground font-semibold">
+            {getInitials(session?.user?.name)}
+          </AvatarFallback>
+        </Avatar>
+        {!isCollapsed && (
+          <span className="text-sm font-semibold text-foreground truncate max-w-[180px] text-center">
+            {session?.user?.name ?? "Usuário"}
+          </span>
+        )}
+      </Link>
+
       {/* Nav */}
       <nav className="flex-1 px-3 py-2 overflow-y-auto">
         {!isCollapsed && (
@@ -189,9 +215,9 @@ export default function Sidebar({ onClose }: SidebarProps) {
         <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-sidebar-primary" />
       )}
       <span
-        className={`flex items-center justify-center h-8 w-8 rounded-lg flex-shrink-0 transition-colors ${
+        className={`flex items-center justify-center h-8 w-8 rounded-full flex-shrink-0 transition-colors ${
           active
-            ? "bg-sidebar-primary/15 text-sidebar-primary shadow-[0_0_12px_hsl(var(--sidebar-primary)/0.35)]"
+            ? "bg-sidebar-primary/15 text-sidebar-primary ring-2 ring-sidebar-primary shadow-[0_0_12px_hsl(var(--sidebar-primary)/0.35)]"
             : "text-sidebar-foreground/70 group-hover:text-sidebar-accent-foreground"
         }`}
       >
@@ -207,39 +233,8 @@ export default function Sidebar({ onClose }: SidebarProps) {
         </ul>
       </nav>
 
-      {/* Usuário */}
-      <div className="border-t border-sidebar-border/60 p-3 space-y-2">
-        <Link
-          href={createLink("/dashboard/perfil")}
-          title="Meu perfil"
-          className={`flex items-center rounded-xl p-2.5 border border-transparent hover:border-sidebar-border hover:bg-sidebar-accent/40 transition-all duration-200 ${isCollapsed ? "justify-center" : ""}`}
-          onClick={handleLinkClick}
-        >
-          <div className="relative flex-shrink-0">
-            <Avatar className="h-9 w-9 ring-2 ring-sidebar-primary/25">
-              <AvatarImage
-                src={session?.user?.image || ""}
-                alt={session?.user?.name || "Usuário"}
-                className="object-cover"
-              />
-              <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-sm font-semibold">
-                {getInitials(session?.user?.name)}
-              </AvatarFallback>
-            </Avatar>
-            <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-sidebar-primary ring-2 ring-sidebar" />
-          </div>
-          {!isCollapsed && (
-            <div className="ml-3 min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground truncate">
-                {session?.user?.name}
-              </p>
-              <p className="text-xs text-sidebar-foreground/60 truncate">
-                {session?.user?.email}
-              </p>
-            </div>
-          )}
-        </Link>
-
+      {/* Rodapé — sair */}
+      <div className="border-t border-sidebar-border/60 p-3">
         <LogoutButtonSimple isCollapsed={isCollapsed} />
       </div>
     </div>

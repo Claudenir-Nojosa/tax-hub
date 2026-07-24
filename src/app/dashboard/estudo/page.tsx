@@ -28,6 +28,7 @@ import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, L
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 
 const DashboardTab = dynamic(() => import("@/components/estudo/DashboardTab"), { ssr: false });
 const EditalTab = dynamic(() => import("@/components/estudo/EditalTab"), { ssr: false });
@@ -94,6 +95,8 @@ function loadFromLocalStorage(concursoId: string | null): EstudoState | null {
 
 export default function EstudoPage() {
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
+  const primeiroNome = session?.user?.name?.split(" ")[0];
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [state, setState] = useState<EstudoState>(DEFAULT_ESTUDO_STATE);
   const [loaded, setLoaded] = useState(false);
@@ -317,6 +320,9 @@ export default function EstudoPage() {
               )}
             </div>
             <div>
+              {primeiroNome && (
+                <p className="text-sm text-muted-foreground">Oi, {primeiroNome}</p>
+              )}
               <h1 className="text-lg font-bold text-foreground">
                 {concursoAtivo?.nome ?? "Estudo SEFAZ-CE 2026"}
               </h1>
