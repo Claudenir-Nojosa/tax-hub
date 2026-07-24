@@ -9,9 +9,15 @@ não entrega o dia, a meta de amanhã espera por ele. Atualize este arquivo se a
 
 1. **Estudo por PDF**: cada matéria tem tópicos; cada tópico tem um PDF (Biblioteca). O dia
    pertence a um grupo do ciclo (A/B/C, do Ciclo de Estudos) e as horas do dia são divididas
-   IGUALMENTE entre as matérias do grupo — ex.: 3h e 3 matérias = 1h cada, no **tópico atual**
-   (primeiro não estudado) de cada matéria. O tempo é monitorado pelas sessões de estudo do
-   calendário (leitor de PDF/Timer, atividades tipo "estudo" da matéria, somadas por dia).
+   PROPORCIONALMENTE AO PESO (1 ou 2, configurado no Ciclo) entre as matérias do grupo — peso 2
+   recebe ~2x o tempo de peso 1; com pesos iguais, cai de volta em divisão igual. Sempre no
+   **tópico atual** (primeiro não estudado) de cada matéria. O tempo é monitorado pelas sessões
+   de estudo do calendário (leitor de PDF/Timer, atividades tipo "estudo" da matéria, somadas por
+   dia). **2026-07-24**: antes disso o tempo era sempre dividido igual — `peso` já existia e já
+   era configurável no Ciclo, mas o motor nunca lia (bug real: configurar peso 2 numa matéria não
+   fazia nada). `prioridade` (Alta/Baixa) continua só informativa por enquanto, não influencia o
+   tempo — decisão deliberada pra não abrir uma segunda dimensão de interação com `peso` sem
+   necessidade concreta.
 2. **Questões escalonadas A-D**: cada tópico tem 4 grupos de questões — os cadernos A/B/C/D do
    Edital (grupo "feito" = acertos+erros > 0). Concluir o tópico k libera: grupo **A do k-1**,
    **B do k-2**, **C do k-3**, **D do k-4**. Quando a teoria da matéria acaba, a "cauda" (grupos
@@ -25,16 +31,30 @@ não entrega o dia, a meta de amanhã espera por ele. Atualize este arquivo se a
 5. **Mutável pela entrega**: o grupo do ciclo só avança quando TODOS os blocos de estudo do dia
    foram entregues (1x por dia, guard `grupoCicloAvancadoEm`). Grupos sem nenhuma matéria com
    teoria pendente são PULADOS (`resolverGrupoEfetivo`, A→B→C→A).
+6. **Reforço de tópicos fracos** (2026-07-24): um grupo "feito" com **menos de 70% de acerto**
+   (`LIMIAR_REFORCO_PERC`) volta a aparecer na trilha — numa seção própria, separada de "questões
+   liberadas" — depois de **3 dias** sem atualização (`REFORCO_COOLDOWN_DIAS`). Antes, "feito" era
+   só `acertos+erros > 0`: 0% e 100% eram tratados igual, e um grupo nunca ressurgia. Qualquer
+   novo registro de acertos/erros nesse grupo (no Edital ou na Trilha) reinicia a contagem dos 3
+   dias (`TopicoCaderno.atualizadoEm`).
 
 ## 2. Arquitetura: derivar > persistir
 
 `src/lib/trilha-dinamica.ts` — funções puras, sem React/DOM:
 - `analisarMateria(materia, topicos)` → tópico atual, questões liberadas (com motivo), grupos
   feitos, matéria concluída. TUDO derivado de `EstudoState.topicos` (estudado + cadernos A-D).
+- `analisarReforcos(materia, topicos, hoje)` → grupos já feitos com acerto abaixo de
+  `LIMIAR_REFORCO_PERC` e esfriados (sem `atualizadoEm`, ou `atualizadoEm` há
+  `REFORCO_COOLDOWN_DIAS`+ dias) — caminho separado de `analisarMateria`, não interfere na
+  liberação escalonada nem no cálculo de matéria concluída.
+- `distribuirMinutosPorPeso(minutosDia, pesos)` → divisão do tempo por maiores restos (Hamilton):
+  cada matéria recebe `floor(peso/pesoTotal * minutosDia)` e a sobra do arredondamento (no máximo
+  `pesos.length - 1` minutos) vai 1 a 1 pras matérias com maior parte fracionária perdida — nenhum
+  minuto desaparece, ao contrário de um `Math.floor` fixo.
 - `computarMetaDia({hoje, trilha, configCiclo, materiasAtivas, topicos, calendario})` → a meta
-  do dia inteira: blocos de estudo (alvo/feito em minutos), questões pendentes, revisões de 30
-  devidas, domingo de cartas. `MateriaLike = {nome, topicos}` — aceita MateriaDef,
-  MateriaConcurso e MateriaBase.
+  do dia inteira: blocos de estudo (alvo/feito em minutos, ponderados por peso), questões
+  pendentes, reforços, revisões de 30 devidas, domingo de cartas. `MateriaLike = {nome, topicos}`
+  — aceita MateriaDef, MateriaConcurso e MateriaBase.
 - `criarTrilhaDinamica()` → estado inicial na ativação.
 
 `EstudoState.trilhaDinamica` (`TrilhaDinamicaState`) guarda SÓ o que não dá pra derivar:
@@ -47,10 +67,17 @@ persistido, não é mais lido por nenhuma UI.
 
 Painel "Meta de hoje": hero com anel de progresso (SVG puro) sobre a % dos blocos do dia + data
 por extenso; um único checklist vertical ("Sua trilha de hoje", ver 3.2) que reúne blocos de
-estudo, questões liberadas, revisão de 30 e cartas num só fluxo conectado por uma linha, em vez de
-cards soltos; questões liberadas com registro INLINE de acertos/erros (grava direto no caderno do
-grupo via `onUpdateTopicos` — mesmo dado do Edital, aparece lá também); progresso por matéria em
-grade de mini-anéis (teoria+questões combinados num só %, badge 100%/em revisão).
+estudo, reforços (ver 3.3), questões liberadas, revisão de 30 e cartas num só fluxo conectado por
+uma linha, em vez de cards soltos; questões liberadas e reforços com registro INLINE de
+acertos/erros (grava direto no caderno do grupo via `onUpdateTopicos` — mesmo dado do Edital,
+aparece lá também, carimbando `atualizadoEm`); progresso por matéria em grade de mini-anéis
+(teoria+questões combinados num só %, badge 100%/em revisão).
+
+Cada bloco de estudo, uma vez que bate o tempo alvo (`concluido`), troca o botão "Ler PDF" por
+**"Marcar como estudado"** — fecha o elo que antes obrigava trocar pra aba Edital só pra marcar o
+tópico (`topicos[key].estudado = true`, mesmo caminho de escrita do `EditalTab.toggleEstudado`).
+É sempre um "set true" explícito, nunca automático nem um toggle — bater o tempo não garante que o
+conteúdo foi de fato terminado, e desmarcar por engano continua sendo ação do Edital.
 
 Dois `useEffect` de bookkeeping (com guards contra loop):
 1. matéria recém-100% → grava `conclusaoMaterias[nome] = hoje` (uma vez);
@@ -59,6 +86,24 @@ Dois `useEffect` de bookkeeping (com guards contra loop):
 
 O banner "amanhã segue pro grupo X" mostra o grupo EFETIVO de amanhã (resolve o skip de grupos
 vazios — com todas as matérias na divisão A, amanhã volta pro A, não pro B literal).
+
+### 3.3 Reforço de tópicos fracos (2026-07-24)
+
+Um grupo "feito" (`acertos+erros > 0`) com **acerto < 70%** (`LIMIAR_REFORCO_PERC`,
+`trilha-dinamica.ts`) some da lista de "questões liberadas" mas passa a ser candidato a
+**reforço** — reaparece na trilha, numa seção própria (ícone de alerta, vermelho, distinta
+visualmente de "liberada" pra não confundir "novo" com "revisar de novo"), depois de
+`REFORCO_COOLDOWN_DIAS` (3) dias sem atualização. `TopicoCaderno` ganhou um campo opcional
+`atualizadoEm?: string` (dateKey), carimbado toda vez que acertos/erros são salvos (Edital ou
+Trilha) — ausente em registros antigos, o que os deixa elegíveis a reforço imediatamente (sem
+dado prévio pra dizer o contrário). Sem migração de banco: `EstudoProgresso`/`ConcursoProgresso`
+guardam `dados Json`, um campo TS opcional não pede nada além do próprio código.
+
+A linha de reforço vem com os campos de acertos/erros PRÉ-PREENCHIDOS com o valor atual (o
+usuário está corrigindo um resultado existente, não começando do zero) e um badge com o % atual.
+Registrar de novo sobrescreve o caderno do grupo inteiro (mesmo caminho de escrita de
+"questões liberadas") — não é um histórico de tentativas, é o mesmo contador cumulativo de
+sempre, só que agora com timestamp.
 
 ## 4. Aviso de meta no leitor de PDF
 
@@ -136,6 +181,10 @@ Deletados na reescrita: `trilha-generator.ts`, `scripts/validar-trilha.ts`, `Tri
   (1/2/4 tópicos), cauda no fim da teoria, matéria 100%, blocos 3h→3×60min, soma de sessões do
   calendário, grupo efetivo pulando grupo vazio, revisão de 30 no dia seguinte (não no mesmo
   dia; some depois de feita), domingos de cartas (+0/+7/+14, marcação e atividade "cartas").
+- Motor (2026-07-24): `distribuirMinutosPorPeso` — pesos iguais = split igual; peso 2:1 pega ~2x;
+  soma sempre bate com `minutosDia` mesmo com resto (ex.: 100min/3 matérias). `analisarReforcos`
+  — grupo com < 70% aparece; ≥ 70% não; `atualizadoEm` recente (< 3 dias) suprime; ausente ou
+  antigo libera.
 - UI: rota descartável `/signup/preview-trilha` — ativar, conferir blocos/questões/progresso,
   simular 3 sessões de 60min → 3/3 "dia entregue" + ciclo avança (1x), registrar questões
   inline → some da lista e progresso atualiza.

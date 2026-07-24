@@ -245,9 +245,9 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
         const dimPadrao = { w: vp1.width, h: vp1.height };
         setDoc(d);
         setDims(new Array(d.numPages).fill(dimPadrao));
-        // zoom inicial sempre 100% (pedido do usuário — antes era "ajustar à largura", que dava
+        // zoom inicial sempre 160% (pedido do usuário — antes era "ajustar à largura", que dava
         // um zoom inicial imprevisível dependendo do tamanho da janela/PDF)
-        setScale(1);
+        setScale(1.6);
 
         // corrige em segundo plano só as páginas cuja dimensão real divergir da estimativa
         for (let i = 2; i <= d.numPages; i++) {

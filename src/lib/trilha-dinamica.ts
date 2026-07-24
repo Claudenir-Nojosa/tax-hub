@@ -1,5 +1,5 @@
 import {
-  dateKeyLocal, topicoKey,
+  dateKeyLocal, topicoKey, calcularPerc,
   type AtividadeCalendario, type EstudoConfigCiclo, type Grupo,
   type TopicoState, type TrilhaDinamicaState,
 } from "./estudo-data";
@@ -24,10 +24,23 @@ export type MateriaLike = { nome: string; topicos: string[] };
 // 4. CARTAS: a cada 2 domingos (14 dias), atividade de revisar as cartas.
 // 5. MUTÁVEL: o grupo do ciclo só avança quando os blocos de estudo do dia foram entregues; a
 //    meta de amanhã depende do que foi feito hoje.
+// 6. TEMPO PONDERADO: o tempo do dia é dividido PROPORCIONALMENTE ao peso (1 ou 2) configurado
+//    por matéria no Ciclo — não mais sempre igual (distribuirMinutosPorPeso).
+// 7. REFORÇO: um grupo "feito" com acerto abaixo de LIMIAR_REFORCO_PERC volta a aparecer na
+//    trilha (seção separada de "questões liberadas") depois de REFORCO_COOLDOWN_DIAS sem
+//    atualização — 0% e 100% deixam de ser tratados igual.
 
 export const GRUPOS_QUESTOES: Grupo[] = ["A", "B", "C", "D"];
 const GRUPOS_CICLO = ["A", "B", "C"] as const;
 export type GrupoCiclo = (typeof GRUPOS_CICLO)[number];
+
+// limiar de acerto abaixo do qual um grupo "feito" é considerado fraco e pode ressurgir como
+// reforço — mesmo corte que o Edital já usa pra colorir o % de acerto (PercBadge), consistente
+// com o que o usuário já enxerga hoje
+export const LIMIAR_REFORCO_PERC = 70;
+// dias de carência antes do MESMO grupo fraco ressurgir de novo — qualquer novo registro de
+// acertos/erros nesse grupo (Edital ou Trilha) reinicia a contagem via TopicoCaderno.atualizadoEm
+export const REFORCO_COOLDOWN_DIAS = 3;
 
 const DIAS_SEMANA = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"] as const;
 
@@ -118,6 +131,52 @@ export function analisarMateria(
   };
 }
 
+export interface ReforcoGrupo {
+  id: string; // estável: `r:${materia}:${topico}:${grupo}`
+  materia: string;
+  topico: string;
+  ordemTopico: number; // 1-based no edital
+  grupo: Grupo;
+  acertos: number;
+  erros: number;
+  perc: number; // % de acerto atual (calcularPerc)
+}
+
+// grupos "feitos" (acertos+erros > 0) com desempenho fraco (< LIMIAR_REFORCO_PERC) que já
+// esfriaram (sem atualizadoEm, ou atualizadoEm há REFORCO_COOLDOWN_DIAS ou mais) — candidatos a
+// reaparecer na trilha como reforço. Grupos ainda não feitos ficam de fora (isso é "pendente",
+// não "fraco" — já aparecem em questoesLiberadas via analisarMateria).
+export function analisarReforcos(
+  materia: MateriaLike,
+  topicos: Record<string, TopicoState>,
+  hoje: string
+): ReforcoGrupo[] {
+  const nomes = materia.topicos;
+  const reforcos: ReforcoGrupo[] = [];
+  for (let i = 0; i < nomes.length; i++) {
+    const estado = topicos[topicoKey(materia.nome, nomes[i])];
+    if (!estado?.estudado) continue;
+    for (const grupo of GRUPOS_QUESTOES) {
+      const c = estado.cadernos[grupo];
+      if (!c || c.acertos + c.erros === 0) continue; // não feito — pendente, não fraco
+      const perc = calcularPerc(c.acertos, c.erros);
+      if (perc >= LIMIAR_REFORCO_PERC) continue;
+      if (c.atualizadoEm && diffDias(c.atualizadoEm, hoje) < REFORCO_COOLDOWN_DIAS) continue;
+      reforcos.push({
+        id: `r:${materia.nome}:${nomes[i]}:${grupo}`,
+        materia: materia.nome,
+        topico: nomes[i],
+        ordemTopico: i + 1,
+        grupo,
+        acertos: c.acertos,
+        erros: c.erros,
+        perc,
+      });
+    }
+  }
+  return reforcos;
+}
+
 // ─── Meta do dia ─────────────────────────────────────────────────────────────
 
 export interface BlocoEstudo {
@@ -140,6 +199,7 @@ export interface MetaDia {
   blocos: BlocoEstudo[];
   blocosConcluidos: boolean; // todos os blocos entregues (false se não há blocos)
   questoesPendentes: QuestaoLiberada[]; // todas as matérias ativas
+  reforcos: ReforcoGrupo[]; // grupos já feitos mas com desempenho fraco, esfriados (distinto de questoesPendentes)
   revisoes30: Revisao30[]; // devidas hoje (matéria concluída ontem ou antes, revisão ainda não feita)
   revisarCartas: boolean; // hoje é domingo de cartas e ainda não marcada
   proximoDomingoCartas: string; // dateKey do próximo domingo de cartas (informativo)
@@ -196,6 +256,23 @@ export function resolverGrupoEfetivo(
   return grupoSalvo; // nenhuma teoria pendente em nenhum grupo — tanto faz
 }
 
+// distribui minutosDia proporcionalmente aos pesos (maiores restos / Hamilton): cada matéria
+// recebe floor(peso/pesoTotal * minutosDia) e os minutos que sobram do arredondamento (no
+// máximo pesos.length - 1) vão 1 a 1 pras matérias com maior parte fracionária perdida — nenhum
+// minuto desaparece, ao contrário de um Math.floor(minutosDia/n) fixo pra todo mundo.
+export function distribuirMinutosPorPeso(minutosDia: number, pesos: number[]): number[] {
+  const pesoTotal = pesos.reduce((s, p) => s + p, 0);
+  if (pesoTotal <= 0 || minutosDia <= 0) return pesos.map(() => 0);
+  const brutos = pesos.map((p) => (p / pesoTotal) * minutosDia);
+  const bases = brutos.map((v) => Math.floor(v));
+  const sobra = minutosDia - bases.reduce((s, v) => s + v, 0);
+  const porResto = brutos
+    .map((v, i) => ({ i, resto: v - bases[i] }))
+    .sort((a, b) => b.resto - a.resto);
+  for (let k = 0; k < sobra; k++) bases[porResto[k].i]++;
+  return bases;
+}
+
 export function minutosEstudoHoje(
   calendario: Record<string, AtividadeCalendario[]>,
   hoje: string,
@@ -228,22 +305,24 @@ export function computarMetaDia(params: {
   const ativas = materiasAtivas.filter((m) => configCiclo.materias[m.nome]?.incluir);
   const analises = ativas.map((m) => analisarMateria(m, topicos));
 
-  // blocos de estudo: matérias do grupo do dia com teoria pendente, tempo dividido igualmente
+  // blocos de estudo: matérias do grupo do dia com teoria pendente, tempo dividido
+  // PROPORCIONALMENTE ao peso configurado no Ciclo (peso 2 = ~2x o tempo de peso 1) — antes era
+  // sempre dividido igual, ignorando o peso que o usuário já configura
   const materiasBloco = materiasDoGrupo(grupoEfetivo, configCiclo, materiasAtivas)
     .map((m) => analises.find((a) => a.materia === m.nome) ?? analisarMateria(m, topicos))
     .filter((a) => a.topicoAtual !== null);
-  const minutosPorBloco = materiasBloco.length > 0 && minutosDia > 0
-    ? Math.floor(minutosDia / materiasBloco.length)
-    : 0;
+  const pesosBloco = materiasBloco.map((a) => configCiclo.materias[a.materia]?.peso ?? 1);
+  const minutosPorMateria = distribuirMinutosPorPeso(minutosDia, pesosBloco);
   const blocos: BlocoEstudo[] = minutosDia > 0
-    ? materiasBloco.map((a) => {
+    ? materiasBloco.map((a, i) => {
         const feitos = minutosEstudoHoje(calendario, hoje, a.materia);
+        const minutosAlvo = minutosPorMateria[i];
         return {
           materia: a.materia,
           topico: a.topicoAtual as string,
-          minutosAlvo: minutosPorBloco,
+          minutosAlvo,
           minutosFeitos: feitos,
-          concluido: feitos >= minutosPorBloco,
+          concluido: feitos >= minutosAlvo,
         };
       })
     : [];
@@ -279,6 +358,7 @@ export function computarMetaDia(params: {
     blocos,
     blocosConcluidos: blocos.length > 0 && blocos.every((b) => b.concluido),
     questoesPendentes: analises.flatMap((a) => a.questoesLiberadas),
+    reforcos: ativas.flatMap((m) => analisarReforcos(m, topicos, hoje)),
     revisoes30,
     revisarCartas: ehDomingoCartas && !cartasFeitaHoje,
     proximoDomingoCartas: proximoDom,

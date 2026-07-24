@@ -35,6 +35,10 @@ export interface Carta {
 export interface TopicoCaderno {
   acertos: number;
   erros: number;
+  // dateKeyLocal da última vez que acertos/erros mudaram — ausente em registros antigos (sempre
+  // elegível a reforço, sem dado prévio pra dizer o contrário). Usado só pelo cooldown de
+  // "reforço" da Trilha Dinâmica (trilha-dinamica.ts), não afeta nada mais.
+  atualizadoEm?: string;
 }
 
 export interface TopicoState {

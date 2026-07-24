@@ -65,7 +65,7 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
   });
   const feitos = meta.blocos.filter((b) => b.concluido).length;
   const perc = meta.blocos.length > 0 ? Math.round((feitos / meta.blocos.length) * 100) : 0;
-  const pendencias = meta.questoesPendentes.length + meta.revisoes30.length + (meta.revisarCartas ? 1 : 0);
+  const pendencias = meta.questoesPendentes.length + meta.reforcos.length + meta.revisoes30.length + (meta.revisarCartas ? 1 : 0);
   const totalAtividades = meta.blocos.length + pendencias;
   const concluidas = meta.analises.filter((a) => a.materiaConcluida).length;
 

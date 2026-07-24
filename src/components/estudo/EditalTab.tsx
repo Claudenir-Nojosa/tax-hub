@@ -6,6 +6,7 @@ import {
   calcularPerc,
   calcularMedia,
   topicoKey,
+  dateKeyLocal,
   type TopicoState,
   type Grupo,
   type MateriaConcurso,
@@ -117,7 +118,9 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
       ...prev,
       cadernos: {
         ...prev.cadernos,
-        [grupo]: { ...prev.cadernos[grupo], [field]: value },
+        // atualizadoEm alimenta o cooldown de "reforço" da Trilha (trilha-dinamica.ts) — sem
+        // isso, um grupo fraco corrigido aqui reapareceria na trilha até o próximo registro
+        [grupo]: { ...prev.cadernos[grupo], [field]: value, atualizadoEm: dateKeyLocal() },
       },
     }));
   };
