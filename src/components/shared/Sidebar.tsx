@@ -98,7 +98,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
       </button>
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-5">
+      <div className="relative flex items-center justify-center px-4 py-5">
         {!isCollapsed && (
           <div className="flex items-center">
             <Image
@@ -125,7 +125,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
           variant="ghost"
           size="icon"
           onClick={onClose}
-          className="lg:hidden hover:bg-sidebar-accent text-sidebar-foreground hover:text-sidebar-accent-foreground h-10 w-10"
+          className="lg:hidden absolute right-3 top-1/2 -translate-y-1/2 hover:bg-sidebar-accent text-sidebar-foreground hover:text-sidebar-accent-foreground h-10 w-10"
         >
           <X className="h-5 w-5" />
         </Button>
@@ -133,7 +133,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
       {/* Ícone quando colapsado */}
       {isCollapsed && (
-        <div className="flex items-center justify-center py-2">
+        <div className="flex items-center justify-center pt-1 pb-4">
           <Image
             src="/icons/taxhub_icone_claro.svg"
             alt="TAX Hub"
@@ -217,7 +217,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
       <span
         className={`flex items-center justify-center h-8 w-8 rounded-full flex-shrink-0 transition-colors ${
           active
-            ? "bg-sidebar-primary/15 text-sidebar-primary ring-2 ring-sidebar-primary shadow-[0_0_12px_hsl(var(--sidebar-primary)/0.35)]"
+            ? "text-sidebar-primary"
             : "text-sidebar-foreground/70 group-hover:text-sidebar-accent-foreground"
         }`}
       >
