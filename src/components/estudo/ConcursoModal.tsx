@@ -218,8 +218,8 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-muted border border-border p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-white">{inicial?.id ? "Editar Concurso" : "Novo Concurso"}</h2>
-          <button onClick={onFechar} className="text-muted-foreground hover:text-white"><X className="h-5 w-5" /></button>
+          <h2 className="text-lg font-bold text-foreground">{inicial?.id ? "Editar Concurso" : "Novo Concurso"}</h2>
+          <button onClick={onFechar} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="space-y-4">
@@ -298,7 +298,7 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
                     <Button
                       onClick={handleProcessarTexto}
                       disabled={!textoEdital.trim()}
-                      className="w-full bg-primary hover:bg-primary/90 text-white"
+                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                       size="sm"
                     >
                       Extrair matérias com IA
@@ -417,7 +417,7 @@ export default function ConcursoModal({ inicial, onSalvar, onFechar }: Props) {
 
         <div className="flex justify-end gap-2 mt-6">
           <Button variant="outline" onClick={onFechar}>Cancelar</Button>
-          <Button onClick={handleSalvar} disabled={saving} className="bg-primary hover:bg-primary/90 text-white">
+          <Button onClick={handleSalvar} disabled={saving} className="bg-primary hover:bg-primary/90 text-primary-foreground">
             {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : "Salvar Concurso"}
           </Button>
         </div>

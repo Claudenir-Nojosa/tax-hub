@@ -1,0 +1,116 @@
+"use client";
+
+import { useState } from "react";
+import { Gem, Swords, X, Zap } from "lucide-react";
+import type { TipoCarta } from "@/lib/estudo-data";
+
+// mesma config visual das cartas em CartasTab.tsx, reduzida aos 3 tipos que o leitor oferece
+// (sem "boss", que só existe como escalada de Monstro dentro da sessão de revisão)
+export const TIPO_CARTAO_CONFIG: Record<"monstro" | "armadilha" | "tesouro", { label: string; Icon: typeof Swords }> = {
+  monstro: { label: "Monstro", Icon: Swords },
+  armadilha: { label: "V ou F", Icon: Zap },
+  tesouro: { label: "Tesouro", Icon: Gem },
+};
+
+// ─── Formulário manual do cartão (sem IA, sem grifo — preenchido do zero) ────
+
+export default function NovoCartaoForm({
+  tipo, materia, topico, onSalvar, onCancelar,
+}: {
+  tipo: TipoCarta;
+  materia: string;
+  topico?: string;
+  onSalvar: (frente: string, verso: string, gabarito?: "verdadeiro" | "falso") => void;
+  onCancelar: () => void;
+}) {
+  const [frente, setFrente] = useState("");
+  const [verso, setVerso] = useState("");
+  const [gabarito, setGabarito] = useState<"verdadeiro" | "falso">("verdadeiro");
+
+  const cfg = TIPO_CARTAO_CONFIG[tipo as "monstro" | "armadilha" | "tesouro"];
+  const frenteLabel = tipo === "monstro" ? "Pergunta" : tipo === "armadilha" ? "Afirmação (Verdadeiro ou Falso?)" : "Texto com lacuna (use ___ pra indicar)";
+  const versoLabel = tipo === "monstro" ? "Resposta" : tipo === "armadilha" ? "Explicação" : "Texto completo";
+  const podeSalvar = frente.trim() !== "" && verso.trim() !== "";
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4" onClick={onCancelar}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-card border border-border rounded-2xl w-full max-w-lg p-4 space-y-3 max-h-[85vh] overflow-y-auto"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <cfg.Icon className="h-4 w-4 text-primary" /> Novo cartão {cfg.label}
+          </div>
+          <button type="button" onClick={onCancelar} className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="text-[11px] text-primary bg-primary/10 border border-primary/20 rounded-lg px-2.5 py-1.5">
+          {materia}{topico ? ` · ${topico}` : ""}
+        </div>
+
+        <div>
+          <label className="text-[11px] font-medium text-muted-foreground block mb-1">{frenteLabel}</label>
+          <textarea
+            value={frente}
+            onChange={(e) => setFrente(e.target.value)}
+            rows={3}
+            autoFocus={tipo === "monstro"}
+            className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
+          />
+        </div>
+
+        {tipo === "armadilha" && (
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground block mb-1.5">Gabarito</label>
+            <div className="flex gap-2">
+              {(["verdadeiro", "falso"] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setGabarito(g)}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all ${
+                    gabarito === g
+                      ? g === "verdadeiro"
+                        ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
+                        : "border-red-500 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300"
+                      : "border-border text-muted-foreground"
+                  }`}
+                >
+                  {g === "verdadeiro" ? "✓ Verdadeiro" : "✗ Falso"}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="text-[11px] font-medium text-muted-foreground block mb-1">{versoLabel}</label>
+          <textarea
+            value={verso}
+            onChange={(e) => setVerso(e.target.value)}
+            rows={4}
+            autoFocus={tipo === "armadilha"}
+            className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => onSalvar(frente, verso, gabarito)}
+            disabled={!podeSalvar}
+            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Criar cartão
+          </button>
+          <button type="button" onClick={onCancelar} className="px-4 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent text-xs font-medium transition-colors">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

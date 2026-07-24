@@ -18,6 +18,10 @@ import {
 } from "@/lib/estudo-data";
 import { computarMetaDia } from "@/lib/trilha-dinamica";
 import { resolverCorMateria } from "./trilha/trilha-ui";
+import EstudoHero from "./ui/EstudoHero";
+import StatTile from "./ui/StatTile";
+import SectionCard from "./ui/SectionCard";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Props {
   state: EstudoState;
@@ -248,7 +252,7 @@ function MetaDiaria({ state }: { state: EstudoState }) {
   const done = perc >= 100;
 
   return (
-    <div className={`rounded-xl border px-5 py-4 ${done
+    <div className={`rounded-2xl border px-5 py-4 ${done
       ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
       : "bg-card border-border"}`}
     >
@@ -326,7 +330,7 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
       <CardTrilha state={state} materiasConcurso={materiasConcurso} onIrParaTrilha={onIrParaTrilha} />
 
       {/* Level + XP hero */}
-      <div className="bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-600 rounded-2xl p-6 text-white shadow-lg">
+      <EstudoHero>
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="flex items-center gap-2 text-3xl font-bold mb-1">
@@ -358,32 +362,30 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
           <span>{progNivel}%</span>
           <span>{xpProximo === 999999 ? "∞" : xpProximo} XP</span>
         </div>
-      </div>
+      </EstudoHero>
 
       {/* Stats — grid-cols do breakpoint largo acompanha a QUANTIDADE real de cards (5 sem
           Biblioteca, 6 com ela) pra nunca sobrar um card sozinho numa linha nova */}
       {(() => {
         const stats = [
-          { label: "Tópicos Estudados", value: `${estudados}/${totalTopicos}` as string | number, sub: null as string | null, Icon: BookOpen, color: "text-primary dark:text-primary", bg: "bg-primary/10 dark:bg-primary/30" },
-          { label: "% do Edital", value: `${percEdital}%`, sub: null, Icon: TrendingUp, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/30" },
-          { label: "Questões Feitas", value: totalQuestoes, sub: null, Icon: HelpCircle, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
-          { label: "% de Acertos", value: totalQuestoes > 0 ? `${percAcertos}%` : "—", sub: null, Icon: Target, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30" },
+          { label: "Tópicos Estudados", valor: `${estudados}/${totalTopicos}` as string | number, sublabel: undefined, icone: BookOpen, tone: "primary" as const },
+          { label: "% do Edital", valor: `${percEdital}%`, sublabel: undefined, icone: TrendingUp, tone: "purple" as const },
+          { label: "Questões Feitas", valor: totalQuestoes, sublabel: undefined, icone: HelpCircle, tone: "success" as const },
+          { label: "% de Acertos", valor: totalQuestoes > 0 ? `${percAcertos}%` : "—", sublabel: undefined, icone: Target, tone: "warning" as const },
           {
             label: "Páginas/Hora",
-            value: pagPorHora !== null ? pagPorHora.toFixed(1) : "—",
-            sub: pagPorHora !== null ? `${totalPaginas} pág registradas` : "registre páginas no timer",
-            Icon: Gauge,
-            color: "text-primary dark:text-primary",
-            bg: "bg-primary/10 dark:bg-primary/20",
+            valor: pagPorHora !== null ? pagPorHora.toFixed(1) : "—",
+            sublabel: pagPorHora !== null ? `${totalPaginas} pág registradas` : "registre páginas no timer",
+            icone: Gauge,
+            tone: "primary" as const,
           },
           ...(pdfs.length > 0
             ? [{
                 label: "Leitura PDFs",
-                value: `${percPdfs}%` as string | number,
-                sub: `${pdfLidasPag.toLocaleString("pt-BR")}/${pdfTotalPag.toLocaleString("pt-BR")} páginas` as string | null,
-                Icon: Library,
-                color: "text-emerald-600 dark:text-emerald-400",
-                bg: "bg-emerald-50 dark:bg-emerald-950/30",
+                valor: `${percPdfs}%` as string | number,
+                sublabel: `${pdfLidasPag.toLocaleString("pt-BR")}/${pdfTotalPag.toLocaleString("pt-BR")} páginas` as string | undefined,
+                icone: Library,
+                tone: "success" as const,
               }]
             : []),
         ];
@@ -391,14 +393,7 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
         return (
           <div className={`grid grid-cols-2 md:grid-cols-3 ${gridColsLg} gap-3`}>
             {stats.map((s) => (
-              <div key={s.label} className="bg-card rounded-xl border border-border p-4 text-center shadow-sm">
-                <div className={`flex items-center justify-center w-9 h-9 rounded-lg mx-auto mb-2 ${s.bg}`}>
-                  <s.Icon className={`h-5 w-5 ${s.color}`} />
-                </div>
-                <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
-                <div className="text-xs text-muted-foreground mt-1">{s.label}</div>
-                {s.sub && <div className="text-[10px] text-muted-foreground mt-0.5">{s.sub}</div>}
-              </div>
+              <StatTile key={s.label} icone={s.icone} label={s.label} valor={s.valor} sublabel={s.sublabel} tone={s.tone} />
             ))}
           </div>
         );
@@ -406,81 +401,73 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Conquistas */}
-        <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-          <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-            <Medal className="h-5 w-5 text-amber-500" />
-            Conquistas
-          </h3>
-          <div className="grid grid-cols-2 gap-2 max-h-[340px] overflow-y-auto pr-1">
-            {CONQUISTAS.map((c) => {
-              const unlocked = conquistas[c.id as keyof typeof conquistas];
-              const CIcon = c.icone;
-              return (
-                <div
-                  key={c.id}
-                  className={`flex items-center gap-2 p-2.5 rounded-lg border transition-all ${
-                    unlocked
-                      ? "border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700"
-                      : "border-border opacity-50"
-                  }`}
-                >
-                  <CIcon className={`h-5 w-5 flex-shrink-0 ${unlocked ? c.cor : "text-muted-foreground"}`} />
-                  <div className="min-w-0">
-                    <div className={`text-xs font-semibold truncate ${unlocked ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>
-                      {c.nome}
+        <SectionCard titulo="Conquistas" icone={Medal} corIcone="bg-amber-500">
+          <ScrollArea className="max-h-[340px] pr-1">
+            <div className="grid grid-cols-2 gap-2">
+              {CONQUISTAS.map((c) => {
+                const unlocked = conquistas[c.id as keyof typeof conquistas];
+                const CIcon = c.icone;
+                return (
+                  <div
+                    key={c.id}
+                    className={`flex items-center gap-2 p-2.5 rounded-lg border transition-all ${
+                      unlocked
+                        ? "border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700"
+                        : "border-border opacity-50"
+                    }`}
+                  >
+                    <CIcon className={`h-5 w-5 flex-shrink-0 ${unlocked ? c.cor : "text-muted-foreground"}`} />
+                    <div className="min-w-0">
+                      <div className={`text-xs font-semibold truncate ${unlocked ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>
+                        {c.nome}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">{c.condicao}</div>
                     </div>
-                    <div className="text-xs text-muted-foreground truncate">{c.condicao}</div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </SectionCard>
 
         {/* Progresso por matéria */}
-        <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-          <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            Progresso por Matéria
-          </h3>
-          <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
-            {MATERIAS_ATIVAS.map((m) => {
-              const prog = getProgressoMateria(m.nome, state.topicos, MATERIAS_ATIVAS);
-              return (
-                <div key={m.nome}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={`text-xs font-medium truncate max-w-[65%] ${"corText" in m ? (m as {corText: string}).corText : "text-foreground"}`}>
-                      {m.nome}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {prog.estudados}/{prog.total}
-                    </span>
+        <SectionCard titulo="Progresso por Matéria" icone={BarChart3} corIcone="bg-primary">
+          <ScrollArea className="max-h-[340px] pr-1">
+            <div className="space-y-2.5">
+              {MATERIAS_ATIVAS.map((m) => {
+                const prog = getProgressoMateria(m.nome, state.topicos, MATERIAS_ATIVAS);
+                return (
+                  <div key={m.nome}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-xs font-medium truncate max-w-[65%] ${"corText" in m ? (m as {corText: string}).corText : "text-foreground"}`}>
+                        {m.nome}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {prog.estudados}/{prog.total}
+                      </span>
+                    </div>
+                    <div className="bg-muted dark:bg-muted rounded-full h-1.5">
+                      <div
+                        className={`rounded-full h-1.5 transition-all duration-300 ${
+                          prog.perc === 100
+                            ? "bg-emerald-500"
+                            : prog.perc > 0
+                            ? "bg-primary"
+                            : "bg-muted dark:bg-muted"
+                        }`}
+                        style={{ width: `${prog.perc}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="bg-muted dark:bg-muted rounded-full h-1.5">
-                    <div
-                      className={`rounded-full h-1.5 transition-all duration-300 ${
-                        prog.perc === 100
-                          ? "bg-emerald-500"
-                          : prog.perc > 0
-                          ? "bg-primary"
-                          : "bg-muted dark:bg-muted"
-                      }`}
-                      style={{ width: `${prog.perc}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </SectionCard>
       </div>
 
       {/* Níveis */}
-      <div className="bg-card rounded-xl border border-border p-5 shadow-sm">
-        <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          Tabela de Níveis
-        </h3>
+      <SectionCard titulo="Tabela de Níveis" icone={TrendingUp} corIcone="bg-primary">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
           {Object.entries(NIVEL_CONFIG).map(([n, cfg]) => {
             const isAtual = Number(n) === nivel;
@@ -510,7 +497,7 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
             );
           })}
         </div>
-      </div>
+      </SectionCard>
     </div>
   );
 }

@@ -2,41 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Play, Pause, Square, Timer, ChevronDown, Check, RotateCcw, Zap, Coffee } from "lucide-react";
-import { MATERIAS, ATIVIDADE_CONFIG, type AtividadeTipo, type Grupo } from "@/lib/estudo-data";
+import {
+  MATERIAS, ATIVIDADE_CONFIG, GRUPO_PILL, GRUPO_OUTLINE,
+  type AtividadeTipo, type Grupo, type MateriaConcurso,
+} from "@/lib/estudo-data";
+import { playBell, formatTime, formatCountdown, WORK_SECS, BREAK_SECS, type PomodoroPhase } from "./timer-utils";
 
 const GRUPOS: Grupo[] = ["A", "B", "C", "D"];
-const GRUPO_PILL: Record<Grupo, string> = {
-  A: "bg-primary text-white",
-  B: "bg-emerald-500 text-white",
-  C: "bg-violet-500 text-white",
-  D: "bg-amber-500 text-white",
-};
-const GRUPO_OUTLINE: Record<Grupo, string> = {
-  A: "border-primary text-primary dark:text-primary",
-  B: "border-emerald-400 text-emerald-600 dark:text-emerald-400",
-  C: "border-violet-400 text-violet-600 dark:text-violet-400",
-  D: "border-amber-400 text-amber-600 dark:text-amber-400",
-};
-
-const WORK_SECS = 25 * 60;
-const BREAK_SECS = 5 * 60;
-
-function playBell() {
-  try {
-    const AudioCtx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 830;
-    gain.gain.setValueAtTime(0.25, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 1.2);
-  } catch { /* ignore */ }
-}
 
 interface Props {
   onSalvar: (
@@ -48,10 +20,10 @@ interface Props {
     topico?: string,
     paginas?: number
   ) => void;
+  materiasConcurso?: MateriaConcurso[];
 }
 
 type Status = "idle" | "running" | "paused";
-type PomodoroPhase = "work" | "break";
 
 interface TimerSnapshot {
   status: Status;
@@ -69,24 +41,9 @@ interface TimerSnapshot {
 
 const TIMER_KEY = "taxhub_timer_v1";
 
-function formatTime(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = secs % 60;
-  if (h > 0)
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
+export default function TimerEstudo({ onSalvar, materiasConcurso }: Props) {
+  const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
 
-function formatCountdown(elapsed: number, phase: PomodoroPhase): string {
-  const target = phase === "work" ? WORK_SECS : BREAK_SECS;
-  const remaining = Math.max(0, target - elapsed);
-  const m = Math.floor(remaining / 60);
-  const s = remaining % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-export default function TimerEstudo({ onSalvar }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [elapsed, setElapsed] = useState(0);
@@ -369,7 +326,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
   }, [status, elapsed, pomodoroMode, pomodoroPhase]);
 
   const topicoOptions = materia
-    ? MATERIAS.find((m) => m.nome === materia)?.topicos ?? []
+    ? materiasAtivas.find((m) => m.nome === materia)?.topicos ?? []
     : [];
 
   const isRunning = status === "running";
@@ -506,7 +463,7 @@ export default function TimerEstudo({ onSalvar }: Props) {
                   className="w-full text-xs border border-border dark:border-border rounded-lg px-2.5 py-1.5 bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">— Só marcar o tempo —</option>
-                  {MATERIAS.map((m) => (
+                  {materiasAtivas.map((m) => (
                     <option key={m.nome} value={m.nome}>{m.nome}</option>
                   ))}
                 </select>

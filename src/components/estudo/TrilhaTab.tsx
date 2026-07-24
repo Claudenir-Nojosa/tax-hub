@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  MATERIAS, dateKeyLocal, topicoKey,
+  MATERIAS, dateKeyLocal, topicoKey, GRUPO_LABEL, GRUPO_BADGE,
   type AtividadeCalendario, type EstudoConfigCiclo, type Grupo, type MateriaConcurso,
   type MateriaDef, type TopicoState, type TrilhaDinamicaState,
 } from "@/lib/estudo-data";
@@ -17,6 +17,8 @@ import {
   type ReforcoGrupo, type Revisao30,
 } from "@/lib/trilha-dinamica";
 import { fmtHoras, resolverCorMateria } from "./trilha/trilha-ui";
+import ProgressRing from "./ui/ProgressRing";
+import EstudoHero from "./ui/EstudoHero";
 
 // Trilha DINÂMICA — nada de plano pré-gerado: a meta de HOJE é derivada na hora do estado real
 // (tópicos estudados, cadernos A-D, sessões do calendário) pelas regras do método do usuário
@@ -42,14 +44,6 @@ interface Props {
   onIrParaCartas?: () => void;
 }
 
-const GRUPO_LABEL: Record<Grupo, string> = { A: "Grupo A", B: "Grupo B", C: "Grupo C", D: "Grupo D" };
-const GRUPO_COR: Record<Grupo, string> = {
-  A: "bg-primary/10 text-primary dark:bg-primary/60 dark:text-primary",
-  B: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300",
-  C: "bg-violet-100 text-violet-700 dark:bg-violet-900/60 dark:text-violet-300",
-  D: "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300",
-};
-
 type TipoPasso = "estudo" | "reforco" | "questoes" | "revisao" | "cartas";
 const TIPO_ITEM: Record<TipoPasso, string> = {
   estudo: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary",
@@ -68,37 +62,6 @@ function fmtDataLonga(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   const s = new Date(y, m - 1, d).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
   return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-// ─── Anel de progresso (SVG puro, sem libs) ────────────────────────────────────
-
-function AnelProgresso({
-  perc, size = 84, espessura = 8, corStroke = "stroke-white", corTrilho = "stroke-white/25", children,
-}: {
-  perc: number;
-  size?: number;
-  espessura?: number;
-  corStroke?: string;
-  corTrilho?: string;
-  children?: React.ReactNode;
-}) {
-  const raio = (size - espessura) / 2;
-  const circ = 2 * Math.PI * raio;
-  const clamped = Math.min(100, Math.max(0, perc));
-  const offset = circ * (1 - clamped / 100);
-  return (
-    <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={raio} strokeWidth={espessura} fill="none" className={corTrilho} />
-        <circle
-          cx={size / 2} cy={size / 2} r={raio} strokeWidth={espessura} fill="none"
-          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-          className={`${corStroke} transition-all duration-700 ease-out`}
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">{children}</div>
-    </div>
-  );
 }
 
 export default function TrilhaTab({
@@ -260,22 +223,25 @@ export default function TrilhaTab({
   return (
     <div className="space-y-4">
       {/* hero do dia */}
-      <div className="relative bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-600 rounded-2xl p-5 sm:p-6 text-white shadow-lg">
-        <button
-          type="button"
-          onClick={desativar}
-          title="Desativar trilha"
-          className="absolute top-3 right-3 p-1.5 rounded-lg text-emerald-100 hover:text-white hover:bg-white/15 transition-colors"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+      <EstudoHero
+        acaoCanto={
+          <button
+            type="button"
+            onClick={desativar}
+            title="Desativar trilha"
+            className="p-1.5 rounded-lg text-emerald-100 hover:text-white hover:bg-white/15 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        }
+      >
         <div className="flex items-center gap-4 sm:gap-5">
-          <AnelProgresso perc={meta.blocos.length > 0 ? percBlocos : 0} size={80} espessura={7}>
+          <ProgressRing perc={meta.blocos.length > 0 ? percBlocos : 0} size={80} espessura={7}>
             <div className="text-center leading-none">
               <div className="text-lg font-bold">{meta.blocos.length > 0 ? `${percBlocos}%` : "—"}</div>
               <div className="text-[9px] text-emerald-100 uppercase tracking-wide mt-0.5">hoje</div>
             </div>
-          </AnelProgresso>
+          </ProgressRing>
           <div className="flex-1 min-w-0">
             <div className="text-[11px] uppercase tracking-wider text-emerald-100 font-semibold mb-0.5">
               {fmtDataLonga(meta.data)}
@@ -308,7 +274,7 @@ export default function TrilhaTab({
             Próxima revisão das cartas: domingo {fmtDataCurta(meta.proximoDomingoCartas)}
           </div>
         )}
-      </div>
+      </EstudoHero>
 
       {/* checklist único do dia */}
       <div className="bg-card rounded-2xl border border-border p-4 sm:p-5">
@@ -507,7 +473,7 @@ function CardMateria({
   const perc = totalUnidades > 0 ? Math.round((feitas / totalUnidades) * 100) : 0;
   return (
     <div className="rounded-xl border border-border dark:border-border p-3 flex flex-col items-center text-center gap-1.5">
-      <AnelProgresso
+      <ProgressRing
         perc={perc}
         size={56}
         espessura={5}
@@ -515,7 +481,7 @@ function CardMateria({
         corTrilho="stroke-border"
       >
         {a.materiaConcluida ? <Trophy className="h-4 w-4 text-amber-500" /> : <span className="text-xs font-bold text-foreground dark:text-foreground">{perc}%</span>}
-      </AnelProgresso>
+      </ProgressRing>
       <span className="w-full flex items-center justify-center gap-1">
         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
         <span className="text-[11px] font-medium text-foreground truncate" title={a.materia}>{a.materia}</span>
@@ -545,7 +511,7 @@ function LinhaQuestao({
   return (
     <div className="rounded-lg hover:bg-accent dark:hover:bg-muted/40 px-2 py-1.5 -mx-2 transition-colors">
       <button type="button" onClick={() => setAberto((v) => !v)} className="w-full flex items-center gap-2.5 text-left">
-        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${GRUPO_COR[q.grupo]}`}>{GRUPO_LABEL[q.grupo]}</span>
+        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${GRUPO_BADGE[q.grupo]}`}>{GRUPO_LABEL[q.grupo]}</span>
         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
         <div className="flex-1 min-w-0">
           <span className="text-sm text-foreground">{q.materia}</span>
@@ -594,7 +560,7 @@ function LinhaReforco({
   return (
     <div className="rounded-lg hover:bg-accent dark:hover:bg-muted/40 px-2 py-1.5 -mx-2 transition-colors">
       <button type="button" onClick={() => setAberto((v) => !v)} className="w-full flex items-center gap-2.5 text-left">
-        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${GRUPO_COR[r.grupo]}`}>{GRUPO_LABEL[r.grupo]}</span>
+        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${GRUPO_BADGE[r.grupo]}`}>{GRUPO_LABEL[r.grupo]}</span>
         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
         <div className="flex-1 min-w-0">
           <span className="text-sm text-foreground">{r.materia}</span>
@@ -643,7 +609,7 @@ function Intro({
   ];
   return (
     <div className="max-w-2xl mx-auto space-y-4">
-      <div className="bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-600 rounded-2xl p-6 sm:p-7 text-white shadow-lg">
+      <EstudoHero className="p-6 sm:p-7">
         <div className="h-12 w-12 rounded-2xl bg-white/15 flex items-center justify-center mb-3">
           <Route className="h-6 w-6" />
         </div>
@@ -651,7 +617,7 @@ function Intro({
         <p className="text-sm text-emerald-100">
           Sua meta diária calculada automaticamente do seu progresso real — sem plano fixo, ela se adapta ao que você entrega.
         </p>
-      </div>
+      </EstudoHero>
       <div className="bg-card rounded-2xl border border-border divide-y divide-border dark:divide-border">
         {regras.map((r, i) => (
           <div key={i} className="px-4 py-3.5 flex gap-3 items-start">

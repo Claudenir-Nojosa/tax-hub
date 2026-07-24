@@ -1,0 +1,303 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { BookOpen, Library, Plus, X } from "lucide-react";
+import {
+  MATERIAS, calcularPagPorHora,
+  type AtividadeCalendario, type Carta, type MateriaConcurso, type MateriaDef, type PdfEstudo,
+} from "@/lib/estudo-data";
+import {
+  salvarArquivoPdf, obterArquivoPdf, excluirArquivoPdf, contarPaginasPdf,
+} from "@/lib/pdf-storage";
+import { resolverCorMateria } from "../trilha/trilha-ui";
+import EstudoHero from "../ui/EstudoHero";
+import { fmtEta } from "./biblioteca-utils";
+import FormPdf from "./FormPdf";
+import PdfRow from "./PdfRow";
+import LeitorPdf from "./LeitorPdf";
+
+// Biblioteca de PDFs (ex.: aulas do Estratégia): anexe o ARQUIVO e leia dentro do próprio site
+// num leitor FULLSCREEN limpo (só o PDF + barra fina com "parei na pág." e cronômetro), com
+// progresso "parei na pág. X", % lido e ETA calculada com o páginas/hora histórico do Timer
+// (calcularPagPorHora). O cronômetro do leitor conta sozinho e, ao fechar (sessão ≥1 min), salva
+// uma atividade de Estudo no calendário da matéria/tópico do PDF via onRegistrarSessao.
+// O arquivo fica no SUPABASE STORAGE (privado — pdf-storage.ts), não mais no navegador: uma vez
+// enviado, `PdfEstudo.arquivoEnviado` sincroniza junto com o resto do EstudoState e o PDF abre em
+// qualquer dispositivo que o usuário logar, sem precisar reanexar.
+
+interface Props {
+  pdfs: PdfEstudo[];
+  calendario: Record<string, AtividadeCalendario[]>;
+  onChange: (pdfs: PdfEstudo[]) => void;
+  materiasConcurso?: MateriaConcurso[];
+  onRegistrarSessao?: (minutos: number, materia: string, topico: string | undefined, paginas: number | undefined, descricao: string) => void;
+  // criar cartão: botões na barra do leitor (ao lado de "Parei aqui") abrem o formulário do tipo
+  // escolhido; o usuário preenche manualmente (sem IA), já travado na matéria/tópico do PDF
+  onAdicionarCartas?: (cartas: Carta[]) => void;
+  // trilha dinâmica: minutos que faltam HOJE pra fechar o bloco de estudo de cada matéria — o
+  // leitor avisa em tempo real quando a sessão atual cruza esse restante ("meta do dia feita!")
+  metaMinutosRestantes?: Record<string, number>;
+}
+
+export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConcurso, onRegistrarSessao, onAdicionarCartas, metaMinutosRestantes }: Props) {
+  const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
+    materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
+
+  const [formAberto, setFormAberto] = useState(false);
+  const [editando, setEditando] = useState<PdfEstudo | null>(null);
+  const [lendo, setLendo] = useState<PdfEstudo | null>(null);
+  const [blobLeitura, setBlobLeitura] = useState<Blob | null>(null);
+  // upload em andamento (linha mostra spinner) e leitor abrindo (baixando o PDF do Storage)
+  const [enviandoIds, setEnviandoIds] = useState<Set<string>>(new Set());
+  const [carregandoLeitor, setCarregandoLeitor] = useState<string | null>(null);
+
+  const pagPorHora = useMemo(() => calcularPagPorHora(calendario), [calendario]);
+
+  const totalPaginas = pdfs.reduce((s, p) => s + p.totalPaginas, 0);
+  const paginasLidas = pdfs.reduce((s, p) => s + Math.min(p.paginaAtual, p.totalPaginas), 0);
+  const percGeral = totalPaginas > 0 ? Math.round((paginasLidas / totalPaginas) * 100) : 0;
+  const etaTotal = fmtEta(totalPaginas - paginasLidas, pagPorHora);
+
+  // grupos por matéria, na ordem do edital (matérias fora da lista ativa vão pro fim)
+  const grupos = useMemo(() => {
+    const porMateria = new Map<string, PdfEstudo[]>();
+    for (const p of pdfs) {
+      const lista = porMateria.get(p.materia) ?? [];
+      lista.push(p);
+      porMateria.set(p.materia, lista);
+    }
+    const ordem = materiasAtivas.map((m) => m.nome);
+    return [...porMateria.entries()]
+      .sort((a, b) => {
+        const ia = ordem.indexOf(a[0]);
+        const ib = ordem.indexOf(b[0]);
+        return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib) || a[0].localeCompare(b[0]);
+      })
+      .map(([materia, lista]) => ({
+        materia,
+        // não concluídos primeiro; dentro de cada bloco, mexidos mais recentemente primeiro
+        lista: [...lista].sort((a, b) => {
+          const ca = a.paginaAtual >= a.totalPaginas ? 1 : 0;
+          const cb = b.paginaAtual >= b.totalPaginas ? 1 : 0;
+          if (ca !== cb) return ca - cb;
+          return (b.atualizadoEm ?? b.criadoEm).localeCompare(a.atualizadoEm ?? a.criadoEm);
+        }),
+      }));
+  }, [pdfs, materiasAtivas]);
+
+  const salvarPdf = async (pdf: PdfEstudo, arquivo?: File) => {
+    let registro = pdf;
+    if (arquivo) {
+      try {
+        await salvarArquivoPdf(pdf.id, arquivo);
+        registro = { ...pdf, arquivoEnviado: true };
+      } catch (e) {
+        alert(`Não consegui enviar o arquivo pro Storage — o PDF foi cadastrado só com os dados. ${e instanceof Error ? e.message : ""}`.trim());
+      }
+    }
+    if (editando) {
+      onChange(pdfs.map((p) => (p.id === registro.id ? registro : p)));
+      setEditando(null);
+      setFormAberto(false);
+    } else {
+      onChange([registro, ...pdfs]);
+      // form fica aberto com a matéria mantida (mesma lição das Cartas) — só fecha no X
+    }
+  };
+
+  // anexar/reanexar arquivo numa entrada já existente (ex.: cadastrada de outro dispositivo, sem
+  // o arquivo ainda enviado)
+  const anexarEm = async (pdf: PdfEstudo, arquivo: File) => {
+    setEnviandoIds((prev) => new Set(prev).add(pdf.id));
+    try {
+      await salvarArquivoPdf(pdf.id, arquivo);
+      // se o total de páginas detectado divergir do cadastrado, corrige pelo arquivo real
+      const paginas = await contarPaginasPdf(arquivo);
+      onChange(
+        pdfs.map((p) =>
+          p.id === pdf.id
+            ? {
+                ...p,
+                arquivoEnviado: true,
+                ...(paginas !== null && paginas !== p.totalPaginas
+                  ? { totalPaginas: paginas, paginaAtual: Math.min(p.paginaAtual, paginas) }
+                  : {}),
+                atualizadoEm: new Date().toISOString(),
+              }
+            : p
+        )
+      );
+    } catch (e) {
+      alert(`Não consegui enviar o arquivo pro Storage. ${e instanceof Error ? e.message : ""}`.trim());
+    } finally {
+      setEnviandoIds((prev) => {
+        const nova = new Set(prev);
+        nova.delete(pdf.id);
+        return nova;
+      });
+    }
+  };
+
+  const abrirLeitor = async (pdf: PdfEstudo) => {
+    setCarregandoLeitor(pdf.id);
+    try {
+      const blob = await obterArquivoPdf(pdf.id);
+      if (!blob) {
+        alert('Arquivo não encontrado no Storage — use "Anexar" pra reenviar o PDF.');
+        onChange(pdfs.map((p) => (p.id === pdf.id ? { ...p, arquivoEnviado: false } : p)));
+        return;
+      }
+      setBlobLeitura(blob);
+      setLendo(pdf);
+    } catch (e) {
+      alert(`Não consegui abrir o PDF. ${e instanceof Error ? e.message : "Tente de novo."}`);
+    } finally {
+      setCarregandoLeitor(null);
+    }
+  };
+
+  const fecharLeitor = () => {
+    setBlobLeitura(null);
+    setLendo(null);
+  };
+
+  const atualizarPagina = (id: string, pagina: number) => {
+    onChange(
+      pdfs.map((p) =>
+        p.id === id
+          ? { ...p, paginaAtual: Math.max(0, Math.min(pagina, p.totalPaginas)), atualizadoEm: new Date().toISOString() }
+          : p
+      )
+    );
+  };
+
+  const excluir = (p: PdfEstudo) => {
+    if (!confirm(`Excluir "${p.nome}" da biblioteca? O arquivo no Storage e o progresso de leitura somem.`)) return;
+    onChange(pdfs.filter((x) => x.id !== p.id));
+    if (p.arquivoEnviado) excluirArquivoPdf(p.id).catch(() => { /* best-effort — fica um objeto órfão, inofensivo */ });
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* header com totais + ETA */}
+      <EstudoHero>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <Library className="h-6 w-6" />
+            <div>
+              <div className="text-lg font-bold">Biblioteca de PDFs</div>
+              <div className="text-xs text-emerald-100">
+                {pdfs.length === 0
+                  ? "Anexe seus PDFs (Estratégia etc.), leia aqui dentro em qualquer dispositivo e acompanhe até onde chegou."
+                  : `${pdfs.length} PDF${pdfs.length !== 1 ? "s" : ""} · ${paginasLidas.toLocaleString("pt-BR")}/${totalPaginas.toLocaleString("pt-BR")} páginas lidas` +
+                    (etaTotal
+                      ? ` · faltam ~${etaTotal} de leitura no seu ritmo de ${Math.round(pagPorHora!)} pág/h`
+                      : pagPorHora === null
+                      ? " · registre sessões com páginas no Timer pra estimar o tempo restante"
+                      : "")}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setEditando(null); setFormAberto((v) => !v); }}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors self-start sm:self-auto"
+          >
+            {formAberto && !editando ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+            {formAberto && !editando ? "Fechar" : "Adicionar PDF"}
+          </button>
+        </div>
+        {pdfs.length > 0 && (
+          <div className="mt-3">
+            <div className="bg-white/15 backdrop-blur-sm rounded-full h-2.5">
+              <div className="bg-white rounded-full h-2.5 transition-all duration-500" style={{ width: `${percGeral}%` }} />
+            </div>
+            <div className="flex justify-between mt-1 text-xs text-emerald-100">
+              <span>leitura geral</span>
+              <span>{percGeral}%</span>
+            </div>
+          </div>
+        )}
+      </EstudoHero>
+
+      {(formAberto || editando) && (
+        <FormPdf
+          key={editando?.id ?? "novo"}
+          materiasAtivas={materiasAtivas}
+          pdfParaEditar={editando ?? undefined}
+          onSalvar={salvarPdf}
+          onFechar={() => { setEditando(null); setFormAberto(false); }}
+        />
+      )}
+
+      {pdfs.length === 0 && !formAberto ? (
+        <div className="rounded-2xl border border-dashed border-input p-10 text-center">
+          <BookOpen className="h-8 w-8 mx-auto mb-3 text-primary" />
+          <p className="text-sm text-foreground font-medium mb-1">Nenhum PDF na biblioteca ainda.</p>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto mb-4">
+            Anexe as aulas em PDF que você estuda: elas ficam salvas na sua conta (Supabase
+            Storage privado), você lê aqui dentro do site em qualquer dispositivo e a biblioteca
+            acompanha o % lido e quanto tempo de leitura falta.
+          </p>
+          <button
+            type="button"
+            onClick={() => setFormAberto(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" /> Adicionar primeiro PDF
+          </button>
+        </div>
+      ) : (
+        grupos.map(({ materia, lista }) => {
+          const cor = resolverCorMateria(materia, materiasAtivas);
+          const tot = lista.reduce((s, p) => s + p.totalPaginas, 0);
+          const lidas = lista.reduce((s, p) => s + Math.min(p.paginaAtual, p.totalPaginas), 0);
+          const perc = tot > 0 ? Math.round((lidas / tot) * 100) : 0;
+          return (
+            <div key={materia} className="bg-card rounded-xl border border-border overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border dark:border-border bg-muted/50">
+                <span className={`w-2.5 h-2.5 rounded-full ${cor.dot}`} />
+                <span className="text-sm font-semibold text-foreground dark:text-foreground flex-1">{materia}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {lista.length} PDF{lista.length !== 1 ? "s" : ""} · {perc}% lido
+                </span>
+              </div>
+              <div className="divide-y divide-border dark:divide-border">
+                {lista.map((p) => (
+                  <PdfRow
+                    key={p.id}
+                    pdf={p}
+                    temArquivo={p.arquivoEnviado === true}
+                    enviando={enviandoIds.has(p.id)}
+                    carregando={carregandoLeitor === p.id}
+                    pagPorHora={pagPorHora}
+                    onLer={() => abrirLeitor(p)}
+                    onAnexar={(arq) => anexarEm(p, arq)}
+                    onAtualizarPagina={(pag) => atualizarPagina(p.id, pag)}
+                    onConcluir={() => atualizarPagina(p.id, p.totalPaginas)}
+                    onEditar={() => { setEditando(p); setFormAberto(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onExcluir={() => excluir(p)}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })
+      )}
+
+      {/* leitor FULLSCREEN limpo: só o PDF (pdf.js) + barra fina no topo com "parei na pág.",
+          botões de criar cartão e o cronômetro da sessão */}
+      {lendo && blobLeitura && (
+        <LeitorPdf
+          pdf={pdfs.find((p) => p.id === lendo.id) ?? lendo}
+          blob={blobLeitura}
+          onAtualizarPagina={(pag) => atualizarPagina(lendo.id, pag)}
+          onRegistrarSessao={onRegistrarSessao}
+          onAdicionarCartas={onAdicionarCartas}
+          minutosMetaRestantes={metaMinutosRestantes?.[lendo.materia]}
+          onFechar={fecharLeitor}
+        />
+      )}
+    </div>
+  );
+}

@@ -7,11 +7,14 @@ import {
   calcularMedia,
   topicoKey,
   dateKeyLocal,
+  GRUPO_BADGE,
+  GRUPO_TEXT,
   type TopicoState,
   type Grupo,
   type MateriaConcurso,
   type PdfEstudo,
 } from "@/lib/estudo-data";
+import { resolverCorMateria } from "./trilha/trilha-ui";
 import { ChevronDown, ChevronRight, Search, CheckSquare, Square, BookOpen, EyeOff, RotateCcw, Trash2 } from "lucide-react";
 
 interface Props {
@@ -42,9 +45,11 @@ function percLeituraTopico(pdfs: PdfEstudo[], materia: string, topico: string): 
 function CadernoInput({
   value,
   onChange,
+  compact = false,
 }: {
   value: number;
   onChange: (v: number) => void;
+  compact?: boolean;
 }) {
   return (
     <input
@@ -56,17 +61,14 @@ function CadernoInput({
         const v = parseInt(e.target.value) || 0;
         onChange(Math.max(0, v));
       }}
-      className="w-10 text-center text-xs border border-border rounded bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring py-0.5 px-0.5"
+      className={
+        compact
+          ? "w-10 text-center text-xs border border-border rounded bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring py-0.5 px-0.5"
+          : "h-9 w-9 text-center text-sm border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+      }
     />
   );
 }
-
-const GRUPO_COR: Record<Grupo, { badge: string; label: string }> = {
-  A: { badge: "bg-primary/10 text-primary dark:bg-primary/60 dark:text-primary",   label: "text-primary dark:text-primary font-bold" },
-  B: { badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300", label: "text-emerald-600 dark:text-emerald-400 font-bold" },
-  C: { badge: "bg-violet-100 text-violet-700 dark:bg-violet-900/60 dark:text-violet-300",   label: "text-violet-600 dark:text-violet-400 font-bold" },
-  D: { badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300",   label: "text-amber-600 dark:text-amber-400 font-bold" },
-};
 
 function PercBadge({ perc }: { perc: number }) {
   const cor =
@@ -80,19 +82,8 @@ function PercBadge({ perc }: { perc: number }) {
   return <span className={`text-xs ${cor}`}>{perc === 0 ? "—" : `${perc}%`}</span>;
 }
 
-const COR_BORDER: Record<string, string> = {
-  sky: "border-l-sky-500", blue: "border-l-blue-500", emerald: "border-l-emerald-500",
-  violet: "border-l-violet-500", rose: "border-l-rose-500", amber: "border-l-amber-500",
-  teal: "border-l-teal-500", indigo: "border-l-indigo-500", pink: "border-l-pink-500",
-  cyan: "border-l-cyan-500", lime: "border-l-lime-500", orange: "border-l-orange-500",
-  purple: "border-l-purple-500", red: "border-l-red-500", green: "border-l-green-500",
-  yellow: "border-l-yellow-500",
-};
-
 export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = [], topicosExcluidos = [], onToggleTopicoExcluido, onDeleteTopico }: Props) {
-  const materiasAtivas = materiasConcurso
-    ? materiasConcurso.map(m => ({ ...m, corBorder: COR_BORDER[m.cor] ?? "border-l-border" }))
-    : MATERIAS;
+  const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
   const [busca, setBusca] = useState("");
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
 
@@ -172,7 +163,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
         <div className="w-20 text-center">Estudado</div>
         {(["A", "B", "C", "D"] as Grupo[]).map((g) => (
           <div key={g} className="w-28 text-center flex flex-col items-center gap-0.5">
-            <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${GRUPO_COR[g].badge}`}>
+            <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${GRUPO_BADGE[g]}`}>
               Grupo {g}
             </span>
             <span className="text-muted-foreground text-xs">Acertos / Erros</span>
@@ -192,6 +183,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
           const estudadoCount = topicosAtivos.filter((t) => topicos[topicoKey(m.nome, t)]?.estudado).length;
           const perc = totalTopicos > 0 ? Math.round((estudadoCount / totalTopicos) * 100) : 0;
           const isOpen = expandidos[m.nome] ?? false;
+          const corMateria = resolverCorMateria(m.nome, materiasAtivas);
 
           return (
             <div
@@ -207,7 +199,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpand(m.nome); }
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 border-l-4 ${m.corBorder} hover:bg-accent transition-colors cursor-pointer`}
+                className={`w-full flex items-center gap-3 px-4 py-3.5 border-l-4 ${corMateria.border} hover:bg-accent transition-colors cursor-pointer`}
               >
                 <span className="text-muted-foreground flex-shrink-0">
                   {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -255,127 +247,145 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                     const media = calcularMedia(estado.cadernos);
                     const percPdf = percLeituraTopico(pdfs, m.nome, t);
                     const excluido = topicosExcluidos.includes(key);
-                    return (
-                      <div
-                        key={t}
-                        className={`flex flex-col md:flex-row md:items-center gap-2 md:gap-2 px-4 py-2.5 hover:bg-accent transition-colors ${
-                          excluido ? "opacity-50" : estado.estudado ? "bg-emerald-50/50 dark:bg-emerald-950/10" : ""
-                        }`}
-                      >
-                        {/* Número */}
-                        <span className="hidden md:block text-xs text-muted-foreground w-6 flex-shrink-0 text-right">
-                          {idx + 1}
-                        </span>
+                    const rowBg = excluido ? "opacity-50" : estado.estudado ? "bg-emerald-50/50 dark:bg-emerald-950/10" : "";
 
-                        {/* Nome do tópico (+ % de leitura dos PDFs da Biblioteca que o cobrem) */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-foreground leading-relaxed">
-                            {t}
-                            {excluido && (
-                              <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full align-middle bg-muted text-muted-foreground">
-                                <EyeOff className="h-2.5 w-2.5" /> Oculto
-                              </span>
-                            )}
-                            {percPdf !== null && (
-                              <span
-                                title="Leitura dos PDFs da Biblioteca que cobrem este tópico"
-                                className={`ml-1.5 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full align-middle ${
-                                  percPdf >= 100
-                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
-                                    : "bg-primary/10 text-primary dark:bg-primary/20"
-                                }`}
-                              >
-                                <BookOpen className="h-2.5 w-2.5" /> {percPdf}%
-                              </span>
-                            )}
-                          </p>
-                        </div>
+                    const nomeETopico = (
+                      <p className="text-xs text-foreground leading-relaxed">
+                        {t}
+                        {excluido && (
+                          <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full align-middle bg-muted text-muted-foreground">
+                            <EyeOff className="h-2.5 w-2.5" /> Oculto
+                          </span>
+                        )}
+                        {percPdf !== null && (
+                          <span
+                            title="Leitura dos PDFs da Biblioteca que cobrem este tópico"
+                            className={`ml-1.5 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full align-middle ${
+                              percPdf >= 100
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                                : "bg-primary/10 text-primary dark:bg-primary/20"
+                            }`}
+                          >
+                            <BookOpen className="h-2.5 w-2.5" /> {percPdf}%
+                          </span>
+                        )}
+                      </p>
+                    );
 
-                        {/* Estudado */}
-                        <div className="flex md:w-20 md:justify-center items-center gap-2">
-                          <span className="md:hidden text-xs text-muted-foreground">Estudado:</span>
+                    const acoes = (onToggleTopicoExcluido || onDeleteTopico) && (
+                      <>
+                        {onToggleTopicoExcluido && (
                           <button
                             type="button"
-                            onClick={() => toggleEstudado(m.nome, t)}
-                            className={`flex-shrink-0 transition-colors ${
-                              estado.estudado ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"
+                            onClick={() => onToggleTopicoExcluido(m.nome, t)}
+                            title={excluido ? "Reativar tópico" : "Ocultar tópico (reversível, sem apagar o progresso)"}
+                            className={`flex-shrink-0 p-1 rounded transition-colors ${
+                              excluido
+                                ? "text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                : "text-muted-foreground hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30"
                             }`}
                           >
-                            {estado.estudado ? (
-                              <CheckSquare className="h-4 w-4" />
-                            ) : (
-                              <Square className="h-4 w-4" />
-                            )}
+                            {excluido ? <RotateCcw className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                           </button>
-                        </div>
-
-                        {/* Cadernos A/B/C/D */}
-                        <div className="flex flex-wrap gap-2 md:gap-1">
-                          {(["A", "B", "C", "D"] as Grupo[]).map((g) => {
-                            const cad = estado.cadernos[g];
-                            return (
-                              <div key={g} className="flex items-center gap-1">
-                                <span className={`text-xs ${GRUPO_COR[g].label} w-4 flex-shrink-0 text-center`}>{g}</span>
-                                <CadernoInput
-                                  value={cad.acertos}
-                                  onChange={(v) => updateCaderno(m.nome, t, g, "acertos", v)}
-                                />
-                                <span className="text-muted-foreground text-xs">/</span>
-                                <CadernoInput
-                                  value={cad.erros}
-                                  onChange={(v) => updateCaderno(m.nome, t, g, "erros", v)}
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Média */}
-                        <div className="md:w-12 md:text-center">
-                          <span
-                            className={`text-xs font-semibold ${
-                              media === 0
-                                ? "text-muted-foreground"
-                                : media >= 70
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : media >= 50
-                                ? "text-amber-600 dark:text-amber-400"
-                                : "text-red-600 dark:text-red-400"
-                            }`}
-                          >
-                            {media === 0 ? "—" : `${media}%`}
-                          </span>
-                        </div>
-
-                        {/* Ocultar/reativar (reversível) + excluir de vez (definitivo) */}
-                        {(onToggleTopicoExcluido || onDeleteTopico) && (
-                          <div className="flex md:w-16 items-center gap-1 md:justify-center">
-                            {onToggleTopicoExcluido && (
-                              <button
-                                type="button"
-                                onClick={() => onToggleTopicoExcluido(m.nome, t)}
-                                title={excluido ? "Reativar tópico" : "Ocultar tópico (reversível, sem apagar o progresso)"}
-                                className={`flex-shrink-0 p-1 rounded transition-colors ${
-                                  excluido
-                                    ? "text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                                    : "text-muted-foreground hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                                }`}
-                              >
-                                {excluido ? <RotateCcw className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                              </button>
-                            )}
-                            {onDeleteTopico && (
-                              <button
-                                type="button"
-                                onClick={() => excluirTopico(m.nome, t)}
-                                title="Excluir tópico definitivamente (apaga o progresso, não dá pra desfazer)"
-                                className="flex-shrink-0 p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
                         )}
+                        {onDeleteTopico && (
+                          <button
+                            type="button"
+                            onClick={() => excluirTopico(m.nome, t)}
+                            title="Excluir tópico definitivamente (apaga o progresso, não dá pra desfazer)"
+                            className="flex-shrink-0 p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </>
+                    );
+
+                    const mediaBadge = (
+                      <span
+                        className={`text-xs font-semibold ${
+                          media === 0
+                            ? "text-muted-foreground"
+                            : media >= 70
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : media >= 50
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-red-600 dark:text-red-400"
+                        }`}
+                      >
+                        {media === 0 ? "—" : `${media}%`}
+                      </span>
+                    );
+
+                    return (
+                      <div key={t} className={`transition-colors ${rowBg}`}>
+                        {/* ── Linha única (≥sm): igual à densidade original, só reskinada ── */}
+                        <div className="hidden sm:flex sm:items-center gap-2 px-4 py-2.5 hover:bg-accent">
+                          <span className="text-xs text-muted-foreground w-6 flex-shrink-0 text-right">{idx + 1}</span>
+                          <div className="flex-1 min-w-0">{nomeETopico}</div>
+                          <div className="flex w-20 justify-center items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleEstudado(m.nome, t)}
+                              className={`flex-shrink-0 transition-colors ${
+                                estado.estudado ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"
+                              }`}
+                            >
+                              {estado.estudado ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {(["A", "B", "C", "D"] as Grupo[]).map((g) => {
+                              const cad = estado.cadernos[g];
+                              return (
+                                <div key={g} className="flex items-center gap-1">
+                                  <span className={`text-xs ${GRUPO_TEXT[g]} w-4 flex-shrink-0 text-center`}>{g}</span>
+                                  <CadernoInput compact value={cad.acertos} onChange={(v) => updateCaderno(m.nome, t, g, "acertos", v)} />
+                                  <span className="text-muted-foreground text-xs">/</span>
+                                  <CadernoInput compact value={cad.erros} onChange={(v) => updateCaderno(m.nome, t, g, "erros", v)} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="w-12 text-center">{mediaBadge}</div>
+                          {acoes && <div className="flex w-16 items-center gap-1 justify-center">{acoes}</div>}
+                        </div>
+
+                        {/* ── Cartão em duas camadas (<sm) — toques maiores, sem cramming ── */}
+                        <div className="sm:hidden px-4 py-3 space-y-2.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">{nomeETopico}</div>
+                            {acoes && <div className="flex items-center gap-0.5 flex-shrink-0">{acoes}</div>}
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleEstudado(m.nome, t)}
+                              className={`min-h-9 flex items-center gap-1.5 px-3 rounded-lg border text-xs font-medium transition-colors flex-shrink-0 ${
+                                estado.estudado
+                                  ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300"
+                                  : "border-border text-muted-foreground"
+                              }`}
+                            >
+                              {estado.estudado ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                              Estudado
+                            </button>
+                            <span className="text-xs text-muted-foreground">Média {mediaBadge}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                            {(["A", "B", "C", "D"] as Grupo[]).map((g) => {
+                              const cad = estado.cadernos[g];
+                              return (
+                                <div key={g} className="flex items-center gap-1.5">
+                                  <span className={`text-xs ${GRUPO_TEXT[g]} w-3.5 flex-shrink-0 text-center`}>{g}</span>
+                                  <CadernoInput value={cad.acertos} onChange={(v) => updateCaderno(m.nome, t, g, "acertos", v)} />
+                                  <span className="text-muted-foreground text-xs">/</span>
+                                  <CadernoInput value={cad.erros} onChange={(v) => updateCaderno(m.nome, t, g, "erros", v)} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     );
                   })}

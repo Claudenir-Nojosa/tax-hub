@@ -2,6 +2,9 @@
 
 import { Settings2, Clock, RotateCcw } from "lucide-react";
 import { MATERIAS, type EstudoConfigCiclo, type ConfigMateria, type MateriaBase } from "@/lib/estudo-data";
+import SectionCard from "./ui/SectionCard";
+import { Switch } from "@/components/ui/switch";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 interface Props {
   config: EstudoConfigCiclo;
@@ -56,101 +59,85 @@ export default function CicloTab({ config, onChange, materiasConcurso }: Props) 
   return (
     <div className="space-y-6">
       {/* Configuração de matérias */}
-      <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-border">
-          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Settings2 className="h-4 w-4 text-primary" />
-            Configuração das Matérias
-          </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Defina quais matérias incluir no ciclo de estudos</p>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted">
-              <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Matéria</th>
-                <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">Incluir</th>
-                <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">Peso</th>
-                <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">Prioridade</th>
-                <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">Divisão</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {MATERIAS_ATIVAS.map((m) => {
-                const cfg = config.materias[m.nome];
-                return (
-                  <tr key={m.nome} className={`hover:bg-accent transition-colors ${cfg?.incluir ? "" : "opacity-60"}`}>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${"corDot" in m ? (m as {corDot:string}).corDot : "bg-primary"}`} />
-                        <span className="text-xs text-foreground">{m.nome}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      <button
-                        type="button"
-                        onClick={() => updateMateria(m.nome, "incluir", !cfg?.incluir)}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                          cfg?.incluir ? "bg-primary" : "bg-muted"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                            cfg?.incluir ? "translate-x-4" : "translate-x-1"
-                          }`}
-                        />
-                      </button>
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      <select
-                        value={cfg?.peso ?? 1}
-                        onChange={(e) => updateMateria(m.nome, "peso", Number(e.target.value) as 1 | 2)}
-                        className="text-xs border border-border rounded bg-card text-foreground px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-ring"
-                      >
-                        <option value={1}>1 — Baixo</option>
-                        <option value={2}>2 — Alto</option>
-                      </select>
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      <select
-                        value={cfg?.prioridade ?? "Baixa"}
-                        onChange={(e) => updateMateria(m.nome, "prioridade", e.target.value)}
-                        className="text-xs border border-border rounded bg-card text-foreground px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-ring"
-                      >
-                        <option value="Alta">Alta</option>
-                        <option value="Baixa">Baixa</option>
-                      </select>
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      <select
-                        value={cfg?.divisao ?? "A"}
-                        onChange={(e) => updateMateria(m.nome, "divisao", e.target.value as "A" | "B" | "C")}
-                        disabled={!cfg?.incluir}
-                        className="text-xs border border-border rounded bg-card text-foreground px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
-                      >
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="C">C</option>
-                      </select>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <SectionCard
+        titulo="Configuração das Matérias"
+        icone={Settings2}
+        contentClassName="-mx-5 sm:-mx-6 -mb-5 sm:-mb-6"
+      >
+        <p className="text-xs text-muted-foreground px-5 sm:px-6 pb-3 -mt-2">Defina quais matérias incluir no ciclo de estudos</p>
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="pl-5 sm:pl-6">Matéria</TableHead>
+              <TableHead className="text-center">Incluir</TableHead>
+              <TableHead className="text-center">Peso</TableHead>
+              <TableHead className="text-center">Prioridade</TableHead>
+              <TableHead className="text-center pr-5 sm:pr-6">Divisão</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {MATERIAS_ATIVAS.map((m) => {
+              const cfg = config.materias[m.nome];
+              return (
+                <TableRow key={m.nome} className={cfg?.incluir ? "" : "opacity-60"}>
+                  <TableCell className="pl-5 sm:pl-6">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${"corDot" in m ? (m as {corDot:string}).corDot : "bg-primary"}`} />
+                      <span className="text-xs text-foreground">{m.nome}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Switch
+                      checked={!!cfg?.incluir}
+                      onCheckedChange={(v) => updateMateria(m.nome, "incluir", v)}
+                      className="mx-auto"
+                    />
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <select
+                      value={cfg?.peso ?? 1}
+                      onChange={(e) => updateMateria(m.nome, "peso", Number(e.target.value) as 1 | 2)}
+                      className="text-xs border border-border rounded bg-card text-foreground px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-ring"
+                    >
+                      <option value={1}>1 — Baixo</option>
+                      <option value={2}>2 — Alto</option>
+                    </select>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <select
+                      value={cfg?.prioridade ?? "Baixa"}
+                      onChange={(e) => updateMateria(m.nome, "prioridade", e.target.value)}
+                      className="text-xs border border-border rounded bg-card text-foreground px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="Alta">Alta</option>
+                      <option value="Baixa">Baixa</option>
+                    </select>
+                  </TableCell>
+                  <TableCell className="text-center pr-5 sm:pr-6">
+                    <select
+                      value={cfg?.divisao ?? "A"}
+                      onChange={(e) => updateMateria(m.nome, "divisao", e.target.value as "A" | "B" | "C")}
+                      disabled={!cfg?.incluir}
+                      className="text-xs border border-border rounded bg-card text-foreground px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
+                    >
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="C">C</option>
+                    </select>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </SectionCard>
 
       {/* Horas por dia */}
-      <div className="bg-card rounded-xl border border-border shadow-sm p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Clock className="h-4 w-4 text-primary" />
-            Horas de Estudo por Dia
-          </h3>
-          <span className="text-xs text-muted-foreground">Total semanal: {minutosParaHoras(totalMin)}</span>
-        </div>
+      <SectionCard
+        titulo="Horas de Estudo por Dia"
+        icone={Clock}
+        acao={<span className="text-xs text-muted-foreground">Total semanal: {minutosParaHoras(totalMin)}</span>}
+      >
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
           {DIAS.map(({ key, label }) => {
             const horas = Math.round(config.horasPorDia[key] / 60);
@@ -170,15 +157,11 @@ export default function CicloTab({ config, onChange, materiasConcurso }: Props) 
             );
           })}
         </div>
-      </div>
+      </SectionCard>
 
       {/* Ciclo ativo */}
       {materiasAtivas.length > 0 && (
-        <div className="bg-card rounded-xl border border-border shadow-sm p-4">
-          <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-            <RotateCcw className="h-4 w-4 text-primary" />
-            Ciclo Ativo — Divisão das Matérias
-          </h3>
+        <SectionCard titulo="Ciclo Ativo — Divisão das Matérias" icone={RotateCcw}>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {(["A", "B", "C"] as const).map((div) => (
               <div key={div} className="rounded-lg border border-border p-3">
@@ -200,7 +183,7 @@ export default function CicloTab({ config, onChange, materiasConcurso }: Props) 
               </div>
             ))}
           </div>
-        </div>
+        </SectionCard>
       )}
     </div>
   );

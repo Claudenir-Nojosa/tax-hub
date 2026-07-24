@@ -21,10 +21,12 @@ export function fmtHoras(min: number): string {
 export function resolverCorMateria(
   nome: string,
   materiasAtivas: (MateriaDef | MateriaConcurso | MateriaBase)[]
-): { dot: string; badge: string } {
+): { dot: string; badge: string; border: string } {
   const m = materiasAtivas.find((x) => x.nome === nome);
   if (!m) return COR_MATERIA_PADRAO;
-  if ("corBadge" in m && "corDot" in m) return { dot: m.corDot, badge: m.corBadge };
+  if ("corBadge" in m && "corDot" in m && "corBorder" in m) {
+    return { dot: m.corDot, badge: m.corBadge, border: m.corBorder };
+  }
   if ("cor" in m) return CORES_MATERIA[m.cor] ?? COR_MATERIA_PADRAO;
   return COR_MATERIA_PADRAO;
 }

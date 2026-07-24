@@ -14,10 +14,13 @@ import {
   MATERIAS, topicoKey, dateKeyLocal,
   type EstudoState, type TopicoState, type AtividadeTipo, type AtividadeCalendario, type MateriaBase,
 } from "@/lib/estudo-data";
+import StatTile from "./ui/StatTile";
+import SectionCard from "./ui/SectionCard";
 
 // ─── Configuração do concurso ─────────────────────────────────────────────────
-// 1ª fase: 01/08/2026 · 2ª fase: 02/08/2026
-const DATA_CONCURSO = new Date("2026-08-01T12:00:00");
+// Fallback só usado quando o concurso ativo não tem dataProva cadastrada (ConcursoModal) — a
+// data real do concurso ativo é lida via prop, não fixa no código.
+const DATA_CONCURSO_FALLBACK = new Date("2026-08-01T12:00:00");
 
 // ─── Paleta de cores ──────────────────────────────────────────────────────────
 const MATERIA_COLORS = [
@@ -365,8 +368,11 @@ function SectionTitle({ children, icon: Icon, color }: { children: React.ReactNo
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function RelatoriosTab({ state, materiasConcurso }: { state: EstudoState; materiasConcurso?: MateriaBase[] }) {
+export default function RelatoriosTab({
+  state, materiasConcurso, dataProva,
+}: { state: EstudoState; materiasConcurso?: MateriaBase[]; dataProva?: string }) {
   const MATERIAS_ATIVAS: MateriaBase[] = materiasConcurso ?? MATERIAS;
+  const dataConcurso = dataProva ? new Date(`${dataProva}T12:00:00`) : DATA_CONCURSO_FALLBACK;
   // ── Dados existentes
   const diasData  = horasPorDiaSemana(state.calendario);
   const tiposData = distribuicaoPorTipo(state.calendario);
@@ -399,7 +405,7 @@ export default function RelatoriosTab({ state, materiasConcurso }: { state: Estu
     ? Math.round((totalAcertos / (totalAcertos + totalErros)) * 100) : null;
 
   // ── Alta prioridade: burn-down, XP e pontos fracos
-  const burndown     = calcBurndown(state.topicos, state.calendario, totTops, DATA_CONCURSO);
+  const burndown     = calcBurndown(state.topicos, state.calendario, totTops, dataConcurso);
   const xpEvo        = calcXPEvolution(state.calendario);
   const pontosFracos = calcPontosFracos(state.topicos);
 
@@ -452,21 +458,10 @@ export default function RelatoriosTab({ state, materiasConcurso }: { state: Estu
       <div>
         <SectionTitle icon={BarChart3} color="bg-primary">Visão Geral</SectionTitle>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-          {[
-            { label: "Total de Horas",   value: `${totalHoras}h`, sub: `${diasC} dia${diasC !== 1 ? "s" : ""} c/ estudo`, Icon: Clock,      color: "text-primary dark:text-primary",    bg: "bg-primary/10 dark:bg-primary/30" },
-            { label: "Média Diária",     value: `${mediaH}h`,     sub: "nos dias estudados",                                 Icon: TrendingUp, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/30" },
-            { label: "Cobertura Edital", value: `${percEd}%`,     sub: `${estudados}/${totTops} tópicos`,                    Icon: BookOpen,   color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
-            { label: "Taxa de Acertos",  value: taxaAc !== null ? `${taxaAc}%` : "—", sub: `${totalAcertos} ✓  ${totalErros} ✗`, Icon: Target, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/30" },
-          ].map((k) => (
-            <div key={k.label} className="bg-card rounded-xl border border-border p-4 shadow-sm text-center">
-              <div className={`flex items-center justify-center w-9 h-9 rounded-lg mx-auto mb-2 ${k.bg}`}>
-                <k.Icon className={`h-5 w-5 ${k.color}`} />
-              </div>
-              <div className={`text-2xl font-bold ${k.color}`}>{k.value}</div>
-              <div className="text-xs font-medium text-foreground mt-0.5">{k.label}</div>
-              <div className="text-xs text-muted-foreground">{k.sub}</div>
-            </div>
-          ))}
+          <StatTile icone={Clock} tone="primary" valor={`${totalHoras}h`} label="Total de Horas" sublabel={`${diasC} dia${diasC !== 1 ? "s" : ""} c/ estudo`} />
+          <StatTile icone={TrendingUp} tone="purple" valor={`${mediaH}h`} label="Média Diária" sublabel="nos dias estudados" />
+          <StatTile icone={BookOpen} tone="success" valor={`${percEd}%`} label="Cobertura Edital" sublabel={`${estudados}/${totTops} tópicos`} />
+          <StatTile icone={Target} tone="warning" valor={taxaAc !== null ? `${taxaAc}%` : "—"} label="Taxa de Acertos" sublabel={`${totalAcertos} ✓  ${totalErros} ✗`} />
         </div>
       </div>
 
@@ -476,7 +471,7 @@ export default function RelatoriosTab({ state, materiasConcurso }: { state: Estu
       <div>
         <SectionTitle icon={Rocket} color="bg-purple-500">Plano de Estudo</SectionTitle>
         <p className="text-xs text-muted-foreground mb-3 ml-7">
-          Data do concurso estimada: {DATA_CONCURSO.toLocaleDateString("pt-BR")} · histórico estimado com base no ritmo médio
+          Data do concurso{dataProva ? "" : " estimada"}: {dataConcurso.toLocaleDateString("pt-BR")} · histórico estimado com base no ritmo médio
         </p>
 
         {/* Mini-KPIs */}

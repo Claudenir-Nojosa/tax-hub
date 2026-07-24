@@ -1,14 +1,18 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, Flame, CalendarDays, Pencil } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, Flame, CalendarDays, Pencil } from "lucide-react";
 import {
   ATIVIDADE_CONFIG,
   MATERIAS,
+  GRUPO_PILL,
+  GRUPO_OUTLINE,
   type AtividadeCalendario,
   type AtividadeTipo,
   type Grupo,
+  type MateriaConcurso,
 } from "@/lib/estudo-data";
+import BottomSheetModal from "./ui/BottomSheetModal";
 
 // Cores para células e modal
 const CAL_COR: Record<AtividadeTipo, string> = {
@@ -21,26 +25,13 @@ const CAL_COR: Record<AtividadeTipo, string> = {
   materia_concluida: "bg-teal-100   text-teal-800   dark:bg-teal-400/20   dark:text-teal-200",
 };
 
-// Cores dos grupos A/B/C/D
-const GRUPO_PILL: Record<Grupo, string> = {
-  A: "bg-primary text-white",
-  B: "bg-emerald-500 text-white",
-  C: "bg-violet-500 text-white",
-  D: "bg-amber-500 text-white",
-};
-const GRUPO_OUTLINE: Record<Grupo, string> = {
-  A: "border-primary text-primary dark:text-primary",
-  B: "border-emerald-400 text-emerald-600 dark:text-emerald-400",
-  C: "border-violet-400 text-violet-600 dark:text-violet-400",
-  D: "border-amber-400 text-amber-600 dark:text-amber-400",
-};
-
 interface Props {
   calendario: Record<string, AtividadeCalendario[]>;
   onUpdate: (calendario: Record<string, AtividadeCalendario[]>) => void;
   onSemanasOKChange: (delta: number) => void;
   streak: number;
   semanasOK: number;
+  materiasConcurso?: MateriaConcurso[];
 }
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -68,7 +59,8 @@ function buildAutoDesc(tipo: AtividadeTipo, grupo: Grupo | null, materia: string
   return ATIVIDADE_CONFIG[tipo].label;
 }
 
-export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange, streak, semanasOK }: Props) {
+export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange, streak, semanasOK, materiasConcurso }: Props) {
+  const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
   const today = new Date();
   const [viewDate, setViewDate] = useState({ year: today.getFullYear(), month: today.getMonth() });
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -185,7 +177,7 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
   const showGrupo = formTipo === "questoes" || formTipo === "bateria";
   const showMateria = formTipo === "estudo" || formTipo === "questoes" || formTipo === "bateria" || formTipo === "materia_concluida";
   const showTopico = (formTipo === "estudo" || formTipo === "questoes" || formTipo === "bateria") && !!formMateria;
-  const topicosMateria = MATERIAS.find((m) => m.nome === formMateria)?.topicos ?? [];
+  const topicosMateria = materiasAtivas.find((m) => m.nome === formMateria)?.topicos ?? [];
   const autoDescPreview = buildAutoDesc(formTipo, formGrupo, formMateria, formTopico);
   const canAdd = formTipo !== "materia_concluida" || !!formMateria;
 
@@ -290,198 +282,189 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
       </div>
 
       {/* Modal */}
-      {modalOpen && selectedDay && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50" onClick={() => setModalOpen(false)}>
-          <div className="w-full max-w-md bg-card rounded-2xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border dark:border-border">
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <CalendarDays className="h-4 w-4 text-primary" />
-                {selectedDay}
-              </h3>
-              <button type="button" onClick={() => setModalOpen(false)} className="p-1.5 rounded-lg hover:bg-muted dark:hover:bg-accent text-muted-foreground">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Atividades existentes */}
-            <div className="px-4 py-3 max-h-40 overflow-y-auto">
-              {(calendario[selectedDay] ?? []).length === 0 ? (
-                <p className="text-xs text-muted-foreground italic text-center py-2">Sem atividades neste dia</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {(calendario[selectedDay] ?? []).map((a) => {
-                    const AtivIcon = ATIVIDADE_CONFIG[a.tipo].icone;
-                    return (
-                      <div key={a.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${CAL_COR[a.tipo]} ${editingId === a.id ? "ring-2 ring-ring" : ""}`}>
-                        <AtivIcon className="h-3.5 w-3.5 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium truncate">{a.descricao}</div>
-                          <div className="text-xs opacity-70">
-                            {a.duracao} min
-                            {(a.paginas ?? 0) > 0 &&
-                              ` · ${a.paginas} pág (${((a.paginas ?? 0) / (a.duracao / 60)).toFixed(1)} pág/h)`}
-                          </div>
-                        </div>
-                        <button type="button" onClick={() => startEdit(a)} className="p-0.5 hover:opacity-70 flex-shrink-0" title="Editar">
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button type="button" onClick={() => { removeAtividade(selectedDay, a.id); if (editingId === a.id) resetForm(); }} className="p-0.5 hover:opacity-70 flex-shrink-0" title="Excluir">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Form nova / editar atividade */}
-            <div className="px-4 pb-4 border-t border-border dark:border-border pt-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  {editingId ? "Editar Atividade" : "Adicionar Atividade"}
-                </div>
-                {editingId && (
-                  <button type="button" onClick={resetForm} className="text-xs text-muted-foreground hover:text-foreground dark:hover:text-foreground">
-                    Cancelar edição
-                  </button>
-                )}
-              </div>
-
-              {/* Tipo — grid 3 colunas */}
-              <div className="grid grid-cols-3 gap-1.5">
-                {(Object.entries(ATIVIDADE_CONFIG) as [AtividadeTipo, typeof ATIVIDADE_CONFIG[AtividadeTipo]][]).map(([tipo, cfg]) => {
-                  const BtnIcon = cfg.icone;
+      {selectedDay && (
+        <BottomSheetModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          titulo={selectedDay}
+          icone={CalendarDays}
+        >
+          {/* Atividades existentes */}
+          <div className="px-4 py-3 max-h-40 overflow-y-auto">
+            {(calendario[selectedDay] ?? []).length === 0 ? (
+              <p className="text-xs text-muted-foreground italic text-center py-2">Sem atividades neste dia</p>
+            ) : (
+              <div className="space-y-1.5">
+                {(calendario[selectedDay] ?? []).map((a) => {
+                  const AtivIcon = ATIVIDADE_CONFIG[a.tipo].icone;
                   return (
-                    <button
-                      key={tipo}
-                      type="button"
-                      onClick={() => handleTipoChange(tipo)}
-                      className={`flex items-center gap-1.5 px-2 py-2 rounded-lg border text-xs transition-all ${
-                        formTipo === tipo
-                          ? `${CAL_COR[tipo]} border-current font-semibold`
-                          : "border-border dark:border-border text-muted-foreground hover:border-primary/40 dark:hover:border-primary/40"
-                      }`}
-                    >
-                      <BtnIcon className="h-3.5 w-3.5 flex-shrink-0" />
-                      <span className="truncate">{cfg.label}</span>
-                    </button>
+                    <div key={a.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${CAL_COR[a.tipo]} ${editingId === a.id ? "ring-2 ring-ring" : ""}`}>
+                      <AtivIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium truncate">{a.descricao}</div>
+                        <div className="text-xs opacity-70">
+                          {a.duracao} min
+                          {(a.paginas ?? 0) > 0 &&
+                            ` · ${a.paginas} pág (${((a.paginas ?? 0) / (a.duracao / 60)).toFixed(1)} pág/h)`}
+                        </div>
+                      </div>
+                      <button type="button" onClick={() => startEdit(a)} className="p-0.5 hover:opacity-70 flex-shrink-0" title="Editar">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button type="button" onClick={() => { removeAtividade(selectedDay, a.id); if (editingId === a.id) resetForm(); }} className="p-0.5 hover:opacity-70 flex-shrink-0" title="Excluir">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
+            )}
+          </div>
 
-              {/* Seletor de Grupo (questões / bateria) */}
-              {showGrupo && (
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1.5">Grupo <span className="text-muted-foreground">(opcional)</span></div>
-                  <div className="flex gap-2">
-                    {GRUPOS.map((g) => (
-                      <button
-                        key={g}
-                        type="button"
-                        onClick={() => setFormGrupo(formGrupo === g ? null : g)}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                          formGrupo === g
-                            ? GRUPO_PILL[g]
-                            : `border ${GRUPO_OUTLINE[g]} bg-transparent`
-                        }`}
-                      >
-                        {g}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Seletor de Matéria */}
-              {showMateria && (
-                <select
-                  value={formMateria}
-                  onChange={(e) => { setFormMateria(e.target.value); setFormTopico(""); }}
-                  className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-white dark:bg-muted text-foreground dark:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">
-                    {formTipo === "materia_concluida" ? "Selecione a matéria *" : "Selecione a matéria (opcional)"}
-                  </option>
-                  {MATERIAS.map((m) => (
-                    <option key={m.nome} value={m.nome}>{m.nome}</option>
-                  ))}
-                </select>
-              )}
-
-              {/* Seletor de Tópico (questões / bateria + matéria selecionada) */}
-              {showTopico && (
-                <select
-                  value={formTopico}
-                  onChange={(e) => setFormTopico(e.target.value)}
-                  className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-white dark:bg-muted text-foreground dark:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Selecione o tópico (opcional)</option>
-                  {topicosMateria.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              )}
-
-              {/* Preview da descrição */}
-              <div className={`text-xs px-3 py-2 rounded-lg ${CAL_COR[formTipo]}`}>
-                <span className="opacity-60">Descrição: </span>
-                <span className="font-medium">{formDesc.trim() || autoDescPreview}</span>
+          {/* Form nova / editar atividade */}
+          <div className="px-4 pb-4 border-t border-border dark:border-border pt-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                {editingId ? "Editar Atividade" : "Adicionar Atividade"}
               </div>
-
-              {/* Descrição customizada (opcional, exceto matéria concluída) */}
-              {formTipo !== "materia_concluida" && (
-                <input
-                  type="text"
-                  placeholder="Descrição personalizada (opcional)"
-                  value={formDesc}
-                  onChange={(e) => setFormDesc(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && canAdd && addAtividade()}
-                  className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-white dark:bg-muted text-foreground dark:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              )}
-
-              {/* Duração + páginas + botão */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <label className="text-xs text-muted-foreground whitespace-nowrap">Duração (min):</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formDuracaoStr}
-                  onChange={(e) => setFormDuracaoStr(e.target.value.replace(/\D/g, ""))}
-                  onFocus={(e) => e.target.select()}
-                  className="w-16 text-sm border border-border dark:border-border rounded-lg px-2 py-1.5 bg-white dark:bg-muted text-foreground dark:text-foreground focus:outline-none focus:ring-2 focus:ring-ring text-center"
-                />
-                <label className="text-xs text-muted-foreground whitespace-nowrap">Páginas:</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formPaginasStr}
-                  onChange={(e) => setFormPaginasStr(e.target.value.replace(/\D/g, ""))}
-                  onFocus={(e) => e.target.select()}
-                  placeholder="—"
-                  title="Páginas lidas (opcional) — alimenta o KPI de páginas por hora"
-                  className="w-16 text-sm border border-border dark:border-border rounded-lg px-2 py-1.5 bg-white dark:bg-muted text-foreground dark:text-foreground focus:outline-none focus:ring-2 focus:ring-ring text-center"
-                />
-                <button
-                  type="button"
-                  onClick={addAtividade}
-                  disabled={!canAdd}
-                  className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {editingId ? <><Pencil className="h-3.5 w-3.5" /> Salvar</> : <><Plus className="h-3.5 w-3.5" /> Adicionar</>}
+              {editingId && (
+                <button type="button" onClick={resetForm} className="text-xs text-muted-foreground hover:text-foreground dark:hover:text-foreground">
+                  Cancelar edição
                 </button>
-              </div>
-              {parseInt(formPaginasStr) > 0 && parseInt(formDuracaoStr) > 0 && (
-                <p className="text-[11px] text-primary text-right font-medium">
-                  📖 {(parseInt(formPaginasStr) / (parseInt(formDuracaoStr) / 60)).toFixed(1)} pág/h
-                </p>
               )}
             </div>
+
+            {/* Tipo — grid 3 colunas */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {(Object.entries(ATIVIDADE_CONFIG) as [AtividadeTipo, typeof ATIVIDADE_CONFIG[AtividadeTipo]][]).map(([tipo, cfg]) => {
+                const BtnIcon = cfg.icone;
+                return (
+                  <button
+                    key={tipo}
+                    type="button"
+                    onClick={() => handleTipoChange(tipo)}
+                    className={`flex items-center gap-1.5 px-2 py-2 rounded-lg border text-xs transition-all ${
+                      formTipo === tipo
+                        ? `${CAL_COR[tipo]} border-current font-semibold`
+                        : "border-border dark:border-border text-muted-foreground hover:border-primary/40 dark:hover:border-primary/40"
+                    }`}
+                  >
+                    <BtnIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span className="truncate">{cfg.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Seletor de Grupo (questões / bateria) */}
+            {showGrupo && (
+              <div>
+                <div className="text-xs text-muted-foreground mb-1.5">Grupo <span className="text-muted-foreground">(opcional)</span></div>
+                <div className="flex gap-2">
+                  {GRUPOS.map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setFormGrupo(formGrupo === g ? null : g)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                        formGrupo === g
+                          ? GRUPO_PILL[g]
+                          : `border ${GRUPO_OUTLINE[g]} bg-transparent`
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Seletor de Matéria */}
+            {showMateria && (
+              <select
+                value={formMateria}
+                onChange={(e) => { setFormMateria(e.target.value); setFormTopico(""); }}
+                className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-white dark:bg-muted text-foreground dark:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">
+                  {formTipo === "materia_concluida" ? "Selecione a matéria *" : "Selecione a matéria (opcional)"}
+                </option>
+                {materiasAtivas.map((m) => (
+                  <option key={m.nome} value={m.nome}>{m.nome}</option>
+                ))}
+              </select>
+            )}
+
+            {/* Seletor de Tópico (questões / bateria + matéria selecionada) */}
+            {showTopico && (
+              <select
+                value={formTopico}
+                onChange={(e) => setFormTopico(e.target.value)}
+                className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-white dark:bg-muted text-foreground dark:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Selecione o tópico (opcional)</option>
+                {topicosMateria.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            )}
+
+            {/* Preview da descrição */}
+            <div className={`text-xs px-3 py-2 rounded-lg ${CAL_COR[formTipo]}`}>
+              <span className="opacity-60">Descrição: </span>
+              <span className="font-medium">{formDesc.trim() || autoDescPreview}</span>
+            </div>
+
+            {/* Descrição customizada (opcional, exceto matéria concluída) */}
+            {formTipo !== "materia_concluida" && (
+              <input
+                type="text"
+                placeholder="Descrição personalizada (opcional)"
+                value={formDesc}
+                onChange={(e) => setFormDesc(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && canAdd && addAtividade()}
+                className="w-full text-sm border border-border dark:border-border rounded-lg px-3 py-2 bg-white dark:bg-muted text-foreground dark:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            )}
+
+            {/* Duração + páginas + botão */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <label className="text-xs text-muted-foreground whitespace-nowrap">Duração (min):</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={formDuracaoStr}
+                onChange={(e) => setFormDuracaoStr(e.target.value.replace(/\D/g, ""))}
+                onFocus={(e) => e.target.select()}
+                className="w-16 text-sm border border-border dark:border-border rounded-lg px-2 py-1.5 bg-white dark:bg-muted text-foreground dark:text-foreground focus:outline-none focus:ring-2 focus:ring-ring text-center"
+              />
+              <label className="text-xs text-muted-foreground whitespace-nowrap">Páginas:</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={formPaginasStr}
+                onChange={(e) => setFormPaginasStr(e.target.value.replace(/\D/g, ""))}
+                onFocus={(e) => e.target.select()}
+                placeholder="—"
+                title="Páginas lidas (opcional) — alimenta o KPI de páginas por hora"
+                className="w-16 text-sm border border-border dark:border-border rounded-lg px-2 py-1.5 bg-white dark:bg-muted text-foreground dark:text-foreground focus:outline-none focus:ring-2 focus:ring-ring text-center"
+              />
+              <button
+                type="button"
+                onClick={addAtividade}
+                disabled={!canAdd}
+                className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {editingId ? <><Pencil className="h-3.5 w-3.5" /> Salvar</> : <><Plus className="h-3.5 w-3.5" /> Adicionar</>}
+              </button>
+            </div>
+            {parseInt(formPaginasStr) > 0 && parseInt(formDuracaoStr) > 0 && (
+              <p className="text-[11px] text-primary text-right font-medium">
+                📖 {(parseInt(formPaginasStr) / (parseInt(formDuracaoStr) / 60)).toFixed(1)} pág/h
+              </p>
+            )}
           </div>
-        </div>
+        </BottomSheetModal>
       )}
     </div>
   );

@@ -29,17 +29,18 @@ import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-da
 import Link from "next/link";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
+import StatTile from "@/components/estudo/ui/StatTile";
 
 const DashboardTab = dynamic(() => import("@/components/estudo/DashboardTab"), { ssr: false });
 const EditalTab = dynamic(() => import("@/components/estudo/EditalTab"), { ssr: false });
 const CicloTab = dynamic(() => import("@/components/estudo/CicloTab"), { ssr: false });
 const CalendarioTab = dynamic(() => import("@/components/estudo/CalendarioTab"), { ssr: false });
 const RelatoriosTab = dynamic(() => import("@/components/estudo/RelatoriosTab"), { ssr: false });
-const CartasTab = dynamic(() => import("@/components/estudo/CartasTab"), { ssr: false });
+const CartasTab = dynamic(() => import("@/components/estudo/cartas/CartasTab"), { ssr: false });
 const ResumosTab = dynamic(() => import("@/components/estudo/ResumosTab"), { ssr: false });
 const TrilhaTab = dynamic(() => import("@/components/estudo/TrilhaTab"), { ssr: false });
-const BibliotecaTab = dynamic(() => import("@/components/estudo/BibliotecaTab"), { ssr: false });
-const TimerEstudo = dynamic(() => import("@/components/estudo/TimerEstudo"), { ssr: false });
+const BibliotecaTab = dynamic(() => import("@/components/estudo/biblioteca/BibliotecaTab"), { ssr: false });
+const TimerEstudo = dynamic(() => import("@/components/estudo/timer/TimerEstudo"), { ssr: false });
 const CompararEditaisTab = dynamic(() => import("@/components/estudo/CompararEditaisTab"), { ssr: false });
 
 const storageKey = (concursoId: string | null) =>
@@ -307,54 +308,53 @@ export default function EstudoPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="bg-card border-b border-border px-4 md:px-6 py-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center">
+      <div className="bg-card border-b border-border px-4 md:px-6 py-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-12 w-12 flex-shrink-0 rounded-xl bg-muted p-1.5 flex items-center justify-center overflow-hidden">
               {concursoAtivo?.foto ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={concursoAtivo.foto} alt={concursoAtivo.nome} className="max-w-[40px] max-h-[40px] w-auto h-auto object-contain rounded-lg" />
+                <img src={concursoAtivo.foto} alt={concursoAtivo.nome} className="max-w-full max-h-full w-auto h-auto object-contain rounded-lg" />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src="/icons/sefazce.png" alt="concurso" className="max-w-[40px] max-h-[40px] w-auto h-auto object-contain rounded-lg" />
+                <img src="/icons/sefazce.png" alt="concurso" className="max-w-full max-h-full w-auto h-auto object-contain rounded-lg" />
               )}
             </div>
-            <div>
+            <div className="min-w-0">
               {primeiroNome && (
                 <p className="text-sm text-muted-foreground">Oi, {primeiroNome}</p>
               )}
-              <h1 className="text-lg font-bold text-foreground">
+              <h1 className="text-lg font-bold text-foreground truncate">
                 {concursoAtivo?.nome ?? "Estudo SEFAZ-CE 2026"}
               </h1>
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 min-w-0">
+                <p className="text-xs text-muted-foreground truncate">
                   {concursoAtivo?.orgao ?? "Acompanhe sua preparação para o concurso"}
                 </p>
-                <Link href="/dashboard/estudo/concursos" className="text-xs text-primary hover:text-primary flex items-center gap-0.5">
+                <Link href="/dashboard/estudo/concursos" className="text-xs text-primary hover:text-primary flex items-center gap-0.5 flex-shrink-0">
                   <RefreshCw className="h-3 w-3" /> Trocar
                 </Link>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-muted border border-border rounded-xl px-4 py-2.5">
-              <nivelConfig.icone className="h-5 w-5 text-foreground dark:text-foreground" />
-              <div>
-                <div className="text-xs font-semibold text-foreground dark:text-foreground">
-                  Nível {nivel} · {nivelConfig.titulo}
-                </div>
-                <div className="text-xs text-muted-foreground">{xp} XP</div>
-              </div>
-            </div>
-            <div className="text-center bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2.5">
-              <div className="flex items-center justify-center gap-1 text-lg font-bold text-amber-600 dark:text-amber-400"><Flame className="h-5 w-5 text-orange-500" />{calcularStreakDias(state.calendario)}</div>
-              <div className="text-xs text-amber-500 dark:text-amber-400">dias</div>
-            </div>
+          <div className="flex items-center gap-2.5 flex-shrink-0">
+            <StatTile
+              icone={nivelConfig.icone}
+              valor={`Nível ${nivel}`}
+              label={`${nivelConfig.titulo} · ${xp} XP`}
+              className="min-w-[168px]"
+            />
+            <StatTile
+              icone={Flame}
+              valor={calcularStreakDias(state.calendario)}
+              label="dias seguidos"
+              tone="warning"
+            />
           </div>
         </div>
 
         {/* Tab bar */}
-        <div className="flex gap-0.5 mt-4 overflow-x-auto pb-px">
+        <div className="flex gap-1 mt-5 overflow-x-auto pb-px">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -363,10 +363,10 @@ export default function EstudoPage() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-all ${
+                className={`flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-xl whitespace-nowrap transition-all ${
                   isActive
-                    ? "bg-primary text-white shadow-sm"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:text-foreground"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -378,7 +378,7 @@ export default function EstudoPage() {
       </div>
 
       {/* Timer flutuante */}
-      <TimerEstudo onSalvar={handleTimerSalvar} />
+      <TimerEstudo onSalvar={handleTimerSalvar} materiasConcurso={materiasFiltradas} />
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
@@ -451,15 +451,16 @@ export default function EstudoPage() {
               onSemanasOKChange={handleSemanasOKChange}
               streak={state.streak}
               semanasOK={state.semanasOK}
+              materiasConcurso={materiasFiltradas}
             />
           )}
 
           {activeTab === "relatorios" && (
-            <RelatoriosTab state={state} materiasConcurso={materiasFiltradas} />
+            <RelatoriosTab state={state} materiasConcurso={materiasFiltradas} dataProva={concursoAtivo?.dataProva} />
           )}
 
           {activeTab === "cartas" && (
-            <CartasTab cartas={state.cartas} onChange={updateCartas} />
+            <CartasTab cartas={state.cartas} onChange={updateCartas} materiasConcurso={materiasFiltradas} />
           )}
 
           {activeTab === "resumos" && (

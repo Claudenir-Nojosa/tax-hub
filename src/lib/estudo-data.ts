@@ -267,6 +267,39 @@ export const CORES_MATERIA: Record<string, { dot: string; badge: string; border:
 };
 export const COR_MATERIA_PADRAO = { dot: "bg-muted-foreground", badge: "bg-muted text-muted-foreground", border: "border-l-border" };
 
+// Cores do grupo de questões A-D (cadernos de erro) — fonte única. Antes duplicado em 4 lugares
+// (EditalTab, CalendarioTab, TimerEstudo, TrilhaTab), cada um com um subconjunto ligeiramente
+// diferente; consolidado aqui seguindo o mesmo padrão de CORES_MATERIA acima.
+export const GRUPO_LABEL: Record<Grupo, string> = { A: "Grupo A", B: "Grupo B", C: "Grupo C", D: "Grupo D" };
+// pill sólido (ex.: seletor de grupo selecionado no Timer/Calendário)
+export const GRUPO_PILL: Record<Grupo, string> = {
+  A: "bg-primary text-white",
+  B: "bg-emerald-500 text-white",
+  C: "bg-violet-500 text-white",
+  D: "bg-amber-500 text-white",
+};
+// contorno (ex.: seletor de grupo não-selecionado no Timer/Calendário)
+export const GRUPO_OUTLINE: Record<Grupo, string> = {
+  A: "border-primary text-primary dark:text-primary",
+  B: "border-emerald-400 text-emerald-600 dark:text-emerald-400",
+  C: "border-violet-400 text-violet-600 dark:text-violet-400",
+  D: "border-amber-400 text-amber-600 dark:text-amber-400",
+};
+// badge suave (ex.: rótulo "Grupo A" no Edital/Trilha)
+export const GRUPO_BADGE: Record<Grupo, string> = {
+  A: "bg-primary/10 text-primary dark:bg-primary/60 dark:text-primary",
+  B: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300",
+  C: "bg-violet-100 text-violet-700 dark:bg-violet-900/60 dark:text-violet-300",
+  D: "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300",
+};
+// só a cor de texto (ex.: a letra "A"/"B"/"C"/"D" isolada, sem fundo)
+export const GRUPO_TEXT: Record<Grupo, string> = {
+  A: "text-primary dark:text-primary font-bold",
+  B: "text-emerald-600 dark:text-emerald-400 font-bold",
+  C: "text-violet-600 dark:text-violet-400 font-bold",
+  D: "text-amber-600 dark:text-amber-400 font-bold",
+};
+
 export interface NivelConfig {
   titulo: string;
   icone: LucideIcon;
