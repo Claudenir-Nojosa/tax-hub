@@ -18,6 +18,7 @@ import {
 } from "@/lib/estudo-data";
 import { computarMetaDia } from "@/lib/trilha-dinamica";
 import { resolverCorMateria } from "./trilha/trilha-ui";
+import { alvoLeituraPdf } from "./biblioteca/biblioteca-utils";
 import EstudoHero from "./ui/EstudoHero";
 import StatTile from "./ui/StatTile";
 import SectionCard from "./ui/SectionCard";
@@ -315,8 +316,8 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
 
   // Biblioteca de PDFs: % geral de leitura (KPI só aparece quando há PDFs cadastrados)
   const pdfs = state.pdfs ?? [];
-  const pdfTotalPag = pdfs.reduce((s, p) => s + p.totalPaginas, 0);
-  const pdfLidasPag = pdfs.reduce((s, p) => s + Math.min(p.paginaAtual, p.totalPaginas), 0);
+  const pdfTotalPag = pdfs.reduce((s, p) => s + alvoLeituraPdf(p), 0);
+  const pdfLidasPag = pdfs.reduce((s, p) => s + Math.min(p.paginaAtual, alvoLeituraPdf(p)), 0);
   const percPdfs = pdfTotalPag > 0 ? Math.round((pdfLidasPag / pdfTotalPag) * 100) : 0;
 
   const NivelIcon = nivelConfig.icone;

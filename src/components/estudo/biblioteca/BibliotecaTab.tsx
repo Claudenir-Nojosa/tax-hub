@@ -84,8 +84,8 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
         materia,
         // não concluídos primeiro; dentro de cada bloco, mexidos mais recentemente primeiro
         lista: [...lista].sort((a, b) => {
-          const ca = a.paginaAtual >= a.totalPaginas ? 1 : 0;
-          const cb = b.paginaAtual >= b.totalPaginas ? 1 : 0;
+          const ca = a.paginaAtual >= alvoLeituraPdf(a) ? 1 : 0;
+          const cb = b.paginaAtual >= alvoLeituraPdf(b) ? 1 : 0;
           if (ca !== cb) return ca - cb;
           return (b.atualizadoEm ?? b.criadoEm).localeCompare(a.atualizadoEm ?? a.criadoEm);
         }),

@@ -15,6 +15,7 @@ import {
   type PdfEstudo,
 } from "@/lib/estudo-data";
 import { resolverCorMateria } from "./trilha/trilha-ui";
+import { alvoLeituraPdf } from "./biblioteca/biblioteca-utils";
 import { ChevronDown, ChevronRight, Search, CheckSquare, Square, BookOpen, EyeOff, RotateCcw, Trash2 } from "lucide-react";
 
 interface Props {
@@ -36,9 +37,9 @@ interface Props {
 function percLeituraTopico(pdfs: PdfEstudo[], materia: string, topico: string): number | null {
   const cobrem = pdfs.filter((p) => p.materia === materia && p.topicos?.includes(topico));
   if (cobrem.length === 0) return null;
-  const total = cobrem.reduce((s, p) => s + p.totalPaginas, 0);
+  const total = cobrem.reduce((s, p) => s + alvoLeituraPdf(p), 0);
   if (total === 0) return null;
-  const lidas = cobrem.reduce((s, p) => s + Math.min(p.paginaAtual, p.totalPaginas), 0);
+  const lidas = cobrem.reduce((s, p) => s + Math.min(p.paginaAtual, alvoLeituraPdf(p)), 0);
   return Math.round((lidas / total) * 100);
 }
 

@@ -174,7 +174,9 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
   const [segundosAbrindo, setSegundosAbrindo] = useState(0);
   // janela de páginas renderizadas (números inclusivos) — recalculada a cada scroll
   const [janela, setJanela] = useState<{ ini: number; fim: number }>({ ini: 1, fim: 2 });
-  const jaRolouRef = useRef(false);
+  // true assim que o usuário rola manualmente (roda/toque) ou navega por seta — a partir daí
+  // paramos de "puxar" o scroll de volta pra paginaInicial (ver efeito abaixo)
+  const interagiuRef = useRef(false);
   const paginaVisivelRef = useRef(0);
   const janelaRef = useRef(janela);
   janelaRef.current = janela;
@@ -300,30 +302,46 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
     }
   }, [onPaginaVisivel]);
 
-  // rola até a página onde o usuário parou — uma vez, quando o layout fica pronto — e RESTAURA a
-  // âncora de zoom (página + fração) sempre que o zoom muda, já que as alturas das páginas mudam
-  // e o scrollTop em pixel absoluto passaria a apontar pra outra página
+  // detecta interação manual (roda do mouse / toque) pra parar de "puxar" o scroll de volta pra
+  // paginaInicial — sem isso, o usuário nunca conseguiria se afastar da página inicial enquanto
+  // dims ainda estiver sendo corrigido em segundo plano (ver efeito abaixo)
+  useEffect(() => {
+    const c = containerRef.current;
+    if (!c) return;
+    const marcar = () => { interagiuRef.current = true; };
+    c.addEventListener("wheel", marcar, { passive: true });
+    c.addEventListener("touchstart", marcar, { passive: true });
+    return () => {
+      c.removeEventListener("wheel", marcar);
+      c.removeEventListener("touchstart", marcar);
+    };
+  }, []);
+
+  // rola até a página onde o usuário parou — e continua reaplicando essa posição sempre que dims
+  // mudar em segundo plano (correção de altura de páginas anteriores à alvo — ver loop "corrige em
+  // segundo plano" acima) até o usuário mexer no scroll de verdade. Sem isso, corrigir a altura de
+  // QUALQUER página antes da alvo desloca o layout de tudo abaixo dela e o scrollTop (um pixel
+  // fixo) passa a apontar pra outra página — relatado pelo usuário: abrir na pág. 153 e cair na
+  // 154. Também RESTAURA a âncora de zoom (página + fração) sempre que o zoom muda, pelo mesmo
+  // motivo (alturas mudam, scrollTop fixo desalinha).
   useEffect(() => {
     if (!doc || scale === null) return;
     // setTimeout(0) em vez de requestAnimationFrame: em abas ocultas/sem foco o compositor pode
     // nunca produzir frames (rAF nunca dispara) — timeout roda sempre, e o layout já está pronto
     const t = setTimeout(() => {
-      if (!jaRolouRef.current) {
-        jaRolouRef.current = true;
-        if (paginaInicial > 1) {
-          const alvo = containerRef.current?.querySelector<HTMLElement>(`[data-pagina="${Math.min(paginaInicial, doc.numPages)}"]`);
-          if (alvo && containerRef.current) containerRef.current.scrollTop = alvo.offsetTop - 8;
-        }
-      } else if (ancoraZoomRef.current) {
+      if (ancoraZoomRef.current) {
         const { pagina, fracao } = ancoraZoomRef.current;
         ancoraZoomRef.current = null;
         const alvo = containerRef.current?.querySelector<HTMLElement>(`[data-pagina="${pagina}"]`);
         if (alvo && containerRef.current) containerRef.current.scrollTop = alvo.offsetTop + fracao * alvo.clientHeight;
+      } else if (!interagiuRef.current && paginaInicial > 1) {
+        const alvo = containerRef.current?.querySelector<HTMLElement>(`[data-pagina="${Math.min(paginaInicial, doc.numPages)}"]`);
+        if (alvo && containerRef.current) containerRef.current.scrollTop = alvo.offsetTop - 8;
       }
       recalcular();
     }, 0);
     return () => clearTimeout(t);
-  }, [doc, scale, paginaInicial, recalcular]);
+  }, [doc, scale, dims, paginaInicial, recalcular]);
 
   // seta direita/esquerda navega pra próxima/anterior página — a partir da página "visível"
   // atual (mesma referência que já move o indicador "pág. X" da barra), rolando até o topo dela.
@@ -343,6 +361,7 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
       const alvo = c.querySelector<HTMLElement>(`[data-pagina="${proxima}"]`);
       if (!alvo) return;
       e.preventDefault();
+      interagiuRef.current = true;
       c.scrollTo({ top: alvo.offsetTop - 8, behavior: "smooth" });
     };
     window.addEventListener("keydown", onKey);
