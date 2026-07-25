@@ -325,6 +325,30 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
     return () => clearTimeout(t);
   }, [doc, scale, paginaInicial, recalcular]);
 
+  // seta direita/esquerda navega pra próxima/anterior página — a partir da página "visível"
+  // atual (mesma referência que já move o indicador "pág. X" da barra), rolando até o topo dela.
+  // Ignorado enquanto o usuário digita em input/textarea/select (ex.: campo "parei na página" ou
+  // o formulário de criar cartão) pra não roubar as setas de quem só está navegando texto/número.
+  useEffect(() => {
+    if (!doc) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      const alvoEl = e.target as HTMLElement | null;
+      if (alvoEl && /^(INPUT|TEXTAREA|SELECT)$/.test(alvoEl.tagName)) return;
+      const c = containerRef.current;
+      if (!c) return;
+      const atual = paginaVisivelRef.current || 1;
+      const proxima = e.key === "ArrowRight" ? Math.min(doc.numPages, atual + 1) : Math.max(1, atual - 1);
+      if (proxima === atual) return;
+      const alvo = c.querySelector<HTMLElement>(`[data-pagina="${proxima}"]`);
+      if (!alvo) return;
+      e.preventDefault();
+      c.scrollTo({ top: alvo.offsetTop - 8, behavior: "smooth" });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [doc]);
+
   if (erro) {
     return (
       <div className="flex-1 flex items-center justify-center text-sm text-red-400 px-6 text-center">
