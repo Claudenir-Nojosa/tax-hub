@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { BookOpen, CheckCircle2, Clock, FileUp, Loader2, Pencil, Trash2 } from "lucide-react";
 import type { PdfEstudo } from "@/lib/estudo-data";
-import { fmtEta } from "./biblioteca-utils";
+import { alvoLeituraPdf, fmtEta } from "./biblioteca-utils";
 
 // ─── Linha de PDF ────────────────────────────────────────────────────────────
 
@@ -24,9 +24,10 @@ export default function PdfRow({
 }) {
   const [paginaInput, setPaginaInput] = useState(String(pdf.paginaAtual));
   const anexoRef = useRef<HTMLInputElement>(null);
-  const perc = pdf.totalPaginas > 0 ? Math.round((Math.min(pdf.paginaAtual, pdf.totalPaginas) / pdf.totalPaginas) * 100) : 0;
-  const concluido = pdf.paginaAtual >= pdf.totalPaginas;
-  const eta = fmtEta(pdf.totalPaginas - pdf.paginaAtual, pagPorHora);
+  const alvo = alvoLeituraPdf(pdf);
+  const perc = alvo > 0 ? Math.round((Math.min(pdf.paginaAtual, alvo) / alvo) * 100) : 0;
+  const concluido = pdf.paginaAtual >= alvo;
+  const eta = fmtEta(alvo - pdf.paginaAtual, pagPorHora);
 
   const commitPagina = () => {
     const n = parseInt(paginaInput);
@@ -130,7 +131,7 @@ export default function PdfRow({
           </div>
         </div>
         <span className="text-[11px] text-muted-foreground whitespace-nowrap w-24 text-right">
-          {Math.min(pdf.paginaAtual, pdf.totalPaginas)}/{pdf.totalPaginas} pág · {perc}%
+          {Math.min(pdf.paginaAtual, alvo)}/{alvo} pág · {perc}%
         </span>
       </div>
 

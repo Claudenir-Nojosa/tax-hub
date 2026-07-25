@@ -4,14 +4,15 @@ import { useMemo, useState } from "react";
 import { BookOpen, Library, Plus, X } from "lucide-react";
 import {
   MATERIAS, calcularPagPorHora,
-  type AtividadeCalendario, type Carta, type MateriaConcurso, type MateriaDef, type PdfEstudo,
+  type AtividadeCalendario, type AtividadeTipo, type Carta, type MateriaConcurso, type MateriaDef,
+  type PdfEstudo, type TopicoState,
 } from "@/lib/estudo-data";
 import {
   salvarArquivoPdf, obterArquivoPdf, excluirArquivoPdf, contarPaginasPdf,
 } from "@/lib/pdf-storage";
 import { resolverCorMateria } from "../trilha/trilha-ui";
 import EstudoHero from "../ui/EstudoHero";
-import { fmtEta } from "./biblioteca-utils";
+import { alvoLeituraPdf, fmtEta } from "./biblioteca-utils";
 import FormPdf from "./FormPdf";
 import PdfRow from "./PdfRow";
 import LeitorPdf from "./LeitorPdf";
@@ -30,7 +31,11 @@ interface Props {
   calendario: Record<string, AtividadeCalendario[]>;
   onChange: (pdfs: PdfEstudo[]) => void;
   materiasConcurso?: MateriaConcurso[];
-  onRegistrarSessao?: (minutos: number, materia: string, topico: string | undefined, paginas: number | undefined, descricao: string) => void;
+  // tópicos do edital — o leitor lê/escreve aqui pra sincronizar cadernos A-D das questões
+  // escalonadas e marcar "concluir leitura do tópico"
+  topicos: Record<string, TopicoState>;
+  onUpdateTopicos: (topicos: Record<string, TopicoState>) => void;
+  onRegistrarSessao?: (minutos: number, tipo: AtividadeTipo, materia: string, topico: string | undefined, paginas: number | undefined, descricao: string) => void;
   // criar cartão: botões na barra do leitor (ao lado de "Parei aqui") abrem o formulário do tipo
   // escolhido; o usuário preenche manualmente (sem IA), já travado na matéria/tópico do PDF
   onAdicionarCartas?: (cartas: Carta[]) => void;
@@ -39,7 +44,7 @@ interface Props {
   metaMinutosRestantes?: Record<string, number>;
 }
 
-export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConcurso, onRegistrarSessao, onAdicionarCartas, metaMinutosRestantes }: Props) {
+export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConcurso, topicos, onUpdateTopicos, onRegistrarSessao, onAdicionarCartas, metaMinutosRestantes }: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
     materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
 
@@ -53,8 +58,10 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
 
   const pagPorHora = useMemo(() => calcularPagPorHora(calendario), [calendario]);
 
-  const totalPaginas = pdfs.reduce((s, p) => s + p.totalPaginas, 0);
-  const paginasLidas = pdfs.reduce((s, p) => s + Math.min(p.paginaAtual, p.totalPaginas), 0);
+  // "página alvo" de cada PDF = fim do conteúdo (se definido) — depois disso é só questão, não
+  // conta pra saber se a LEITURA terminou nem pro % geral
+  const totalPaginas = pdfs.reduce((s, p) => s + alvoLeituraPdf(p), 0);
+  const paginasLidas = pdfs.reduce((s, p) => s + Math.min(p.paginaAtual, alvoLeituraPdf(p)), 0);
   const percGeral = totalPaginas > 0 ? Math.round((paginasLidas / totalPaginas) * 100) : 0;
   const etaTotal = fmtEta(totalPaginas - paginasLidas, pagPorHora);
 
@@ -171,6 +178,12 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
     );
   };
 
+  // patch genérico num PDF (fim do conteúdo, questões geradas) — mesma ideia de atualizarPagina,
+  // mas pra qualquer campo em vez de só paginaAtual
+  const atualizarPdf = (id: string, patch: Partial<PdfEstudo>) => {
+    onChange(pdfs.map((p) => (p.id === id ? { ...p, ...patch, atualizadoEm: new Date().toISOString() } : p)));
+  };
+
   const excluir = (p: PdfEstudo) => {
     if (!confirm(`Excluir "${p.nome}" da biblioteca? O arquivo no Storage e o progresso de leitura somem.`)) return;
     onChange(pdfs.filter((x) => x.id !== p.id));
@@ -250,8 +263,8 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
       ) : (
         grupos.map(({ materia, lista }) => {
           const cor = resolverCorMateria(materia, materiasAtivas);
-          const tot = lista.reduce((s, p) => s + p.totalPaginas, 0);
-          const lidas = lista.reduce((s, p) => s + Math.min(p.paginaAtual, p.totalPaginas), 0);
+          const tot = lista.reduce((s, p) => s + alvoLeituraPdf(p), 0);
+          const lidas = lista.reduce((s, p) => s + Math.min(p.paginaAtual, alvoLeituraPdf(p)), 0);
           const perc = tot > 0 ? Math.round((lidas / tot) * 100) : 0;
           return (
             <div key={materia} className="bg-card rounded-xl border border-border overflow-hidden">
@@ -274,7 +287,7 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
                     onLer={() => abrirLeitor(p)}
                     onAnexar={(arq) => anexarEm(p, arq)}
                     onAtualizarPagina={(pag) => atualizarPagina(p.id, pag)}
-                    onConcluir={() => atualizarPagina(p.id, p.totalPaginas)}
+                    onConcluir={() => atualizarPagina(p.id, alvoLeituraPdf(p))}
                     onEditar={() => { setEditando(p); setFormAberto(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                     onExcluir={() => excluir(p)}
                   />
@@ -291,7 +304,10 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
         <LeitorPdf
           pdf={pdfs.find((p) => p.id === lendo.id) ?? lendo}
           blob={blobLeitura}
+          topicos={topicos}
           onAtualizarPagina={(pag) => atualizarPagina(lendo.id, pag)}
+          onAtualizarPdf={(patch) => atualizarPdf(lendo.id, patch)}
+          onUpdateTopicos={onUpdateTopicos}
           onRegistrarSessao={onRegistrarSessao}
           onAdicionarCartas={onAdicionarCartas}
           minutosMetaRestantes={metaMinutosRestantes?.[lendo.materia]}

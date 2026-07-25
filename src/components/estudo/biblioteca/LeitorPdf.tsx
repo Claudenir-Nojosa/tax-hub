@@ -2,11 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { ArrowLeft, CheckCircle2, Clock, Pause, Play } from "lucide-react";
-import type { Carta, PdfEstudo, TipoCarta } from "@/lib/estudo-data";
-import { fmtCrono, novaCartaManual } from "./biblioteca-utils";
+import { ArrowLeft, CheckCircle2, Clock, Flag, ListChecks, Pause, Play } from "lucide-react";
+import {
+  gerarQuestoesGrupos, topicoKey,
+  type AtividadeTipo, type Carta, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
+} from "@/lib/estudo-data";
+import { fmtCrono, novaCartaManual, sincronizarCadernoComQuestoes } from "./biblioteca-utils";
 import InputPaginaLeitor from "./InputPaginaLeitor";
 import NovoCartaoForm, { TIPO_CARTAO_CONFIG } from "./NovoCartaoForm";
+import PainelQuestoes from "./PainelQuestoes";
 
 // pdf.js só carrega quando o leitor abre (bundle pesado — não entra no load da aba)
 const VisorPdf = dynamic(() => import("./VisorPdf"), { ssr: false });
@@ -14,12 +18,16 @@ const VisorPdf = dynamic(() => import("./VisorPdf"), { ssr: false });
 // ─── Leitor fullscreen ───────────────────────────────────────────────────────
 
 export default function LeitorPdf({
-  pdf, blob, onAtualizarPagina, onRegistrarSessao, onAdicionarCartas, minutosMetaRestantes, onFechar,
+  pdf, blob, topicos, onAtualizarPagina, onAtualizarPdf, onUpdateTopicos, onRegistrarSessao, onAdicionarCartas, minutosMetaRestantes, onFechar,
 }: {
   pdf: PdfEstudo;
   blob: Blob;
+  topicos: Record<string, TopicoState>;
   onAtualizarPagina: (pagina: number) => void;
-  onRegistrarSessao?: (minutos: number, materia: string, topico: string | undefined, paginas: number | undefined, descricao: string) => void;
+  // patch genérico no registro do PDF (fim do conteúdo, questões geradas) — mesmo PDF, só outros campos
+  onAtualizarPdf: (patch: Partial<PdfEstudo>) => void;
+  onUpdateTopicos: (topicos: Record<string, TopicoState>) => void;
+  onRegistrarSessao?: (minutos: number, tipo: AtividadeTipo, materia: string, topico: string | undefined, paginas: number | undefined, descricao: string) => void;
   onAdicionarCartas?: (cartas: Carta[]) => void;
   // trilha dinâmica: minutos que faltavam (na abertura do leitor) pro bloco de hoje desta
   // matéria — quando o cronômetro da sessão cruza esse valor, avisa que a meta do dia foi batida
@@ -43,6 +51,70 @@ export default function LeitorPdf({
   const [cartaForm, setCartaForm] = useState<TipoCarta | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // tópico do edital mapeado por este PDF — questões, fim de conteúdo e "concluir leitura" giram
+  // em torno dele (o PDF sempre cobre no máximo um tópico na prática deste fluxo)
+  const topicoAtual = pdf.topicos?.[0];
+  // até onde é conteúdo (teoria) — depois disso só tem questão; sem paginaConteudoFim definida,
+  // o PDF inteiro conta como conteúdo (compatível com PDFs cadastrados antes dessa feature)
+  const alvoLeitura = pdf.paginaConteudoFim ?? pdf.totalPaginas;
+  const chaveTopico = topicoAtual ? topicoKey(pdf.materia, topicoAtual) : null;
+  const jaEstudado = chaveTopico ? topicos[chaveTopico]?.estudado === true : false;
+
+  const definirFimConteudo = () => onAtualizarPdf({ paginaConteudoFim: paginaVisivel });
+
+  const concluirLeitura = () => {
+    if (!chaveTopico) return;
+    const estado = topicos[chaveTopico];
+    if (!estado) return;
+    onUpdateTopicos({ ...topicos, [chaveTopico]: { ...estado, estudado: true } });
+  };
+
+  // painel de questões escalonadas (grupos A-D) do tópico do PDF — geração, marcação e "refazer"
+  const [painelQuestoesAberto, setPainelQuestoesAberto] = useState(false);
+  const segundosQuestoesRef = useRef(0);
+  const [segundosQuestoes, setSegundosQuestoes] = useState(0);
+
+  useEffect(() => {
+    if (!painelQuestoesAberto) return;
+    const interval = setInterval(() => {
+      segundosQuestoesRef.current += 1;
+      setSegundosQuestoes(segundosQuestoesRef.current);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [painelQuestoesAberto]);
+
+  const gerarQuestoes = (total: number) => {
+    if (!topicoAtual) return;
+    const questoes: PdfQuestoes = { total, resultados: gerarQuestoesGrupos(total), criadoEm: new Date().toISOString() };
+    onAtualizarPdf({ questoes });
+    onUpdateTopicos(sincronizarCadernoComQuestoes(topicos, pdf.materia, topicoAtual, questoes));
+  };
+
+  const marcarQuestao = (numero: number, acertou: boolean | null) => {
+    if (!pdf.questoes || !topicoAtual) return;
+    const questoes: PdfQuestoes = {
+      ...pdf.questoes,
+      resultados: pdf.questoes.resultados.map((r) => (r.numero === numero ? { ...r, acertou } : r)),
+    };
+    onAtualizarPdf({ questoes });
+    onUpdateTopicos(sincronizarCadernoComQuestoes(topicos, pdf.materia, topicoAtual, questoes));
+  };
+
+  const refazerQuestoes = () => {
+    onAtualizarPdf({ questoes: undefined });
+    // zera o caderno desse tópico também — sem isso ele ficaria mostrando contagens de uma lista
+    // de questões que não existe mais
+    if (chaveTopico && topicos[chaveTopico]) {
+      onUpdateTopicos({
+        ...topicos,
+        [chaveTopico]: {
+          ...topicos[chaveTopico],
+          cadernos: { A: { acertos: 0, erros: 0 }, B: { acertos: 0, erros: 0 }, C: { acertos: 0, erros: 0 }, D: { acertos: 0, erros: 0 } },
+        },
+      });
+    }
+  };
 
   const salvarCartaManual = (frente: string, verso: string, gabarito?: "verdadeiro" | "falso") => {
     if (!cartaForm || !onAdicionarCartas) return;
@@ -78,17 +150,24 @@ export default function LeitorPdf({
   }, [pausado]);
 
   const encerrarSessao = () => {
+    const p = pdfRef.current;
     const minutos = Math.round(segundosRef.current / 60);
     if (minutos >= 1 && onRegistrarSessao) {
-      const p = pdfRef.current;
       const paginasLidas = p.paginaAtual - paginaInicialRef.current;
       onRegistrarSessao(
         minutos,
+        "estudo",
         p.materia,
         p.topicos?.[0],
         paginasLidas > 0 ? paginasLidas : undefined,
         `Leitura: ${p.nome}`
       );
+    }
+    // timer de questões é separado do de leitura — conta só enquanto o painel de questões está
+    // aberto, registrado como atividade própria (tipo "questoes") ao fechar o leitor
+    const minutosQuestoes = Math.round(segundosQuestoesRef.current / 60);
+    if (minutosQuestoes >= 1 && onRegistrarSessao) {
+      onRegistrarSessao(minutosQuestoes, "questoes", p.materia, p.topicos?.[0], undefined, `Questões: ${p.nome}`);
     }
     onFechar();
   };
@@ -132,6 +211,44 @@ export default function LeitorPdf({
           className="hidden sm:flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-muted text-muted-foreground hover:bg-accent transition-colors flex-shrink-0"
         >
           pág. {paginaVisivel} · Parei aqui
+        </button>
+
+        {/* fim do conteúdo — a partir daqui o PDF só tem questão, não teoria; é essa página (não
+            o total) que define "terminei de ler" e o % de leitura */}
+        <button
+          type="button"
+          onClick={definirFimConteudo}
+          title={pdf.paginaConteudoFim ? `Fim do conteúdo: pág. ${pdf.paginaConteudoFim} — clique pra atualizar pra pág. ${paginaVisivel}` : `Marcar a página visível (${paginaVisivel}) como fim do conteúdo — depois disso só tem questão`}
+          className="hidden sm:flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-muted text-muted-foreground hover:bg-accent transition-colors flex-shrink-0"
+        >
+          <Flag className="h-3 w-3" />
+          {pdf.paginaConteudoFim ? `Fim: pág. ${pdf.paginaConteudoFim}` : "Fim do conteúdo"}
+        </button>
+
+        {/* concluir a leitura do tópico — só aparece depois que o usuário passou do fim do
+            conteúdo; não é automático (bater a página não garante que o conteúdo foi assimilado) */}
+        {chaveTopico && !jaEstudado && paginaVisivel >= alvoLeitura && (
+          <button
+            type="button"
+            onClick={concluirLeitura}
+            title="Marca o tópico como estudado no Edital"
+            className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors flex-shrink-0"
+          >
+            <CheckCircle2 className="h-3 w-3" />
+            <span className="hidden sm:inline">Concluir leitura</span>
+          </button>
+        )}
+
+        {/* questões escalonadas do tópico (grupos A-D) — botões de criar cartão continuam ao lado */}
+        <button
+          type="button"
+          onClick={() => setPainelQuestoesAberto(true)}
+          title="Questões do tópico (grupos A-D)"
+          className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors flex-shrink-0 ${
+            pdf.questoes ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-accent"
+          }`}
+        >
+          <ListChecks className="h-4 w-4" />
         </button>
 
         {/* botões de criar cartão — direto na barra, sem precisar selecionar texto nem sair da
@@ -198,6 +315,21 @@ export default function LeitorPdf({
           topico={pdf.topicos?.[0]}
           onSalvar={salvarCartaManual}
           onCancelar={() => setCartaForm(null)}
+        />
+      )}
+
+      {/* painel de questões escalonadas do tópico — também por cima do PDF, mesma família visual
+          do NovoCartaoForm */}
+      {painelQuestoesAberto && (
+        <PainelQuestoes
+          materia={pdf.materia}
+          topico={topicoAtual}
+          questoes={pdf.questoes}
+          segundos={segundosQuestoes}
+          onGerar={gerarQuestoes}
+          onMarcar={marcarQuestao}
+          onRefazer={refazerQuestoes}
+          onFechar={() => setPainelQuestoesAberto(false)}
         />
       )}
 

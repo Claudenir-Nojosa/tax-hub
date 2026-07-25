@@ -181,6 +181,37 @@ export interface EstudoState {
 
 // PDF de estudo (ex.: aulas do Estratégia) — SÓ metadados + progresso de leitura; o arquivo em
 // si nunca é enviado (continua no leitor do usuário — sem custo de storage, sem copyright).
+// Resultado de UMA questão da lista escalonada gerada a partir do PDF — grupo A-D é derivado da
+// posição na lista (ver gerarQuestoesGrupos), não escolhido à mão. acertou null = ainda não
+// respondida (distinto de false = respondida e errada).
+export interface QuestaoResultado {
+  numero: number; // 1-based, posição na lista de questões do tópico
+  grupo: Grupo;
+  acertou: boolean | null;
+}
+
+// Lista de questões de um tópico, mapeada a partir do PDF aberto no leitor (páginas depois de
+// PdfEstudo.paginaConteudoFim). O agregado (quantos certos/errados por grupo) é sincronizado pra
+// TopicoState.cadernos via sincronizarCadernoComQuestoes (biblioteca-utils.ts) — esta lista é a
+// fonte do detalhe POR QUESTÃO; o caderno do Edital guarda só o agregado, como sempre guardou.
+export interface PdfQuestoes {
+  total: number;
+  resultados: QuestaoResultado[];
+  criadoEm: string;
+}
+
+const ORDEM_GRUPOS_QUESTOES: Grupo[] = ["A", "B", "C", "D"];
+
+// Distribui N questões em grupos A-D por rodízio: questão 1→A, 2→B, 3→C, 4→D, 5→A... (ex.: 20
+// questões → A:1,5,9,13,17 · B:2,6,10,14,18 · C:3,7,11,15,19 · D:4,8,12,16,20).
+export function gerarQuestoesGrupos(total: number): QuestaoResultado[] {
+  const resultados: QuestaoResultado[] = [];
+  for (let n = 1; n <= total; n++) {
+    resultados.push({ numero: n, grupo: ORDEM_GRUPOS_QUESTOES[(n - 1) % 4], acertou: null });
+  }
+  return resultados;
+}
+
 export interface PdfEstudo {
   id: string;
   nome: string; // ex.: "Aula 05 — ICMS: fato gerador"
@@ -188,6 +219,11 @@ export interface PdfEstudo {
   topicos?: string[]; // tópicos do edital cobertos (opcional, multi)
   totalPaginas: number;
   paginaAtual: number; // 0..totalPaginas — "parei na página X" (= páginas lidas)
+  // última página de CONTEÚDO (teoria) — páginas depois disso são só questões do tópico. Quando
+  // ausente, o PDF inteiro conta como conteúdo (comportamento antigo, compatível com PDFs já
+  // cadastrados). É esse valor (não totalPaginas) que define "terminei de ler" e o % de leitura.
+  paginaConteudoFim?: number;
+  questoes?: PdfQuestoes;
   criadoEm: string;
   atualizadoEm?: string;
   // true = o arquivo está salvo no Supabase Storage (pdf-storage.ts), disponível em qualquer
