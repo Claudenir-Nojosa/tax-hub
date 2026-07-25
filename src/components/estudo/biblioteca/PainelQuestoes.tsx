@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Clock, ListChecks, RotateCcw, X } from "lucide-react";
-import { GRUPO_BADGE, GRUPO_LABEL, type Grupo, type PdfQuestoes } from "@/lib/estudo-data";
+import { Check, ChevronDown, ChevronUp, Clock, ListChecks, RotateCcw, X } from "lucide-react";
+import { GRUPO_BADGE, GRUPO_LABEL, type Alternativa, type Grupo, type PdfQuestoes } from "@/lib/estudo-data";
 import { fmtCrono } from "./biblioteca-utils";
 
 const GRUPOS: Grupo[] = ["A", "B", "C", "D"];
+const ALTERNATIVAS: Alternativa[] = ["A", "B", "C", "D", "E"];
 
 // Painel de questões escalonadas do tópico — por cima do PDF (o leitor continua visível atrás),
 // mesmo tratamento de overlay do NovoCartaoForm. Antes de gerar, só pede o total; depois de
-// gerado, mostra os 4 grupos com um chip tocável por questão (ciclo: pendente → certo → errado).
+// gerado, mostra os 4 grupos com um chip tocável por questão (ciclo: pendente → certo → errado)
+// e, abaixo, o Gabarito: qual alternativa (A-E) o usuário marcou em cada questão — independente
+// de certo/errado, é só o registro de qual opção ele indicou.
 export default function PainelQuestoes({
   materia,
   topico,
@@ -17,6 +20,7 @@ export default function PainelQuestoes({
   segundos,
   onGerar,
   onMarcar,
+  onMarcarAlternativa,
   onRefazer,
   onFechar,
 }: {
@@ -26,10 +30,12 @@ export default function PainelQuestoes({
   segundos: number;
   onGerar: (total: number) => void;
   onMarcar: (numero: number, acertou: boolean | null) => void;
+  onMarcarAlternativa: (numero: number, alternativa: Alternativa | null) => void;
   onRefazer: () => void;
   onFechar: () => void;
 }) {
   const [totalStr, setTotalStr] = useState("");
+  const [gabaritoAberto, setGabaritoAberto] = useState(true);
 
   const totalNum = parseInt(totalStr);
   const podeGerar = Number.isFinite(totalNum) && totalNum >= 4 && totalNum <= 200;
@@ -38,6 +44,7 @@ export default function PainelQuestoes({
     grupo: g,
     itens: questoes?.resultados.filter((r) => r.grupo === g) ?? [],
   }));
+  const marcadasGabarito = questoes?.resultados.filter((r) => r.alternativa).length ?? 0;
 
   return (
     <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4" onClick={onFechar}>
@@ -149,6 +156,49 @@ export default function PainelQuestoes({
                   </div>
                 );
               })}
+            </div>
+
+            <div className="space-y-2 border-t border-border pt-3">
+              <button
+                type="button"
+                onClick={() => setGabaritoAberto((v) => !v)}
+                className="flex items-center justify-between w-full text-left"
+              >
+                <span className="text-xs font-semibold text-foreground">
+                  Gabarito <span className="font-normal text-muted-foreground">· {marcadasGabarito}/{questoes.total} marcadas</span>
+                </span>
+                {gabaritoAberto ? (
+                  <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+              </button>
+              {gabaritoAberto && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {questoes.resultados.map((r) => (
+                    <div key={r.numero} className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1.5">
+                      <span className="text-[11px] font-mono text-muted-foreground w-6 flex-shrink-0 text-right">{r.numero}.</span>
+                      <div className="flex gap-1">
+                        {ALTERNATIVAS.map((alt) => (
+                          <button
+                            key={alt}
+                            type="button"
+                            title={`Marcar alternativa ${alt} na questão ${r.numero}`}
+                            onClick={() => onMarcarAlternativa(r.numero, r.alternativa === alt ? null : alt)}
+                            className={`h-6 w-6 rounded-md text-[10px] font-semibold flex items-center justify-center transition-colors ${
+                              r.alternativa === alt
+                                ? "bg-primary text-primary-foreground"
+                                : "border border-border text-muted-foreground hover:border-primary/50"
+                            }`}
+                          >
+                            {alt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

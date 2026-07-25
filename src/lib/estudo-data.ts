@@ -181,13 +181,17 @@ export interface EstudoState {
 
 // PDF de estudo (ex.: aulas do Estratégia) — SÓ metadados + progresso de leitura; o arquivo em
 // si nunca é enviado (continua no leitor do usuário — sem custo de storage, sem copyright).
+export type Alternativa = "A" | "B" | "C" | "D" | "E";
+
 // Resultado de UMA questão da lista escalonada gerada a partir do PDF — grupo A-D é derivado da
 // posição na lista (ver gerarQuestoesGrupos), não escolhido à mão. acertou null = ainda não
-// respondida (distinto de false = respondida e errada).
+// respondida (distinto de false = respondida e errada). alternativa = a letra que o usuário
+// marcou no gabarito (independente de acertou/errou — é só o registro de qual opção ele indicou).
 export interface QuestaoResultado {
   numero: number; // 1-based, posição na lista de questões do tópico
   grupo: Grupo;
   acertou: boolean | null;
+  alternativa?: Alternativa;
 }
 
 // Lista de questões de um tópico, mapeada a partir do PDF aberto no leitor (páginas depois de

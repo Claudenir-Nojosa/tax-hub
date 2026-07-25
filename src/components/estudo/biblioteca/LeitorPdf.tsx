@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { ArrowLeft, CheckCircle2, Clock, Flag, ListChecks, Pause, Play } from "lucide-react";
 import {
   gerarQuestoesGrupos, topicoKey,
-  type AtividadeTipo, type Carta, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
+  type Alternativa, type AtividadeTipo, type Carta, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
 } from "@/lib/estudo-data";
 import { fmtCrono, novaCartaManual, sincronizarCadernoComQuestoes } from "./biblioteca-utils";
 import InputPaginaLeitor from "./InputPaginaLeitor";
@@ -99,6 +99,17 @@ export default function LeitorPdf({
     };
     onAtualizarPdf({ questoes });
     onUpdateTopicos(sincronizarCadernoComQuestoes(topicos, pdf.materia, topicoAtual, questoes));
+  };
+
+  // gabarito: só registra qual alternativa o usuário marcou — não mexe no caderno (isso é feito
+  // por marcarQuestao/acertou), então não passa por sincronizarCadernoComQuestoes
+  const marcarAlternativa = (numero: number, alternativa: Alternativa | null) => {
+    if (!pdf.questoes) return;
+    const questoes: PdfQuestoes = {
+      ...pdf.questoes,
+      resultados: pdf.questoes.resultados.map((r) => (r.numero === numero ? { ...r, alternativa: alternativa ?? undefined } : r)),
+    };
+    onAtualizarPdf({ questoes });
   };
 
   const refazerQuestoes = () => {
@@ -328,6 +339,7 @@ export default function LeitorPdf({
           segundos={segundosQuestoes}
           onGerar={gerarQuestoes}
           onMarcar={marcarQuestao}
+          onMarcarAlternativa={marcarAlternativa}
           onRefazer={refazerQuestoes}
           onFechar={() => setPainelQuestoesAberto(false)}
         />
