@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { ArrowLeft, CheckCircle2, Clock, Flag, ListChecks, Pause, Play } from "lucide-react";
+import { ArrowLeft, BookOpen, CheckCircle2, Clock, ClipboardList, Flag, ListChecks, Pause, Play } from "lucide-react";
 import {
   gerarQuestoesGrupos, topicoKey,
   type Alternativa, type AtividadeTipo, type Carta, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
@@ -75,14 +75,18 @@ export default function LeitorPdf({
   const segundosQuestoesRef = useRef(0);
   const [segundosQuestoes, setSegundosQuestoes] = useState(0);
 
+  // qual dos dois cronômetros está contando agora — alternado pelo botão na barra (só um conta
+  // por vez; "pausado" pausa o que estiver ativo no momento)
+  const [modoTimer, setModoTimer] = useState<"leitura" | "questoes">("leitura");
+
   useEffect(() => {
-    if (!painelQuestoesAberto) return;
+    if (pausado || modoTimer !== "questoes") return;
     const interval = setInterval(() => {
       segundosQuestoesRef.current += 1;
       setSegundosQuestoes(segundosQuestoesRef.current);
     }, 1000);
     return () => clearInterval(interval);
-  }, [painelQuestoesAberto]);
+  }, [pausado, modoTimer]);
 
   const gerarQuestoes = (total: number) => {
     if (!topicoAtual) return;
@@ -145,7 +149,7 @@ export default function LeitorPdf({
   const metaRestanteRef = useRef(minutosMetaRestantes);
 
   useEffect(() => {
-    if (pausado) return;
+    if (pausado || modoTimer !== "leitura") return;
     const interval = setInterval(() => {
       segundosRef.current += 1;
       setSegundos(segundosRef.current);
@@ -158,7 +162,7 @@ export default function LeitorPdf({
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [pausado]);
+  }, [pausado, modoTimer]);
 
   const encerrarSessao = () => {
     const p = pdfRef.current;
@@ -288,23 +292,49 @@ export default function LeitorPdf({
         />
         <span className="hidden sm:block text-[11px] text-muted-foreground flex-shrink-0">de {pdf.totalPaginas}</span>
 
-        <div
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg flex-shrink-0 font-mono text-sm ${
-            pausado ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-          }`}
-          title="Cronômetro da sessão — salvo automaticamente nesta matéria/tópico ao fechar"
-        >
-          <Clock className="h-3.5 w-3.5" />
-          {fmtCrono(segundos)}
+        {/* alterna qual cronômetro está contando agora — só um conta por vez; "pausado" pausa o
+            que estiver ativo no momento */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
+            <button
+              type="button"
+              onClick={() => setModoTimer("leitura")}
+              title="Cronômetro de leitura"
+              className={`h-6 w-6 rounded-md flex items-center justify-center transition-colors ${
+                modoTimer === "leitura" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <BookOpen className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setModoTimer("questoes")}
+              title="Cronômetro de questões"
+              className={`h-6 w-6 rounded-md flex items-center justify-center transition-colors ${
+                modoTimer === "questoes" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <ClipboardList className="h-3 w-3" />
+            </button>
+          </div>
+          <div
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-sm ${
+              pausado ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+            }`}
+            title={`Cronômetro de ${modoTimer === "leitura" ? "leitura" : "questões"} — salvo automaticamente nesta matéria/tópico ao fechar`}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            {fmtCrono(modoTimer === "leitura" ? segundos : segundosQuestoes)}
+          </div>
+          <button
+            type="button"
+            onClick={() => setPausado((v) => !v)}
+            title={pausado ? "Retomar cronômetro" : "Pausar cronômetro"}
+            className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            {pausado ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => setPausado((v) => !v)}
-          title={pausado ? "Retomar cronômetro" : "Pausar cronômetro"}
-          className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors flex-shrink-0"
-        >
-          {pausado ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-        </button>
       </div>
 
       {/* o PDF em si (pdf.js com camada de texto) — ocupa TODO o resto da tela. A página inicial
@@ -336,7 +366,6 @@ export default function LeitorPdf({
           materia={pdf.materia}
           topico={topicoAtual}
           questoes={pdf.questoes}
-          segundos={segundosQuestoes}
           onGerar={gerarQuestoes}
           onMarcar={marcarQuestao}
           onMarcarAlternativa={marcarAlternativa}

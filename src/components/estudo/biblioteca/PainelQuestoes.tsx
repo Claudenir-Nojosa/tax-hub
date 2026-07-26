@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronDown, ChevronUp, Clock, ListChecks, RotateCcw, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, ListChecks, RotateCcw, X } from "lucide-react";
 import { GRUPO_BADGE, GRUPO_LABEL, type Alternativa, type Grupo, type PdfQuestoes } from "@/lib/estudo-data";
-import { fmtCrono } from "./biblioteca-utils";
 
 const GRUPOS: Grupo[] = ["A", "B", "C", "D"];
 const ALTERNATIVAS: Alternativa[] = ["A", "B", "C", "D", "E"];
@@ -17,7 +16,6 @@ export default function PainelQuestoes({
   materia,
   topico,
   questoes,
-  segundos,
   onGerar,
   onMarcar,
   onMarcarAlternativa,
@@ -27,7 +25,6 @@ export default function PainelQuestoes({
   materia: string;
   topico?: string;
   questoes?: PdfQuestoes;
-  segundos: number;
   onGerar: (total: number) => void;
   onMarcar: (numero: number, acertou: boolean | null) => void;
   onMarcarAlternativa: (numero: number, alternativa: Alternativa | null) => void;
@@ -56,14 +53,9 @@ export default function PainelQuestoes({
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <ListChecks className="h-4 w-4 text-primary" /> Questões
           </div>
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1 text-[11px] text-muted-foreground font-mono" title="Tempo nesta sessão de questões">
-              <Clock className="h-3.5 w-3.5" /> {fmtCrono(segundos)}
-            </span>
-            <button type="button" onClick={onFechar} className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+          <button type="button" onClick={onFechar} className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         {!topico ? (
