@@ -44,10 +44,16 @@ export default function PainelQuestoes({
   const marcadasGabarito = questoes?.resultados.filter((r) => r.alternativa).length ?? 0;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4" onClick={onFechar}>
+    // telas grandes (lg+): dock fixo ao lado do PDF, os dois visíveis ao mesmo tempo — a única
+    // razão de ainda ser overlay (fixed inset-0, com fundo escurecido) é a tela pequena, onde não
+    // cabe PDF + painel lado a lado
+    <div
+      className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4 lg:static lg:inset-auto lg:z-auto lg:flex lg:items-stretch lg:justify-start lg:bg-transparent lg:p-0 lg:w-[440px] lg:flex-shrink-0 lg:h-full"
+      onClick={onFechar}
+    >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-card border border-border rounded-2xl w-full max-w-2xl p-4 space-y-3 max-h-[85vh] overflow-y-auto"
+        className="bg-card border border-border rounded-2xl w-full max-w-2xl p-4 space-y-3 max-h-[85vh] overflow-y-auto lg:rounded-none lg:border-0 lg:border-l lg:max-w-none lg:max-h-none lg:h-full lg:w-full"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -108,7 +114,7 @@ export default function PainelQuestoes({
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
               {porGrupo.map(({ grupo, itens }) => {
                 const acertos = itens.filter((r) => r.acertou === true).length;
                 const erros = itens.filter((r) => r.acertou === false).length;
@@ -166,7 +172,7 @@ export default function PainelQuestoes({
                 )}
               </button>
               {gabaritoAberto && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5">
                   {questoes.resultados.map((r) => (
                     <div key={r.numero} className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1.5">
                       <span className="text-[11px] font-mono text-muted-foreground w-6 flex-shrink-0 text-right">{r.numero}.</span>

@@ -337,14 +337,32 @@ export default function LeitorPdf({
         </div>
       </div>
 
-      {/* o PDF em si (pdf.js com camada de texto) — ocupa TODO o resto da tela. A página inicial
-          é a DO MOMENTO DA ABERTURA (ref), pra não pular o scroll a cada commit do progresso */}
-      <div className="flex-1 flex flex-col min-h-0 relative">
-        <VisorPdf
-          blob={blob}
-          paginaInicial={Math.max(1, Math.min(paginaInicialRef.current || 1, pdf.totalPaginas))}
-          onPaginaVisivel={setPaginaVisivel}
-        />
+      {/* o PDF em si (pdf.js com camada de texto) — ocupa TODO o resto da tela, com o painel de
+          questões dockado ao lado em telas grandes (lg+) quando aberto (ver PainelQuestoes.tsx —
+          em telas menores ele continua como overlay por cima, sem espaço pros dois lado a lado).
+          A página inicial é a DO MOMENTO DA ABERTURA (ref), pra não pular o scroll a cada commit
+          do progresso */}
+      <div className="flex-1 flex min-h-0 relative">
+        <div className="flex-1 min-w-0 flex flex-col">
+          <VisorPdf
+            blob={blob}
+            paginaInicial={Math.max(1, Math.min(paginaInicialRef.current || 1, pdf.totalPaginas))}
+            onPaginaVisivel={setPaginaVisivel}
+          />
+        </div>
+
+        {painelQuestoesAberto && (
+          <PainelQuestoes
+            materia={pdf.materia}
+            topico={topicoAtual}
+            questoes={pdf.questoes}
+            onGerar={gerarQuestoes}
+            onMarcar={marcarQuestao}
+            onMarcarAlternativa={marcarAlternativa}
+            onRefazer={refazerQuestoes}
+            onFechar={() => setPainelQuestoesAberto(false)}
+          />
+        )}
       </div>
 
       {/* formulário manual do cartão — já travado na matéria/tópico do PDF, aberto pelos botões
@@ -356,21 +374,6 @@ export default function LeitorPdf({
           topico={pdf.topicos?.[0]}
           onSalvar={salvarCartaManual}
           onCancelar={() => setCartaForm(null)}
-        />
-      )}
-
-      {/* painel de questões escalonadas do tópico — também por cima do PDF, mesma família visual
-          do NovoCartaoForm */}
-      {painelQuestoesAberto && (
-        <PainelQuestoes
-          materia={pdf.materia}
-          topico={topicoAtual}
-          questoes={pdf.questoes}
-          onGerar={gerarQuestoes}
-          onMarcar={marcarQuestao}
-          onMarcarAlternativa={marcarAlternativa}
-          onRefazer={refazerQuestoes}
-          onFechar={() => setPainelQuestoesAberto(false)}
         />
       )}
 
