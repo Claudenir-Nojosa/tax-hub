@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { ArrowLeft, BookOpen, CheckCircle2, Clock, ClipboardList, Flag, ListChecks, Pause, Play } from "lucide-react";
 import {
@@ -201,7 +202,12 @@ export default function LeitorPdf({
     };
   }, []);
 
-  return (
+  // portado direto pro <body> — algum ancestral do shell do dashboard (sidebar/scroll container)
+  // quebrava o containing-block do position:fixed do leitor, deixando uma tira do topo da página
+  // por baixo (o hero verde da Biblioteca) visível acima da barra do leitor; portar pro body
+  // garante que o fixed inset-0 é sempre relativo à viewport de verdade, igual ao color picker
+  // do ConcursoModal.tsx
+  return createPortal(
     <div className="fixed inset-0 z-[100] bg-background flex flex-col">
       {/* barra fina: voltar · nome · parei na pág. · cronômetro — segue o tema do app (antes
           forçava bg-muted text-white sempre, ilegível no tema claro) */}
@@ -257,8 +263,8 @@ export default function LeitorPdf({
         {/* questões escalonadas do tópico (grupos A-D) — botões de criar cartão continuam ao lado */}
         <button
           type="button"
-          onClick={() => setPainelQuestoesAberto(true)}
-          title="Questões do tópico (grupos A-D)"
+          onClick={() => setPainelQuestoesAberto((v) => !v)}
+          title="Questões do tópico (grupos A-D) — clique de novo pra fechar"
           className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors flex-shrink-0 ${
             pdf.questoes ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-accent"
           }`}
@@ -383,6 +389,7 @@ export default function LeitorPdf({
           <CheckCircle2 className="h-3.5 w-3.5" /> {toast}
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
