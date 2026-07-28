@@ -37,6 +37,9 @@ interface Props {
   // troca a posição do tópico com o vizinho acima/abaixo (concurso.materias) — sem prop, as
   // setas de reordenar somem
   onMoveTopico?: (materia: string, topico: string, direcao: "up" | "down") => void;
+  // cria uma matéria nova (concurso.materias) — sem prop, o campo de adicionar matéria some
+  // (mesmo caso de sem concurso ativo)
+  onAddMateria?: (nome: string) => void;
 }
 
 // % de leitura dos PDFs da Biblioteca que cobrem este tópico (média ponderada pelo total de
@@ -112,12 +115,13 @@ function PercBadge({ perc }: { perc: number }) {
   return <span className={`text-xs ${cor}`}>{perc === 0 ? "—" : `${perc}%`}</span>;
 }
 
-export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = [], topicosExcluidos = [], onToggleTopicoExcluido, onDeleteTopico, onAddTopico, onMoveTopico }: Props) {
+export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = [], topicosExcluidos = [], onToggleTopicoExcluido, onDeleteTopico, onAddTopico, onMoveTopico, onAddMateria }: Props) {
   const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
   const [busca, setBusca] = useState("");
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
   // texto do campo "Adicionar tópico" de cada matéria, indexado pelo nome dela
   const [novoTopico, setNovoTopico] = useState<Record<string, string>>({});
+  const [novaMateria, setNovaMateria] = useState("");
 
   const toggleExpand = (nome: string) => {
     setExpandidos((prev) => ({ ...prev, [nome]: !prev[nome] }));
@@ -160,6 +164,16 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
       ...prev,
       cadernos: { ...prev.cadernos, [grupo]: { ...prev.cadernos[grupo], link: novo.trim() || undefined } },
     }));
+  };
+
+  const adicionarMateria = () => {
+    const texto = novaMateria.trim();
+    if (!texto || !onAddMateria) return;
+    onAddMateria(texto);
+    setNovaMateria("");
+    // já abre a matéria recém-criada — sem isso, o usuário adiciona a matéria e não vê onde
+    // ela foi parar até clicar pra expandir manualmente
+    setExpandidos((prev) => ({ ...prev, [texto]: true }));
   };
 
   const adicionarTopico = (materia: string) => {
@@ -501,6 +515,27 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
       {materiasFiltradas.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">
           Nenhum tópico encontrado para &quot;{busca}&quot;
+        </div>
+      )}
+
+      {/* Adicionar matéria — fica fora da lista filtrada, sempre visível independente da busca */}
+      {onAddMateria && (
+        <div className="flex items-center gap-2 bg-card rounded-xl border border-dashed border-border p-3">
+          <input
+            type="text"
+            value={novaMateria}
+            onChange={(e) => setNovaMateria(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && adicionarMateria()}
+            placeholder="Nome da nova matéria..."
+            className="flex-1 text-sm border border-border rounded-lg px-3 py-2 bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <button
+            type="button"
+            onClick={adicionarMateria}
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" /> Adicionar matéria
+          </button>
         </div>
       )}
     </div>

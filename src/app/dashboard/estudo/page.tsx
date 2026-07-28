@@ -12,6 +12,7 @@ import {
   topicoKey,
   filtrarTopicosExcluidos,
   NIVEL_CONFIG,
+  CORES_MATERIA,
   type EstudoState,
   type TopicoState,
   type AtividadeCalendario,
@@ -228,6 +229,36 @@ export default function EstudoPage() {
       if (!res.ok) throw new Error();
     }).catch(() => {
       toast.error("Não deu pra excluir o tópico — tente de novo");
+      setConcursoAtivo((prev) => (prev ? { ...prev, materias: anterior } : prev));
+    });
+  }, [concursoAtivo]);
+
+  // adicionar matéria DE VERDADE — mesmo mecanismo otimista de concurso.materias + PUT dos
+  // outros handlers desta seção. id/cor seguem exatamente a regra do ConcursoModal
+  // (adicionarMateria) pra não haver dois jeitos diferentes de criar matéria no mesmo app.
+  const addMateria = useCallback((nome: string) => {
+    if (!concursoAtivo) return;
+    const texto = nome.trim();
+    if (!texto) return;
+    const id = texto.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    const materiasAtuais = concursoAtivo.materias as MateriaConcurso[];
+    if (materiasAtuais.find((m) => m.id === id)) {
+      toast.error("Matéria já existe");
+      return;
+    }
+    const chavesCor = Object.keys(CORES_MATERIA);
+    const cor = chavesCor[materiasAtuais.length % chavesCor.length];
+    const materiasAtualizadas = [...materiasAtuais, { id, nome: texto, cor, topicos: [] }];
+    const anterior = concursoAtivo.materias;
+    setConcursoAtivo((prev) => (prev ? { ...prev, materias: materiasAtualizadas } : prev));
+    fetch(`/api/concurso/${concursoAtivo.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ materias: materiasAtualizadas }),
+    }).then((res) => {
+      if (!res.ok) throw new Error();
+    }).catch(() => {
+      toast.error("Não deu pra adicionar a matéria — tente de novo");
       setConcursoAtivo((prev) => (prev ? { ...prev, materias: anterior } : prev));
     });
   }, [concursoAtivo]);
@@ -457,6 +488,7 @@ export default function EstudoPage() {
               onDeleteTopico={concursoAtivo ? deleteTopico : undefined}
               onAddTopico={concursoAtivo ? addTopico : undefined}
               onMoveTopico={concursoAtivo ? moveTopico : undefined}
+              onAddMateria={concursoAtivo ? addMateria : undefined}
             />
           )}
 
