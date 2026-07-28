@@ -207,7 +207,11 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
       t.toLowerCase().includes(busca.toLowerCase()) ||
       m.nome.toLowerCase().includes(busca.toLowerCase())
     ),
-  })).filter((m) => m.topicos.length > 0);
+  })).filter((m) => busca === "" || m.topicos.length > 0);
+  // ^ sem busca, mostra a matéria mesmo com 0 tópicos (matéria recém-criada via "Adicionar
+  // matéria", que nasce sem tópico nenhum) — senão ela some da lista e o usuário não acha onde
+  // adicionar o primeiro tópico dela. Com busca ativa, mantém o comportamento de só mostrar
+  // quem bateu o filtro.
 
   return (
     <div className="space-y-4">
