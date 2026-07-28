@@ -17,7 +17,7 @@ import {
 } from "@/lib/estudo-data";
 import { resolverCorMateria } from "./trilha/trilha-ui";
 import { alvoLeituraPdf } from "./biblioteca/biblioteca-utils";
-import { ChevronDown, ChevronRight, Search, CheckSquare, Square, BookOpen, EyeOff, RotateCcw, Trash2, Link2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Search, CheckSquare, Square, BookOpen, EyeOff, RotateCcw, Trash2, Link2, Plus, ArrowUp, ArrowDown } from "lucide-react";
 
 interface Props {
   topicos: Record<string, TopicoState>;
@@ -31,6 +31,12 @@ interface Props {
   // excluir é DEFINITIVO: remove o tópico da matéria (concurso.materias) e apaga o progresso
   // dele — sem prop, o botão de lixeira não aparece (ex.: sem concurso ativo ainda carregado)
   onDeleteTopico?: (materia: string, topico: string) => void;
+  // cria um tópico novo na matéria (concurso.materias) — sem prop, o campo de adicionar some
+  // (mesmo caso de sem concurso ativo)
+  onAddTopico?: (materia: string, topico: string) => void;
+  // troca a posição do tópico com o vizinho acima/abaixo (concurso.materias) — sem prop, as
+  // setas de reordenar somem
+  onMoveTopico?: (materia: string, topico: string, direcao: "up" | "down") => void;
 }
 
 // % de leitura dos PDFs da Biblioteca que cobrem este tópico (média ponderada pelo total de
@@ -106,10 +112,12 @@ function PercBadge({ perc }: { perc: number }) {
   return <span className={`text-xs ${cor}`}>{perc === 0 ? "—" : `${perc}%`}</span>;
 }
 
-export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = [], topicosExcluidos = [], onToggleTopicoExcluido, onDeleteTopico }: Props) {
+export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = [], topicosExcluidos = [], onToggleTopicoExcluido, onDeleteTopico, onAddTopico, onMoveTopico }: Props) {
   const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
   const [busca, setBusca] = useState("");
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
+  // texto do campo "Adicionar tópico" de cada matéria, indexado pelo nome dela
+  const [novoTopico, setNovoTopico] = useState<Record<string, string>>({});
 
   const toggleExpand = (nome: string) => {
     setExpandidos((prev) => ({ ...prev, [nome]: !prev[nome] }));
@@ -152,6 +160,13 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
       ...prev,
       cadernos: { ...prev.cadernos, [grupo]: { ...prev.cadernos[grupo], link: novo.trim() || undefined } },
     }));
+  };
+
+  const adicionarTopico = (materia: string) => {
+    const texto = novoTopico[materia]?.trim();
+    if (!texto || !onAddTopico) return;
+    onAddTopico(materia, texto);
+    setNovoTopico((prev) => ({ ...prev, [materia]: "" }));
   };
 
   const excluirTopico = (materia: string, topico: string) => {
@@ -208,7 +223,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
           </div>
         ))}
         <div className="w-12 text-center">Média</div>
-        <div className="w-16" />
+        <div className="w-28" />
       </div>
 
       {/* Matérias */}
@@ -276,6 +291,28 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                 </div>
               </div>
 
+              {/* Adicionar tópico — só aparece com concurso ativo (onAddTopico vem de lá) */}
+              {isOpen && onAddTopico && (
+                <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/30">
+                  <input
+                    type="text"
+                    value={novoTopico[m.nome] ?? ""}
+                    onChange={(e) => setNovoTopico((prev) => ({ ...prev, [m.nome]: e.target.value }))}
+                    onKeyDown={(e) => e.key === "Enter" && adicionarTopico(m.nome)}
+                    placeholder="Adicionar tópico..."
+                    className="flex-1 text-xs border border-border rounded-lg px-3 py-1.5 bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => adicionarTopico(m.nome)}
+                    title="Adicionar tópico"
+                    className="flex-shrink-0 h-7 w-7 rounded-lg flex items-center justify-center text-primary hover:bg-primary/10 transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
               {/* Tópicos */}
               {isOpen && (
                 <div className="divide-y divide-border">
@@ -313,8 +350,30 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                       </p>
                     );
 
-                    const acoes = (onToggleTopicoExcluido || onDeleteTopico) && (
+                    const acoes = (onToggleTopicoExcluido || onDeleteTopico || onMoveTopico) && (
                       <>
+                        {onMoveTopico && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => onMoveTopico(m.nome, t, "up")}
+                              disabled={idx === 0}
+                              title="Mover pra cima"
+                              className="flex-shrink-0 p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-20 disabled:pointer-events-none"
+                            >
+                              <ArrowUp className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onMoveTopico(m.nome, t, "down")}
+                              disabled={idx === m.topicos.length - 1}
+                              title="Mover pra baixo"
+                              className="flex-shrink-0 p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-20 disabled:pointer-events-none"
+                            >
+                              <ArrowDown className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
                         {onToggleTopicoExcluido && (
                           <button
                             type="button"
@@ -390,7 +449,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                             })}
                           </div>
                           <div className="w-12 text-center">{mediaBadge}</div>
-                          {acoes && <div className="flex w-16 items-center gap-1 justify-center">{acoes}</div>}
+                          {acoes && <div className="flex w-28 items-center gap-0.5 justify-center">{acoes}</div>}
                         </div>
 
                         {/* ── Cartão em duas camadas (<sm) — toques maiores, sem cramming ── */}

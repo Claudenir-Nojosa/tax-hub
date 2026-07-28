@@ -232,6 +232,59 @@ export default function EstudoPage() {
     });
   }, [concursoAtivo]);
 
+  // adicionar tópico DE VERDADE — mesmo mecanismo do deleteTopico (mutação otimista de
+  // concurso.materias + PUT), só que insere em vez de remover. Sem entrada em `topicos` ainda
+  // (fica undefined até o usuário mexer nele — mesmo fallback de defaultTopicoState() já usado
+  // em toda leitura). Ignora se o tópico já existe na matéria, pra não duplicar a chave.
+  const addTopico = useCallback((materia: string, topico: string) => {
+    if (!concursoAtivo) return;
+    const texto = topico.trim();
+    if (!texto) return;
+    const materiasAtualizadas = (concursoAtivo.materias as MateriaConcurso[]).map((m) =>
+      m.nome === materia && !m.topicos.includes(texto) ? { ...m, topicos: [...m.topicos, texto] } : m
+    );
+    const anterior = concursoAtivo.materias;
+    setConcursoAtivo((prev) => (prev ? { ...prev, materias: materiasAtualizadas } : prev));
+    fetch(`/api/concurso/${concursoAtivo.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ materias: materiasAtualizadas }),
+    }).then((res) => {
+      if (!res.ok) throw new Error();
+    }).catch(() => {
+      toast.error("Não deu pra adicionar o tópico — tente de novo");
+      setConcursoAtivo((prev) => (prev ? { ...prev, materias: anterior } : prev));
+    });
+  }, [concursoAtivo]);
+
+  // reordenar um tópico dentro da matéria (troca de posição com o vizinho acima/abaixo) — mesmo
+  // mecanismo otimista de concurso.materias + PUT do addTopico/deleteTopico. A ordem em si não
+  // afeta `topicos`/progresso (chaveado por materia+topico), só a ordem de exibição.
+  const moveTopico = useCallback((materia: string, topico: string, direcao: "up" | "down") => {
+    if (!concursoAtivo) return;
+    const materiasAtualizadas = (concursoAtivo.materias as MateriaConcurso[]).map((m) => {
+      if (m.nome !== materia) return m;
+      const idx = m.topicos.indexOf(topico);
+      const alvo = direcao === "up" ? idx - 1 : idx + 1;
+      if (idx === -1 || alvo < 0 || alvo >= m.topicos.length) return m;
+      const topicos = [...m.topicos];
+      [topicos[idx], topicos[alvo]] = [topicos[alvo], topicos[idx]];
+      return { ...m, topicos };
+    });
+    const anterior = concursoAtivo.materias;
+    setConcursoAtivo((prev) => (prev ? { ...prev, materias: materiasAtualizadas } : prev));
+    fetch(`/api/concurso/${concursoAtivo.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ materias: materiasAtualizadas }),
+    }).then((res) => {
+      if (!res.ok) throw new Error();
+    }).catch(() => {
+      toast.error("Não deu pra reordenar — tente de novo");
+      setConcursoAtivo((prev) => (prev ? { ...prev, materias: anterior } : prev));
+    });
+  }, [concursoAtivo]);
+
   // cartas geradas pelo grifo no leitor de PDF — prepend no baralho (mesma ordem do CartasTab)
   const adicionarCartas = useCallback((novas: Carta[]) => {
     setState((prev) => ({ ...prev, cartas: [...novas, ...prev.cartas] }));
@@ -402,6 +455,8 @@ export default function EstudoPage() {
               topicosExcluidos={state.topicosExcluidos}
               onToggleTopicoExcluido={toggleTopicoExcluido}
               onDeleteTopico={concursoAtivo ? deleteTopico : undefined}
+              onAddTopico={concursoAtivo ? addTopico : undefined}
+              onMoveTopico={concursoAtivo ? moveTopico : undefined}
             />
           )}
 
