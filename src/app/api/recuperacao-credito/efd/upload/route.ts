@@ -1,22 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "../../../../../../auth"
 import db from "@/lib/db"
-import { processarArquivosEfd } from "@/lib/efd-icms-parser"
-import { parseEntradasEfdIcmsIpi } from "@/lib/efd-icms-ipi-entradas-parser"
-import { detectarTipoEfd, processarArquivosEfdContribuicoes } from "@/lib/efd-contribuicoes-parser"
-import { processarArquivosEcf, temBlocoPresumido } from "@/lib/ecf-parser"
-import { detectarDctf, processarArquivosDctf } from "@/lib/dctf-parser"
-import { detectarEcd, processarArquivosEcd } from "@/lib/ecd-parser"
-
-function somenteDigitos(v: string) {
-  return v.replace(/\D/g, "")
-}
+import { processarArquivoEfdRecuperacaoCredito } from "@/lib/recuperacao-credito/processar-efd"
 
 // POST — upload de 1+ arquivos fiscais em texto (.txt EFD/ECF ou .dec DCTF). Detecta
 // automaticamente se cada arquivo é um EFD ICMS/IPI, EFD Contribuições (PIS/COFINS), ECF
-// (IRPJ/CSLL) ou DCTF (.dec) pelo conteúdo e grava no model certo. EFDs/DCTF: 1 arquivo = 1
-// competência (mês); ECF: 1 arquivo = 1 ano-calendário.
-// Falhas são por-arquivo: um arquivo ruim não impede os outros de serem salvos.
+// (IRPJ/CSLL) ou DCTF (.dec) pelo conteúdo e grava no model certo — a lógica de dispatch em si
+// vive em src/lib/recuperacao-credito/processar-efd.ts (reaproveitada também pelo fluxo de
+// upload via Storage, ver .../efd/processar-storage/route.ts). EFDs/DCTF: 1 arquivo = 1
+// competência (mês); ECF: 1 arquivo = 1 ano-calendário. Falhas são por-arquivo: um arquivo ruim
+// não impede os outros de serem salvos.
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) {
@@ -47,171 +40,12 @@ export async function POST(req: NextRequest) {
   const erros: { arquivo: string; motivo: string }[] = []
 
   for (const file of files) {
-    const nomeLower = file.name.toLowerCase()
-    if (!nomeLower.endsWith(".txt") && !nomeLower.endsWith(".dec")) {
-      erros.push({ arquivo: file.name, motivo: "Apenas arquivos .txt (EFD/ECF) ou .dec (DCTF) são aceitos" })
-      continue
-    }
-
     try {
-      const conteudo = await file.text()
-
-      if (detectarEcd(conteudo)) {
-        const [dados] = await processarArquivosEcd([file])
-        if (!dados) {
-          erros.push({ arquivo: file.name, motivo: "Não foi possível ler o plano de contas (I050) da ECD" })
-          continue
-        }
-        if (somenteDigitos(dados.cnpj) !== somenteDigitos(cliente.cnpj)) {
-          erros.push({
-            arquivo: file.name,
-            motivo: `CNPJ da ECD (${dados.cnpj}) não corresponde ao cliente selecionado (${cliente.cnpj})`,
-          })
-          continue
-        }
-        await db.declaracaoEcd.upsert({
-          where: { projetoId_competencia: { projetoId: projeto.id, competencia: dados.anoCalendario } },
-          create: {
-            projetoId: projeto.id,
-            competencia: dados.anoCalendario,
-            cnpj: dados.cnpj,
-            arquivoNome: file.name,
-            dados: dados as unknown as object,
-          },
-          update: { cnpj: dados.cnpj, arquivoNome: file.name, dados: dados as unknown as object },
-        })
-        salvos.push({ competencia: dados.anoCalendario, arquivoNome: file.name, tipo: "ECD" })
-        continue
-      }
-
-      if (detectarDctf(conteudo)) {
-        const [dados] = await processarArquivosDctf([file])
-        if (!dados) {
-          erros.push({ arquivo: file.name, motivo: "Não foi possível ler os débitos da DCTF (.dec)" })
-          continue
-        }
-        if (somenteDigitos(dados.cnpj) !== somenteDigitos(cliente.cnpj)) {
-          erros.push({
-            arquivo: file.name,
-            motivo: `CNPJ da DCTF (${dados.cnpj}) não corresponde ao cliente selecionado (${cliente.cnpj})`,
-          })
-          continue
-        }
-        await db.declaracaoDctf.upsert({
-          where: { projetoId_competencia: { projetoId: projeto.id, competencia: dados.competencia } },
-          create: {
-            projetoId: projeto.id,
-            competencia: dados.competencia,
-            cnpj: dados.cnpj,
-            arquivoNome: file.name,
-            dados: dados as unknown as object,
-          },
-          update: { cnpj: dados.cnpj, arquivoNome: file.name, dados: dados as unknown as object },
-        })
-        salvos.push({ competencia: dados.competencia, arquivoNome: file.name, tipo: "DCTF" })
-        continue
-      }
-
-      const tipo = detectarTipoEfd(conteudo)
-
-      if (!tipo) {
-        erros.push({ arquivo: file.name, motivo: "Não foi possível identificar o tipo do arquivo (EFD ICMS/IPI, EFD Contribuições, ECF ou DCTF)" })
-        continue
-      }
-
-      if (tipo === "ECF") {
-        const [dados] = await processarArquivosEcf([file])
-        if (!dados) {
-          erros.push({ arquivo: file.name, motivo: "Não foi possível ler o registro 0000 (cabeçalho) da ECF" })
-          continue
-        }
-        if (somenteDigitos(dados.cnpj) !== somenteDigitos(cliente.cnpj)) {
-          erros.push({
-            arquivo: file.name,
-            motivo: `CNPJ da ECF (${dados.cnpj}) não corresponde ao cliente selecionado (${cliente.cnpj})`,
-          })
-          continue
-        }
-        if (!temBlocoPresumido(dados)) {
-          erros.push({
-            arquivo: file.name,
-            motivo:
-              "ECF sem apuração de Lucro Presumido (bloco P) — a apuração via bloco N (Lucro Real) ainda não é suportada",
-          })
-          continue
-        }
-
-        await db.declaracaoEcf.upsert({
-          where: { projetoId_competencia: { projetoId: projeto.id, competencia: dados.anoCalendario } },
-          create: {
-            projetoId: projeto.id,
-            competencia: dados.anoCalendario,
-            cnpj: dados.cnpj,
-            arquivoNome: file.name,
-            dados: dados as unknown as object,
-          },
-          update: { cnpj: dados.cnpj, arquivoNome: file.name, dados: dados as unknown as object },
-        })
-
-        salvos.push({ competencia: dados.anoCalendario, arquivoNome: file.name, tipo: "ECF" })
-      } else if (tipo === "ICMS_IPI") {
-        const [dados] = await processarArquivosEfd([file])
-        if (!dados) {
-          erros.push({ arquivo: file.name, motivo: "Não foi possível ler o registro 0000 (cabeçalho) do EFD" })
-          continue
-        }
-        if (somenteDigitos(dados.cnpj) !== somenteDigitos(cliente.cnpj)) {
-          erros.push({
-            arquivo: file.name,
-            motivo: `CNPJ do EFD (${dados.cnpj}) não corresponde ao cliente selecionado (${cliente.cnpj})`,
-          })
-          continue
-        }
-
-        // Linhas item a item (C100/C170) pra aba "Entradas" — mesmo parser usado na Reforma
-        // Tributária (src/lib/efd-icms-ipi-entradas-parser.ts), reaproveitado aqui sem alteração.
-        dados.linhasEntrada = parseEntradasEfdIcmsIpi(conteudo).linhas
-
-        await db.declaracaoEfdIcmsIpi.upsert({
-          where: { projetoId_competencia: { projetoId: projeto.id, competencia: dados.competencia } },
-          create: {
-            projetoId: projeto.id,
-            competencia: dados.competencia,
-            cnpj: dados.cnpj,
-            arquivoNome: file.name,
-            dados: dados as unknown as object,
-          },
-          update: { cnpj: dados.cnpj, arquivoNome: file.name, dados: dados as unknown as object },
-        })
-
-        salvos.push({ competencia: dados.competencia, arquivoNome: file.name, tipo: "ICMS_IPI" })
+      const resultado = await processarArquivoEfdRecuperacaoCredito(file, projeto, cliente)
+      if (resultado.ok) {
+        salvos.push({ competencia: resultado.competencia, arquivoNome: file.name, tipo: resultado.tipo })
       } else {
-        const [dados] = await processarArquivosEfdContribuicoes([file])
-        if (!dados) {
-          erros.push({ arquivo: file.name, motivo: "Não foi possível ler o registro 0000 (cabeçalho) do EFD" })
-          continue
-        }
-        if (somenteDigitos(dados.cnpj) !== somenteDigitos(cliente.cnpj)) {
-          erros.push({
-            arquivo: file.name,
-            motivo: `CNPJ do EFD (${dados.cnpj}) não corresponde ao cliente selecionado (${cliente.cnpj})`,
-          })
-          continue
-        }
-
-        await db.declaracaoEfdContribuicoes.upsert({
-          where: { projetoId_competencia: { projetoId: projeto.id, competencia: dados.competencia } },
-          create: {
-            projetoId: projeto.id,
-            competencia: dados.competencia,
-            cnpj: dados.cnpj,
-            arquivoNome: file.name,
-            dados: dados as unknown as object,
-          },
-          update: { cnpj: dados.cnpj, arquivoNome: file.name, dados: dados as unknown as object },
-        })
-
-        salvos.push({ competencia: dados.competencia, arquivoNome: file.name, tipo: "CONTRIBUICOES" })
+        erros.push({ arquivo: file.name, motivo: resultado.motivo })
       }
     } catch (e) {
       erros.push({ arquivo: file.name, motivo: e instanceof Error ? e.message : "Erro ao processar arquivo" })

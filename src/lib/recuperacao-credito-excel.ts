@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs"
 import { montarAbaIcms, type DeclaracaoEfdRegistro } from "./efd-icms-excel"
-import { montarAbaEntradas } from "./entradas-icms-excel"
+import { montarAbaEntradasCabecalho } from "./entradas-icms-excel"
 import { montarAbasPisCofins, type DeclaracaoEfdContribuicoesRegistro } from "./efd-contribuicoes-excel"
 import { montarAbaComprovantePagamento } from "./comprovante-pagamento-excel"
 import type { DadosComprovantePagamento } from "./comprovante-pagamento-parser"
@@ -23,8 +23,9 @@ import type { AnaliseChecklist } from "./checklist-excel"
 import { compararRetencoes, type ComparativoRetencao, type TributoRetencao } from "./retencoes-analise"
 import { analisarEstoqueAbertura } from "./estoque-abertura-analise"
 import { montarAbaSelic } from "./selic-excel"
-import { montarAbaAntecipacaoIcmsStCabecalho, finalizarExcelComAntecipacaoIcmsSt, type PendenteAbaAntecipacaoIcmsSt } from "./icms-st-antecipacao-excel"
+import { montarAbaAntecipacaoIcmsStCabecalho } from "./icms-st-antecipacao-excel"
 import { elegivelAntecipacaoIcmsSt } from "./icms-st-antecipacao-ce"
+import { finalizarExcelComAbasHibridas, type AbaHibridaPendente } from "./excel-xml-hibrido"
 
 const BRL_FMT = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
 
@@ -237,26 +238,27 @@ export async function exportarDeclaracaoFiscalExcel(
   const wsMenu = temCadastro ? criarAbaMenu(wb) : null
   const wsChecklist = criarAbaChecklist(wb)
 
-  // Antecipação ICMS-ST (Ceará) usa geração híbrida (ExcelJS só pro cabeçalho + linhas de dado
-  // injetadas via XML/jszip, ver icms-st-antecipacao-excel.ts) pra não estourar memória do
+  // Entradas e Antecipação ICMS-ST (Ceará) usam geração híbrida (ExcelJS só pro cabeçalho + linhas
+  // de dado injetadas via XML/jszip, ver excel-xml-hibrido.ts) pra não estourar memória do
   // navegador com EFDs grandes — por isso o `wb.xlsx.writeBuffer()` final não pode ser feito
-  // direto aqui: precisa passar por `finalizarExcelComAntecipacaoIcmsSt` (abaixo), que só faz o
-  // round-trip extra pelo jszip quando essa aba de fato entrou (`pendenteIcmsSt !== null`).
-  let pendenteIcmsSt: PendenteAbaAntecipacaoIcmsSt | null = null
+  // direto aqui: precisa passar por `finalizarExcelComAbasHibridas` (abaixo), que só faz o
+  // round-trip extra pelo jszip quando pelo menos uma dessas abas de fato entrou.
+  const pendentesHibridos: AbaHibridaPendente[] = []
 
   if (temIcms) {
     await montarAbaIcms(wb, dados.icms!, nomeCliente)
-    await montarAbaEntradas(
+    const { pendente: pendenteEntradas } = await montarAbaEntradasCabecalho(
       wb,
       dados.icms!.map((d) => ({ competencia: d.competencia, linhasEntrada: d.dados.linhasEntrada })),
       nomeCliente
     )
+    if (pendenteEntradas) pendentesHibridos.push(pendenteEntradas)
     // Antecipação ICMS-ST (Ceará) — só entra quando o cliente é elegível (UF CE + CNAE têxtil no
     // Cartão CNPJ, ver elegivelAntecipacaoIcmsSt) e a aba não foi desmarcada no diálogo de export.
     if (elegivelAntecipacaoIcmsSt(dados.cadastro?.consultaCnpj) && (incluir?.antecipacaoIcmsSt ?? true)) {
       const linhasEntradaTodas = dados.icms!.flatMap((d) => d.dados.linhasEntrada ?? [])
-      const resultado = await montarAbaAntecipacaoIcmsStCabecalho(wb, linhasEntradaTodas, nomeCliente)
-      pendenteIcmsSt = resultado.pendente
+      const { pendente: pendenteIcmsSt } = await montarAbaAntecipacaoIcmsStCabecalho(wb, linhasEntradaTodas, nomeCliente)
+      if (pendenteIcmsSt) pendentesHibridos.push(pendenteIcmsSt)
     }
   }
   const refsDebito = temPisCofins ? await montarAbasPisCofins(wb, dados.pisCofins!, nomeCliente) : null
@@ -336,7 +338,7 @@ export async function exportarDeclaracaoFiscalExcel(
   // só cadastro importado → arquivo ainda precisa de um contexto no nome
   const contexto = contextos.join(", ") || "Cadastro"
 
-  const blob = await finalizarExcelComAntecipacaoIcmsSt(wb, pendenteIcmsSt)
+  const blob = await finalizarExcelComAbasHibridas(wb, pendentesHibridos)
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url

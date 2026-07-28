@@ -31,6 +31,7 @@ import type { DadosCadastroEmpresa } from "@/lib/cadastro-parser";
 import { resumoSimples } from "@/lib/cadastro-excel";
 import { calcularAntecipacaoItem, elegivelAntecipacaoIcmsSt, parseDataBr } from "@/lib/icms-st-antecipacao-ce";
 import { SecaoColapsavel, GraficoBarras, GraficoSeries, ListaArquivosColapsavel } from "@/components/recuperacao-credito/painel-importados";
+import { mintarUrlsUpload, uploadArquivoStorage, comConcorrencia } from "@/lib/recuperacao-credito-upload-client";
 import SelecionarAbasExportDialog, { type OpcaoAbaExport } from "@/components/recuperacao-credito/SelecionarAbasExportDialog";
 import {
   FileSearch,
@@ -207,9 +208,11 @@ function isEfd(nome: string) {
 }
 
 // Lê a resposta como JSON com segurança — hosts serverless (Vercel) devolvem corpo não-JSON
-// ("Request Entity Too Large" em texto puro, sem CORS/JSON) quando o payload de upload excede o
-// limite da plataforma (~4.5MB), e `res.json()` direto quebra com "Unexpected token" nesse caso,
-// mascarando a causa real do erro.
+// ("Request Entity Too Large" em texto puro, sem CORS/JSON) quando o payload excede o limite da
+// plataforma (~4.5MB), e `res.json()` direto quebra com "Unexpected token" nesse caso, mascarando
+// a causa real do erro. PDFs e EFDs não passam mais pelo corpo dessa função (sobem direto pro
+// Storage — ver recuperacao-credito-upload-client.ts), então esse caso só ainda pode acontecer no
+// caminho de xlsx/csv (stub, fora de escopo aqui).
 async function parseRespostaJson(res: Response): Promise<Record<string, unknown>> {
   const texto = await res.text();
   try {
@@ -221,27 +224,6 @@ async function parseRespostaJson(res: Response): Promise<Record<string, unknown>
         : `Erro inesperado do servidor (${res.status}).`
     );
   }
-}
-
-// Limite de payload por requisição de upload, com margem de segurança abaixo do limite de ~4.5MB
-// de request body de funções serverless (Vercel) — nunca manda um lote maior que isso de uma vez.
-const TAMANHO_MAX_LOTE_BYTES = 3.5 * 1024 * 1024;
-
-function dividirEmLotes(arquivos: ArquivoCarregado[]): ArquivoCarregado[][] {
-  const lotes: ArquivoCarregado[][] = [];
-  let loteAtual: ArquivoCarregado[] = [];
-  let tamanhoAtual = 0;
-  for (const a of arquivos) {
-    if (loteAtual.length > 0 && tamanhoAtual + a.size > TAMANHO_MAX_LOTE_BYTES) {
-      lotes.push(loteAtual);
-      loteAtual = [];
-      tamanhoAtual = 0;
-    }
-    loteAtual.push(a);
-    tamanhoAtual += a.size;
-  }
-  if (loteAtual.length > 0) lotes.push(loteAtual);
-  return lotes;
 }
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
@@ -650,33 +632,75 @@ export default function RecuperacaoCreditoPage() {
     [adicionarArquivos]
   );
 
-  // Um único endpoint recebe qualquer PDF e detecta sozinho se é Declaração/Extrato do Simples
-  // Nacional ou Comprovante de Arrecadação de DARF pelo conteúdo — por isso recarrega as duas
-  // listas depois. Envia em lotes (ver dividirEmLotes) pra não estourar o limite de payload de
-  // upload da plataforma quando o usuário solta vários PDFs de uma vez.
-  const processarPdfs = async (pdfs: ArquivoCarregado[]) => {
-    if (!projetoSelecionadoId) return;
-    const salvos: { tipo: string; detalhe: string }[] = [];
+  // Sobe um lote de arquivos DIRETO pro Supabase Storage (mint de URLs assinadas + upload com
+  // concorrência limitada — ver recuperacao-credito-upload-client.ts), depois chama o endpoint de
+  // processamento em LOOP até não sobrar nenhum `restante` (o servidor processa por orçamento de
+  // tempo, não tudo de uma chamada só — ver .../pdf|efd/processar-storage/route.ts). Substitui o
+  // antigo corte em lotes de 3,5MB enviados um de cada vez (dividirEmLotes) — que, além de lento
+  // pra centenas de arquivos, falhava direto pra qualquer arquivo ÚNICO acima desse tamanho
+  // (bug real reportado pelo usuário: um EFD Contribuições de 4,5MB sozinho).
+  async function enviarViaStorage<S>(
+    projetoId: string,
+    arquivos: ArquivoCarregado[],
+    endpointProcessar: string
+  ): Promise<{ salvos: S[]; erros: { arquivo: string; motivo: string }[] }> {
+    const salvos: S[] = [];
     const erros: { arquivo: string; motivo: string }[] = [];
 
-    for (const lote of dividirEmLotes(pdfs)) {
-      const form = new FormData();
-      form.append("projetoId", projetoSelecionadoId);
-      lote.forEach((a) => form.append("files", a.file, a.name));
+    const { urls, erros: errosMint } = await mintarUrlsUpload(
+      projetoId,
+      arquivos.map((a) => ({ nome: a.name, tamanho: a.size }))
+    );
+    for (const erro of errosMint) erros.push({ arquivo: erro.nome, motivo: erro.motivo });
 
+    const porNome = new Map(arquivos.map((a) => [a.name, a]));
+    const uploadsOk: { path: string; nomeOriginal: string }[] = [];
+    await comConcorrencia(urls, async (urlMintada) => {
+      const arquivo = porNome.get(urlMintada.nome);
+      if (!arquivo) return;
       try {
-        const res = await fetch("/api/recuperacao-credito/pdf/upload", { method: "POST", body: form });
+        await uploadArquivoStorage(urlMintada, arquivo.file);
+        uploadsOk.push({ path: urlMintada.path, nomeOriginal: urlMintada.nome });
+      } catch (e) {
+        erros.push({ arquivo: urlMintada.nome, motivo: e instanceof Error ? e.message : "Erro ao subir arquivo" });
+      }
+    });
+
+    let restantes = uploadsOk;
+    while (restantes.length > 0) {
+      try {
+        const res = await fetch(endpointProcessar, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projetoId, arquivos: restantes }),
+        });
         const data = await parseRespostaJson(res);
         if (!res.ok) {
-          erros.push({ arquivo: lote.map((a) => a.name).join(", "), motivo: (data.error as string) ?? "Erro ao processar PDFs" });
-          continue;
+          for (const a of restantes) erros.push({ arquivo: a.nomeOriginal, motivo: (data.error as string) ?? "Erro ao processar arquivo" });
+          break;
         }
-        salvos.push(...((data.salvos as { tipo: string; detalhe: string }[]) ?? []));
+        salvos.push(...((data.salvos as S[]) ?? []));
         erros.push(...((data.erros as { arquivo: string; motivo: string }[]) ?? []));
+        restantes = (data.restantes as { path: string; nomeOriginal: string }[]) ?? [];
       } catch (e) {
-        erros.push({ arquivo: lote.map((a) => a.name).join(", "), motivo: e instanceof Error ? e.message : "Erro ao processar PDFs" });
+        for (const a of restantes) erros.push({ arquivo: a.nomeOriginal, motivo: e instanceof Error ? e.message : "Erro ao processar arquivo" });
+        break;
       }
     }
+
+    return { salvos, erros };
+  }
+
+  // Um único endpoint recebe qualquer PDF e detecta sozinho se é Declaração/Extrato do Simples
+  // Nacional ou Comprovante de Arrecadação de DARF pelo conteúdo — por isso recarrega as duas
+  // listas depois.
+  const processarPdfs = async (pdfs: ArquivoCarregado[]) => {
+    if (!projetoSelecionadoId) return;
+    const { salvos, erros } = await enviarViaStorage<{ tipo: string; detalhe: string }>(
+      projetoSelecionadoId,
+      pdfs,
+      "/api/recuperacao-credito/pdf/processar-storage"
+    );
 
     const salvosPgdas = salvos.filter((s) => s.tipo === "PGDAS").length;
     const salvosComprovante = salvos.filter((s) => s.tipo === "COMPROVANTE");
@@ -704,31 +728,14 @@ export default function RecuperacaoCreditoPage() {
   };
 
   // Um único endpoint recebe qualquer EFD (.txt) e detecta sozinho se é ICMS/IPI ou
-  // Contribuições (PIS/COFINS) pelo conteúdo — por isso recarrega as duas listas depois. Também
-  // enviado em lotes, mesmo motivo do processarPdfs.
+  // Contribuições (PIS/COFINS) pelo conteúdo — por isso recarrega as duas listas depois.
   const processarEfds = async (efds: ArquivoCarregado[]) => {
     if (!projetoSelecionadoId) return;
-    const salvos: { tipo: string }[] = [];
-    const erros: { arquivo: string; motivo: string }[] = [];
-
-    for (const lote of dividirEmLotes(efds)) {
-      const form = new FormData();
-      form.append("projetoId", projetoSelecionadoId);
-      lote.forEach((a) => form.append("files", a.file, a.name));
-
-      try {
-        const res = await fetch("/api/recuperacao-credito/efd/upload", { method: "POST", body: form });
-        const data = await parseRespostaJson(res);
-        if (!res.ok) {
-          erros.push({ arquivo: lote.map((a) => a.name).join(", "), motivo: (data.error as string) ?? "Erro ao processar EFDs" });
-          continue;
-        }
-        salvos.push(...((data.salvos as { tipo: string }[]) ?? []));
-        erros.push(...((data.erros as { arquivo: string; motivo: string }[]) ?? []));
-      } catch (e) {
-        erros.push({ arquivo: lote.map((a) => a.name).join(", "), motivo: e instanceof Error ? e.message : "Erro ao processar EFDs" });
-      }
-    }
+    const { salvos, erros } = await enviarViaStorage<{ tipo: string }>(
+      projetoSelecionadoId,
+      efds,
+      "/api/recuperacao-credito/efd/processar-storage"
+    );
 
     const salvosIcms = salvos.filter((s) => s.tipo === "ICMS_IPI").length;
     const salvosContrib = salvos.filter((s) => s.tipo === "CONTRIBUICOES").length;

@@ -1,5 +1,4 @@
 import ExcelJS from "exceljs"
-import JSZip from "jszip"
 import type { LinhaEntradaEfd } from "./efd-icms-ipi-entradas-parser"
 import {
   calcularAntecipacaoItem,
@@ -11,6 +10,13 @@ import {
   type Situacao,
 } from "./icms-st-antecipacao-ce"
 import { colLetra } from "./reforma-excel/coluna-letra"
+import {
+  celulaValor,
+  celulaFormula,
+  gerarLinhasXmlEmLotes,
+  finalizarExcelComAbasHibridas,
+  type AbaHibridaPendente,
+} from "./excel-xml-hibrido"
 
 // Export da automação "Antecipação ICMS-ST (Ceará)" — mesma convenção visual usada em todo o
 // projeto (helpers duplicados de propósito, ver docs/recuperacao-credito.md seção 12).
@@ -32,7 +38,6 @@ import { colLetra } from "./reforma-excel/coluna-letra"
 const BRL = '_-"R$"* #,##0.00_-;-"R$"* #,##0.00_-;_-"R$"* "-"??_-;_-@_-'
 const COR_HEADER_BG = "FF0E2841"
 const COR_HEADER_TEXTO = "FFFFFFFF"
-const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 const LOGO_URL = "/icons/taxhub_logo_full.png"
 
@@ -69,13 +74,6 @@ async function carregarLogoBase64(): Promise<string | null> {
   } catch {
     return null
   }
-}
-
-// Devolve o controle ao event loop por um instante — sem isso, gerar dezenas/centenas de
-// milhares de linhas de XML roda 100% síncrono e o navegador mostra "Página sem resposta"
-// (mesmo helper de reforma-excel/yield.ts, duplicado de propósito).
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 const LABEL_SITUACAO: Record<Situacao, string> = {
@@ -249,13 +247,12 @@ const colAux2 = colLetra(COL_INICIO + COLUNAS.length + 3)
 const colAux3 = colLetra(COL_INICIO + COLUNAS.length + 4)
 const UFS_REGIAO = Object.keys(REGIAO_UF)
 
-// Descritor do que falta gerar como XML depois que o ExcelJS grava o stub (cabeçalho) — tudo que
-// `gerarLinhasXmlAntecipacaoIcmsSt` precisa pra montar as linhas de dado sem depender do
-// workbook/worksheet do ExcelJS (que nesse ponto já foi serializado pro buffer base).
-export interface PendenteAbaAntecipacaoIcmsSt {
-  sheetName: string
+// O que `gerarLinhasXmlAntecipacaoIcmsSt` precisa pra montar as linhas de dado sem depender do
+// workbook/worksheet do ExcelJS (que nesse ponto já foi serializado pro buffer base) — fechado
+// numa closure dentro do `AbaHibridaPendente.gerarLinhasXml` devolvido por
+// `montarAbaAntecipacaoIcmsStCabecalho` (ver excel-xml-hibrido.ts).
+interface DadosXmlAntecipacaoIcmsSt {
   calculadas: LinhaCalculada[]
-  dimensaoRef: string
   linhaCsosnInicio: number
   linhaUfInicio: number
   linhaUfFim: number
@@ -280,7 +277,7 @@ export async function montarAbaAntecipacaoIcmsStCabecalho(
   wb: ExcelJS.Workbook,
   linhas: LinhaEntradaEfd[],
   nomeEmpresa: string
-): Promise<{ calculadas: LinhaCalculada[]; pendente: PendenteAbaAntecipacaoIcmsSt | null }> {
+): Promise<{ calculadas: LinhaCalculada[]; pendente: AbaHibridaPendente | null }> {
   const calculadas: LinhaCalculada[] = linhas.map((linha) => ({ linha, resultado: calcularAntecipacaoItem(linha) }))
 
   const sheetName = "Antecipação ICMS-ST"
@@ -368,95 +365,28 @@ export async function montarAbaAntecipacaoIcmsStCabecalho(
     ws.getCell(`${colAux3}${r}`).value = adicionalRegiao(uf)
   })
 
-  const colFim = colLetra(COL_INICIO + COLUNAS.length - 1)
-  const pendente: PendenteAbaAntecipacaoIcmsSt = {
+  const dadosXml: DadosXmlAntecipacaoIcmsSt = { calculadas, linhaCsosnInicio, linhaUfInicio, linhaUfFim }
+  const pendente: AbaHibridaPendente = {
     sheetName,
-    calculadas,
     dimensaoRef: `B1:${colAux3}${Math.max(ultimaLinhaDados, linhaUfFim)}`,
-    linhaCsosnInicio,
-    linhaUfInicio,
-    linhaUfFim,
+    gerarLinhasXml: (estilosColunas, onProgress) => gerarLinhasXmlAntecipacaoIcmsSt(dadosXml, estilosColunas, onProgress),
   }
   return { calculadas, pendente }
 }
 
 // ---------------------------------------------------------------------------------------------
 // Geração das LINHAS DE DADO como XML de planilha (SpreadsheetML), injetadas no .xlsx depois que
-// o ExcelJS grava o cabeçalho. Strings usam inlineStr (sem sharedStrings); células sem estilo
-// próprio herdam o numFmt/fonte/alinhamento do <col> escrito pelo cabeçalho (atributo s="N").
-// Mesma técnica de reforma-excel/anos.ts (gerarXmlDadosAno).
+// o ExcelJS grava o cabeçalho (mecânica genérica — lotes, yield, bytes — em excel-xml-hibrido.ts).
+// Strings usam inlineStr (sem sharedStrings); células sem estilo próprio herdam o
+// numFmt/fonte/alinhamento do <col> escrito pelo cabeçalho (atributo s="N").
 // ---------------------------------------------------------------------------------------------
 
-const EPOCH_EXCEL = 25569 // dias entre 1899-12-30 e 1970-01-01
-
-function escXml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-}
-
-function numXml(n: number): string {
-  if (!Number.isFinite(n)) return "0"
-  return String(Math.round(n * 1e10) / 1e10) // evita 1.0000000000000002e-3 nas células
-}
-
-// Extrai do XML do stub (gerado pelo ExcelJS) o id de estilo de cada coluna (<col style="N">).
-// As células injetadas precisam do atributo s="N" explícito: o Excel NÃO aplica o estilo da
-// coluna a células gravadas sem estilo próprio.
-function extrairEstilosDasColunas(sheetXml: string): Map<number, string> {
-  const estilos = new Map<number, string>() // nº da coluna (1-based) → id do estilo
-  for (const m of sheetXml.matchAll(/<col[^>]*min="(\d+)"[^>]*max="(\d+)"[^>]*style="(\d+)"[^>]*\/>/g)) {
-    const min = Number(m[1])
-    const max = Number(m[2])
-    for (let c = min; c <= max; c++) estilos.set(c, m[3])
-  }
-  return estilos
-}
-
-// Localiza o arquivo XML de uma aba dentro do .xlsx (nome da aba → rId → caminho da worksheet).
-async function mapearCaminhosDasAbas(zip: JSZip): Promise<Map<string, string>> {
-  const workbookXml = await zip.file("xl/workbook.xml")!.async("string")
-  const relsXml = await zip.file("xl/_rels/workbook.xml.rels")!.async("string")
-  const caminhoPorRid = new Map<string, string>()
-  for (const m of relsXml.matchAll(/<Relationship[^>]*Id="(rId\d+)"[^>]*Target="([^"]+)"/g)) {
-    caminhoPorRid.set(m[1], `xl/${m[2].replace(/^\//, "").replace(/^xl\//, "")}`)
-  }
-  const caminhoPorNome = new Map<string, string>()
-  for (const m of workbookXml.matchAll(/<sheet[^>]*name="([^"]+)"[^>]*r:id="(rId\d+)"/g)) {
-    const caminho = caminhoPorRid.get(m[2])
-    if (caminho) caminhoPorNome.set(m[1], caminho)
-  }
-  return caminhoPorNome
-}
-
-function celulaValor(ref: string, sAttr: string, v: string | number | Date | null): string | null {
-  if (v === null) return null
-  if (typeof v === "number") return `<c r="${ref}"${sAttr}><v>${numXml(v)}</v></c>`
-  if (v instanceof Date) {
-    const serial = v.getTime() / 86400000 + EPOCH_EXCEL
-    return `<c r="${ref}"${sAttr}><v>${serial}</v></c>`
-  }
-  return `<c r="${ref}"${sAttr} t="inlineStr"><is><t xml:space="preserve">${escXml(v)}</t></is></c>`
-}
-
-// Fórmula cujo resultado em cache pode ser número OU texto (as 7 colunas de ICMS-ST usam "" —
-// texto vazio — quando a linha não é 1403/2403, mesma convenção de calcularAntecipacaoItem/null).
-function celulaFormula(ref: string, sAttr: string, formula: string, result: string | number): string {
-  if (typeof result === "number") return `<c r="${ref}"${sAttr}><f>${escXml(formula)}</f><v>${numXml(result)}</v></c>`
-  return `<c r="${ref}"${sAttr} t="str"><f>${escXml(formula)}</f><v>${escXml(result)}</v></c>`
-}
-
-// Devolve BYTES (Uint8Array), não string: uma string JS tem um limite absoluto de tamanho
-// (~536 milhões de caracteres no V8, independente de quanta memória está disponível) — um EFD
-// grande o bastante (dezenas de milhares de linhas × 71 colunas, 7 delas com fórmulas longas)
-// estourava esse limite (`RangeError: Invalid string length`) mesmo depois da geração híbrida
-// evitar o "Out of Memory" de objeto de célula. Cada LOTE de linhas ainda é montado como string
-// (pequeno, seguro) e convertido pra bytes imediatamente — só o array de bytes final é grande, e
-// Uint8Array não tem esse teto.
-export async function gerarLinhasXmlAntecipacaoIcmsSt(
-  pendente: PendenteAbaAntecipacaoIcmsSt,
+async function gerarLinhasXmlAntecipacaoIcmsSt(
+  dados: DadosXmlAntecipacaoIcmsSt,
   estilosColunas: Map<number, string>,
   onProgress?: (linhaAtual: number, totalLinhas: number) => void
 ): Promise<Uint8Array> {
-  const { calculadas } = pendente
+  const { calculadas, linhaCsosnInicio, linhaUfInicio, linhaUfFim } = dados
 
   const LETRAS = COLUNAS.map((_c, i) => colLetra(COL_INICIO + i))
   const S_ATTR = COLUNAS.map((_c, i) => {
@@ -467,122 +397,61 @@ export async function gerarLinhasXmlAntecipacaoIcmsSt(
     iBaseAntec = IDX["Base Cálculo Antecipação"], iAliqBaseAntec = IDX["Alíquota Base Antecipação"],
     iAdicional = IDX["Adicional Região"], iAliqTotalAntec = IDX["Alíquota Total Antecipação"],
     iValorAntec = IDX["Valor Antecipação ICMS-ST"]
-  const { linhaCsosnInicio, linhaUfInicio, linhaUfFim } = pendente
 
-  const encoder = new TextEncoder()
-  const partesBytes: Uint8Array[] = []
-  let lote: string[] = []
-  const TAMANHO_LOTE = 1000
+  return gerarLinhasXmlEmLotes(
+    calculadas,
+    ({ linha, resultado }, i) => {
+      const r = LINHA_HEADER + 1 + i
+      const cells: (string | null)[] = new Array(COLUNAS.length).fill(null)
 
-  for (let i = 0; i < calculadas.length; i++) {
-    const { linha, resultado } = calculadas[i]
-    const r = LINHA_HEADER + 1 + i
-    const cells: (string | null)[] = new Array(COLUNAS.length).fill(null)
+      for (let ci = 0; ci < COLUNAS_BRUTAS.length; ci++) {
+        const v = COLUNAS_BRUTAS[ci].valor!(linha)
+        cells[ci] = celulaValor(`${LETRAS[ci]}${r}`, S_ATTR[ci], v)
+      }
 
-    for (let ci = 0; ci < COLUNAS_BRUTAS.length; ci++) {
-      const v = COLUNAS_BRUTAS[ci].valor!(linha)
-      cells[ci] = celulaValor(`${LETRAS[ci]}${r}`, S_ATTR[ci], v)
-    }
+      cells[iSituacaoAntec] = celulaFormula(
+        `${cSituacaoAntec}${r}`, S_ATTR[iSituacaoAntec],
+        `IF(${cCfop}${r}="1403","Dentro do Estado",IF(${cCfop}${r}="2403","Fora do Estado",""))`,
+        resultado ? LABEL_SITUACAO[resultado.situacao] : ""
+      )
+      cells[iOrigem] = celulaFormula(
+        `${cOrigem}${r}`, S_ATTR[iOrigem],
+        `IF(${cSituacaoAntec}${r}="","",IF(AND(${cSituacaoAntec}${r}="Fora do Estado",COUNTIF($${colAux1}$${linhaCsosnInicio}:$${colAux1}$${linhaCsosnInicio + CODIGOS_CSOSN.length - 1},${cCst}${r})=0,OR(LEFT(${cCst}${r},1)="1",LEFT(${cCst}${r},1)="2",LEFT(${cCst}${r},1)="3",LEFT(${cCst}${r},1)="8")),"Sim","Não"))`,
+        resultado ? (resultado.origemEstrangeira ? "Sim" : "Não") : ""
+      )
+      cells[iBaseAntec] = celulaFormula(
+        `${cBaseAntec}${r}`, S_ATTR[iBaseAntec],
+        `IF(${cSituacaoAntec}${r}="","",${cVlrItem}${r}-${cVlrDescItem}${r})`,
+        resultado ? resultado.base : ""
+      )
+      cells[iAliqBaseAntec] = celulaFormula(
+        `${cAliqBaseAntec}${r}`, S_ATTR[iAliqBaseAntec],
+        `IF(${cSituacaoAntec}${r}="","",IF(${cSituacaoAntec}${r}="Fora do Estado",IF(${cDataEntrada}${r}>=DATE(2024,1,1),0.089,0.08),IF(${cDataEntrada}${r}>=DATE(2024,1,1),0.0333,0.03)))`,
+        resultado ? resultado.aliquotaBase : ""
+      )
+      cells[iAdicional] = celulaFormula(
+        `${cAdicional}${r}`, S_ATTR[iAdicional],
+        `IF(${cOrigem}${r}="Sim",IFERROR(VLOOKUP(${cUfFornecedor}${r},$${colAux2}$${linhaUfInicio}:$${colAux3}$${linhaUfFim},2,0),0),0)`,
+        resultado ? resultado.adicionalRegiao : 0
+      )
+      cells[iAliqTotalAntec] = celulaFormula(
+        `${cAliqTotalAntec}${r}`, S_ATTR[iAliqTotalAntec],
+        `IF(${cSituacaoAntec}${r}="","",${cAliqBaseAntec}${r}+${cAdicional}${r})`,
+        resultado ? resultado.aliquotaTotal : ""
+      )
+      cells[iValorAntec] = celulaFormula(
+        `${cValorAntec}${r}`, S_ATTR[iValorAntec],
+        `IF(${cSituacaoAntec}${r}="","",ROUND(${cBaseAntec}${r}*${cAliqTotalAntec}${r},2))`,
+        resultado ? resultado.valor : ""
+      )
 
-    cells[iSituacaoAntec] = celulaFormula(
-      `${cSituacaoAntec}${r}`, S_ATTR[iSituacaoAntec],
-      `IF(${cCfop}${r}="1403","Dentro do Estado",IF(${cCfop}${r}="2403","Fora do Estado",""))`,
-      resultado ? LABEL_SITUACAO[resultado.situacao] : ""
-    )
-    cells[iOrigem] = celulaFormula(
-      `${cOrigem}${r}`, S_ATTR[iOrigem],
-      `IF(${cSituacaoAntec}${r}="","",IF(AND(${cSituacaoAntec}${r}="Fora do Estado",COUNTIF($${colAux1}$${linhaCsosnInicio}:$${colAux1}$${linhaCsosnInicio + CODIGOS_CSOSN.length - 1},${cCst}${r})=0,OR(LEFT(${cCst}${r},1)="1",LEFT(${cCst}${r},1)="2",LEFT(${cCst}${r},1)="3",LEFT(${cCst}${r},1)="8")),"Sim","Não"))`,
-      resultado ? (resultado.origemEstrangeira ? "Sim" : "Não") : ""
-    )
-    cells[iBaseAntec] = celulaFormula(
-      `${cBaseAntec}${r}`, S_ATTR[iBaseAntec],
-      `IF(${cSituacaoAntec}${r}="","",${cVlrItem}${r}-${cVlrDescItem}${r})`,
-      resultado ? resultado.base : ""
-    )
-    cells[iAliqBaseAntec] = celulaFormula(
-      `${cAliqBaseAntec}${r}`, S_ATTR[iAliqBaseAntec],
-      `IF(${cSituacaoAntec}${r}="","",IF(${cSituacaoAntec}${r}="Fora do Estado",IF(${cDataEntrada}${r}>=DATE(2024,1,1),0.089,0.08),IF(${cDataEntrada}${r}>=DATE(2024,1,1),0.0333,0.03)))`,
-      resultado ? resultado.aliquotaBase : ""
-    )
-    cells[iAdicional] = celulaFormula(
-      `${cAdicional}${r}`, S_ATTR[iAdicional],
-      `IF(${cOrigem}${r}="Sim",IFERROR(VLOOKUP(${cUfFornecedor}${r},$${colAux2}$${linhaUfInicio}:$${colAux3}$${linhaUfFim},2,0),0),0)`,
-      resultado ? resultado.adicionalRegiao : 0
-    )
-    cells[iAliqTotalAntec] = celulaFormula(
-      `${cAliqTotalAntec}${r}`, S_ATTR[iAliqTotalAntec],
-      `IF(${cSituacaoAntec}${r}="","",${cAliqBaseAntec}${r}+${cAdicional}${r})`,
-      resultado ? resultado.aliquotaTotal : ""
-    )
-    cells[iValorAntec] = celulaFormula(
-      `${cValorAntec}${r}`, S_ATTR[iValorAntec],
-      `IF(${cSituacaoAntec}${r}="","",ROUND(${cBaseAntec}${r}*${cAliqTotalAntec}${r},2))`,
-      resultado ? resultado.valor : ""
-    )
-
-    let row = `<row r="${r}">`
-    for (const cell of cells) if (cell !== null) row += cell
-    row += "</row>"
-    lote.push(row)
-
-    if (lote.length >= TAMANHO_LOTE || i === calculadas.length - 1) {
-      partesBytes.push(encoder.encode(lote.join("")))
-      lote = []
-      onProgress?.(i + 1, calculadas.length)
-      await yieldToEventLoop()
-    }
-  }
-
-  const tamanhoTotal = partesBytes.reduce((s, p) => s + p.length, 0)
-  const resultado = new Uint8Array(tamanhoTotal)
-  let offset = 0
-  for (const parte of partesBytes) {
-    resultado.set(parte, offset)
-    offset += parte.length
-  }
-  return resultado
-}
-
-// Ponto único de finalização — usado tanto pelo export standalone (exportarAntecipacaoIcmsStExcel)
-// quanto pelo orquestrador combinado da Recuperação de Crédito (recuperacao-credito-excel.ts):
-// grava o workbook UMA vez, e só faz o round-trip pelo jszip (carregar → injetar XML → recompactar)
-// quando há de fato uma aba de Antecipação ICMS-ST grande demais pra ter entrado via ExcelJS —
-// sem custo extra pros exports que não usam essa aba.
-export async function finalizarExcelComAntecipacaoIcmsSt(
-  wb: ExcelJS.Workbook,
-  pendente: PendenteAbaAntecipacaoIcmsSt | null,
-  onProgress?: (linhaAtual: number, totalLinhas: number) => void
-): Promise<Blob> {
-  const bufferBase = await wb.xlsx.writeBuffer()
-  if (!pendente) return new Blob([bufferBase], { type: MIME_XLSX })
-
-  const zip = await JSZip.loadAsync(bufferBase)
-  const caminhos = await mapearCaminhosDasAbas(zip)
-  const caminho = caminhos.get(pendente.sheetName)
-  if (!caminho || !zip.file(caminho)) throw new Error(`Aba "${pendente.sheetName}" não encontrada no arquivo gerado`)
-
-  let sheetXml = await zip.file(caminho)!.async("string")
-  const estilosColunas = extrairEstilosDasColunas(sheetXml)
-  const linhasBytes = await gerarLinhasXmlAntecipacaoIcmsSt(pendente, estilosColunas, onProgress)
-  sheetXml = sheetXml.replace(/<dimension ref="[^"]*"\s*\/>/, `<dimension ref="${pendente.dimensaoRef}"/>`)
-
-  // Splice em BYTES, não em string: o stub (sheetXml) é pequeno (só cabeçalho), então cortar em
-  // volta de "</sheetData>" nele é seguro, mas concatenar o resultado com `linhasBytes` como
-  // string estouraria o limite de tamanho de string do V8 em EFDs grandes (ver nota em
-  // gerarLinhasXmlAntecipacaoIcmsSt) — por isso a junção final acontece em Uint8Array. Entregar
-  // bytes (não string) ao JSZip também evita o "Reparado" por tamanho inconsistente de caracteres
-  // multi-byte (ç, õ...) que apareceu na Reforma Tributária com esse mesmo tipo de injeção.
-  const idxFechamento = sheetXml.indexOf("</sheetData>")
-  const encoder = new TextEncoder()
-  const headBytes = encoder.encode(sheetXml.slice(0, idxFechamento))
-  const tailBytes = encoder.encode(sheetXml.slice(idxFechamento))
-  const finalBytes = new Uint8Array(headBytes.length + linhasBytes.length + tailBytes.length)
-  finalBytes.set(headBytes, 0)
-  finalBytes.set(linhasBytes, headBytes.length)
-  finalBytes.set(tailBytes, headBytes.length + linhasBytes.length)
-  zip.file(caminho, finalBytes)
-
-  return zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 }, mimeType: MIME_XLSX })
+      let row = `<row r="${r}">`
+      for (const cell of cells) if (cell !== null) row += cell
+      row += "</row>"
+      return row
+    },
+    { onProgress }
+  )
 }
 
 export async function exportarAntecipacaoIcmsStExcel(
@@ -595,7 +464,7 @@ export async function exportarAntecipacaoIcmsStExcel(
   wb.created = new Date()
   wb.calcProperties.fullCalcOnLoad = true
   const { pendente } = await montarAbaAntecipacaoIcmsStCabecalho(wb, linhas, nomeEmpresa)
-  const blob = await finalizarExcelComAntecipacaoIcmsSt(wb, pendente, onProgress)
+  const blob = await finalizarExcelComAbasHibridas(wb, pendente ? [pendente] : [], onProgress)
 
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")

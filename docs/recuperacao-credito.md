@@ -13,12 +13,49 @@ extensão/conteúdo:
 
 | Tipo de arquivo | Rota | O que faz |
 |---|---|---|
-| `.pdf` (Declaração/Extrato PGDAS, Comprovante de Arrecadação de DARF, DCTFWeb ou Fontes Pagadoras/DIRF) | Simples Nacional, Comprovante de Pagamentos, DCTFWeb ou Fontes Pagadoras | Um único endpoint (`/api/recuperacao-credito/pdf/upload`) detecta o sub-tipo pelo conteúdo e extrai/persiste no model certo |
-| `.txt` (EFD ICMS/IPI, EFD Contribuições, ECF ou ECD, começa com `\|0000\|`) e `.dec` (DCTF Mensal, começa com `DCTFM`) | ICMS/IPI, PIS/COFINS, IRPJ/CSLL, Balanço Patrimonial ou DCTF | Um único endpoint (`/api/recuperacao-credito/efd/upload`) detecta o sub-tipo pelo conteúdo (`detectarEcd` / `detectarDctf` / `detectarTipoEfd`) e extrai/persiste no model certo |
+| `.pdf` (Declaração/Extrato PGDAS, Comprovante de Arrecadação de DARF, DCTFWeb ou Fontes Pagadoras/DIRF) | Simples Nacional, Comprovante de Pagamentos, DCTFWeb ou Fontes Pagadoras | Dispatch por conteúdo em `src/lib/recuperacao-credito/processar-pdf.ts` (ver "Upload — infraestrutura" abaixo) extrai/persiste no model certo |
+| `.txt` (EFD ICMS/IPI, EFD Contribuições, ECF ou ECD, começa com `\|0000\|`) e `.dec` (DCTF Mensal, começa com `DCTFM`) | ICMS/IPI, PIS/COFINS, IRPJ/CSLL, Balanço Patrimonial ou DCTF | Dispatch por conteúdo em `src/lib/recuperacao-credito/processar-efd.ts` (`detectarEcd` / `detectarDctf` / `detectarTipoEfd`) extrai/persiste no model certo |
 | `.xlsx` / `.xls` / `.csv` | Análise genérica por IA | Stub — ainda não implementado (`/api/recuperacao-credito/route.ts`) |
 
 PDFs e `.txt` exigem **Cliente + Projeto** selecionados (ver seção 2); os arquivos genéricos
 (`.xlsx/.csv`) não exigem, pois essa parte ainda não persiste nada.
+
+### Upload — infraestrutura (direto pro Storage, não mais FormData pro Vercel)
+
+Até um caso real reportado pelo usuário (projeto de 466 arquivos/833MB; e, isoladamente, um único
+EFD Contribuições de 4,5MB falhando sozinho), PDFs/EFDs subiam via `FormData` cortada em lotes de
+até 3,5MB (margem de segurança abaixo do limite de ~4,5MB de corpo de função serverless do
+Vercel), **um lote de cada vez, esperando a resposta antes do próximo** — lento pra muitos
+arquivos e uma falha dura pra qualquer arquivo ÚNICO acima do teto (sem como "enviar menos", já
+que era só 1 arquivo). Migrado pro mesmo padrão já usado pela Biblioteca de PDFs (Estudo,
+`src/lib/pdf-storage.ts`): o navegador sobe o arquivo DIRETO pro Supabase Storage, nunca passando
+pela função Vercel.
+
+- **Bucket `recuperacao-credito-uploads`** — privado, sem restrição de MIME (`.txt`/`.dec` não
+  têm MIME confiável entre navegadores; a validação de tipo já é por CONTEÚDO nos parsers),
+  `fileSizeLimit` de 50MB (teto do plano free do Supabase — bem acima da média real de ~1,8MB por
+  arquivo). **Tratado como espaço de RASCUNHO, não armazenamento permanente**: os objetos são
+  apagados assim que processados (sucesso ou erro) — a "verdade" que importa fica no Postgres via
+  Prisma, igual sempre foi. Se esse bucket algum dia precisar virar armazenamento permanente, isso
+  é uma decisão de custo separada, não pra assumir silenciosamente.
+- **Fluxo**: `POST /api/recuperacao-credito/upload/urls` minta N URLs assinadas numa chamada só
+  (rejeita por-arquivo quem passar de 50MB) → navegador sobe com concorrência limitada (~8
+  simultâneos, `src/lib/recuperacao-credito-upload-client.ts`) → `POST
+  /api/recuperacao-credito/{pdf,efd}/processar-storage` baixa cada arquivo do Storage, delega o
+  parsing pras mesmas funções de dispatch do upload direto (`processarArquivoPdf|EfdRecuperacaoCredito`)
+  e apaga o objeto ao final.
+- **Orçamento de tempo, não contagem fixa** — como o corpo da requisição agora é só um JSON de
+  paths (sem limite de tamanho relevante), o gargalo virou o TEMPO de execução da função
+  (`export const maxDuration = 60`, ~50s de orçamento interno, conservador o bastante pro plano
+  Hobby da Vercel). Cada chamada de `processar-storage` processa o que der dentro desse orçamento
+  e devolve `restantes` — o cliente (`page.tsx`) continua chamando até `restantes` esvaziar, dezenas
+  de arquivos por chamada em vez de um por vez.
+- **Rotas antigas de FormData** (`.../pdf/upload`, `.../efd/upload`) continuam existindo — a UI não
+  as chama mais diretamente, mas ficaram como fallback fino (só delegam pras mesmas funções de
+  dispatch) caso algum outro fluxo precise de upload direto no futuro.
+- **Gap aceito, fora de escopo**: se o usuário fechar a aba entre o upload pro Storage e a chamada
+  de `processar-storage`, os objetos ficam órfãos no bucket de rascunho (sem sweep automático).
+  Candidato a um Vercel Cron de limpeza futuro — deliberadamente não construído agora.
 
 ## 2. Modelo de dados: Cliente → Projeto → Declarações
 
@@ -104,17 +141,30 @@ CNPJ do cliente selecionado (comparando só dígitos, `somenteDigitos()`). Se n�
   zerados). Antes de implementar essa parte, validar o `E520` campo a campo contra um cliente
   industrial real com IPI não-zero, do mesmo jeito que o `E110` do ICMS foi validado.
 - **Aba "Entradas" (item a item)**: sempre que há EFD ICMS/IPI importado, o Excel também ganha
-  uma aba **"Entradas"** (`src/lib/entradas-icms-excel.ts`, `montarAbaEntradas`) — granularidade
-  de ITEM (um `C170` por linha), diferente da aba "ICMS e IPI" (agregada por CFOP+CST+alíquota
-  via `C190`). As linhas vêm de `parseEntradasEfdIcmsIpi()`
+  uma aba **"Entradas"** (`src/lib/entradas-icms-excel.ts`, `montarAbaEntradasCabecalho`) —
+  granularidade de ITEM (um `C170` por linha), diferente da aba "ICMS e IPI" (agregada por
+  CFOP+CST+alíquota via `C190`). As linhas vêm de `parseEntradasEfdIcmsIpi()`
   (`src/lib/efd-icms-ipi-entradas-parser.ts`) — parser já existente, construído originalmente
   para a Reforma Tributária (aba "Entradas - EFD ICMS IPI" de crédito IBS/CBS); o upload route
   (`efd/upload/route.ts`) roda esse parser em paralelo ao
   `processarArquivosEfd` e grava o resultado em `DadosEfdIcmsIpi.linhasEntrada` (mesmo campo
-  `Json`, sem migração de schema). Estilo Excel Table (1 linha = 1 item), igual à aba
-  "Comprovante de Pagamentos" (seção 6): `SUBTOTAL` em todas as colunas monetárias, filtro,
-  zebra. Validado com um EFD real da GIGI Tecidos (123 itens) — soma manual de "Vlr Item" bateu
-  exatamente com o `SUBTOTAL` gerado.
+  `Json`, sem migração de schema).
+  - **Geração híbrida (não é mais `addTable`)**: até um projeto de ~466 arquivos/833MB (caso real
+    reportado pelo usuário), essa aba montava TODAS as linhas de item via `ws.addTable` do
+    ExcelJS — célula-a-célula, centenas de milhares de objetos JS na aba do navegador, o mesmo
+    padrão que já tinha causado um Out of Memory real e documentado na aba "Antecipação ICMS-ST"
+    (§18). Migrada pra técnica **híbrida** (mecânica genérica extraída em
+    `src/lib/excel-xml-hibrido.ts`, reaproveitada por `icms-st-antecipacao-excel.ts` também): o
+    ExcelJS monta só o CABEÇALHO (larguras/estilos por coluna, filtro, subtotal); as linhas de
+    DADO são geradas como XML de planilha puro, em lotes, e injetadas no `.xlsx` via `jszip` —
+    nunca passam pelo modelo de objeto `Cell` do ExcelJS. `finalizarExcelComAbasHibridas` aceita
+    **N** abas híbridas pendentes no mesmo workbook (necessário porque Entradas e Antecipação
+    ICMS-ST podem entrar juntas no mesmo export combinado). Zebra (que o `addTable` dava de graça)
+    recriada via uma única regra de formatação condicional — custo O(1), não por linha.
+  - Validado com um EFD real da GIGI Tecidos (123 itens, antes da migração) — soma manual de
+    "Vlr Item" bateu exatamente com o `SUBTOTAL` gerado — e com um teste sintético de 3.500 linhas
+    (`tsx`, fora do navegador) depois da migração, cobrindo o caso de duas abas híbridas juntas no
+    mesmo workbook e caracteres especiais no nome do fornecedor.
   - **GAP CONHECIDO / decisão deliberada — sem a análise de oportunidade de ICMS-ST**: a
     planilha de referência do usuário (cliente real, "Análise Entradas.xlsx") tinha 6 colunas a
     mais (chave composta, alíquota de ICMS-ST "correta", valor de ICMS-ST recalculado, flag
@@ -759,12 +809,15 @@ determinístico.
     entrada já importados. Sem botão de baixar Excel próprio: a aba já sai junto no botão
     "Baixar Excel" combinado da seção de declarações fiscais.
   - **Aba a mais no Excel combinado** — `exportarDeclaracaoFiscalExcel`
-    (`src/lib/recuperacao-credito-excel.ts`) chama `montarAbaAntecipacaoIcmsSt` (mesma função da
-    automação standalone, `src/lib/icms-st-antecipacao-excel.ts`, sem nenhuma mudança nela)
-    dentro do bloco `if (temIcms)`, só quando `elegivelAntecipacaoIcmsSt(dados.cadastro
+    (`src/lib/recuperacao-credito-excel.ts`) chama `montarAbaAntecipacaoIcmsStCabecalho` (mesma
+    função da automação standalone, `src/lib/icms-st-antecipacao-excel.ts`, sem nenhuma mudança
+    de regra nela) dentro do bloco `if (temIcms)`, só quando `elegivelAntecipacaoIcmsSt(dados.cadastro
     ?.consultaCnpj)` bate — a checagem lê `dados.cadastro` direto (não o cadastro já filtrado
     pelo toggle "Cadastro" do diálogo de export), porque são duas decisões independentes: incluir
-    a aba Menu/Cadastro é uma coisa, checar a elegibilidade do cliente pra outra aba é outra.
+    a aba Menu/Cadastro é uma coisa, checar a elegibilidade do cliente pra outra aba é outra. Desde
+    a migração da aba "Entradas" pra geração híbrida também (§4), o pendente dessa aba entra no
+    MESMO array `pendentesHibridos` que vai pra `finalizarExcelComAbasHibridas`
+    (`src/lib/excel-xml-hibrido.ts`) — um workbook pode ter as duas abas híbridas ao mesmo tempo.
   - **Diálogo "quais abas exportar"** (`SelecionarAbasExportDialog`, §2/UI): ganha a opção
     "Antecipação ICMS-ST (Ceará)" (`key: "antecipacaoIcmsSt"` em `IncluirAbas`) só quando o
     cliente é elegível, marcada por padrão como as demais.

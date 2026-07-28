@@ -2,7 +2,8 @@ import ExcelJS from "exceljs"
 import type { DadosEfdIcmsIpi, RegistroAgregado } from "./efd-icms-parser"
 import { isSaida, labelCfop, labelCst } from "./efd-icms-parser"
 import { montarAbaChecklist } from "./checklist-excel"
-import { montarAbaEntradas } from "./entradas-icms-excel"
+import { montarAbaEntradasCabecalho } from "./entradas-icms-excel"
+import { finalizarExcelComAbasHibridas, type AbaHibridaPendente } from "./excel-xml-hibrido"
 
 // Mesma convenção visual usada em src/lib/pgdas/export-pgdas-excel.ts (duplicado de propósito
 // pra não arriscar regressão nos exports já em produção).
@@ -338,15 +339,15 @@ export async function exportarEfdIcmsExcel(
   wb.creator = "Tax Hub — Recuperação de Crédito"
   wb.created = new Date()
   await montarAbaIcms(wb, declaracoes, nomeCliente)
-  await montarAbaEntradas(
+  const { pendente } = await montarAbaEntradasCabecalho(
     wb,
     declaracoes.map((d) => ({ competencia: d.competencia, linhasEntrada: d.dados.linhasEntrada })),
     nomeCliente
   )
   await montarAbaChecklist(wb, nomeCliente)
 
-  const buffer = await wb.xlsx.writeBuffer()
-  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+  const pendentes: AbaHibridaPendente[] = pendente ? [pendente] : []
+  const blob = await finalizarExcelComAbasHibridas(wb, pendentes)
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url

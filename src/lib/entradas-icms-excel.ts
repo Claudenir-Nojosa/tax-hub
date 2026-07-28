@@ -1,5 +1,12 @@
 import ExcelJS from "exceljs"
 import type { LinhaEntradaEfd } from "./efd-icms-ipi-entradas-parser"
+import { colLetra } from "./reforma-excel/coluna-letra"
+import {
+  celulaValor,
+  gerarLinhasXmlEmLotes,
+  finalizarExcelComAbasHibridas,
+  type AbaHibridaPendente,
+} from "./excel-xml-hibrido"
 
 // Aba "Entradas" — réplica dos dados brutos item a item (registros C100/C170 do EFD ICMS/IPI),
 // mesma granularidade da aba "Entradas" de uma planilha de referência real do usuário (cliente
@@ -10,6 +17,14 @@ import type { LinhaEntradaEfd } from "./efd-icms-ipi-entradas-parser"
 // aba "De x para") — decisão deliberada, confirmada com o usuário: NÃO replicar essas colunas
 // aqui, por não serem generalizáveis a partir do EFD sozinho. Ver docs/recuperacao-credito.md
 // seção 4 (GAP CONHECIDO — oportunidade ICMS-ST).
+//
+// GERAÇÃO HÍBRIDA (mesma técnica de src/lib/icms-st-antecipacao-excel.ts, mecânica genérica em
+// src/lib/excel-xml-hibrido.ts): o ExcelJS monta só o CABEÇALHO da aba (estilos, larguras,
+// subtotal, filtro) — as linhas de DADO são geradas como XML de planilha puro e injetadas no
+// .xlsx via jszip, sem passar pelo modelo de objeto Cell do ExcelJS. Com EFDs grandes (centenas
+// de milhares de itens) o modelo normal do ExcelJS/addTable cria milhões de objetos de célula e o
+// navegador estoura memória ("Out of Memory") — mesma causa raiz já corrigida na aba de
+// Antecipação ICMS-ST, replicada aqui.
 
 // Mesma convenção visual usada nos outros exports deste módulo (duplicado de propósito — ver
 // docs/recuperacao-credito.md seção 12).
@@ -164,19 +179,39 @@ export interface DeclaracaoEntradasRegistro {
 }
 
 const LINHA_HEADER = 6
+const COL_INICIO = 2 // B — coluna A é a margem
+const COLS_ESQUERDA = new Set(["Empresa", "Nome Fornecedor", "Descrição Item", "Natureza Crédito", "Descrição CFOP"])
 
-export async function montarAbaEntradas(
+function estiloColunaDados(c: ColunaEntrada): Partial<ExcelJS.Style> {
+  const style: Partial<ExcelJS.Style> = {
+    font: { name: "Calibri", size: 10 },
+    alignment: { horizontal: COLS_ESQUERDA.has(c.nome) ? "left" : "center", vertical: "middle" },
+  }
+  if (c.monetaria) style.numFmt = BRL
+  else if (c.nome === "PA") style.numFmt = "mm-dd-yy"
+  return style
+}
+
+// Monta só o CABEÇALHO da aba (logo, título, linha de header, subtotal, larguras/estilos por
+// COLUNA) — nenhuma célula de dado é criada aqui (isso é o que evitava estourar memória: ver nota
+// "GERAÇÃO HÍBRIDA" no topo do arquivo). As linhas de dado entram depois, como XML puro, via
+// `gerarLinhasXmlEntradas` (fechada na closure de `gerarLinhasXml` do pendente devolvido).
+export async function montarAbaEntradasCabecalho(
   wb: ExcelJS.Workbook,
   declaracoes: DeclaracaoEntradasRegistro[],
   nomeCliente: string
-): Promise<void> {
+): Promise<{ pendente: AbaHibridaPendente | null }> {
   const linhas = declaracoes.flatMap((d) => d.linhasEntrada ?? [])
-  if (linhas.length === 0) return
+  if (linhas.length === 0) return { pendente: null }
 
-  const ws = wb.addWorksheet("Entradas", { views: [{ showGridLines: false }] })
+  const sheetName = "Entradas"
+  const ws = wb.addWorksheet(sheetName, { views: [{ showGridLines: false }] })
   ws.properties.tabColor = { argb: "FF1F3864" }
 
-  ws.columns = [{ width: 3 }, ...COLUNAS.map((c) => ({ width: c.largura ?? 12 }))]
+  // Estilo (fonte/alinhamento/numFmt) definido NO NÍVEL DA COLUNA, não célula a célula — permite
+  // as linhas de dado (XML puro, sem objeto de célula do ExcelJS) herdarem o formato certo: o id
+  // de estilo do <col> é extraído do stub e carimbado em cada célula gerada via atributo s="N".
+  ws.columns = [{ width: 3 }, ...COLUNAS.map((c) => ({ width: c.largura ?? 12, style: estiloColunaDados(c) }))]
 
   ws.getRow(1).height = 60
   const logoBase64 = await carregarLogoBase64()
@@ -188,63 +223,86 @@ export async function montarAbaEntradas(
   const nomeCurto = nomeCliente.trim().split(/\s+/)[0] || nomeCliente
   sc(ws.getCell(3, 2), { value: `Entradas - EFD ICMS IPI - ${nomeCurto}`, bold: true, size: 12 })
 
-  ws.addTable({
-    name: "EntradasEfd",
-    ref: `B${LINHA_HEADER}`,
-    headerRow: true,
-    totalsRow: false,
-    style: { theme: "TableStyleMedium2", showRowStripes: true },
-    columns: COLUNAS.map((c) => ({ name: c.nome, filterButton: true })),
-    rows: linhas.map((l) => COLUNAS.map((c) => c.valor(l))),
-  })
-
-  // Linha acima do cabeçalho: SUBTOTAL (respeita filtro) em todas as colunas monetárias.
-  const ROW_SUBTOTAL = LINHA_HEADER - 1
+  // Cabeçalho da tabela — escrito manualmente (sem addTable: um Excel Table/ListObject força o
+  // ExcelJS a materializar um objeto de célula por linha de dado, exatamente a causa do "Out of
+  // Memory"). AutoFilter dá as setinhas de filtro sem esse custo (1 atributo no XML da aba, não
+  // depende da quantidade de linhas).
   const primeiraLinhaDados = LINHA_HEADER + 1
   const ultimaLinhaDados = LINHA_HEADER + Math.max(linhas.length, 1)
+  const headerRow = ws.getRow(LINHA_HEADER)
+  COLUNAS.forEach((c, i) => {
+    sc(headerRow.getCell(COL_INICIO + i), { value: c.nome, bold: true, align: "center", color: COR_HEADER_TEXTO, bg: COR_HEADER_BG })
+  })
+  ws.autoFilter = {
+    from: { row: LINHA_HEADER, column: COL_INICIO },
+    to: { row: LINHA_HEADER, column: COL_INICIO + COLUNAS.length - 1 },
+  }
+
+  // Zebra (showRowStripes) que o addTable dava de graça — recriada via UMA regra de formatação
+  // condicional (custo O(1): é 1 regra no XML da aba, não 1 estilo por linha de dado).
+  const colFimLetra = colLetra(COL_INICIO + COLUNAS.length - 1)
+  ws.addConditionalFormatting({
+    ref: `B${primeiraLinhaDados}:${colFimLetra}${ultimaLinhaDados}`,
+    rules: [
+      {
+        type: "expression",
+        formulae: ["MOD(ROW(),2)=0"],
+        style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFF2F2F2" } } },
+        priority: 1,
+      },
+    ],
+  })
+
+  // Linha acima do cabeçalho: SUBTOTAL em todas as colunas monetárias (soma calculada em JS numa
+  // única passada — barata mesmo com muitas linhas: só soma números, não cria célula nenhuma).
+  const ROW_SUBTOTAL = LINHA_HEADER - 1
   COLUNAS.forEach((c, i) => {
     if (!c.monetaria) return
-    const col = i + 2 // B = coluna 2
+    const col = COL_INICIO + i
+    const letra = colLetra(col)
     const soma = linhas.reduce((s, l) => s + (Number(c.valor(l)) || 0), 0)
     const cell = ws.getCell(ROW_SUBTOTAL, col)
-    cell.value = { formula: `SUBTOTAL(9,EntradasEfd[${c.nome}])`, result: soma } as ExcelJS.CellFormulaValue
+    cell.value = { formula: `SUBTOTAL(9,${letra}${primeiraLinhaDados}:${letra}${ultimaLinhaDados})`, result: soma } as ExcelJS.CellFormulaValue
     cell.font = { name: "Calibri", bold: true, size: 11 }
     cell.numFmt = BRL
     cell.alignment = { horizontal: "center", vertical: "middle" }
   })
 
-  // Formatação das linhas de dados: contábil nas colunas monetárias, data nas colunas de
-  // data/PA, tudo centralizado exceto colunas de texto longo (alinhadas à esquerda).
-  // Objetos de estilo COMPARTILHADOS entre todas as células de dados — criar um `{...}` novo por
-  // célula (linha × coluna) é o que estoura a memória do navegador em EFDs grandes (mesmo bug
-  // corrigido em icms-st-antecipacao-excel.ts): ExcelJS guarda a referência que recebe (não
-  // clona), então reusar a mesma referência custa O(colunas) objetos em vez de O(linhas ×
-  // colunas) — sem mudar o resultado (o writer do .xlsx dedupe os estilos por conteúdo na hora
-  // de gravar, com ou sem reuso de referência em memória).
-  const FONTE_DADOS = { name: "Calibri", size: 10 }
-  const ALIGN_ESQUERDA: Partial<ExcelJS.Alignment> = { horizontal: "left", vertical: "middle" }
-  const ALIGN_CENTRO: Partial<ExcelJS.Alignment> = { horizontal: "center", vertical: "middle" }
-  const COLS_ESQUERDA = new Set(["Empresa", "Nome Fornecedor", "Descrição Item", "Natureza Crédito", "Descrição CFOP"])
-  const alinhamentoPorColuna = COLUNAS.map((c) => (COLS_ESQUERDA.has(c.nome) ? ALIGN_ESQUERDA : ALIGN_CENTRO))
-  const numFmtPorColuna = COLUNAS.map((c) => (c.monetaria ? BRL : c.nome === "PA" ? "mm-dd-yy" : undefined))
-  for (let r = primeiraLinhaDados; r <= ultimaLinhaDados; r++) {
-    const row = ws.getRow(r)
-    COLUNAS.forEach((_c, i) => {
-      const col = i + 2
-      const cell = row.getCell(col)
-      cell.font = FONTE_DADOS
-      cell.alignment = alinhamentoPorColuna[i]
-      const numFmt = numFmtPorColuna[i]
-      if (numFmt) cell.numFmt = numFmt
-    })
-  }
+  ws.views = [{ showGridLines: false, state: "frozen", xSplit: 0, ySplit: LINHA_HEADER }]
 
-  const headerRow = ws.getRow(LINHA_HEADER)
-  COLUNAS.forEach((_c, i) => {
-    sc(headerRow.getCell(i + 2), { bold: true, align: "center", color: COR_HEADER_TEXTO, bg: COR_HEADER_BG })
+  const pendente: AbaHibridaPendente = {
+    sheetName,
+    dimensaoRef: `B1:${colFimLetra}${ultimaLinhaDados}`,
+    gerarLinhasXml: (estilosColunas, onProgress) => gerarLinhasXmlEntradas(linhas, estilosColunas, onProgress),
+  }
+  return { pendente }
+}
+
+async function gerarLinhasXmlEntradas(
+  linhas: LinhaEntradaEfd[],
+  estilosColunas: Map<number, string>,
+  onProgress?: (atual: number, total: number) => void
+): Promise<Uint8Array> {
+  const LETRAS = COLUNAS.map((_c, i) => colLetra(COL_INICIO + i))
+  const S_ATTR = COLUNAS.map((_c, i) => {
+    const id = estilosColunas.get(COL_INICIO + i)
+    return id ? ` s="${id}"` : ""
   })
 
-  ws.views = [{ showGridLines: false, state: "frozen", xSplit: 0, ySplit: LINHA_HEADER }]
+  return gerarLinhasXmlEmLotes(
+    linhas,
+    (linha, i) => {
+      const r = LINHA_HEADER + 1 + i
+      let row = `<row r="${r}">`
+      COLUNAS.forEach((c, ci) => {
+        const cell = celulaValor(`${LETRAS[ci]}${r}`, S_ATTR[ci], c.valor(linha))
+        if (cell) row += cell
+      })
+      row += "</row>"
+      return row
+    },
+    { onProgress }
+  )
 }
 
 // Uso standalone (só a aba Entradas, sem combinar com ICMS/IPI) — cria o workbook, monta a aba e
@@ -257,10 +315,9 @@ export async function exportarEntradasIcmsExcel(
   const wb = new ExcelJS.Workbook()
   wb.creator = "Tax Hub — Recuperação de Crédito"
   wb.created = new Date()
-  await montarAbaEntradas(wb, declaracoes, nomeCliente)
+  const { pendente } = await montarAbaEntradasCabecalho(wb, declaracoes, nomeCliente)
 
-  const buffer = await wb.xlsx.writeBuffer()
-  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+  const blob = await finalizarExcelComAbasHibridas(wb, pendente ? [pendente] : [])
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
