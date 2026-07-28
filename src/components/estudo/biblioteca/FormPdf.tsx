@@ -9,20 +9,26 @@ import { novoId } from "./biblioteca-utils";
 // ─── Form de cadastro/edição ─────────────────────────────────────────────────
 
 export default function FormPdf({
-  materiasAtivas, pdfParaEditar, onSalvar, onFechar,
+  materiasAtivas, pdfParaEditar, presetMateria, presetTopico, onSalvar, onFechar,
 }: {
   materiasAtivas: (MateriaDef | MateriaConcurso)[];
   pdfParaEditar?: PdfEstudo;
+  // pré-preenche matéria/tópico ao abrir pra um PDF NOVO (ex.: botão "+" num tópico que já tem
+  // PDF, na Biblioteca) — ignorado em modo de edição (pdfParaEditar manda).
+  presetMateria?: string;
+  presetTopico?: string;
   onSalvar: (pdf: PdfEstudo, arquivo?: File) => void | Promise<void>;
   onFechar: () => void;
 }) {
   const [nome, setNome] = useState(pdfParaEditar?.nome ?? "");
-  const [materia, setMateria] = useState(pdfParaEditar?.materia ?? materiasAtivas[0]?.nome ?? "");
-  const [topicosSel, setTopicosSel] = useState<Set<string>>(new Set(pdfParaEditar?.topicos ?? []));
+  const [materia, setMateria] = useState(pdfParaEditar?.materia ?? presetMateria ?? materiasAtivas[0]?.nome ?? "");
+  const [topicosSel, setTopicosSel] = useState<Set<string>>(
+    new Set(pdfParaEditar?.topicos ?? (presetTopico ? [presetTopico] : []))
+  );
   const [totalPaginas, setTotalPaginas] = useState(pdfParaEditar ? String(pdfParaEditar.totalPaginas) : "");
   const [paginasDetectadas, setPaginasDetectadas] = useState(false);
   const [arquivo, setArquivo] = useState<File | null>(null);
-  const [mostrarTopicos, setMostrarTopicos] = useState((pdfParaEditar?.topicos?.length ?? 0) > 0);
+  const [mostrarTopicos, setMostrarTopicos] = useState((pdfParaEditar?.topicos?.length ?? 0) > 0 || !!presetTopico);
   const [salvasAgora, setSalvasAgora] = useState(0);
   const [flash, setFlash] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -74,10 +80,12 @@ export default function FormPdf({
           },
           arquivo ?? undefined
         );
-        // matéria fica mantida pro próximo PDF (cadastro em sequência); limpa o resto
+        // matéria fica mantida pro próximo PDF (cadastro em sequência); limpa o resto — o tópico
+        // preset (veio de um botão "+" num tópico específico) também fica marcado, pra dar pra
+        // anexar vários PDFs seguidos no mesmo tópico sem remarcar toda vez
         setNome("");
         setTotalPaginas("");
-        setTopicosSel(new Set());
+        setTopicosSel(new Set(presetTopico ? [presetTopico] : []));
         setArquivo(null);
         setPaginasDetectadas(false);
         setSalvasAgora((n) => n + 1);

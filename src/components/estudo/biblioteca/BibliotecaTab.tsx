@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BookOpen, Library, Plus, X } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, Library, Plus, X } from "lucide-react";
 import {
   MATERIAS, calcularPagPorHora,
   type AtividadeCalendario, type AtividadeTipo, type Carta, type MateriaConcurso, type MateriaDef,
@@ -25,6 +25,30 @@ import LeitorPdf from "./LeitorPdf";
 // O arquivo fica no SUPABASE STORAGE (privado — pdf-storage.ts), não mais no navegador: uma vez
 // enviado, `PdfEstudo.arquivoEnviado` sincroniza junto com o resto do EstudoState e o PDF abre em
 // qualquer dispositivo que o usuário logar, sem precisar reanexar.
+
+// Sub-agrupa os PDFs de uma matéria pelo tópico PRIMÁRIO (pdf.topicos?.[0] — na prática um PDF
+// cobre no máximo um tópico, mesma convenção já usada em LeitorPdf.tsx) — deixa óbvio quando um
+// tópico já tem mais de um PDF (empilhados juntos) e dá onde pendurar o botão "+" de anexar mais
+// um. PDFs sem tópico marcado caem no grupo "Sem tópico", sempre por último.
+function agruparPorTopico(
+  lista: PdfEstudo[],
+  topicosDaMateria: string[]
+): { topico: string | null; itens: PdfEstudo[] }[] {
+  const porTopico = new Map<string | null, PdfEstudo[]>();
+  for (const p of lista) {
+    const t = p.topicos?.[0] ?? null;
+    const arr = porTopico.get(t) ?? [];
+    arr.push(p);
+    porTopico.set(t, arr);
+  }
+  return [...porTopico.entries()].sort(([a], [b]) => {
+    if (a === null) return 1;
+    if (b === null) return -1;
+    const ia = topicosDaMateria.indexOf(a);
+    const ib = topicosDaMateria.indexOf(b);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  }).map(([topico, itens]) => ({ topico, itens }));
+}
 
 interface Props {
   pdfs: PdfEstudo[];
@@ -55,6 +79,13 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
   // upload em andamento (linha mostra spinner) e leitor abrindo (baixando o PDF do Storage)
   const [enviandoIds, setEnviandoIds] = useState<Set<string>>(new Set());
   const [carregandoLeitor, setCarregandoLeitor] = useState<string | null>(null);
+  // cada matéria vira uma seção colapsável (default fechada) — com muitos PDFs a página inteira
+  // expandida forçava scroll enorme; só abre a matéria que o usuário quer ver
+  const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
+  // preenche matéria/tópico ao abrir o form pra um PDF NOVO a partir do botão "+" de um tópico
+  // que já tem PDF (ver agruparPorTopico) — permite anexar mais de um PDF ao mesmo tópico sem
+  // precisar remarcar tudo de novo
+  const [presetNovoPdf, setPresetNovoPdf] = useState<{ materia: string; topico?: string } | null>(null);
 
   const pagPorHora = useMemo(() => calcularPagPorHora(calendario), [calendario]);
 
@@ -102,13 +133,16 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
         alert(`Não consegui enviar o arquivo pro Storage — o PDF foi cadastrado só com os dados. ${e instanceof Error ? e.message : ""}`.trim());
       }
     }
+    // expande a matéria do PDF salvo — sem isso, adicionar/editar um PDF numa matéria colapsada
+    // some da vista até o usuário abrir a seção manualmente
+    setExpandidos((prev) => ({ ...prev, [registro.materia]: true }));
     if (editando) {
       onChange(pdfs.map((p) => (p.id === registro.id ? registro : p)));
       setEditando(null);
       setFormAberto(false);
     } else {
       onChange([registro, ...pdfs]);
-      // form fica aberto com a matéria mantida (mesma lição das Cartas) — só fecha no X
+      // form fica aberto com a matéria (e o tópico preset, se veio de um) mantidos — só fecha no X
     }
   };
 
@@ -213,7 +247,7 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
           </div>
           <button
             type="button"
-            onClick={() => { setEditando(null); setFormAberto((v) => !v); }}
+            onClick={() => { setEditando(null); setPresetNovoPdf(null); setFormAberto((v) => !v); }}
             className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors self-start sm:self-auto"
           >
             {formAberto && !editando ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
@@ -235,11 +269,13 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
 
       {(formAberto || editando) && (
         <FormPdf
-          key={editando?.id ?? "novo"}
+          key={editando?.id ?? `novo-${presetNovoPdf?.materia ?? ""}-${presetNovoPdf?.topico ?? ""}`}
           materiasAtivas={materiasAtivas}
           pdfParaEditar={editando ?? undefined}
+          presetMateria={presetNovoPdf?.materia}
+          presetTopico={presetNovoPdf?.topico}
           onSalvar={salvarPdf}
-          onFechar={() => { setEditando(null); setFormAberto(false); }}
+          onFechar={() => { setEditando(null); setFormAberto(false); setPresetNovoPdf(null); }}
         />
       )}
 
@@ -266,33 +302,78 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
           const tot = lista.reduce((s, p) => s + alvoLeituraPdf(p), 0);
           const lidas = lista.reduce((s, p) => s + Math.min(p.paginaAtual, alvoLeituraPdf(p)), 0);
           const perc = tot > 0 ? Math.round((lidas / tot) * 100) : 0;
+          const aberto = expandidos[materia] ?? false;
+          const topicosDaMateria = materiasAtivas.find((m) => m.nome === materia)?.topicos ?? [];
+          const porTopico = agruparPorTopico(lista, topicosDaMateria);
+          // só vale a pena mostrar sub-cabeçalho de tópico quando há tópico de verdade pra
+          // agrupar — matérias sem nenhum PDF marcado com tópico continuam como lista simples
+          const comSubcabecalhos = !(porTopico.length === 1 && porTopico[0].topico === null);
+
+          const abrirNovoPdf = (topico?: string) => {
+            setEditando(null);
+            setPresetNovoPdf({ materia, topico });
+            setFormAberto(true);
+          };
+
           return (
             <div key={materia} className="bg-card rounded-xl border border-border overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border dark:border-border bg-muted/50">
-                <span className={`w-2.5 h-2.5 rounded-full ${cor.dot}`} />
+              <button
+                type="button"
+                onClick={() => setExpandidos((prev) => ({ ...prev, [materia]: !aberto }))}
+                className="w-full flex items-center gap-2 px-4 py-2.5 border-b border-border dark:border-border bg-muted/50 hover:bg-muted dark:hover:bg-accent transition-colors text-left"
+              >
+                {aberto ? (
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                )}
+                <span className={`w-2.5 h-2.5 rounded-full ${cor.dot} flex-shrink-0`} />
                 <span className="text-sm font-semibold text-foreground dark:text-foreground flex-1">{materia}</span>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-[11px] text-muted-foreground flex-shrink-0">
                   {lista.length} PDF{lista.length !== 1 ? "s" : ""} · {perc}% lido
                 </span>
-              </div>
-              <div className="divide-y divide-border dark:divide-border">
-                {lista.map((p) => (
-                  <PdfRow
-                    key={p.id}
-                    pdf={p}
-                    temArquivo={p.arquivoEnviado === true}
-                    enviando={enviandoIds.has(p.id)}
-                    carregando={carregandoLeitor === p.id}
-                    pagPorHora={pagPorHora}
-                    onLer={() => abrirLeitor(p)}
-                    onAnexar={(arq) => anexarEm(p, arq)}
-                    onAtualizarPagina={(pag) => atualizarPagina(p.id, pag)}
-                    onConcluir={() => atualizarPagina(p.id, alvoLeituraPdf(p))}
-                    onEditar={() => { setEditando(p); setFormAberto(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                    onExcluir={() => excluir(p)}
-                  />
-                ))}
-              </div>
+              </button>
+              {aberto && (
+                <div className="divide-y divide-border dark:divide-border">
+                  {porTopico.map(({ topico, itens }) => (
+                    <div key={topico ?? "__sem_topico__"}>
+                      {comSubcabecalhos && (
+                        <div className="flex items-center gap-2 px-4 py-1.5 bg-muted/20">
+                          <span className="text-[11px] text-muted-foreground flex-1 truncate" title={topico ?? undefined}>
+                            {topico ?? "Sem tópico"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => abrirNovoPdf(topico ?? undefined)}
+                            title={topico ? `Anexar outro PDF em "${topico}"` : "Anexar outro PDF nessa matéria"}
+                            className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors flex-shrink-0"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                      <div className="divide-y divide-border dark:divide-border">
+                        {itens.map((p) => (
+                          <PdfRow
+                            key={p.id}
+                            pdf={p}
+                            temArquivo={p.arquivoEnviado === true}
+                            enviando={enviandoIds.has(p.id)}
+                            carregando={carregandoLeitor === p.id}
+                            pagPorHora={pagPorHora}
+                            onLer={() => abrirLeitor(p)}
+                            onAnexar={(arq) => anexarEm(p, arq)}
+                            onAtualizarPagina={(pag) => atualizarPagina(p.id, pag)}
+                            onConcluir={() => atualizarPagina(p.id, alvoLeituraPdf(p))}
+                            onEditar={() => { setEditando(p); setPresetNovoPdf(null); setFormAberto(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                            onExcluir={() => excluir(p)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })
