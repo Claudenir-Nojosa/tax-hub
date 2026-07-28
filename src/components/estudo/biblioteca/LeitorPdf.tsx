@@ -119,14 +119,21 @@ export default function LeitorPdf({
 
   const refazerQuestoes = () => {
     onAtualizarPdf({ questoes: undefined });
-    // zera o caderno desse tópico também — sem isso ele ficaria mostrando contagens de uma lista
-    // de questões que não existe mais
+    // zera acertos/erros do caderno desse tópico também — sem isso ele ficaria mostrando
+    // contagens de uma lista de questões que não existe mais. Preserva o link de cada grupo (ver
+    // TopicoCaderno.link) — refazer a distribuição de questões não invalida o link externo.
     if (chaveTopico && topicos[chaveTopico]) {
+      const cad = topicos[chaveTopico].cadernos;
       onUpdateTopicos({
         ...topicos,
         [chaveTopico]: {
           ...topicos[chaveTopico],
-          cadernos: { A: { acertos: 0, erros: 0 }, B: { acertos: 0, erros: 0 }, C: { acertos: 0, erros: 0 }, D: { acertos: 0, erros: 0 } },
+          cadernos: {
+            A: { ...cad.A, acertos: 0, erros: 0 },
+            B: { ...cad.B, acertos: 0, erros: 0 },
+            C: { ...cad.C, acertos: 0, erros: 0 },
+            D: { ...cad.D, acertos: 0, erros: 0 },
+          },
         },
       });
     }

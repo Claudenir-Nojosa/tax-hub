@@ -39,6 +39,10 @@ export interface TopicoCaderno {
   // elegível a reforço, sem dado prévio pra dizer o contrário). Usado só pelo cooldown de
   // "reforço" da Trilha Dinâmica (trilha-dinamica.ts), não afeta nada mais.
   atualizadoEm?: string;
+  // link externo pra lista de questões desse grupo (ex.: TecConcursos) — só um atalho de
+  // navegação, não afeta cálculo nenhum. Precisa ser preservado por qualquer código que
+  // reescreva o caderno inteiro (ex.: sincronizarCadernoComQuestoes, refazerQuestoes).
+  link?: string;
 }
 
 export interface TopicoState {
