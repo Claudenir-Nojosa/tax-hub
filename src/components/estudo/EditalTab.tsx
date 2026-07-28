@@ -40,6 +40,9 @@ interface Props {
   // cria uma matéria nova (concurso.materias) — sem prop, o campo de adicionar matéria some
   // (mesmo caso de sem concurso ativo)
   onAddMateria?: (nome: string) => void;
+  // exclui a matéria INTEIRA (todos os tópicos junto) — sem prop, o botão de lixeira da matéria
+  // não aparece
+  onDeleteMateria?: (materia: string) => void;
 }
 
 // % de leitura dos PDFs da Biblioteca que cobrem este tópico (média ponderada pelo total de
@@ -115,7 +118,7 @@ function PercBadge({ perc }: { perc: number }) {
   return <span className={`text-xs ${cor}`}>{perc === 0 ? "—" : `${perc}%`}</span>;
 }
 
-export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = [], topicosExcluidos = [], onToggleTopicoExcluido, onDeleteTopico, onAddTopico, onMoveTopico, onAddMateria }: Props) {
+export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = [], topicosExcluidos = [], onToggleTopicoExcluido, onDeleteTopico, onAddTopico, onMoveTopico, onAddMateria, onDeleteMateria }: Props) {
   const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
   const [busca, setBusca] = useState("");
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
@@ -187,6 +190,12 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
     if (!onDeleteTopico) return;
     if (!confirm(`Excluir "${topico}" de ${materia} DEFINITIVAMENTE?\n\nDiferente de ocultar, isso apaga o progresso desse tópico (estudado, cadernos A-D) e não pode ser desfeito.`)) return;
     onDeleteTopico(materia, topico);
+  };
+
+  const excluirMateria = (materia: string) => {
+    if (!onDeleteMateria) return;
+    if (!confirm(`Excluir a matéria "${materia}" DEFINITIVAMENTE?\n\nIsso apaga TODOS os tópicos dela e o progresso (estudado, cadernos A-D) de cada um. Não pode ser desfeito.`)) return;
+    onDeleteMateria(materia);
   };
 
   const marcarTodos = (materia: string, estudado: boolean) => {
@@ -304,6 +313,16 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                       >
                         ✗ Limpar
                       </button>
+                      {onDeleteMateria && (
+                        <button
+                          type="button"
+                          onClick={() => excluirMateria(m.nome)}
+                          title="Excluir matéria definitivamente (apaga todos os tópicos e o progresso, não dá pra desfazer)"
+                          className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

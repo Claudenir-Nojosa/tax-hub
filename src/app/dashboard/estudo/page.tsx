@@ -263,6 +263,35 @@ export default function EstudoPage() {
     });
   }, [concursoAtivo]);
 
+  // excluir uma matéria INTEIRA (concurso.materias) — mesmo mecanismo otimista de PUT dos outros
+  // handlers desta seção. Limpa também o progresso (estudado/cadernos) e a marca de oculto de
+  // TODOS os tópicos dela, já que deixam de existir junto com a matéria.
+  const deleteMateria = useCallback((materia: string) => {
+    if (!concursoAtivo) return;
+    const materiasAtuais = concursoAtivo.materias as MateriaConcurso[];
+    const alvo = materiasAtuais.find((m) => m.nome === materia);
+    if (!alvo) return;
+    const materiasAtualizadas = materiasAtuais.filter((m) => m.nome !== materia);
+    const anterior = concursoAtivo.materias;
+    setConcursoAtivo((prev) => (prev ? { ...prev, materias: materiasAtualizadas } : prev));
+    const chavesRemovidas = new Set(alvo.topicos.map((t) => topicoKey(materia, t)));
+    setState((prev) => ({
+      ...prev,
+      topicos: Object.fromEntries(Object.entries(prev.topicos).filter(([k]) => !chavesRemovidas.has(k))),
+      topicosExcluidos: prev.topicosExcluidos.filter((k) => !chavesRemovidas.has(k)),
+    }));
+    fetch(`/api/concurso/${concursoAtivo.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ materias: materiasAtualizadas }),
+    }).then((res) => {
+      if (!res.ok) throw new Error();
+    }).catch(() => {
+      toast.error("Não deu pra excluir a matéria — tente de novo");
+      setConcursoAtivo((prev) => (prev ? { ...prev, materias: anterior } : prev));
+    });
+  }, [concursoAtivo]);
+
   // adicionar tópico DE VERDADE — mesmo mecanismo do deleteTopico (mutação otimista de
   // concurso.materias + PUT), só que insere em vez de remover. Sem entrada em `topicos` ainda
   // (fica undefined até o usuário mexer nele — mesmo fallback de defaultTopicoState() já usado
@@ -395,13 +424,13 @@ export default function EstudoPage() {
       <div className="bg-card border-b border-border px-4 md:px-6 py-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="h-12 w-12 flex-shrink-0 rounded-xl bg-muted p-1.5 flex items-center justify-center overflow-hidden">
+            <div className="h-12 w-12 flex-shrink-0 flex items-center justify-center overflow-hidden">
               {concursoAtivo?.foto ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={concursoAtivo.foto} alt={concursoAtivo.nome} className="max-w-full max-h-full w-auto h-auto object-contain rounded-lg" />
+                <img src={concursoAtivo.foto} alt={concursoAtivo.nome} className="max-w-full max-h-full w-auto h-auto object-contain" />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src="/icons/sefazce.png" alt="concurso" className="max-w-full max-h-full w-auto h-auto object-contain rounded-lg" />
+                <img src="/icons/sefazce.png" alt="concurso" className="max-w-full max-h-full w-auto h-auto object-contain" />
               )}
             </div>
             <div className="min-w-0">
@@ -489,6 +518,7 @@ export default function EstudoPage() {
               onAddTopico={concursoAtivo ? addTopico : undefined}
               onMoveTopico={concursoAtivo ? moveTopico : undefined}
               onAddMateria={concursoAtivo ? addMateria : undefined}
+              onDeleteMateria={concursoAtivo ? deleteMateria : undefined}
             />
           )}
 
