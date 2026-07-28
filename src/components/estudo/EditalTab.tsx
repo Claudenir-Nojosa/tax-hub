@@ -7,6 +7,7 @@ import {
   calcularMedia,
   topicoKey,
   dateKeyLocal,
+  defaultTopicoState,
   GRUPO_BADGE,
   GRUPO_TEXT,
   type TopicoState,
@@ -95,7 +96,9 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
   const updateTopico = useCallback(
     (materia: string, topico: string, fn: (prev: TopicoState) => TopicoState) => {
       const key = topicoKey(materia, topico);
-      const prev = topicos[key];
+      // tópico recém-criado (concurso/matéria novos) ainda não tem entrada em `topicos` — sem o
+      // fallback, mexer nele pela primeira vez quebrava com "Cannot read properties of undefined"
+      const prev = topicos[key] ?? defaultTopicoState();
       onUpdate({ ...topicos, [key]: fn(prev) });
     },
     [topicos, onUpdate]
@@ -129,7 +132,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
     const updated = { ...topicos };
     m.topicos.forEach((t) => {
       const key = topicoKey(materia, t);
-      updated[key] = { ...updated[key], estudado };
+      updated[key] = { ...(updated[key] ?? defaultTopicoState()), estudado };
     });
     onUpdate(updated);
   };
@@ -244,7 +247,10 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                 <div className="divide-y divide-border">
                   {m.topicos.map((t, idx) => {
                     const key = topicoKey(m.nome, t);
-                    const estado = topicos[key];
+                    // tópico recém-criado (concurso/matéria novos) ainda não tem entrada aqui —
+                    // sem o fallback, expandir a matéria quebrava com "Cannot read properties of
+                    // undefined" na hora
+                    const estado = topicos[key] ?? defaultTopicoState();
                     const media = calcularMedia(estado.cadernos);
                     const percPdf = percLeituraTopico(pdfs, m.nome, t);
                     const excluido = topicosExcluidos.includes(key);
