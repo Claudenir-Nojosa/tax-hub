@@ -29,6 +29,11 @@ export type MateriaLike = { nome: string; topicos: string[] };
 // 7. REFORÇO: um grupo "feito" com acerto abaixo de LIMIAR_REFORCO_PERC volta a aparecer na
 //    trilha (seção separada de "questões liberadas") depois de REFORCO_COOLDOWN_DIAS sem
 //    atualização — 0% e 100% deixam de ser tratados igual.
+// 8. REVISÃO DO LINK: cada tópico tem UM link de questões (aba Questões, ex.: TecConcursos —
+//    substituiu os 4 links por grupo). Quando os 4 grupos A-D do tópico ficam feitos, a revisão
+//    das questões do link entra na trilha DIAS_REVISAO_LINK dias depois. Registrado o resultado,
+//    abaixo de LIMIAR_REFORCO_PERC volta como reforço depois de REFORCO_COOLDOWN_DIAS (mesmas
+//    regras do reforço A-D).
 
 export const GRUPOS_QUESTOES: Grupo[] = ["A", "B", "C", "D"];
 const GRUPOS_CICLO = ["A", "B", "C"] as const;
@@ -41,6 +46,9 @@ export const LIMIAR_REFORCO_PERC = 70;
 // dias de carência antes do MESMO grupo fraco ressurgir de novo — qualquer novo registro de
 // acertos/erros nesse grupo (Edital ou Trilha) reinicia a contagem via TopicoCaderno.atualizadoEm
 export const REFORCO_COOLDOWN_DIAS = 3;
+// dias de espera após concluir os 4 grupos A-D de um tópico até a revisão das questões do link
+// (aba Questões, ex.: TecConcursos) aparecer na trilha
+export const DIAS_REVISAO_LINK = 7;
 
 const DIAS_SEMANA = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"] as const;
 
@@ -177,6 +185,80 @@ export function analisarReforcos(
   return reforcos;
 }
 
+// ─── Revisão das questões do link (aba Questões) ────────────────────────────
+
+export type StatusRevisaoLink =
+  | { tipo: "sem_link" }
+  | { tipo: "aguardando_grupos" } // link cadastrado, mas os 4 grupos A-D ainda não estão feitos
+  | { tipo: "aguardando_prazo"; diasRestantes: number } // 4 grupos feitos, ainda dentro dos DIAS_REVISAO_LINK
+  | { tipo: "disponivel" } // prazo passou, revisão ainda não registrada
+  | { tipo: "feita"; perc: number; reforco: boolean }; // já registrada — reforco = abaixo do limiar
+
+// status individual de um tópico — usado tanto pra decidir o que aparece na Trilha
+// (analisarRevisoesLink) quanto pro badge informativo da aba Questões
+export function statusRevisaoLink(estado: TopicoState | undefined, hoje: string): StatusRevisaoLink {
+  if (!estado?.linkQuestoes) return { tipo: "sem_link" };
+  const todosFeitos = GRUPOS_QUESTOES.every((g) => grupoFeito(estado, g));
+  if (!todosFeitos) return { tipo: "aguardando_grupos" };
+
+  // data de conclusão = a mais recente entre os atualizadoEm dos 4 grupos; se algum grupo feito
+  // não tem atualizadoEm (registro antigo, de antes desse campo existir), considera já elegível
+  // na hora — mesma filosofia do reforço A-D (ausência de data não bloqueia, libera de cara)
+  const datas = GRUPOS_QUESTOES.map((g) => estado.cadernos[g].atualizadoEm).filter((d): d is string => !!d);
+  const dataConclusao = datas.length === 4 ? datas.sort()[datas.length - 1] : "1970-01-01";
+  const diasDesde = diffDias(dataConclusao, hoje);
+
+  if (!estado.revisaoLink) {
+    if (diasDesde < DIAS_REVISAO_LINK) return { tipo: "aguardando_prazo", diasRestantes: DIAS_REVISAO_LINK - diasDesde };
+    return { tipo: "disponivel" };
+  }
+  const perc = calcularPerc(estado.revisaoLink.acertos, estado.revisaoLink.erros);
+  return { tipo: "feita", perc, reforco: perc < LIMIAR_REFORCO_PERC };
+}
+
+export interface RevisaoLinkPendente {
+  id: string; // estável: `rl:${materia}:${topico}`
+  materia: string;
+  topico: string;
+  ordemTopico: number;
+  link: string;
+  reforco: boolean; // true = corrigindo um resultado fraco anterior, não a 1ª tentativa
+  acertosAtual?: number; // pré-preenche o form quando é reforço
+  errosAtual?: number;
+}
+
+// tópicos com revisão do link disponível (1ª vez) ou pedindo reforço (< LIMIAR_REFORCO_PERC e
+// já esfriado, mesmo cooldown do reforço A-D) — igual a analisarReforcos, caminho separado que
+// não interfere na liberação escalonada nem no cálculo de matéria concluída
+export function analisarRevisoesLink(
+  materia: MateriaLike,
+  topicos: Record<string, TopicoState>,
+  hoje: string
+): RevisaoLinkPendente[] {
+  const nomes = materia.topicos;
+  const pendentes: RevisaoLinkPendente[] = [];
+  for (let i = 0; i < nomes.length; i++) {
+    const estado = topicos[topicoKey(materia.nome, nomes[i])];
+    const status = statusRevisaoLink(estado, hoje);
+    if (status.tipo === "disponivel") {
+      pendentes.push({
+        id: `rl:${materia.nome}:${nomes[i]}`, materia: materia.nome, topico: nomes[i], ordemTopico: i + 1,
+        link: estado!.linkQuestoes!, reforco: false,
+      });
+    } else if (status.tipo === "feita" && status.reforco) {
+      const atualizadoEm = estado!.revisaoLink!.atualizadoEm;
+      if (diffDias(atualizadoEm, hoje) >= REFORCO_COOLDOWN_DIAS) {
+        pendentes.push({
+          id: `rl:${materia.nome}:${nomes[i]}`, materia: materia.nome, topico: nomes[i], ordemTopico: i + 1,
+          link: estado!.linkQuestoes!, reforco: true,
+          acertosAtual: estado!.revisaoLink!.acertos, errosAtual: estado!.revisaoLink!.erros,
+        });
+      }
+    }
+  }
+  return pendentes;
+}
+
 // ─── Meta do dia ─────────────────────────────────────────────────────────────
 
 export interface BlocoEstudo {
@@ -200,6 +282,7 @@ export interface MetaDia {
   blocosConcluidos: boolean; // todos os blocos entregues (false se não há blocos)
   questoesPendentes: QuestaoLiberada[]; // todas as matérias ativas
   reforcos: ReforcoGrupo[]; // grupos já feitos mas com desempenho fraco, esfriados (distinto de questoesPendentes)
+  revisoesLink: RevisaoLinkPendente[]; // revisão das questões do link, 7 dias após os 4 grupos A-D
   revisoes30: Revisao30[]; // devidas hoje (matéria concluída ontem ou antes, revisão ainda não feita)
   revisarCartas: boolean; // hoje é domingo de cartas e ainda não marcada
   proximoDomingoCartas: string; // dateKey do próximo domingo de cartas (informativo)
@@ -359,6 +442,7 @@ export function computarMetaDia(params: {
     blocosConcluidos: blocos.length > 0 && blocos.every((b) => b.concluido),
     questoesPendentes: analises.flatMap((a) => a.questoesLiberadas),
     reforcos: ativas.flatMap((m) => analisarReforcos(m, topicos, hoje)),
+    revisoesLink: ativas.flatMap((m) => analisarRevisoesLink(m, topicos, hoje)),
     revisoes30,
     revisarCartas: ehDomingoCartas && !cartasFeitaHoje,
     proximoDomingoCartas: proximoDom,

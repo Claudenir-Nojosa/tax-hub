@@ -18,7 +18,7 @@ import {
 } from "@/lib/estudo-data";
 import { resolverCorMateria } from "./trilha/trilha-ui";
 import { alvoLeituraPdf } from "./biblioteca/biblioteca-utils";
-import { ChevronDown, ChevronRight, Search, CheckSquare, Square, BookOpen, EyeOff, RotateCcw, Trash2, Link2, Plus, ArrowUp, ArrowDown } from "lucide-react";
+import { ChevronDown, ChevronRight, Search, CheckSquare, Square, BookOpen, EyeOff, RotateCcw, Trash2, Plus, ArrowUp, ArrowDown } from "lucide-react";
 
 interface Props {
   topicos: Record<string, TopicoState>;
@@ -82,28 +82,6 @@ function CadernoInput({
           : "h-9 w-9 text-center text-sm border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
       }
     />
-  );
-}
-
-// Ícone de link das questões de um grupo (ex.: TecConcursos) — clique abre direto se já tiver
-// link cadastrado; sem link, ou com botão direito, abre o prompt de cadastro/edição.
-function LinkGrupoButton({ link, onEditar }: { link?: string; onEditar: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        if (link) window.open(link, "_blank", "noopener,noreferrer");
-        else onEditar();
-      }}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        onEditar();
-      }}
-      title={link ? `Abrir questões: ${link}\n(botão direito pra editar/remover)` : "Cadastrar link das questões (ex.: TecConcursos)"}
-      className={`flex-shrink-0 transition-colors ${link ? "text-primary hover:text-primary/70" : "text-muted-foreground/40 hover:text-muted-foreground"}`}
-    >
-      <Link2 className="h-3 w-3" />
-    </button>
   );
 }
 
@@ -189,18 +167,6 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
         // isso, um grupo fraco corrigido aqui reapareceria na trilha até o próximo registro
         [grupo]: { ...prev.cadernos[grupo], [field]: value, atualizadoEm: dateKeyLocal() },
       },
-    }));
-  };
-
-  // link externo por grupo (ex.: lista de questões no TecConcursos) — clique no ícone abre
-  // direto se já tiver link; botão direito sempre abre este prompt pra cadastrar/editar/remover
-  // (deixar em branco remove).
-  const editarLinkCaderno = (materia: string, topico: string, grupo: Grupo, atual?: string) => {
-    const novo = prompt(`Link das questões do Grupo ${grupo} (ex.: TecConcursos)`, atual ?? "");
-    if (novo === null) return; // cancelado
-    updateTopico(materia, topico, (prev) => ({
-      ...prev,
-      cadernos: { ...prev.cadernos, [grupo]: { ...prev.cadernos[grupo], link: novo.trim() || undefined } },
     }));
   };
 
@@ -513,7 +479,6 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                               return (
                                 <div key={g} className="flex items-center gap-1">
                                   <span className={`text-xs ${GRUPO_TEXT[g]} w-4 flex-shrink-0 text-center`}>{g}</span>
-                                  <LinkGrupoButton link={cad.link} onEditar={() => editarLinkCaderno(m.nome, t, g, cad.link)} />
                                   <CadernoInput compact value={cad.acertos} onChange={(v) => updateCaderno(m.nome, t, g, "acertos", v)} />
                                   <span className="text-muted-foreground text-xs">/</span>
                                   <CadernoInput compact value={cad.erros} onChange={(v) => updateCaderno(m.nome, t, g, "erros", v)} />
@@ -555,7 +520,6 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                               return (
                                 <div key={g} className="flex items-center gap-1.5">
                                   <span className={`text-xs ${GRUPO_TEXT[g]} w-3.5 flex-shrink-0 text-center`}>{g}</span>
-                                  <LinkGrupoButton link={cad.link} onEditar={() => editarLinkCaderno(m.nome, t, g, cad.link)} />
                                   <CadernoInput value={cad.acertos} onChange={(v) => updateCaderno(m.nome, t, g, "acertos", v)} />
                                   <span className="text-muted-foreground text-xs">/</span>
                                   <CadernoInput value={cad.erros} onChange={(v) => updateCaderno(m.nome, t, g, "erros", v)} />

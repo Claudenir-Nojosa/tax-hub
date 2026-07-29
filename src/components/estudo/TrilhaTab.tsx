@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, BookOpen, CalendarClock, Check, ChevronDown, Clock, Layers,
-  ListChecks, Route, Settings2, Sparkles, Target, Trash2, Trophy,
+  AlertTriangle, ArrowRight, BookOpen, CalendarClock, Check, ChevronDown, Clock, ExternalLink,
+  Layers, ListChecks, Route, Settings2, Sparkles, Target, Trash2, Trophy,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -14,7 +14,7 @@ import {
 import {
   computarMetaDia, criarTrilhaDinamica, grupoCicloSeguinte, resolverGrupoEfetivo,
   type AnaliseMateria, type BlocoEstudo, type MetaDia, type QuestaoLiberada,
-  type ReforcoGrupo, type Revisao30,
+  type ReforcoGrupo, type Revisao30, type RevisaoLinkPendente,
 } from "@/lib/trilha-dinamica";
 import { fmtHoras, resolverCorMateria } from "./trilha/trilha-ui";
 import ProgressRing from "./ui/ProgressRing";
@@ -44,11 +44,12 @@ interface Props {
   onIrParaCartas?: () => void;
 }
 
-type TipoPasso = "estudo" | "reforco" | "questoes" | "revisao" | "cartas";
+type TipoPasso = "estudo" | "reforco" | "questoes" | "linkQuestoes" | "revisao" | "cartas";
 const TIPO_ITEM: Record<TipoPasso, string> = {
   estudo: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary",
   reforco: "bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-400",
   questoes: "bg-teal-100 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400",
+  linkQuestoes: "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400",
   revisao: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400",
   cartas: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400",
 };
@@ -128,6 +129,18 @@ export default function TrilhaTab({
   const registrarReforco = (r: ReforcoGrupo, acertos: number, erros: number) =>
     registrarCaderno(r.materia, r.topico, r.grupo, acertos, erros);
 
+  // registro da revisão das questões do link (1ª vez ou correção de reforço) — grava em
+  // revisaoLink, não em cadernos (é um resultado do tópico inteiro, não de um grupo A-D)
+  const registrarRevisaoLink = (r: RevisaoLinkPendente, acertos: number, erros: number) => {
+    const key = topicoKey(r.materia, r.topico);
+    const estado = topicos[key];
+    if (!estado) return;
+    onUpdateTopicos({
+      ...topicos,
+      [key]: { ...estado, revisaoLink: { acertos, erros, atualizadoEm: dateKeyLocal() } },
+    });
+  };
+
   // marca o tópico atual de um bloco como estudado direto da Trilha, sem precisar trocar pra
   // aba Edital — só avança (não desmarca); corrigir um engano continua sendo ação do Edital
   const marcarTopicoEstudado = (materia: string, topico: string) => {
@@ -161,7 +174,7 @@ export default function TrilhaTab({
   const materiasEmRevisao = meta.analises.filter(
     (a) => a.materiaConcluida && (trilha.revisoes30Feitas[a.materia] ?? []).length > 0
   );
-  const pendencias = meta.questoesPendentes.length + meta.reforcos.length + meta.revisoes30.length + (meta.revisarCartas ? 1 : 0);
+  const pendencias = meta.questoesPendentes.length + meta.reforcos.length + meta.revisoesLink.length + meta.revisoes30.length + (meta.revisarCartas ? 1 : 0);
 
   // ── monta o checklist único do dia ────────────────────────────────────────
   type Passo = { id: string; tipo: TipoPasso; concluido: boolean; icone: LucideIcon; corpo: React.ReactNode };
@@ -199,6 +212,15 @@ export default function TrilhaTab({
       concluido: false,
       icone: ListChecks,
       corpo: <CorpoQuestoes questoes={meta.questoesPendentes} materiasAtivas={materiasAtivas} onRegistrar={registrarQuestoes} />,
+    });
+  }
+  if (meta.revisoesLink.length > 0) {
+    passos.push({
+      id: "revisoes-link",
+      tipo: "linkQuestoes",
+      concluido: false,
+      icone: ExternalLink,
+      corpo: <CorpoRevisoesLink revisoes={meta.revisoesLink} materiasAtivas={materiasAtivas} onRegistrar={registrarRevisaoLink} />,
     });
   }
   for (const r of meta.revisoes30) {
@@ -416,6 +438,84 @@ function CorpoQuestoes({
   );
 }
 
+function CorpoRevisoesLink({
+  revisoes, materiasAtivas, onRegistrar,
+}: {
+  revisoes: RevisaoLinkPendente[];
+  materiasAtivas: (MateriaDef | MateriaConcurso)[];
+  onRegistrar: (r: RevisaoLinkPendente, acertos: number, erros: number) => void;
+}) {
+  return (
+    <div>
+      <div className="text-sm font-semibold text-foreground dark:text-foreground">
+        {revisoes.length} revisão{revisoes.length !== 1 ? "ões" : ""} de questões do link
+      </div>
+      <div className="text-[11px] text-muted-foreground mb-2">
+        7 dias após concluir os 4 grupos A-D do tópico — refaça as questões do link cadastrado na aba Questões.
+      </div>
+      <div className="space-y-1 max-h-64 overflow-y-auto pr-1 -mr-1">
+        {revisoes.map((r) => (
+          <LinhaRevisaoLink key={r.id} r={r} materiasAtivas={materiasAtivas} onRegistrar={onRegistrar} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LinhaRevisaoLink({
+  r, materiasAtivas, onRegistrar,
+}: {
+  r: RevisaoLinkPendente;
+  materiasAtivas: (MateriaDef | MateriaConcurso)[];
+  onRegistrar: (r: RevisaoLinkPendente, acertos: number, erros: number) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [acertos, setAcertos] = useState(r.reforco ? String(r.acertosAtual ?? "") : "");
+  const [erros, setErros] = useState(r.reforco ? String(r.errosAtual ?? "") : "");
+  const cor = resolverCorMateria(r.materia, materiasAtivas);
+  const podeSalvar = acertos !== "" && erros !== "" && Number(acertos) + Number(erros) > 0;
+
+  return (
+    <div className="rounded-lg hover:bg-accent dark:hover:bg-muted/40 px-2 py-1.5 -mx-2 transition-colors">
+      <button type="button" onClick={() => setAberto((v) => !v)} className="w-full flex items-center gap-2.5 text-left">
+        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
+        <div className="flex-1 min-w-0">
+          <span className="text-sm text-foreground">{r.materia}</span>
+          <span className="text-xs text-muted-foreground"> · tópico {r.ordemTopico}: </span>
+          <span className="text-xs text-muted-foreground" title={r.topico}>{r.topico.length > 50 ? r.topico.slice(0, 50) + "…" : r.topico}</span>
+        </div>
+        {r.reforco && <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 flex-shrink-0">reforço</span>}
+        <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground flex-shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
+      </button>
+      {aberto && (
+        <div className="mt-2 flex items-center gap-2 pl-1 flex-wrap">
+          <a
+            href={r.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] text-primary hover:underline flex items-center gap-1 flex-shrink-0"
+          >
+            <ExternalLink className="h-3 w-3" /> Abrir questões
+          </a>
+          {r.reforco && <span className="text-[10px] text-muted-foreground">{r.acertosAtual} acerto{r.acertosAtual !== 1 ? "s" : ""} / {r.errosAtual} erro{r.errosAtual !== 1 ? "s" : ""} — refaça e atualize</span>}
+          <label className="text-[11px] text-muted-foreground">Acertos</label>
+          <input type="number" min={0} value={acertos} onChange={(e) => setAcertos(e.target.value)} className="w-16 bg-muted border border-border rounded-md px-2 py-1 text-sm text-foreground dark:text-foreground outline-none focus:border-emerald-400" />
+          <label className="text-[11px] text-muted-foreground">Erros</label>
+          <input type="number" min={0} value={erros} onChange={(e) => setErros(e.target.value)} className="w-16 bg-muted border border-border rounded-md px-2 py-1 text-sm text-foreground dark:text-foreground outline-none focus:border-emerald-400" />
+          <button
+            type="button"
+            disabled={!podeSalvar}
+            onClick={() => onRegistrar(r, Number(acertos), Number(erros))}
+            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-medium"
+          >
+            Salvar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CorpoRevisao30({ r, onMarcar }: { r: Revisao30; onMarcar: () => void }) {
   return (
     <div className="flex items-center gap-3">
@@ -603,6 +703,7 @@ function Intro({
   const regras: { icone: LucideIcon; cor: string; texto: string }[] = [
     { icone: Clock, cor: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary", texto: "Cada dia pertence a um grupo do ciclo (A/B/C). As horas do dia são divididas entre as matérias do grupo — ex.: 3h e 3 matérias = 1h de PDF em cada, no tópico atual. O tempo é monitorado pelo leitor de PDF." },
     { icone: ListChecks, cor: "bg-teal-100 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400", texto: "Concluir um tópico libera questões dos anteriores: grupo A do último, B do penúltimo, C do antepenúltimo, D do anterior a esse — até fechar os 4 grupos de todos os tópicos." },
+    { icone: ExternalLink, cor: "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400", texto: "Cadastrado o link de questões do tópico (aba Questões), 7 dias após concluir os 4 grupos A-D a trilha pede pra refazer essas questões — abaixo de 70% volta como reforço." },
     { icone: Trophy, cor: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400", texto: "Matéria 100% (teoria + todos os grupos) entra em modo revisão: no dia seguinte, 30 questões englobando todos os tópicos dela." },
     { icone: Layers, cor: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400", texto: "A cada 2 domingos, revisão das cartas." },
     { icone: Sparkles, cor: "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400", texto: "Trilha 100% mutável: o ciclo só avança quando você entrega os blocos do dia — a meta de amanhã depende do que você fez hoje." },

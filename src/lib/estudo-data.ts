@@ -39,17 +39,27 @@ export interface TopicoCaderno {
   // elegível a reforço, sem dado prévio pra dizer o contrário). Usado só pelo cooldown de
   // "reforço" da Trilha Dinâmica (trilha-dinamica.ts), não afeta nada mais.
   atualizadoEm?: string;
-  // link externo pra lista de questões desse grupo (ex.: TecConcursos) — só um atalho de
-  // navegação, não afeta cálculo nenhum. Precisa ser preservado por qualquer código que
-  // reescreva o caderno inteiro (ex.: sincronizarCadernoComQuestoes, refazerQuestoes).
-  link?: string;
 }
 
 export type NivelImportancia = "alta" | "media" | "baixa";
 
+// resultado da revisão de questões do link (aba Questões) feita 7 dias após concluir os 4
+// grupos A-D do tópico — ver DIAS_REVISAO_LINK em trilha-dinamica.ts. Só existe depois do
+// primeiro registro; sem isso a revisão nunca foi feita.
+export interface RevisaoLinkTopico {
+  acertos: number;
+  erros: number;
+  atualizadoEm: string; // dateKeyLocal do último registro — mesmo cooldown de reforço do A-D
+}
+
 export interface TopicoState {
   estudado: boolean;
   cadernos: Record<Grupo, TopicoCaderno>;
+  // link único de questões do tópico (ex.: TecConcursos), cadastrado na aba Questões — usado
+  // pela revisão da Trilha 7 dias após concluir os 4 grupos A-D. Substituiu o link por grupo
+  // (TopicoCaderno.link), que exigia cadastrar 4 vezes o mesmo link.
+  linkQuestoes?: string;
+  revisaoLink?: RevisaoLinkTopico;
   // nível de importância do tópico pro edital (ausente = não definido) — só indicação visual no
   // Edital, não afeta cálculo de progresso/XP/Ciclo/Trilha
   importancia?: NivelImportancia;

@@ -26,7 +26,7 @@ import {
   MATERIAS,
 } from "@/lib/estudo-data";
 import { computarMetaDia } from "@/lib/trilha-dinamica";
-import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library } from "lucide-react";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -35,6 +35,7 @@ import StatTile from "@/components/estudo/ui/StatTile";
 
 const DashboardTab = dynamic(() => import("@/components/estudo/DashboardTab"), { ssr: false });
 const EditalTab = dynamic(() => import("@/components/estudo/EditalTab"), { ssr: false });
+const QuestoesTab = dynamic(() => import("@/components/estudo/QuestoesTab"), { ssr: false });
 const CicloTab = dynamic(() => import("@/components/estudo/CicloTab"), { ssr: false });
 const CalendarioTab = dynamic(() => import("@/components/estudo/CalendarioTab"), { ssr: false });
 const RelatoriosTab = dynamic(() => import("@/components/estudo/RelatoriosTab"), { ssr: false });
@@ -48,11 +49,12 @@ const CompararEditaisTab = dynamic(() => import("@/components/estudo/CompararEdi
 const storageKey = (concursoId: string | null) =>
   concursoId ? `taxhub_estudo_c_${concursoId}` : "taxhub_estudo_v1";
 
-type Tab = "dashboard" | "edital" | "biblioteca" | "ciclo" | "trilha" | "calendario" | "relatorios" | "cartas" | "resumos" | "comparar";
+type Tab = "dashboard" | "edital" | "questoes" | "biblioteca" | "ciclo" | "trilha" | "calendario" | "relatorios" | "cartas" | "resumos" | "comparar";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "edital", label: "Edital", icon: BookOpen },
+  { id: "questoes", label: "Questões", icon: ListChecks },
   { id: "biblioteca", label: "Biblioteca", icon: Library },
   { id: "ciclo", label: "Ciclo de Estudos", icon: RotateCcw },
   { id: "trilha", label: "Trilha", icon: Route },
@@ -527,6 +529,14 @@ export default function EstudoPage() {
               onMoveTopico={concursoAtivo ? moveTopico : undefined}
               onAddMateria={concursoAtivo ? addMateria : undefined}
               onDeleteMateria={concursoAtivo ? deleteMateria : undefined}
+            />
+          )}
+
+          {activeTab === "questoes" && (
+            <QuestoesTab
+              topicos={state.topicos}
+              onUpdate={updateTopicos}
+              materiasConcurso={materiasFiltradas}
             />
           )}
 

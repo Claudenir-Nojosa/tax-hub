@@ -47,7 +47,6 @@ export function sincronizarCadernoComQuestoes(
   for (const g of GRUPOS) {
     const doGrupo = questoes.resultados.filter((r) => r.grupo === g);
     cadernos[g] = {
-      ...cadernos[g], // preserva o link do grupo (ver TopicoCaderno.link) — não é resultado de questão
       acertos: doGrupo.filter((r) => r.acertou === true).length,
       erros: doGrupo.filter((r) => r.acertou === false).length,
       atualizadoEm: agora,
