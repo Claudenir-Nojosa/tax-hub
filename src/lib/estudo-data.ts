@@ -43,9 +43,12 @@ export interface TopicoCaderno {
 
 export type NivelImportancia = "alta" | "media" | "baixa";
 
-// resultado da revisão de questões do link (aba Questões) feita 7 dias após concluir os 4
-// grupos A-D do tópico — ver DIAS_REVISAO_LINK em trilha-dinamica.ts. Só existe depois do
-// primeiro registro; sem isso a revisão nunca foi feita.
+// os dois "checkpoints" de revisão das questões do link, contados a partir da conclusão dos 4
+// grupos A-D do tópico — ver CHECKPOINTS_REVISAO_LINK em trilha-dinamica.ts
+export type ChecklistRevisaoLink = "d7" | "d30";
+
+// resultado de UM checkpoint da revisão de questões do link (aba Questões). Só existe depois do
+// primeiro registro daquele checkpoint; sem isso a revisão ainda não foi feita.
 export interface RevisaoLinkTopico {
   acertos: number;
   erros: number;
@@ -56,10 +59,11 @@ export interface TopicoState {
   estudado: boolean;
   cadernos: Record<Grupo, TopicoCaderno>;
   // link único de questões do tópico (ex.: TecConcursos), cadastrado na aba Questões — usado
-  // pela revisão da Trilha 7 dias após concluir os 4 grupos A-D. Substituiu o link por grupo
-  // (TopicoCaderno.link), que exigia cadastrar 4 vezes o mesmo link.
+  // pelas revisões da Trilha (7 e 30 dias após concluir os 4 grupos A-D). Substituiu o link por
+  // grupo (TopicoCaderno.link), que exigia cadastrar 4 vezes o mesmo link.
   linkQuestoes?: string;
-  revisaoLink?: RevisaoLinkTopico;
+  // um resultado por checkpoint — independentes entre si (fazer o de 7 dias não altera o de 30)
+  revisoesLink?: Partial<Record<ChecklistRevisaoLink, RevisaoLinkTopico>>;
   // nível de importância do tópico pro edital (ausente = não definido) — só indicação visual no
   // Edital, não afeta cálculo de progresso/XP/Ciclo/Trilha
   importancia?: NivelImportancia;

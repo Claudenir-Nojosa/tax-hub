@@ -130,14 +130,18 @@ export default function TrilhaTab({
     registrarCaderno(r.materia, r.topico, r.grupo, acertos, erros);
 
   // registro da revisão das questões do link (1ª vez ou correção de reforço) — grava em
-  // revisaoLink, não em cadernos (é um resultado do tópico inteiro, não de um grupo A-D)
+  // revisoesLink[checkpoint], não em cadernos (é um resultado do tópico inteiro, não de um grupo
+  // A-D); os checkpoints de 7 e 30 dias são independentes, cada um com seu próprio registro
   const registrarRevisaoLink = (r: RevisaoLinkPendente, acertos: number, erros: number) => {
     const key = topicoKey(r.materia, r.topico);
     const estado = topicos[key];
     if (!estado) return;
     onUpdateTopicos({
       ...topicos,
-      [key]: { ...estado, revisaoLink: { acertos, erros, atualizadoEm: dateKeyLocal() } },
+      [key]: {
+        ...estado,
+        revisoesLink: { ...estado.revisoesLink, [r.checkpoint]: { acertos, erros, atualizadoEm: dateKeyLocal() } },
+      },
     });
   };
 
@@ -451,7 +455,7 @@ function CorpoRevisoesLink({
         {revisoes.length} revisão{revisoes.length !== 1 ? "ões" : ""} de questões do link
       </div>
       <div className="text-[11px] text-muted-foreground mb-2">
-        7 dias após concluir os 4 grupos A-D do tópico — refaça as questões do link cadastrado na aba Questões.
+        7 e 30 dias após concluir os 4 grupos A-D do tópico — refaça as questões do link cadastrado na aba Questões.
       </div>
       <div className="space-y-1 max-h-64 overflow-y-auto pr-1 -mr-1">
         {revisoes.map((r) => (
@@ -484,6 +488,7 @@ function LinhaRevisaoLink({
           <span className="text-xs text-muted-foreground"> · tópico {r.ordemTopico}: </span>
           <span className="text-xs text-muted-foreground" title={r.topico}>{r.topico.length > 50 ? r.topico.slice(0, 50) + "…" : r.topico}</span>
         </div>
+        <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 flex-shrink-0">{r.dias}d</span>
         {r.reforco && <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 flex-shrink-0">reforço</span>}
         <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground flex-shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
       </button>
@@ -703,7 +708,7 @@ function Intro({
   const regras: { icone: LucideIcon; cor: string; texto: string }[] = [
     { icone: Clock, cor: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary", texto: "Cada dia pertence a um grupo do ciclo (A/B/C). As horas do dia são divididas entre as matérias do grupo — ex.: 3h e 3 matérias = 1h de PDF em cada, no tópico atual. O tempo é monitorado pelo leitor de PDF." },
     { icone: ListChecks, cor: "bg-teal-100 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400", texto: "Concluir um tópico libera questões dos anteriores: grupo A do último, B do penúltimo, C do antepenúltimo, D do anterior a esse — até fechar os 4 grupos de todos os tópicos." },
-    { icone: ExternalLink, cor: "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400", texto: "Cadastrado o link de questões do tópico (aba Questões), 7 dias após concluir os 4 grupos A-D a trilha pede pra refazer essas questões — abaixo de 70% volta como reforço." },
+    { icone: ExternalLink, cor: "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400", texto: "Cadastrado o link de questões do tópico (aba Questões), 7 e 30 dias após concluir os 4 grupos A-D a trilha pede pra refazer essas questões em cada checkpoint — abaixo de 70% volta como reforço." },
     { icone: Trophy, cor: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400", texto: "Matéria 100% (teoria + todos os grupos) entra em modo revisão: no dia seguinte, 30 questões englobando todos os tópicos dela." },
     { icone: Layers, cor: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400", texto: "A cada 2 domingos, revisão das cartas." },
     { icone: Sparkles, cor: "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400", texto: "Trilha 100% mutável: o ciclo só avança quando você entrega os blocos do dia — a meta de amanhã depende do que você fez hoje." },

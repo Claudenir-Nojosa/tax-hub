@@ -1,6 +1,6 @@
 import {
   dateKeyLocal, topicoKey, calcularPerc,
-  type AtividadeCalendario, type EstudoConfigCiclo, type Grupo,
+  type AtividadeCalendario, type ChecklistRevisaoLink, type EstudoConfigCiclo, type Grupo,
   type TopicoState, type TrilhaDinamicaState,
 } from "./estudo-data";
 
@@ -31,9 +31,11 @@ export type MateriaLike = { nome: string; topicos: string[] };
 //    atualização — 0% e 100% deixam de ser tratados igual.
 // 8. REVISÃO DO LINK: cada tópico tem UM link de questões (aba Questões, ex.: TecConcursos —
 //    substituiu os 4 links por grupo). Quando os 4 grupos A-D do tópico ficam feitos, a revisão
-//    das questões do link entra na trilha DIAS_REVISAO_LINK dias depois. Registrado o resultado,
-//    abaixo de LIMIAR_REFORCO_PERC volta como reforço depois de REFORCO_COOLDOWN_DIAS (mesmas
-//    regras do reforço A-D).
+//    das questões do link entra na trilha em DOIS checkpoints INDEPENDENTES (CHECKPOINTS_
+//    REVISAO_LINK: 7 e 30 dias depois, cada um contado da mesma data de conclusão). Registrado o
+//    resultado de um checkpoint, abaixo de LIMIAR_REFORCO_PERC volta como reforço depois de
+//    REFORCO_COOLDOWN_DIAS (mesmas regras do reforço A-D) — o outro checkpoint segue seu próprio
+//    prazo, sem depender do primeiro ter sido feito.
 
 export const GRUPOS_QUESTOES: Grupo[] = ["A", "B", "C", "D"];
 const GRUPOS_CICLO = ["A", "B", "C"] as const;
@@ -46,9 +48,12 @@ export const LIMIAR_REFORCO_PERC = 70;
 // dias de carência antes do MESMO grupo fraco ressurgir de novo — qualquer novo registro de
 // acertos/erros nesse grupo (Edital ou Trilha) reinicia a contagem via TopicoCaderno.atualizadoEm
 export const REFORCO_COOLDOWN_DIAS = 3;
-// dias de espera após concluir os 4 grupos A-D de um tópico até a revisão das questões do link
-// (aba Questões, ex.: TecConcursos) aparecer na trilha
-export const DIAS_REVISAO_LINK = 7;
+// checkpoints de revisão das questões do link (aba Questões, ex.: TecConcursos) — independentes
+// entre si, cada um contado a partir da conclusão dos 4 grupos A-D do tópico
+export const CHECKPOINTS_REVISAO_LINK: { id: ChecklistRevisaoLink; dias: number }[] = [
+  { id: "d7", dias: 7 },
+  { id: "d30", dias: 30 },
+];
 
 const DIAS_SEMANA = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"] as const;
 
@@ -190,13 +195,18 @@ export function analisarReforcos(
 export type StatusRevisaoLink =
   | { tipo: "sem_link" }
   | { tipo: "aguardando_grupos" } // link cadastrado, mas os 4 grupos A-D ainda não estão feitos
-  | { tipo: "aguardando_prazo"; diasRestantes: number } // 4 grupos feitos, ainda dentro dos DIAS_REVISAO_LINK
-  | { tipo: "disponivel" } // prazo passou, revisão ainda não registrada
+  | { tipo: "aguardando_prazo"; diasRestantes: number } // 4 grupos feitos, ainda dentro do prazo do checkpoint
+  | { tipo: "disponivel" } // prazo passou, esse checkpoint ainda não foi registrado
   | { tipo: "feita"; perc: number; reforco: boolean }; // já registrada — reforco = abaixo do limiar
 
-// status individual de um tópico — usado tanto pra decidir o que aparece na Trilha
-// (analisarRevisoesLink) quanto pro badge informativo da aba Questões
-export function statusRevisaoLink(estado: TopicoState | undefined, hoje: string): StatusRevisaoLink {
+// status de UM checkpoint (7 ou 30 dias) de um tópico — usado tanto pra decidir o que aparece na
+// Trilha (analisarRevisoesLink) quanto pro badge informativo da aba Questões. Os dois checkpoints
+// são independentes: cada um olha só o próprio registro em revisoesLink[checkpoint].
+export function statusRevisaoLink(
+  estado: TopicoState | undefined,
+  hoje: string,
+  checkpoint: ChecklistRevisaoLink = "d7"
+): StatusRevisaoLink {
   if (!estado?.linkQuestoes) return { tipo: "sem_link" };
   const todosFeitos = GRUPOS_QUESTOES.every((g) => grupoFeito(estado, g));
   if (!todosFeitos) return { tipo: "aguardando_grupos" };
@@ -207,29 +217,34 @@ export function statusRevisaoLink(estado: TopicoState | undefined, hoje: string)
   const datas = GRUPOS_QUESTOES.map((g) => estado.cadernos[g].atualizadoEm).filter((d): d is string => !!d);
   const dataConclusao = datas.length === 4 ? datas.sort()[datas.length - 1] : "1970-01-01";
   const diasDesde = diffDias(dataConclusao, hoje);
+  const diasAlvo = CHECKPOINTS_REVISAO_LINK.find((c) => c.id === checkpoint)!.dias;
 
-  if (!estado.revisaoLink) {
-    if (diasDesde < DIAS_REVISAO_LINK) return { tipo: "aguardando_prazo", diasRestantes: DIAS_REVISAO_LINK - diasDesde };
+  const registro = estado.revisoesLink?.[checkpoint];
+  if (!registro) {
+    if (diasDesde < diasAlvo) return { tipo: "aguardando_prazo", diasRestantes: diasAlvo - diasDesde };
     return { tipo: "disponivel" };
   }
-  const perc = calcularPerc(estado.revisaoLink.acertos, estado.revisaoLink.erros);
+  const perc = calcularPerc(registro.acertos, registro.erros);
   return { tipo: "feita", perc, reforco: perc < LIMIAR_REFORCO_PERC };
 }
 
 export interface RevisaoLinkPendente {
-  id: string; // estável: `rl:${materia}:${topico}`
+  id: string; // estável: `rl:${materia}:${topico}:${checkpoint}`
   materia: string;
   topico: string;
   ordemTopico: number;
   link: string;
+  checkpoint: ChecklistRevisaoLink;
+  dias: number; // 7 ou 30 — pro rótulo na UI
   reforco: boolean; // true = corrigindo um resultado fraco anterior, não a 1ª tentativa
   acertosAtual?: number; // pré-preenche o form quando é reforço
   errosAtual?: number;
 }
 
 // tópicos com revisão do link disponível (1ª vez) ou pedindo reforço (< LIMIAR_REFORCO_PERC e
-// já esfriado, mesmo cooldown do reforço A-D) — igual a analisarReforcos, caminho separado que
-// não interfere na liberação escalonada nem no cálculo de matéria concluída
+// já esfriado, mesmo cooldown do reforço A-D), pros DOIS checkpoints (7 e 30 dias) — igual a
+// analisarReforcos, caminho separado que não interfere na liberação escalonada nem no cálculo de
+// matéria concluída
 export function analisarRevisoesLink(
   materia: MateriaLike,
   topicos: Record<string, TopicoState>,
@@ -239,20 +254,22 @@ export function analisarRevisoesLink(
   const pendentes: RevisaoLinkPendente[] = [];
   for (let i = 0; i < nomes.length; i++) {
     const estado = topicos[topicoKey(materia.nome, nomes[i])];
-    const status = statusRevisaoLink(estado, hoje);
-    if (status.tipo === "disponivel") {
-      pendentes.push({
-        id: `rl:${materia.nome}:${nomes[i]}`, materia: materia.nome, topico: nomes[i], ordemTopico: i + 1,
-        link: estado!.linkQuestoes!, reforco: false,
-      });
-    } else if (status.tipo === "feita" && status.reforco) {
-      const atualizadoEm = estado!.revisaoLink!.atualizadoEm;
-      if (diffDias(atualizadoEm, hoje) >= REFORCO_COOLDOWN_DIAS) {
+    for (const cp of CHECKPOINTS_REVISAO_LINK) {
+      const status = statusRevisaoLink(estado, hoje, cp.id);
+      if (status.tipo === "disponivel") {
         pendentes.push({
-          id: `rl:${materia.nome}:${nomes[i]}`, materia: materia.nome, topico: nomes[i], ordemTopico: i + 1,
-          link: estado!.linkQuestoes!, reforco: true,
-          acertosAtual: estado!.revisaoLink!.acertos, errosAtual: estado!.revisaoLink!.erros,
+          id: `rl:${materia.nome}:${nomes[i]}:${cp.id}`, materia: materia.nome, topico: nomes[i], ordemTopico: i + 1,
+          link: estado!.linkQuestoes!, checkpoint: cp.id, dias: cp.dias, reforco: false,
         });
+      } else if (status.tipo === "feita" && status.reforco) {
+        const registro = estado!.revisoesLink![cp.id]!;
+        if (diffDias(registro.atualizadoEm, hoje) >= REFORCO_COOLDOWN_DIAS) {
+          pendentes.push({
+            id: `rl:${materia.nome}:${nomes[i]}:${cp.id}`, materia: materia.nome, topico: nomes[i], ordemTopico: i + 1,
+            link: estado!.linkQuestoes!, checkpoint: cp.id, dias: cp.dias, reforco: true,
+            acertosAtual: registro.acertos, errosAtual: registro.erros,
+          });
+        }
       }
     }
   }

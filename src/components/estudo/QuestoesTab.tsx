@@ -5,7 +5,7 @@ import {
   MATERIAS, topicoKey, dateKeyLocal, defaultTopicoState,
   type TopicoState, type MateriaConcurso,
 } from "@/lib/estudo-data";
-import { statusRevisaoLink, DIAS_REVISAO_LINK, type StatusRevisaoLink } from "@/lib/trilha-dinamica";
+import { statusRevisaoLink, CHECKPOINTS_REVISAO_LINK, type StatusRevisaoLink } from "@/lib/trilha-dinamica";
 import { resolverCorMateria } from "./trilha/trilha-ui";
 import { ChevronDown, ChevronRight, ExternalLink, Search, Link2 } from "lucide-react";
 
@@ -15,9 +15,11 @@ interface Props {
   materiasConcurso?: MateriaConcurso[]; // se passado, usa em vez de MATERIAS hardcoded
 }
 
-// Badge de status da revisão do link — mesmo motor da Trilha (statusRevisaoLink), só pra dar
-// contexto de quando o link cadastrado aqui vai virar uma tarefa de verdade.
-function StatusBadge({ status }: { status: StatusRevisaoLink }) {
+// Badge de status de UM checkpoint da revisão do link — mesmo motor da Trilha
+// (statusRevisaoLink), só pra dar contexto de quando o link cadastrado aqui vira tarefa de
+// verdade. `label` prefixa o texto (ex.: "7d") pra distinguir os dois checkpoints lado a lado.
+function StatusBadge({ label, status }: { label?: string; status: StatusRevisaoLink }) {
+  const prefixo = label ? `${label}: ` : "";
   switch (status.tipo) {
     case "sem_link":
       return null;
@@ -30,13 +32,13 @@ function StatusBadge({ status }: { status: StatusRevisaoLink }) {
     case "aguardando_prazo":
       return (
         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-          revisão libera em {status.diasRestantes} dia{status.diasRestantes !== 1 ? "s" : ""}
+          {prefixo}libera em {status.diasRestantes} dia{status.diasRestantes !== 1 ? "s" : ""}
         </span>
       );
     case "disponivel":
       return (
         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
-          revisão disponível na Trilha
+          {prefixo}disponível na Trilha
         </span>
       );
     case "feita":
@@ -48,7 +50,7 @@ function StatusBadge({ status }: { status: StatusRevisaoLink }) {
               : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
           }`}
         >
-          {status.perc}% acerto{status.reforco ? " · reforçar" : ""}
+          {prefixo}{status.perc}%{status.reforco ? " · reforçar" : ""}
         </span>
       );
   }
@@ -98,7 +100,7 @@ export default function QuestoesTab({ topicos, onUpdate, materiasConcurso }: Pro
         <span>
           Cadastre o link das questões de cada tópico (ex.: TecConcursos) — um só por tópico.
           Depois de concluir os 4 grupos A-D dele no Edital, a Trilha avisa pra fazer essas
-          questões {DIAS_REVISAO_LINK} dias depois.
+          questões de novo em dois momentos: {CHECKPOINTS_REVISAO_LINK.map((c) => `${c.dias} dias`).join(" e ")}.
         </span>
       </div>
 
@@ -130,13 +132,23 @@ export default function QuestoesTab({ topicos, onUpdate, materiasConcurso }: Pro
                   {m.topicos.map((t) => {
                     const key = topicoKey(m.nome, t);
                     const estado = topicos[key];
-                    const status = statusRevisaoLink(estado, hoje);
+                    const status7 = statusRevisaoLink(estado, hoje, "d7");
+                    const status30 = statusRevisaoLink(estado, hoje, "d30");
                     return (
                       <div key={t} className="px-4 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2">
                         <div className="flex-1 min-w-0">
                           <p className="text-xs text-foreground leading-relaxed" title={t}>{t}</p>
-                          {status.tipo !== "sem_link" && (
-                            <div className="mt-1"><StatusBadge status={status} /></div>
+                          {status7.tipo !== "sem_link" && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {status7.tipo === "aguardando_grupos" ? (
+                                <StatusBadge status={status7} />
+                              ) : (
+                                <>
+                                  <StatusBadge label="7d" status={status7} />
+                                  <StatusBadge label="30d" status={status30} />
+                                </>
+                              )}
+                            </div>
                           )}
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0 w-full sm:w-72">

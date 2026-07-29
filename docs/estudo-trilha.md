@@ -37,14 +37,16 @@ não entrega o dia, a meta de amanhã espera por ele. Atualize este arquivo se a
    só `acertos+erros > 0`: 0% e 100% eram tratados igual, e um grupo nunca ressurgia. Qualquer
    novo registro de acertos/erros nesse grupo (no Edital ou na Trilha) reinicia a contagem dos 3
    dias (`TopicoCaderno.atualizadoEm`).
-7. **Revisão das questões do link** (2026-07-29): substituiu os 4 links por grupo A-D (um por
-   grupo, redundante) por **um único link por tópico**, cadastrado na aba **Questões**
-   (`QuestoesTab.tsx`). Quando os 4 grupos A-D do tópico ficam feitos, a revisão das questões
-   desse link entra na trilha **`DIAS_REVISAO_LINK` (7) dias depois** — o usuário refaz as
-   questões externamente (ex.: TecConcursos) e registra acertos/erros inline, igual às questões
-   liberadas. Abaixo de `LIMIAR_REFORCO_PERC` (70%), a revisão volta como **reforço** depois de
-   `REFORCO_COOLDOWN_DIAS` (3 dias) sem atualização — mesmas regras do reforço A-D, caminho
-   separado (`analisarRevisoesLink`, `TopicoState.revisaoLink`).
+7. **Revisão das questões do link** (2026-07-29, checkpoint de 30 dias em 2026-07-29): substituiu
+   os 4 links por grupo A-D (um por grupo, redundante) por **um único link por tópico**,
+   cadastrado na aba **Questões** (`QuestoesTab.tsx`). Quando os 4 grupos A-D do tópico ficam
+   feitos, a revisão das questões desse link entra na trilha em **dois checkpoints
+   INDEPENDENTES** (`CHECKPOINTS_REVISAO_LINK`: 7 e 30 dias depois, cada um contado da mesma data
+   de conclusão — fazer o de 7 dias não libera nem atrasa o de 30) — o usuário refaz as questões
+   externamente (ex.: TecConcursos) e registra acertos/erros inline, igual às questões liberadas.
+   Abaixo de `LIMIAR_REFORCO_PERC` (70%), aquele checkpoint específico volta como **reforço**
+   depois de `REFORCO_COOLDOWN_DIAS` (3 dias) sem atualização — mesmas regras do reforço A-D,
+   caminho separado (`analisarRevisoesLink`, `TopicoState.revisoesLink[checkpoint]`).
 
 ## 2. Arquitetura: derivar > persistir
 
@@ -55,11 +57,13 @@ não entrega o dia, a meta de amanhã espera por ele. Atualize este arquivo se a
   `LIMIAR_REFORCO_PERC` e esfriados (sem `atualizadoEm`, ou `atualizadoEm` há
   `REFORCO_COOLDOWN_DIAS`+ dias) — caminho separado de `analisarMateria`, não interfere na
   liberação escalonada nem no cálculo de matéria concluída.
-- `statusRevisaoLink(estado, hoje)` → status individual de um tópico em relação à revisão do
-  link (`sem_link` / `aguardando_grupos` / `aguardando_prazo` / `disponivel` / `feita`) — usado
-  tanto pelo badge informativo da aba Questões quanto por `analisarRevisoesLink(materia, topicos,
-  hoje)`, que filtra pra só os tópicos com revisão `disponivel` (1ª vez) ou `feita` com reforço
-  já esfriado (mesmo cooldown do reforço A-D).
+- `statusRevisaoLink(estado, hoje, checkpoint)` → status de UM checkpoint ("d7" ou "d30") em
+  relação à revisão do link (`sem_link` / `aguardando_grupos` / `aguardando_prazo` / `disponivel`
+  / `feita`) — usado tanto pelo badge informativo da aba Questões (chamado 2x, um por checkpoint)
+  quanto por `analisarRevisoesLink(materia, topicos, hoje)`, que itera `CHECKPOINTS_REVISAO_LINK`
+  e filtra pra só os tópicos×checkpoint com revisão `disponivel` (1ª vez) ou `feita` com reforço
+  já esfriado (mesmo cooldown do reforço A-D). Os dois checkpoints são independentes — cada um
+  lê só o próprio registro em `TopicoState.revisoesLink[checkpoint]`.
 - `distribuirMinutosPorPeso(minutosDia, pesos)` → divisão do tempo por maiores restos (Hamilton):
   cada matéria recebe `floor(peso/pesoTotal * minutosDia)` e a sobra do arredondamento (no máximo
   `pesos.length - 1` minutos) vai 1 a 1 pras matérias com maior parte fracionária perdida — nenhum
@@ -200,10 +204,12 @@ Deletados na reescrita: `trilha-generator.ts`, `scripts/validar-trilha.ts`, `Tri
   — grupo com < 70% aparece; ≥ 70% não; `atualizadoEm` recente (< 3 dias) suprime; ausente ou
   antigo libera.
 - Motor (2026-07-29): `statusRevisaoLink`/`analisarRevisoesLink` — sem link cadastrado nunca
-  aparece; 4 grupos A-D incompletos fica em `aguardando_grupos`; completos e dentro dos 7 dias
-  fica em `aguardando_prazo` com contagem regressiva; passado o prazo e sem registro vira
-  `disponivel` (entra na trilha); registrado ≥ 70% fecha (`feita`, sem reforço); registrado < 70%
-  volta como reforço só depois de 3 dias sem atualização, igual ao reforço A-D.
+  aparece; 4 grupos A-D incompletos fica em `aguardando_grupos`; completos e dentro do prazo do
+  checkpoint fica em `aguardando_prazo` com contagem regressiva; passado o prazo e sem registro
+  vira `disponivel` (entra na trilha); registrado ≥ 70% fecha (`feita`, sem reforço); registrado <
+  70% volta como reforço só depois de 3 dias sem atualização, igual ao reforço A-D. Os checkpoints
+  de 7 e 30 dias são independentes: registrar o de 7 dias não muda o status do de 30 (cada um lê
+  só o próprio `revisoesLink[checkpoint]`).
 - UI: rota descartável `/signup/preview-trilha` — ativar, conferir blocos/questões/progresso,
   simular 3 sessões de 60min → 3/3 "dia entregue" + ciclo avança (1x), registrar questões
   inline → some da lista e progresso atualiza.
