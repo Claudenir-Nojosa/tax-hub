@@ -13,6 +13,7 @@ import {
   filtrarTopicosExcluidos,
   NIVEL_CONFIG,
   CORES_MATERIA,
+  buildDefaultConfigCiclo,
   type EstudoState,
   type TopicoState,
   type AtividadeCalendario,
@@ -60,7 +61,13 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "cartas", label: "Cartas", icon: Layers },
 ];
 
-function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {
+// materiasConcurso: matérias REAIS do concurso ativo — sem isso o configCiclo (peso/prioridade/
+// divisão) caía sempre no default hardcoded do SEFAZ-CE (buildDefaultConfigCiclo sem args),
+// fazendo o Ciclo parecer compartilhado entre concursos diferentes em vez de único por concurso
+function mergeWithDefaults(parsed: Partial<EstudoState>, materiasConcurso?: MateriaConcurso[]): EstudoState {
+  const configCicloBase = materiasConcurso && materiasConcurso.length > 0
+    ? buildDefaultConfigCiclo(materiasConcurso)
+    : DEFAULT_ESTUDO_STATE.configCiclo;
   return {
     ...DEFAULT_ESTUDO_STATE,
     ...parsed,
@@ -75,21 +82,21 @@ function mergeWithDefaults(parsed: Partial<EstudoState>): EstudoState {
       ...(parsed.topicos ?? {}),
     },
     configCiclo: {
-      ...DEFAULT_ESTUDO_STATE.configCiclo,
+      ...configCicloBase,
       ...(parsed.configCiclo ?? {}),
       materias: {
-        ...DEFAULT_ESTUDO_STATE.configCiclo.materias,
+        ...configCicloBase.materias,
         ...(parsed.configCiclo?.materias ?? {}),
       },
     },
   };
 }
 
-function loadFromLocalStorage(concursoId: string | null): EstudoState | null {
+function loadFromLocalStorage(concursoId: string | null, materiasConcurso?: MateriaConcurso[]): EstudoState | null {
   try {
     const raw = localStorage.getItem(storageKey(concursoId));
     if (!raw) return null;
-    return mergeWithDefaults(JSON.parse(raw) as Partial<EstudoState>);
+    return mergeWithDefaults(JSON.parse(raw) as Partial<EstudoState>, materiasConcurso);
   } catch {
     return null;
   }
@@ -120,12 +127,13 @@ export default function EstudoPage() {
             : (lista.find(c => c.isPrincipal) ?? lista[0]);
           if (alvo) {
             setConcursoAtivo(alvo);
+            const materiasAlvo = alvo.materias as MateriaConcurso[] | undefined;
             const progressoRes = await fetch(`/api/concurso/${alvo.id}/progresso`);
             if (progressoRes.ok) {
               const dados = await progressoRes.json();
-              setState(dados ? mergeWithDefaults(dados as Partial<EstudoState>) : DEFAULT_ESTUDO_STATE);
+              setState(mergeWithDefaults((dados ?? {}) as Partial<EstudoState>, materiasAlvo));
             } else {
-              setState(DEFAULT_ESTUDO_STATE);
+              setState(mergeWithDefaults({}, materiasAlvo));
             }
             setLoaded(true);
             return;

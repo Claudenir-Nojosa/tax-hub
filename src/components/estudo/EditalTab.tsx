@@ -14,6 +14,7 @@ import {
   type Grupo,
   type MateriaConcurso,
   type PdfEstudo,
+  type NivelImportancia,
 } from "@/lib/estudo-data";
 import { resolverCorMateria } from "./trilha/trilha-ui";
 import { alvoLeituraPdf } from "./biblioteca/biblioteca-utils";
@@ -106,6 +107,36 @@ function LinkGrupoButton({ link, onEditar }: { link?: string; onEditar: () => vo
   );
 }
 
+// Nível de importância do tópico pro edital — indicação visual pura (não afeta cálculo nenhum).
+// Cores fixas pedidas: Baixa=azul, Média=amarelo, Alta=vermelho.
+const IMPORTANCIA_CICLO: NivelImportancia[] = ["baixa", "media", "alta"];
+const IMPORTANCIA_CONFIG: Record<NivelImportancia, { label: string; dot: string }> = {
+  baixa: { label: "Baixa", dot: "bg-blue-500" },
+  media: { label: "Média", dot: "bg-amber-400" },
+  alta: { label: "Alta", dot: "bg-red-500" },
+};
+
+// Clique cicla: sem nível → Baixa → Média → Alta → sem nível → ...
+function proximaImportancia(atual?: NivelImportancia): NivelImportancia | undefined {
+  if (!atual) return IMPORTANCIA_CICLO[0];
+  const idx = IMPORTANCIA_CICLO.indexOf(atual);
+  return idx === IMPORTANCIA_CICLO.length - 1 ? undefined : IMPORTANCIA_CICLO[idx + 1];
+}
+
+function ImportanciaDot({ nivel, onClick }: { nivel?: NivelImportancia; onClick: () => void }) {
+  const cfg = nivel ? IMPORTANCIA_CONFIG[nivel] : null;
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title={cfg ? `Importância: ${cfg.label} (clique pra mudar)` : "Definir importância do tópico (clique)"}
+      className={`flex-shrink-0 h-2.5 w-2.5 rounded-full transition-colors ${
+        cfg ? cfg.dot : "border border-dashed border-muted-foreground/40 hover:border-muted-foreground"
+      }`}
+    />
+  );
+}
+
 function PercBadge({ perc }: { perc: number }) {
   const cor =
     perc === 0
@@ -143,6 +174,10 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
 
   const toggleEstudado = (materia: string, topico: string) => {
     updateTopico(materia, topico, (prev) => ({ ...prev, estudado: !prev.estudado }));
+  };
+
+  const ciclarImportancia = (materia: string, topico: string) => {
+    updateTopico(materia, topico, (prev) => ({ ...prev, importancia: proximaImportancia(prev.importancia) }));
   };
 
   const updateCaderno = (materia: string, topico: string, grupo: Grupo, field: "acertos" | "erros", value: number) => {
@@ -459,6 +494,7 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                         {/* ── Linha única (≥sm): igual à densidade original, só reskinada ── */}
                         <div className="hidden sm:flex sm:items-center gap-2 px-4 py-2.5 hover:bg-accent">
                           <span className="text-xs text-muted-foreground w-6 flex-shrink-0 text-right">{idx + 1}</span>
+                          <ImportanciaDot nivel={estado.importancia} onClick={() => ciclarImportancia(m.nome, t)} />
                           <div className="flex-1 min-w-0">{nomeETopico}</div>
                           <div className="flex w-20 justify-center items-center gap-2">
                             <button
@@ -492,7 +528,10 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
                         {/* ── Cartão em duas camadas (<sm) — toques maiores, sem cramming ── */}
                         <div className="sm:hidden px-4 py-3 space-y-2.5">
                           <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">{nomeETopico}</div>
+                            <div className="flex items-start gap-2 flex-1 min-w-0">
+                              <div className="mt-1"><ImportanciaDot nivel={estado.importancia} onClick={() => ciclarImportancia(m.nome, t)} /></div>
+                              <div className="flex-1 min-w-0">{nomeETopico}</div>
+                            </div>
                             {acoes && <div className="flex items-center gap-0.5 flex-shrink-0">{acoes}</div>}
                           </div>
                           <div className="flex items-center justify-between gap-2">

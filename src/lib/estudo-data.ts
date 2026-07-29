@@ -45,9 +45,14 @@ export interface TopicoCaderno {
   link?: string;
 }
 
+export type NivelImportancia = "alta" | "media" | "baixa";
+
 export interface TopicoState {
   estudado: boolean;
   cadernos: Record<Grupo, TopicoCaderno>;
+  // nível de importância do tópico pro edital (ausente = não definido) — só indicação visual no
+  // Edital, não afeta cálculo de progresso/XP/Ciclo/Trilha
+  importancia?: NivelImportancia;
 }
 
 export interface AtividadeCalendario {
@@ -1160,15 +1165,35 @@ export function buildDefaultTopicos(): Record<string, TopicoState> {
   return topicos;
 }
 
-export function buildDefaultConfigCiclo(): EstudoConfigCiclo {
+// Seed do Ciclo: por padrão usa a lista hardcoded MATERIAS (SEFAZ-CE), mas aceita as matérias
+// REAIS de um concurso customizado — sem isso, todo concurso herdava peso/prioridade/divisão
+// fixos das 24 matérias do SEFAZ-CE (mesmo quando o concurso tinha matérias com outros nomes),
+// fazendo o Ciclo "parecer" igual entre concursos diferentes em vez de único por concurso.
+const DIVISOES_ROTATIVAS: ("A" | "B" | "C")[] = ["A", "B", "C"];
+
+export function buildDefaultConfigCiclo(
+  materiasConcurso?: (MateriaDef | MateriaConcurso | MateriaBase)[]
+): EstudoConfigCiclo {
+  const fonte = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
   const materias: Record<string, ConfigMateria> = {};
-  MATERIAS.forEach((m) => {
-    materias[m.nome] = {
-      incluir: m.incluirDefault,
-      peso: m.pesoDefault,
-      prioridade: m.prioridadeDefault,
-      divisao: m.divisaoDefault,
-    };
+  fonte.forEach((m, i) => {
+    if ("incluirDefault" in m) {
+      materias[m.nome] = {
+        incluir: m.incluirDefault,
+        peso: m.pesoDefault,
+        prioridade: m.prioridadeDefault,
+        divisao: m.divisaoDefault,
+      };
+    } else {
+      // matéria customizada (sem defaults pré-definidos): inclui por padrão, peso/prioridade
+      // neutros, divisão em rodízio A/B/C pra distribuir o ciclo automaticamente
+      materias[m.nome] = {
+        incluir: true,
+        peso: 1,
+        prioridade: "Baixa",
+        divisao: DIVISOES_ROTATIVAS[i % 3],
+      };
+    }
   });
   return {
     materias,
