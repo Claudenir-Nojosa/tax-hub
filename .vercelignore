@@ -1,0 +1,6 @@
+# sobras de teste local (não relacionadas ao app) que ficam bloqueadas por um
+# processo externo (PVA do RPA efd-pva-rpa) -- impedem o deploy por EBUSY
+recursos/
+mysql/
+TryLock.txt
+build/
