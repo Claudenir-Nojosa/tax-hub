@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { FlipHorizontal2, HeartPulse, BadgeCheck, Percent, ArrowRight } from "lucide-react";
+import { FlipHorizontal2, HeartPulse, BadgeCheck, Percent, ArrowRight, Download } from "lucide-react";
+
+// atualizar esta URL manualmente sempre que gerar uma nova versão do .exe
+// (efd-pva-rpa/dist/EFD-PVA-RPA.exe, via `python -m PyInstaller --onefile ...`)
+const URL_DOWNLOAD_EFD_PVA_RPA =
+  "https://9qulyjk55bzciljt.public.blob.vercel-storage.com/downloads/EFD-PVA-RPA.exe";
 
 const automacoes = [
   {
@@ -83,6 +88,44 @@ export default function AutomacoesPage() {
             </div>
           </Link>
         ))}
+
+        <a
+          href={URL_DOWNLOAD_EFD_PVA_RPA}
+          download
+          className="group block rounded-xl border border-dashed border-border bg-card p-6 hover:border-primary hover:shadow-md transition-all duration-200"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Download className="h-5 w-5" />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {["Desktop", "Windows", "EFD Contribuições"].map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                <h2 className="text-base font-semibold text-foreground leading-snug">
+                  RPA — Transmissão EFD Contribuições (baixar app)
+                </h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  App desktop (Windows, .exe, sem instalação) que abre o PVA da Receita Federal e
+                  automatiza a importação de uma escrituração: você escolhe o arquivo, ele clica
+                  Importar Escrituração, seleciona o arquivo, clica Abrir, espera a importação
+                  terminar e clica Sim para validar. Roda em modo supervisionado — acompanhe o PVA
+                  na tela. Versão inicial: para depois de validar; assinar e transmitir ainda não
+                  foram automatizados.
+                </p>
+              </div>
+            </div>
+            <Download className="h-5 w-5 flex-shrink-0 text-border group-hover:text-primary transition-colors mt-1" />
+          </div>
+        </a>
       </div>
     </div>
   );
