@@ -22,9 +22,12 @@ não entrega o dia, a meta de amanhã espera por ele. Atualize este arquivo se a
    Edital (grupo "feito" = acertos+erros > 0). Concluir o tópico k libera: grupo **A do k-1**,
    **B do k-2**, **C do k-3**, **D do k-4**. Quando a teoria da matéria acaba, a "cauda" (grupos
    cujo gatilho seria um tópico que não existe) libera toda de uma vez.
-3. **Matéria 100%** = teoria completa + os 4 grupos de TODOS os tópicos feitos. No **dia
-   seguinte** à conclusão entra a atividade "revisão da matéria: 30 questões englobando todos os
-   tópicos" (30 no total, não 30 por tópico) — o "modo revisão".
+3. **Matéria 100%** = teoria completa + os 4 grupos de TODOS os tópicos feitos. **`DIAS_REVISAO_
+   MATERIA` (3) dias** depois da conclusão entra a atividade "revisão da matéria: 30 questões
+   englobando todos os tópicos" (30 no total, não 30 por tópico) — o "modo revisão". Link próprio
+   (`ConfigMateria.linkRevisaoMateria`, cadastrado na aba Questões — é por MATÉRIA, não por
+   tópico, já que a revisão engloba todos). Era "no dia seguinte" (1 dia) até 2026-07-29, quando
+   o usuário corrigiu o prazo pra 3 dias.
 4. **Cartas**: a cada 2 domingos (14 dias), atividade de revisar as cartas. Âncora = primeiro
    domingo após a ativação da trilha. "Feita" = marcada na trilha OU atividade tipo "cartas" no
    calendário do dia.
@@ -37,16 +40,23 @@ não entrega o dia, a meta de amanhã espera por ele. Atualize este arquivo se a
    só `acertos+erros > 0`: 0% e 100% eram tratados igual, e um grupo nunca ressurgia. Qualquer
    novo registro de acertos/erros nesse grupo (no Edital ou na Trilha) reinicia a contagem dos 3
    dias (`TopicoCaderno.atualizadoEm`).
-7. **Revisão das questões do link** (2026-07-29, checkpoint de 30 dias em 2026-07-29): substituiu
-   os 4 links por grupo A-D (um por grupo, redundante) por **um único link por tópico**,
-   cadastrado na aba **Questões** (`QuestoesTab.tsx`). Quando os 4 grupos A-D do tópico ficam
-   feitos, a revisão das questões desse link entra na trilha em **dois checkpoints
-   INDEPENDENTES** (`CHECKPOINTS_REVISAO_LINK`: 7 e 30 dias depois, cada um contado da mesma data
-   de conclusão — fazer o de 7 dias não libera nem atrasa o de 30) — o usuário refaz as questões
-   externamente (ex.: TecConcursos) e registra acertos/erros inline, igual às questões liberadas.
-   Abaixo de `LIMIAR_REFORCO_PERC` (70%), aquele checkpoint específico volta como **reforço**
-   depois de `REFORCO_COOLDOWN_DIAS` (3 dias) sem atualização — mesmas regras do reforço A-D,
-   caminho separado (`analisarRevisoesLink`, `TopicoState.revisoesLink[checkpoint]`).
+7. **Revisão das questões do link** (2026-07-29): substituiu os 4 links por grupo A-D (um por
+   grupo, redundante) por links cadastrados na aba **Questões** (`QuestoesTab.tsx`). Quando os 4
+   grupos A-D do tópico ficam feitos, a revisão das questões entra na trilha em **dois
+   checkpoints INDEPENDENTES** (`CHECKPOINTS_REVISAO_LINK`: 7 e 30 dias depois, cada um contado da
+   mesma data de conclusão — fazer o de 7 dias não libera nem atrasa o de 30), **cada checkpoint
+   com o SEU PRÓPRIO link** (`TopicoState.linkRevisao7d`/`linkRevisao30d` — na prática costumam
+   ser cadernos diferentes, o de 30 dias em geral cobrindo mais questões que o de 7). O usuário
+   refaz as questões externamente (ex.: TecConcursos) e registra acertos/erros inline, igual às
+   questões liberadas. Abaixo de `LIMIAR_REFORCO_PERC` (70%), aquele checkpoint específico volta
+   como **reforço** depois de `REFORCO_COOLDOWN_DIAS` (3 dias) sem atualização — mesmas regras do
+   reforço A-D, caminho separado (`analisarRevisoesLink`, `TopicoState.revisoesLink[checkpoint]`).
+8. **Clicar na atividade abre o link direto** (2026-07-29): tanto a revisão do link (7d/30d)
+   quanto a revisão de 30 questões (matéria) abrem o link cadastrado numa nova aba ao clicar na
+   linha da atividade na Trilha — sem precisar expandir primeiro. Na revisão do link, o clique
+   TAMBÉM expande o form de acertos/erros (pra já estar visível quando o usuário volta de fazer
+   as questões); um chevron separado permite recolher sem reabrir o link. Sem link cadastrado, o
+   botão da revisão de 30 fica desabilitado em vez de tentar abrir algo vazio.
 
 ## 2. Arquitetura: derivar > persistir
 
@@ -184,7 +194,7 @@ mesmo motivo, com a identidade da matéria ficando só na bolinha ao lado do nom
 src/lib/trilha-dinamica.ts            motor puro (análise por matéria + meta do dia)
 src/lib/estudo-data.ts                 TrilhaDinamicaState (+ TrilhaEstudo legado deprecated)
 src/components/estudo/TrilhaTab.tsx    painel Meta de Hoje + ativação + bookkeeping
-src/components/estudo/QuestoesTab.tsx  cadastro do link único de questões por tópico (ex.: TecConcursos)
+src/components/estudo/QuestoesTab.tsx  cadastro dos links de questões (7d/30d por tópico + revisão de matéria)
 src/components/estudo/DashboardTab.tsx CardTrilha (resumo da meta de hoje)
 src/components/estudo/BibliotecaTab.tsx metaMinutosRestantes → aviso no LeitorPdf
 src/components/estudo/trilha/trilha-ui.ts  fmtHoras/resolverCorMateria (compartilhados)
@@ -197,8 +207,9 @@ Deletados na reescrita: `trilha-generator.ts`, `scripts/validar-trilha.ts`, `Tri
 - `npx tsc --noEmit`.
 - Motor: script sintético (padrão do antigo validar-trilha) cobrindo: liberação escalonada
   (1/2/4 tópicos), cauda no fim da teoria, matéria 100%, blocos 3h→3×60min, soma de sessões do
-  calendário, grupo efetivo pulando grupo vazio, revisão de 30 no dia seguinte (não no mesmo
-  dia; some depois de feita), domingos de cartas (+0/+7/+14, marcação e atividade "cartas").
+  calendário, grupo efetivo pulando grupo vazio, revisão de 30 a partir de DIAS_REVISAO_MATERIA
+  dias (não antes; some depois de feita), domingos de cartas (+0/+7/+14, marcação e atividade
+  "cartas").
 - Motor (2026-07-24): `distribuirMinutosPorPeso` — pesos iguais = split igual; peso 2:1 pega ~2x;
   soma sempre bate com `minutosDia` mesmo com resto (ex.: 100min/3 matérias). `analisarReforcos`
   — grupo com < 70% aparece; ≥ 70% não; `atualizadoEm` recente (< 3 dias) suprime; ausente ou
@@ -210,6 +221,11 @@ Deletados na reescrita: `trilha-generator.ts`, `scripts/validar-trilha.ts`, `Tri
   70% volta como reforço só depois de 3 dias sem atualização, igual ao reforço A-D. Os checkpoints
   de 7 e 30 dias são independentes: registrar o de 7 dias não muda o status do de 30 (cada um lê
   só o próprio `revisoesLink[checkpoint]`).
+- Motor (2026-07-29, links por checkpoint): cada checkpoint lê seu PRÓPRIO link
+  (`linkDoCheckpoint` — `linkRevisao7d` pro "d7", `linkRevisao30d` pro "d30"); revisão de 30
+  passou de 1 pra `DIAS_REVISAO_MATERIA` (3) dias; `Revisao30.link` vem de
+  `configCiclo.materias[materia].linkRevisaoMateria`, ausente quando a matéria não tem link
+  cadastrado (UI desabilita o botão de abrir em vez de tentar `window.open(undefined)`).
 - UI: rota descartável `/signup/preview-trilha` — ativar, conferir blocos/questões/progresso,
   simular 3 sessões de 60min → 3/3 "dia entregue" + ciclo avança (1x), registrar questões
   inline → some da lista e progresso atualiza.

@@ -58,10 +58,12 @@ export interface RevisaoLinkTopico {
 export interface TopicoState {
   estudado: boolean;
   cadernos: Record<Grupo, TopicoCaderno>;
-  // link único de questões do tópico (ex.: TecConcursos), cadastrado na aba Questões — usado
-  // pelas revisões da Trilha (7 e 30 dias após concluir os 4 grupos A-D). Substituiu o link por
-  // grupo (TopicoCaderno.link), que exigia cadastrar 4 vezes o mesmo link.
-  linkQuestoes?: string;
+  // link do caderno de questões do tópico (ex.: TecConcursos) pra cada checkpoint de revisão da
+  // Trilha — um por checkpoint, já que na prática é um caderno diferente por revisão (o de 30
+  // dias costuma cobrir mais questões que o de 7). Cadastrados na aba Questões. Substituiu o
+  // link único por grupo A-D (TopicoCaderno.link), que exigia cadastrar 4 vezes o mesmo link.
+  linkRevisao7d?: string;
+  linkRevisao30d?: string;
   // um resultado por checkpoint — independentes entre si (fazer o de 7 dias não altera o de 30)
   revisoesLink?: Partial<Record<ChecklistRevisaoLink, RevisaoLinkTopico>>;
   // nível de importância do tópico pro edital (ausente = não definido) — só indicação visual no
@@ -85,6 +87,10 @@ export interface ConfigMateria {
   peso: 1 | 2;
   prioridade: "Alta" | "Baixa";
   divisao: "A" | "B" | "C";
+  // link do caderno de questões (ex.: TecConcursos) pra revisão de 30 questões da matéria
+  // inteira, que libera DIAS_REVISAO_MATERIA dias depois dela bater 100% — é por matéria, não
+  // por tópico, já que a revisão engloba todos os tópicos dela. Cadastrado na aba Questões.
+  linkRevisaoMateria?: string;
 }
 
 export interface EstudoConfigCiclo {

@@ -19,8 +19,9 @@ export type MateriaLike = { nome: string; topicos: string[] };
 //    Concluir o tópico i+1 LIBERA o grupo A do tópico i; concluir i+2 libera o B do i; i+3 o C;
 //    i+4 o D. Quando a teoria da matéria termina, os grupos restantes (a "cauda") ficam todos
 //    liberados. Grupo "feito" = caderno com acertos+erros > 0.
-// 3. MATÉRIA 100% = teoria toda + 4 grupos de todos os tópicos feitos → no DIA SEGUINTE entra a
-//    atividade "revisão da matéria: 30 questões englobando todos os tópicos" (modo revisão).
+// 3. MATÉRIA 100% = teoria toda + 4 grupos de todos os tópicos feitos → DIAS_REVISAO_MATERIA
+//    dias depois entra a atividade "revisão da matéria: 30 questões englobando todos os
+//    tópicos" (modo revisão), com link próprio (ConfigMateria.linkRevisaoMateria).
 // 4. CARTAS: a cada 2 domingos (14 dias), atividade de revisar as cartas.
 // 5. MUTÁVEL: o grupo do ciclo só avança quando os blocos de estudo do dia foram entregues; a
 //    meta de amanhã depende do que foi feito hoje.
@@ -54,6 +55,9 @@ export const CHECKPOINTS_REVISAO_LINK: { id: ChecklistRevisaoLink; dias: number 
   { id: "d7", dias: 7 },
   { id: "d30", dias: 30 },
 ];
+// dias de espera após a matéria bater 100% até a revisão de 30 questões liberar (2026-07-29:
+// era "no dia seguinte" (1 dia), corrigido a pedido do usuário)
+export const DIAS_REVISAO_MATERIA = 3;
 
 const DIAS_SEMANA = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"] as const;
 
@@ -199,15 +203,21 @@ export type StatusRevisaoLink =
   | { tipo: "disponivel" } // prazo passou, esse checkpoint ainda não foi registrado
   | { tipo: "feita"; perc: number; reforco: boolean }; // já registrada — reforco = abaixo do limiar
 
+// cada checkpoint tem seu PRÓPRIO link (na prática, cadernos diferentes — o de 30 dias costuma
+// cobrir mais questões que o de 7)
+export function linkDoCheckpoint(estado: TopicoState | undefined, checkpoint: ChecklistRevisaoLink): string | undefined {
+  return checkpoint === "d7" ? estado?.linkRevisao7d : estado?.linkRevisao30d;
+}
+
 // status de UM checkpoint (7 ou 30 dias) de um tópico — usado tanto pra decidir o que aparece na
 // Trilha (analisarRevisoesLink) quanto pro badge informativo da aba Questões. Os dois checkpoints
-// são independentes: cada um olha só o próprio registro em revisoesLink[checkpoint].
+// são independentes: cada um com seu próprio link e seu próprio registro em revisoesLink[checkpoint].
 export function statusRevisaoLink(
   estado: TopicoState | undefined,
   hoje: string,
   checkpoint: ChecklistRevisaoLink = "d7"
 ): StatusRevisaoLink {
-  if (!estado?.linkQuestoes) return { tipo: "sem_link" };
+  if (!estado || !linkDoCheckpoint(estado, checkpoint)) return { tipo: "sem_link" };
   const todosFeitos = GRUPOS_QUESTOES.every((g) => grupoFeito(estado, g));
   if (!todosFeitos) return { tipo: "aguardando_grupos" };
 
@@ -259,14 +269,14 @@ export function analisarRevisoesLink(
       if (status.tipo === "disponivel") {
         pendentes.push({
           id: `rl:${materia.nome}:${nomes[i]}:${cp.id}`, materia: materia.nome, topico: nomes[i], ordemTopico: i + 1,
-          link: estado!.linkQuestoes!, checkpoint: cp.id, dias: cp.dias, reforco: false,
+          link: linkDoCheckpoint(estado, cp.id)!, checkpoint: cp.id, dias: cp.dias, reforco: false,
         });
       } else if (status.tipo === "feita" && status.reforco) {
         const registro = estado!.revisoesLink![cp.id]!;
         if (diffDias(registro.atualizadoEm, hoje) >= REFORCO_COOLDOWN_DIAS) {
           pendentes.push({
             id: `rl:${materia.nome}:${nomes[i]}:${cp.id}`, materia: materia.nome, topico: nomes[i], ordemTopico: i + 1,
-            link: estado!.linkQuestoes!, checkpoint: cp.id, dias: cp.dias, reforco: true,
+            link: linkDoCheckpoint(estado, cp.id)!, checkpoint: cp.id, dias: cp.dias, reforco: true,
             acertosAtual: registro.acertos, errosAtual: registro.erros,
           });
         }
@@ -289,6 +299,7 @@ export interface BlocoEstudo {
 export interface Revisao30 {
   materia: string;
   concluidaEm: string; // dateKey da conclusão da matéria
+  link?: string; // ConfigMateria.linkRevisaoMateria — clicar na atividade abre direto
 }
 
 export interface MetaDia {
@@ -430,11 +441,14 @@ export function computarMetaDia(params: {
   // revisões de 30 questões: devidas A PARTIR DO DIA SEGUINTE à conclusão, até serem feitas
   const revisoes30: Revisao30[] = Object.entries(trilha.conclusaoMaterias)
     .filter(([nome, dataConclusao]) => {
-      if (diffDias(dataConclusao, hoje) < 1) return false; // só no dia posterior em diante
+      if (diffDias(dataConclusao, hoje) < DIAS_REVISAO_MATERIA) return false;
       const feitas = trilha.revisoes30Feitas[nome] ?? [];
       return feitas.length === 0; // pendente até a primeira revisão
     })
-    .map(([materia, concluidaEm]) => ({ materia, concluidaEm }));
+    .map(([materia, concluidaEm]) => ({
+      materia, concluidaEm,
+      link: configCiclo.materias[materia]?.linkRevisaoMateria,
+    }));
 
   // cartas: domingos a cada 14 dias da âncora; "feita" via marcação ou atividade tipo "cartas"
   const dif = diffDias(trilha.ancoraCartas, hoje);

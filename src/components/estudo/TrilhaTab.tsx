@@ -479,19 +479,31 @@ function LinhaRevisaoLink({
   const cor = resolverCorMateria(r.materia, materiasAtivas);
   const podeSalvar = acertos !== "" && erros !== "" && Number(acertos) + Number(erros) > 0;
 
+  // clicar na atividade vai direto pro link (nova aba) E revela o form de registro — assim
+  // quando o usuário volta de fazer as questões, os campos já estão à mostra pra preencher
+  const abrirEExpandir = () => {
+    window.open(r.link, "_blank", "noopener,noreferrer");
+    setAberto(true);
+  };
+
   return (
     <div className="rounded-lg hover:bg-accent dark:hover:bg-muted/40 px-2 py-1.5 -mx-2 transition-colors">
-      <button type="button" onClick={() => setAberto((v) => !v)} className="w-full flex items-center gap-2.5 text-left">
-        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
-        <div className="flex-1 min-w-0">
-          <span className="text-sm text-foreground">{r.materia}</span>
-          <span className="text-xs text-muted-foreground"> · tópico {r.ordemTopico}: </span>
-          <span className="text-xs text-muted-foreground" title={r.topico}>{r.topico.length > 50 ? r.topico.slice(0, 50) + "…" : r.topico}</span>
-        </div>
-        <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 flex-shrink-0">{r.dias}d</span>
-        {r.reforco && <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 flex-shrink-0">reforço</span>}
-        <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground flex-shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
-      </button>
+      <div className="w-full flex items-center gap-2.5">
+        <button type="button" onClick={abrirEExpandir} title="Abrir questões" className="flex-1 min-w-0 flex items-center gap-2.5 text-left">
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
+          <div className="flex-1 min-w-0">
+            <span className="text-sm text-foreground">{r.materia}</span>
+            <span className="text-xs text-muted-foreground"> · tópico {r.ordemTopico}: </span>
+            <span className="text-xs text-muted-foreground" title={r.topico}>{r.topico.length > 50 ? r.topico.slice(0, 50) + "…" : r.topico}</span>
+          </div>
+          <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 flex-shrink-0">{r.dias}d</span>
+          {r.reforco && <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 flex-shrink-0">reforço</span>}
+          <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+        </button>
+        <button type="button" onClick={() => setAberto((v) => !v)} title="Registrar resultado" className="flex-shrink-0 p-1 -m-1">
+          <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${aberto ? "rotate-180" : ""}`} />
+        </button>
+      </div>
       {aberto && (
         <div className="mt-2 flex items-center gap-2 pl-1 flex-wrap">
           <a
@@ -524,12 +536,23 @@ function LinhaRevisaoLink({
 function CorpoRevisao30({ r, onMarcar }: { r: Revisao30; onMarcar: () => void }) {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold text-foreground dark:text-foreground">{r.materia} — revisão da matéria</div>
+      {/* clicar na atividade vai direto pro link (nova aba) — sem link cadastrado (aba
+          Questões), o botão fica desabilitado em vez de quebrar */}
+      <button
+        type="button"
+        onClick={() => r.link && window.open(r.link, "_blank", "noopener,noreferrer")}
+        disabled={!r.link}
+        title={r.link ? "Abrir questões" : "Cadastre o link na aba Questões"}
+        className="flex-1 min-w-0 text-left disabled:cursor-default"
+      >
+        <div className="text-sm font-semibold text-foreground dark:text-foreground flex items-center gap-1.5">
+          {r.materia} — revisão da matéria
+          {r.link && <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
+        </div>
         <div className="text-[11px] text-muted-foreground">
           100% concluída em {fmtDataCurta(r.concluidaEm)} — <b>30 questões englobando todos os tópicos</b> (não 30 por tópico).
         </div>
-      </div>
+      </button>
       <button type="button" onClick={onMarcar} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-medium">
         Concluí
       </button>
@@ -709,7 +732,7 @@ function Intro({
     { icone: Clock, cor: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary", texto: "Cada dia pertence a um grupo do ciclo (A/B/C). As horas do dia são divididas entre as matérias do grupo — ex.: 3h e 3 matérias = 1h de PDF em cada, no tópico atual. O tempo é monitorado pelo leitor de PDF." },
     { icone: ListChecks, cor: "bg-teal-100 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400", texto: "Concluir um tópico libera questões dos anteriores: grupo A do último, B do penúltimo, C do antepenúltimo, D do anterior a esse — até fechar os 4 grupos de todos os tópicos." },
     { icone: ExternalLink, cor: "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400", texto: "Cadastrado o link de questões do tópico (aba Questões), 7 e 30 dias após concluir os 4 grupos A-D a trilha pede pra refazer essas questões em cada checkpoint — abaixo de 70% volta como reforço." },
-    { icone: Trophy, cor: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400", texto: "Matéria 100% (teoria + todos os grupos) entra em modo revisão: no dia seguinte, 30 questões englobando todos os tópicos dela." },
+    { icone: Trophy, cor: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400", texto: "Matéria 100% (teoria + todos os grupos) entra em modo revisão: 3 dias depois, 30 questões englobando todos os tópicos dela, pelo link cadastrado na aba Questões." },
     { icone: Layers, cor: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400", texto: "A cada 2 domingos, revisão das cartas." },
     { icone: Sparkles, cor: "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400", texto: "Trilha 100% mutável: o ciclo só avança quando você entrega os blocos do dia — a meta de amanhã depende do que você fez hoje." },
   ];

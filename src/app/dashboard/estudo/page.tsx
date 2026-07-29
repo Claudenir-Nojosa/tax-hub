@@ -536,6 +536,8 @@ export default function EstudoPage() {
             <QuestoesTab
               topicos={state.topicos}
               onUpdate={updateTopicos}
+              configCiclo={state.configCiclo}
+              onUpdateConfigCiclo={updateConfigCiclo}
               materiasConcurso={materiasFiltradas}
             />
           )}
