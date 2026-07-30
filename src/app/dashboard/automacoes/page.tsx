@@ -115,11 +115,12 @@ export default function AutomacoesPage() {
                 </h2>
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   App desktop (Windows, .exe, sem instalação) que reúne automações supervisionadas
-                  de transmissão: você escolhe a automação e o arquivo, e acompanha o programa
-                  alvo sendo pilotado na tela. <strong>EFD Contribuições</strong> já validando,
-                  assinando e chegando até a tela de transmissão no PVA (transmissão final ainda é
-                  manual, de propósito). <strong>DCTF</strong> (via DCTFMensalV3-9) está com a
-                  tela pronta — em breve a automação em si.
+                  de transmissão: você escolhe a automação e o(s) arquivo(s), e acompanha o
+                  programa alvo sendo pilotado na tela. <strong>EFD Contribuições</strong> valida,
+                  assina e transmite de verdade pro PVA (em lote, vários arquivos de uma vez),
+                  parando só no diálogo de salvar o recibo pra você conferir e confirmar. <strong>
+                  DCTF</strong> (via DCTFMensalV3-9) está com a tela pronta — em breve a automação
+                  em si.
                 </p>
               </div>
             </div>
