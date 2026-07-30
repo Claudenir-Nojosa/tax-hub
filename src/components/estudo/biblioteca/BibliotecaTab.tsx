@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BookOpen, ChevronDown, ChevronRight, Library, Plus, X } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, FileStack, Library, Plus, X } from "lucide-react";
 import {
   MATERIAS, calcularPagPorHora,
   type AtividadeCalendario, type AtividadeTipo, type Carta, type MateriaConcurso, type MateriaDef,
@@ -14,6 +14,7 @@ import { resolverCorMateria } from "../trilha/trilha-ui";
 import EstudoHero from "../ui/EstudoHero";
 import { alvoLeituraPdf, fmtEta } from "./biblioteca-utils";
 import FormPdf from "./FormPdf";
+import FormPdfLote from "./FormPdfLote";
 import PdfRow from "./PdfRow";
 import LeitorPdf from "./LeitorPdf";
 
@@ -73,6 +74,7 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
     materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
 
   const [formAberto, setFormAberto] = useState(false);
+  const [formLoteAberto, setFormLoteAberto] = useState(false);
   const [editando, setEditando] = useState<PdfEstudo | null>(null);
   const [lendo, setLendo] = useState<PdfEstudo | null>(null);
   const [blobLeitura, setBlobLeitura] = useState<Blob | null>(null);
@@ -144,6 +146,19 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
       onChange([registro, ...pdfs]);
       // form fica aberto com a matéria (e o tópico preset, se veio de um) mantidos — só fecha no X
     }
+  };
+
+  // upload em lote (FormPdfLote): recebe o lote INTEIRO já com upload feito, e faz UM ÚNICO
+  // onChange/setExpandidos com tudo -- nunca um onChange por arquivo (ver comentário na prop
+  // onSalvarLote do FormPdfLote sobre o risco de closure obsoleta numa sequência de chamadas)
+  const salvarPdfsEmLote = (registros: PdfEstudo[]) => {
+    if (registros.length === 0) return;
+    setExpandidos((prev) => {
+      const novo = { ...prev };
+      for (const r of registros) novo[r.materia] = true;
+      return novo;
+    });
+    onChange([...registros, ...pdfs]);
   };
 
   // anexar/reanexar arquivo numa entrada já existente (ex.: cadastrada de outro dispositivo, sem
@@ -245,14 +260,25 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => { setEditando(null); setPresetNovoPdf(null); setFormAberto((v) => !v); }}
-            className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors self-start sm:self-auto"
-          >
-            {formAberto && !editando ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-            {formAberto && !editando ? "Fechar" : "Adicionar PDF"}
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => { setEditando(null); setPresetNovoPdf(null); setFormAberto((v) => !v); setFormLoteAberto(false); }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
+            >
+              {formAberto && !editando ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+              {formAberto && !editando ? "Fechar" : "Adicionar PDF"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEditando(null); setFormAberto(false); setFormLoteAberto((v) => !v); }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
+              title="Anexar vários PDFs de uma vez e linkar por tópico pelo nome do arquivo"
+            >
+              {formLoteAberto ? <X className="h-3.5 w-3.5" /> : <FileStack className="h-3.5 w-3.5" />}
+              {formLoteAberto ? "Fechar" : "Vários PDFs"}
+            </button>
+          </div>
         </div>
         {pdfs.length > 0 && (
           <div className="mt-3">
@@ -279,7 +305,15 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
         />
       )}
 
-      {pdfs.length === 0 && !formAberto ? (
+      {formLoteAberto && (
+        <FormPdfLote
+          materiasAtivas={materiasAtivas}
+          onSalvarLote={salvarPdfsEmLote}
+          onFechar={() => setFormLoteAberto(false)}
+        />
+      )}
+
+      {pdfs.length === 0 && !formAberto && !formLoteAberto ? (
         <div className="rounded-2xl border border-dashed border-input p-10 text-center">
           <BookOpen className="h-8 w-8 mx-auto mb-3 text-primary" />
           <p className="text-sm text-foreground font-medium mb-1">Nenhum PDF na biblioteca ainda.</p>
