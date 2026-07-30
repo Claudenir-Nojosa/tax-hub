@@ -2,9 +2,9 @@ import Link from "next/link";
 import { FlipHorizontal2, HeartPulse, BadgeCheck, Percent, ArrowRight, Download } from "lucide-react";
 
 // atualizar esta URL manualmente sempre que gerar uma nova versão do .exe
-// (efd-pva-rpa/dist/EFD-PVA-RPA.exe, via `python -m PyInstaller --onefile ...`)
-const URL_DOWNLOAD_EFD_PVA_RPA =
-  "https://9qulyjk55bzciljt.public.blob.vercel-storage.com/downloads/EFD-PVA-RPA.exe";
+// (efd-pva-rpa/dist/TaxRPAHub.exe, via `pyinstaller TaxRPAHub.spec`)
+const URL_DOWNLOAD_TAX_RPAHUB =
+  "https://9qulyjk55bzciljt.public.blob.vercel-storage.com/downloads/TaxRPAHub.exe";
 
 const automacoes = [
   {
@@ -90,7 +90,7 @@ export default function AutomacoesPage() {
         ))}
 
         <a
-          href={URL_DOWNLOAD_EFD_PVA_RPA}
+          href={URL_DOWNLOAD_TAX_RPAHUB}
           download
           className="group block rounded-xl border border-dashed border-border bg-card p-6 hover:border-primary hover:shadow-md transition-all duration-200"
         >
@@ -101,7 +101,7 @@ export default function AutomacoesPage() {
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {["Desktop", "Windows", "EFD Contribuições"].map((tag) => (
+                  {["Desktop", "Windows", "EFD Contribuições", "DCTF"].map((tag) => (
                     <span
                       key={tag}
                       className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
@@ -111,15 +111,15 @@ export default function AutomacoesPage() {
                   ))}
                 </div>
                 <h2 className="text-base font-semibold text-foreground leading-snug">
-                  RPA — Transmissão EFD Contribuições (baixar app)
+                  Tax RPAHub (baixar app)
                 </h2>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  App desktop (Windows, .exe, sem instalação) que abre o PVA da Receita Federal e
-                  automatiza a importação de uma escrituração: você escolhe o arquivo, ele clica
-                  Importar Escrituração, seleciona o arquivo, clica Abrir, espera a importação
-                  terminar e clica Sim para validar. Roda em modo supervisionado — acompanhe o PVA
-                  na tela. Versão inicial: para depois de validar; assinar e transmitir ainda não
-                  foram automatizados.
+                  App desktop (Windows, .exe, sem instalação) que reúne automações supervisionadas
+                  de transmissão: você escolhe a automação e o arquivo, e acompanha o programa
+                  alvo sendo pilotado na tela. <strong>EFD Contribuições</strong> já validando,
+                  assinando e chegando até a tela de transmissão no PVA (transmissão final ainda é
+                  manual, de propósito). <strong>DCTF</strong> (via DCTFMensalV3-9) está com a
+                  tela pronta — em breve a automação em si.
                 </p>
               </div>
             </div>
