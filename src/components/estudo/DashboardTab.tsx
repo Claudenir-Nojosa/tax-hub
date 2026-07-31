@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, HelpCircle, Target, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles, Gauge, Route, ArrowRight, Trophy, Library, Flag, CalendarDays, ListChecks } from "lucide-react";
+import { BookOpen, HelpCircle, Target, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles, Gauge, Route, Compass, ArrowRight, Trophy, Library, Flag, CalendarDays, ListChecks } from "lucide-react";
 import {
   NIVEL_CONFIG,
   CONQUISTAS,
@@ -71,8 +71,8 @@ function MensagemDoDia({ state, materiasConcurso }: { state: EstudoState; materi
 
   return (
     <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2">
-      <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-2xl shadow-md flex-shrink-0">
-        🦉
+      <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md flex-shrink-0">
+        <Compass className="h-6 w-6 text-white" />
       </div>
       <div className="flex-1 min-w-0 bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
         <div className="text-sm font-bold text-foreground dark:text-foreground">{titulo}</div>
