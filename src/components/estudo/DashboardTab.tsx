@@ -17,7 +17,7 @@ import {
   topicoKey,
 } from "@/lib/estudo-data";
 import { computarMetaDia } from "@/lib/trilha-dinamica";
-import { resolverCorMateria } from "./trilha/trilha-ui";
+import { proximaAtividade, resolverCorMateria } from "./trilha/trilha-ui";
 import { alvoLeituraPdf } from "./biblioteca/biblioteca-utils";
 import EstudoHero from "./ui/EstudoHero";
 import StatTile from "./ui/StatTile";
@@ -33,6 +33,53 @@ interface Props {
 function fmtDataCurtaBR(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+// Bolha de mensagem "estilo Duolingo" — a primeira coisa que o usuário vê no Dashboard, apontando
+// numa frase só o que fazer agora. Puramente narrativa: reusa o mesmo MetaDia que o CardTrilha já
+// calcula, só escolhe UM item (proximaAtividade) e o transforma numa fala curta. Sem trilha ativa
+// ou sem materiasAtivas, some — o CTA "Ative sua trilha" do CardTrilha já cobre esse caso.
+function MensagemDoDia({ state, materiasConcurso }: { state: EstudoState; materiasConcurso?: MateriaBase[] }) {
+  const trilha = state.trilhaDinamica;
+  if (!trilha?.ativa) return null;
+
+  const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
+  const meta = computarMetaDia({
+    trilha,
+    configCiclo: state.configCiclo,
+    materiasAtivas,
+    topicos: state.topicos,
+    calendario: state.calendario,
+  });
+  const proxima = proximaAtividade(meta);
+  const streakDias = calcularStreakDias(state.calendario);
+
+  let titulo: string;
+  let corpo: string;
+  if (!proxima) {
+    titulo = "Tudo em dia por aqui! 🎉";
+    corpo = streakDias > 0
+      ? `Você já está há ${streakDias} dia${streakDias !== 1 ? "s" : ""} sem parar — volte amanhã pra manter a sequência.`
+      : "Nada pendente no checklist de hoje.";
+  } else if (proxima.ehNova) {
+    titulo = "Sua atividade de hoje é:";
+    corpo = `${proxima.titulo} — ${proxima.subtitulo}`;
+  } else {
+    titulo = "Vi que você ainda não fez:";
+    corpo = `${proxima.titulo} · ${proxima.subtitulo}`;
+  }
+
+  return (
+    <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2">
+      <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-2xl shadow-md flex-shrink-0">
+        🦉
+      </div>
+      <div className="flex-1 min-w-0 bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+        <div className="text-sm font-bold text-foreground dark:text-foreground">{titulo}</div>
+        <div className="text-sm text-muted-foreground mt-0.5">{corpo}</div>
+      </div>
+    </div>
+  );
 }
 
 // Card da meta de HOJE da trilha dinâmica — resumo dos blocos de estudo do dia e pendências;
@@ -324,6 +371,9 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
 
   return (
     <div className="space-y-6">
+      {/* Mensagem estilo Duolingo — a próxima atividade num tom de conversa */}
+      <MensagemDoDia state={state} materiasConcurso={materiasConcurso} />
+
       {/* Meta diária */}
       <MetaDiaria state={state} />
 

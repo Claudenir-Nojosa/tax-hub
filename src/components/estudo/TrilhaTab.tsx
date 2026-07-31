@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowRight, BookOpen, CalendarClock, Check, ChevronDown, Clock, ExternalLink,
-  Layers, ListChecks, Route, Settings2, Sparkles, Target, Trash2, Trophy,
+  Flame, Layers, ListChecks, Route, Settings2, Sparkles, Target, Trash2, Trophy,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  MATERIAS, dateKeyLocal, topicoKey, GRUPO_LABEL, GRUPO_BADGE,
+  MATERIAS, calcularStreakDias, dateKeyLocal, topicoKey, GRUPO_LABEL, GRUPO_BADGE,
   type AtividadeCalendario, type EstudoConfigCiclo, type Grupo, type MateriaConcurso,
   type MateriaDef, type TopicoState, type TrilhaDinamicaState,
 } from "@/lib/estudo-data";
@@ -16,7 +16,7 @@ import {
   type AnaliseMateria, type BlocoEstudo, type MetaDia, type QuestaoLiberada,
   type ReforcoGrupo, type Revisao30, type RevisaoLinkPendente,
 } from "@/lib/trilha-dinamica";
-import { fmtHoras, resolverCorMateria } from "./trilha/trilha-ui";
+import { fmtHoras, resolverCorMateria, TIPO_ITEM_COR, type TipoPasso } from "./trilha/trilha-ui";
 import ProgressRing from "./ui/ProgressRing";
 import EstudoHero from "./ui/EstudoHero";
 
@@ -44,16 +44,6 @@ interface Props {
   onIrParaCartas?: () => void;
 }
 
-type TipoPasso = "estudo" | "reforco" | "questoes" | "linkQuestoes" | "revisao" | "cartas";
-const TIPO_ITEM: Record<TipoPasso, string> = {
-  estudo: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary",
-  reforco: "bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-400",
-  questoes: "bg-teal-100 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400",
-  linkQuestoes: "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400",
-  revisao: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400",
-  cartas: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400",
-};
-
 function fmtDataCurta(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
@@ -74,6 +64,7 @@ export default function TrilhaTab({
   const hoje = dateKeyLocal();
 
   const temMateriasNoCiclo = materiasAtivas.some((m) => configCiclo.materias[m.nome]?.incluir);
+  const streakDias = calcularStreakDias(calendario);
 
   const meta: MetaDia | null = useMemo(() => {
     if (!trilha?.ativa) return null;
@@ -245,6 +236,8 @@ export default function TrilhaTab({
       corpo: <CorpoCartas onIrParaCartas={onIrParaCartas} onMarcar={marcarCartasFeitas} />,
     });
   }
+  // primeiro passo ainda não concluído — é ele que ganha o destaque de "comece por aqui"
+  const idxPassoAtual = passos.findIndex((p) => !p.concluido);
 
   return (
     <div className="space-y-4">
@@ -284,6 +277,17 @@ export default function TrilhaTab({
               {pendencias > 0 && ` · ${pendencias} pendência${pendencias !== 1 ? "s" : ""} no checklist`}
             </div>
           </div>
+          {streakDias > 0 && (
+            <div className="hidden sm:flex flex-col items-center flex-shrink-0 pl-4 border-l border-white/20">
+              <div className="flex items-center gap-1 text-2xl font-bold">
+                <Flame className="h-6 w-6 text-orange-300" />
+                {streakDias}
+              </div>
+              <div className="text-[10px] text-emerald-100 uppercase tracking-wide">
+                dia{streakDias !== 1 ? "s" : ""} seguidos
+              </div>
+            </div>
+          )}
         </div>
         {meta.blocosConcluidos && (
           <div className="mt-4 text-xs bg-white/15 backdrop-blur-sm rounded-lg px-3 py-2 flex items-center gap-1.5">
@@ -306,14 +310,19 @@ export default function TrilhaTab({
       <div className="bg-card rounded-2xl border border-border p-4 sm:p-5">
         <div className="text-sm font-bold text-foreground dark:text-foreground mb-4">Sua trilha de hoje</div>
         {passos.length === 0 ? (
-          <div className="py-6 text-center">
-            <Check className="h-8 w-8 text-emerald-400 mx-auto mb-2" />
-            <div className="text-sm text-muted-foreground">Tudo em dia — nada pendente no checklist agora.</div>
+          <div className="py-8 text-center">
+            <div className="h-14 w-14 rounded-full bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center mx-auto mb-3">
+              <Check className="h-7 w-7 text-emerald-500" />
+            </div>
+            <div className="text-sm font-semibold text-foreground">Tudo em dia por aqui! 🎉</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Nada pendente no checklist agora — volte mais tarde ou aproveite pra descansar.
+            </div>
           </div>
         ) : (
           <div>
             {passos.map((p, i) => (
-              <PassoLinha key={p.id} passo={p} ultimo={i === passos.length - 1} />
+              <PassoLinha key={p.id} passo={p} ultimo={i === passos.length - 1} atual={i === idxPassoAtual} />
             ))}
           </div>
         )}
@@ -338,21 +347,37 @@ export default function TrilhaTab({
 // ─── Linha do checklist (timeline vertical conectada) ──────────────────────────
 
 function PassoLinha({
-  passo, ultimo,
+  passo, ultimo, atual,
 }: {
   passo: { tipo: TipoPasso; concluido: boolean; icone: LucideIcon; corpo: React.ReactNode };
   ultimo: boolean;
+  atual: boolean;
 }) {
   const Icone = passo.icone;
   return (
-    <div className="flex gap-3">
+    <div className={`flex gap-3 rounded-xl transition-colors ${atual ? "-mx-2 px-2 py-1.5 bg-emerald-50/70 dark:bg-emerald-950/25" : ""}`}>
       <div className="flex flex-col items-center flex-shrink-0">
-        <div className={`h-9 w-9 rounded-full flex items-center justify-center ${passo.concluido ? "bg-emerald-500 text-white" : TIPO_ITEM[passo.tipo]}`}>
+        <div
+          className={`h-9 w-9 rounded-full flex items-center justify-center transition-shadow ${
+            passo.concluido
+              ? "bg-emerald-500 text-white"
+              : atual
+                ? `${TIPO_ITEM_COR[passo.tipo]} ring-2 ring-emerald-400 dark:ring-emerald-500 ring-offset-2 ring-offset-card shadow-md`
+                : TIPO_ITEM_COR[passo.tipo]
+          }`}
+        >
           {passo.concluido ? <Check className="h-4 w-4" /> : <Icone className="h-4 w-4" />}
         </div>
         {!ultimo && <div className="w-0.5 flex-1 min-h-[16px] bg-muted my-1 rounded-full" />}
       </div>
-      <div className={`flex-1 min-w-0 ${ultimo ? "" : "pb-5"}`}>{passo.corpo}</div>
+      <div className={`flex-1 min-w-0 ${ultimo ? "" : "pb-5"}`}>
+        {atual && (
+          <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide mb-1">
+            Comece por aqui
+          </div>
+        )}
+        {passo.corpo}
+      </div>
     </div>
   );
 }
