@@ -440,6 +440,8 @@ export default function LeitorPdf({
             paginaVisivel={paginaVisivel}
             totalPaginas={pdf.totalPaginas}
             paginaConteudoFim={pdf.paginaConteudoFim}
+            blob={blob}
+            nomeArquivo={`${pdf.nome}.pdf`}
             onAtualizar={(capitulos: CapituloPdf[]) => onAtualizarPdf({ capitulos: capitulos.length > 0 ? capitulos : undefined })}
             onFechar={() => setCapitulosAberto(false)}
           />

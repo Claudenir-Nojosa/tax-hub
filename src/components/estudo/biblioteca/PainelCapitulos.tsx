@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Layers, Plus, Target, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Layers, Loader2, Plus, Sparkles, Target, Trash2, X } from "lucide-react";
 import type { CapituloPdf, SubcapituloPdf } from "@/lib/estudo-data";
 
 // Painel de capítulos — aberto de dentro do leitor (botão "Capítulos" na barra), dockado ao lado
@@ -63,16 +63,21 @@ function paraCapitulosPdf(linhas: LinhaCap[]): CapituloPdf[] {
 }
 
 export default function PainelCapitulos({
-  capitulos, paginaVisivel, totalPaginas, paginaConteudoFim, onAtualizar, onFechar,
+  capitulos, paginaVisivel, totalPaginas, paginaConteudoFim, blob, nomeArquivo, onAtualizar, onFechar,
 }: {
   capitulos: CapituloPdf[];
   paginaVisivel: number;
   totalPaginas: number;
   paginaConteudoFim?: number;
+  // arquivo já em memória no leitor — reaproveitado pra mandar pra IA sem baixar de novo
+  blob: Blob;
+  nomeArquivo: string;
   onAtualizar: (capitulos: CapituloPdf[]) => void;
   onFechar: () => void;
 }) {
   const [linhas, setLinhas] = useState<LinhaCap[]>(() => paraLinhas(capitulos));
+  const [sugerindo, setSugerindo] = useState(false);
+  const [erroSugestao, setErroSugestao] = useState<string | null>(null);
   const fimDocumento = paginaConteudoFim ?? totalPaginas;
 
   // ações estruturais (adicionar/remover/usar página atual) persistem NA HORA; edição de texto
@@ -111,6 +116,45 @@ export default function PainelCapitulos({
   const removerSub = (i: number, si: number) =>
     persistir(linhas.map((l, li) => (li === i ? { ...l, subcapitulos: l.subcapitulos.filter((_, ssi) => ssi !== si) } : l)));
 
+  // lê o índice do próprio PDF (já em memória, não baixa de novo) e pré-preenche a lista — sempre
+  // editável depois, nada aplica sozinho. Só extrai nome + início de cada capítulo de TEORIA,
+  // pulando introdução/apresentação e as seções de exercício (ver prompt da rota) — o fim continua
+  // derivado automaticamente, como sempre.
+  const sugerirComIA = async () => {
+    if (sugerindo) return;
+    if (linhas.length > 0 && !confirm(`Isso substitui os ${linhas.length} capítulo(s) já cadastrados pela sugestão da IA — continuar?`)) return;
+
+    setSugerindo(true);
+    setErroSugestao(null);
+    try {
+      const form = new FormData();
+      form.append("file", blob, nomeArquivo);
+      const res = await fetch("/api/ai/pdf-capitulos", { method: "POST", body: form });
+      const data = (await res.json().catch(() => ({}))) as {
+        capitulos?: { nome: string; paginaInicio: number }[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? `Erro ${res.status}`);
+      if (!data.capitulos || data.capitulos.length === 0) {
+        setErroSugestao("A IA não achou um índice reconhecível nas primeiras páginas");
+        return;
+      }
+      persistir(
+        data.capitulos.map((c) => ({
+          nome: c.nome,
+          paginaInicio: String(c.paginaInicio),
+          paginaFim: "",
+          subcapitulos: [],
+          aberto: false,
+        }))
+      );
+    } catch (e) {
+      setErroSugestao(e instanceof Error ? e.message : "Erro ao sugerir com IA");
+    } finally {
+      setSugerindo(false);
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4 lg:static lg:inset-auto lg:z-auto lg:flex lg:items-stretch lg:justify-start lg:bg-transparent lg:p-0 lg:w-[440px] lg:flex-shrink-0 lg:h-full"
@@ -129,13 +173,26 @@ export default function PainelCapitulos({
           </button>
         </div>
 
-        <p className="text-xs text-muted-foreground">
-          Divida a leitura em capítulos (e, se quiser, subcapítulos) — a Trilha manda um de cada
-          vez, na ordem, juntando os curtos até render uma atividade de duração razoável. Navegue
-          até a página certa no PDF e clique no alvo pra preencher com a página atual ({paginaVisivel}),
-          sem digitar.
-          {paginaConteudoFim && ` A partir da página ${paginaConteudoFim} é só questão — capítulos não deveriam passar disso.`}
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground flex-1">
+            Divida a leitura em capítulos (e, se quiser, subcapítulos) — a Trilha manda um de cada
+            vez, na ordem, juntando os curtos até render uma atividade de duração razoável. Navegue
+            até a página certa no PDF e clique no alvo pra preencher com a página atual ({paginaVisivel}),
+            sem digitar.
+            {paginaConteudoFim && ` A partir da página ${paginaConteudoFim} é só questão — capítulos não deveriam passar disso.`}
+          </p>
+          <button
+            type="button"
+            onClick={sugerirComIA}
+            disabled={sugerindo}
+            className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium text-primary hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-wait"
+            title="Pede pra IA ler o índice do PDF e sugerir os capítulos de teoria (pula apresentação e questões) — você revisa antes"
+          >
+            {sugerindo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            {sugerindo ? "Lendo…" : "Sugerir com IA"}
+          </button>
+        </div>
+        {erroSugestao && <div className="text-[10px] text-red-500 dark:text-red-400">{erroSugestao}</div>}
 
         {linhas.length === 0 ? (
           <p className="text-xs text-muted-foreground py-4 text-center">Nenhum capítulo ainda.</p>
