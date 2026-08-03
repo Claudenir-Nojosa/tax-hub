@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BookOpen, ChevronDown, ChevronRight, FileStack, Library, Plus, X } from "lucide-react";
 import {
   MATERIAS, calcularPagPorHora,
@@ -11,6 +11,7 @@ import {
   salvarArquivoPdf, obterArquivoPdf, excluirArquivoPdf, contarPaginasPdf,
 } from "@/lib/pdf-storage";
 import { resolverCorMateria } from "../trilha/trilha-ui";
+import type { AberturaPdfSolicitada } from "../trilha/TrilhaLinhas";
 import EstudoHero from "../ui/EstudoHero";
 import { alvoLeituraPdf, fmtEta } from "./biblioteca-utils";
 import FormPdf from "./FormPdf";
@@ -67,9 +68,16 @@ interface Props {
   // trilha dinâmica: minutos que faltam HOJE pra fechar o bloco de estudo de cada matéria — o
   // leitor avisa em tempo real quando a sessão atual cruza esse restante ("meta do dia feita!")
   metaMinutosRestantes?: Record<string, number>;
+  // pedido de abertura vindo de fora (botão "Ler PDF" da Trilha, com página mapeada pro tópico) —
+  // consumido uma vez (abre o leitor + onAberturaConsumida) e não de novo até um pedido novo
+  aberturaSolicitada?: AberturaPdfSolicitada | null;
+  onAberturaConsumida?: () => void;
 }
 
-export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConcurso, topicos, onUpdateTopicos, onRegistrarSessao, onAdicionarCartas, metaMinutosRestantes }: Props) {
+export default function BibliotecaTab({
+  pdfs, calendario, onChange, materiasConcurso, topicos, onUpdateTopicos, onRegistrarSessao,
+  onAdicionarCartas, metaMinutosRestantes, aberturaSolicitada, onAberturaConsumida,
+}: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
     materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
 
@@ -194,7 +202,12 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
     }
   };
 
-  const abrirLeitor = async (pdf: PdfEstudo) => {
+  // abertura vinda de um deep link (Trilha "Ler PDF", com página mapeada pro tópico) — guardada
+  // à parte de `lendo`/`blobLeitura` porque só ela carrega paginaInicio/paginaFim; abertura
+  // genérica (clique na própria Biblioteca) passa undefined e o leitor abre do jeito de sempre
+  const [aberturaAtual, setAberturaAtual] = useState<AberturaPdfSolicitada | null>(null);
+
+  const abrirLeitor = async (pdf: PdfEstudo, abertura?: AberturaPdfSolicitada) => {
     setCarregandoLeitor(pdf.id);
     try {
       const blob = await obterArquivoPdf(pdf.id);
@@ -205,6 +218,7 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
       }
       setBlobLeitura(blob);
       setLendo(pdf);
+      setAberturaAtual(abertura ?? null);
     } catch (e) {
       alert(`Não consegui abrir o PDF. ${e instanceof Error ? e.message : "Tente de novo."}`);
     } finally {
@@ -212,9 +226,20 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
     }
   };
 
+  // consome um pedido de abertura externo uma vez só — assim que dispara, avisa o pai
+  // (onAberturaConsumida) pra ele zerar o pedido e essa mesma abertura não repetir de novo
+  useEffect(() => {
+    if (!aberturaSolicitada) return;
+    const pdf = pdfs.find((p) => p.id === aberturaSolicitada.pdfId);
+    if (pdf) abrirLeitor(pdf, aberturaSolicitada);
+    onAberturaConsumida?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberturaSolicitada]);
+
   const fecharLeitor = () => {
     setBlobLeitura(null);
     setLendo(null);
+    setAberturaAtual(null);
   };
 
   const atualizarPagina = (id: string, pagina: number) => {
@@ -426,6 +451,8 @@ export default function BibliotecaTab({ pdfs, calendario, onChange, materiasConc
           onRegistrarSessao={onRegistrarSessao}
           onAdicionarCartas={onAdicionarCartas}
           minutosMetaRestantes={metaMinutosRestantes?.[lendo.materia]}
+          paginaAbertura={aberturaAtual?.paginaInicio}
+          paginaFimAlvo={aberturaAtual?.paginaFim}
           onFechar={fecharLeitor}
         />
       )}

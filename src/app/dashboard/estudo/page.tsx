@@ -26,6 +26,7 @@ import {
   MATERIAS,
 } from "@/lib/estudo-data";
 import { computarMetaSemana } from "@/lib/trilha-dinamica";
+import type { AberturaPdfSolicitada } from "@/components/estudo/trilha/TrilhaLinhas";
 import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
@@ -112,6 +113,9 @@ export default function EstudoPage() {
   const [state, setState] = useState<EstudoState>(DEFAULT_ESTUDO_STATE);
   const [loaded, setLoaded] = useState(false);
   const [concursoAtivo, setConcursoAtivo] = useState<(ConcursoData & { id: string }) | null>(null);
+  // pedido de abertura de um PDF específico (com página) vindo do "Ler PDF" da Trilha -- a
+  // Biblioteca consome e limpa (onAberturaConsumida) assim que abre o leitor
+  const [aberturaPdf, setAberturaPdf] = useState<AberturaPdfSolicitada | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Migra e carrega concurso (por ID da URL ou principal)
@@ -559,6 +563,8 @@ export default function EstudoPage() {
               }
               onAdicionarCartas={adicionarCartas}
               metaMinutosRestantes={metaMinutosRestantes}
+              aberturaSolicitada={aberturaPdf}
+              onAberturaConsumida={() => setAberturaPdf(null)}
             />
           )}
 
@@ -582,7 +588,7 @@ export default function EstudoPage() {
               onUpdateTrilha={updateTrilhaDinamica}
               onUpdateTopicos={updateTopicos}
               onIrParaCiclo={() => setActiveTab("ciclo")}
-              onIrParaBiblioteca={() => setActiveTab("biblioteca")}
+              onIrParaBiblioteca={(abertura) => { setAberturaPdf(abertura ?? null); setActiveTab("biblioteca"); }}
               onIrParaCartas={() => setActiveTab("cartas")}
             />
           )}

@@ -18,7 +18,7 @@ import {
 import { fmtHoras, gerarMensagemGustavo } from "./trilha/trilha-ui";
 import {
   CardMateria, CorpoBloco, CorpoCartas, CorpoQuestoes, CorpoReforcos, CorpoRevisao30,
-  CorpoRevisoesLink,
+  CorpoRevisoesLink, type AberturaPdfSolicitada,
 } from "./trilha/TrilhaLinhas";
 import ProgressRing from "./ui/ProgressRing";
 import EstudoHero from "./ui/EstudoHero";
@@ -46,7 +46,7 @@ interface Props {
   onUpdateTrilha: (trilha: TrilhaDinamicaState | undefined) => void;
   onUpdateTopicos: (topicos: Record<string, TopicoState>) => void;
   onIrParaCiclo?: () => void;
-  onIrParaBiblioteca?: () => void;
+  onIrParaBiblioteca?: (abertura?: AberturaPdfSolicitada) => void;
   onIrParaCartas?: () => void;
 }
 

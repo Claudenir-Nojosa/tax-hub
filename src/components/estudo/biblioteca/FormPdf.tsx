@@ -2,9 +2,22 @@
 
 import { useRef, useState } from "react";
 import { ChevronDown, FileUp, Loader2, X } from "lucide-react";
-import type { MateriaConcurso, MateriaDef, PdfEstudo } from "@/lib/estudo-data";
+import type { MateriaConcurso, MateriaDef, PdfEstudo, TopicoPaginas } from "@/lib/estudo-data";
 import { contarPaginasPdf } from "@/lib/pdf-storage";
 import { novoId } from "./biblioteca-utils";
+
+// intervalo em edição por tópico — strings (inputs controlados); só vira TopicoPaginas de
+// verdade no salvar, e só pros tópicos com início E fim preenchidos (parcial não quebra nada,
+// só não entra no mapeamento -- "Ler PDF" cai no comportamento genérico pra esse tópico)
+type IntervalosEmEdicao = Record<string, { inicio: string; fim: string }>;
+
+function intervalosIniciais(pdf?: PdfEstudo): IntervalosEmEdicao {
+  const mapa: IntervalosEmEdicao = {};
+  for (const ip of pdf?.intervalosPaginas ?? []) {
+    mapa[ip.topico] = { inicio: String(ip.paginaInicio), fim: String(ip.paginaFim) };
+  }
+  return mapa;
+}
 
 // ─── Form de cadastro/edição ─────────────────────────────────────────────────
 
@@ -29,6 +42,7 @@ export default function FormPdf({
   const [paginasDetectadas, setPaginasDetectadas] = useState(false);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [mostrarTopicos, setMostrarTopicos] = useState((pdfParaEditar?.topicos?.length ?? 0) > 0 || !!presetTopico);
+  const [intervalos, setIntervalos] = useState<IntervalosEmEdicao>(intervalosIniciais(pdfParaEditar));
   const [salvasAgora, setSalvasAgora] = useState(0);
   const [flash, setFlash] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -49,11 +63,27 @@ export default function FormPdf({
     }
   };
 
+  // só entram no mapeamento os tópicos com início E fim preenchidos e válidos (fim >= início) —
+  // um tópico selecionado sem intervalo simplesmente fica de fora, sem travar o salvamento
+  const construirIntervalosPaginas = (topicosSelecionados: string[]): TopicoPaginas[] | undefined => {
+    const resultado: TopicoPaginas[] = [];
+    for (const t of topicosSelecionados) {
+      const par = intervalos[t];
+      if (!par) continue;
+      const inicio = parseInt(par.inicio);
+      const fim = parseInt(par.fim);
+      if (!Number.isFinite(inicio) || !Number.isFinite(fim) || inicio < 1 || fim < inicio) continue;
+      resultado.push({ topico: t, paginaInicio: inicio, paginaFim: fim });
+    }
+    return resultado.length > 0 ? resultado : undefined;
+  };
+
   const salvar = async () => {
     if (!podeSalvar || enviando) return;
     setEnviando(true);
     try {
       const topicos = [...topicosSel].filter((t) => topicosDaMateria.includes(t));
+      const intervalosPaginas = construirIntervalosPaginas(topicos);
       if (pdfParaEditar) {
         await onSalvar(
           {
@@ -61,6 +91,7 @@ export default function FormPdf({
             nome: nome.trim(),
             materia,
             topicos: topicos.length > 0 ? topicos : undefined,
+            intervalosPaginas,
             totalPaginas: paginasNum,
             paginaAtual: Math.min(pdfParaEditar.paginaAtual, paginasNum),
             atualizadoEm: new Date().toISOString(),
@@ -74,6 +105,7 @@ export default function FormPdf({
             nome: nome.trim(),
             materia,
             topicos: topicos.length > 0 ? topicos : undefined,
+            intervalosPaginas,
             totalPaginas: paginasNum,
             paginaAtual: 0,
             criadoEm: new Date().toISOString(),
@@ -86,6 +118,7 @@ export default function FormPdf({
         setNome("");
         setTotalPaginas("");
         setTopicosSel(new Set(presetTopico ? [presetTopico] : []));
+        setIntervalos({});
         setArquivo(null);
         setPaginasDetectadas(false);
         setSalvasAgora((n) => n + 1);
@@ -219,6 +252,42 @@ export default function FormPdf({
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {topicosSel.size > 0 && (
+        <div className="mb-3">
+          <div className="text-[11px] font-medium text-muted-foreground mb-1.5">
+            Intervalo de páginas por tópico (opcional) — a Trilha abre o leitor já na página certa e avisa quando você passa da página final
+          </div>
+          <div className="space-y-1.5">
+            {[...topicosSel].filter((t) => topicosDaMateria.includes(t)).map((t) => {
+              const par = intervalos[t] ?? { inicio: "", fim: "" };
+              return (
+                <div key={t} className="flex items-center gap-2 rounded-lg border border-border dark:border-border px-2.5 py-1.5">
+                  <span className="flex-1 min-w-0 text-xs text-foreground truncate" title={t}>{t}</span>
+                  <label className="text-[10px] text-muted-foreground flex-shrink-0">pág.</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={par.inicio}
+                    onChange={(e) => setIntervalos((prev) => ({ ...prev, [t]: { inicio: e.target.value, fim: prev[t]?.fim ?? "" } }))}
+                    placeholder="início"
+                    className="w-16 text-xs border border-border rounded-md px-2 py-1 bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                  />
+                  <span className="text-[10px] text-muted-foreground flex-shrink-0">até</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={par.fim}
+                    onChange={(e) => setIntervalos((prev) => ({ ...prev, [t]: { inicio: prev[t]?.inicio ?? "", fim: e.target.value } }))}
+                    placeholder="fim"
+                    className="w-16 text-xs border border-border rounded-md px-2 py-1 bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

@@ -21,7 +21,7 @@ if (typeof window !== "undefined" && !("withResolvers" in Promise)) {
   };
 }
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Loader2, Minus, Plus } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy } from "pdfjs-dist";
@@ -163,7 +163,13 @@ interface Props {
   onPaginaVisivel?: (pagina: number) => void;
 }
 
-export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props) {
+// controle imperativo exposto pro pai (LeitorPdf) — hoje só usado pelo botão "Voltar à página X"
+// do aviso de fim de conteúdo (ver paginaFimAlvo), pra rolar de volta sem reabrir o leitor
+export interface VisorPdfHandle {
+  scrollParaPagina: (pagina: number) => void;
+}
+
+function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: React.Ref<VisorPdfHandle>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [dims, setDims] = useState<{ w: number; h: number }[]>([]);
@@ -185,6 +191,19 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
   // parado, então o mesmo pixel passa a apontar pra outra página ("sair da página" ao dar zoom,
   // reportado pelo usuário)
   const ancoraZoomRef = useRef<{ pagina: number; fracao: number } | null>(null);
+
+  // scrollParaPagina: mesmo padrão da navegação por seta (scrollTo suave até o topo da página
+  // alvo) — marca interagiuRef pra não ser "puxado" de volta pra paginaInicial pelo efeito abaixo
+  useImperativeHandle(ref, () => ({
+    scrollParaPagina: (pagina: number) => {
+      const c = containerRef.current;
+      const alvo = c?.querySelector<HTMLElement>(`[data-pagina="${pagina}"]`);
+      if (alvo && c) {
+        interagiuRef.current = true;
+        c.scrollTo({ top: alvo.offsetTop - 8, behavior: "smooth" });
+      }
+    },
+  }), []);
 
   // acha a página que contém o topo da viewport agora, e a que fração da altura DELA o scroll
   // está — usado só pra restaurar a posição relativa depois que o zoom muda a altura das páginas
@@ -430,6 +449,9 @@ export default function VisorPdf({ blob, paginaInicial, onPaginaVisivel }: Props
     </div>
   );
 }
+
+const VisorPdf = forwardRef(VisorPdfInner);
+export default VisorPdf;
 
 // ─── Página individual (virtualizada) ────────────────────────────────────────
 

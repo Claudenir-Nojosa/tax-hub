@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
-import { ArrowLeft, BookOpen, CheckCircle2, Clock, ClipboardList, Flag, ListChecks, Pause, Play } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, Clock, ClipboardList, Flag, ListChecks, Pause, Play } from "lucide-react";
 import {
   gerarQuestoesGrupos, topicoKey,
   type Alternativa, type AtividadeTipo, type Carta, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
@@ -12,6 +12,7 @@ import { fmtCrono, novaCartaManual, sincronizarCadernoComQuestoes } from "./bibl
 import InputPaginaLeitor from "./InputPaginaLeitor";
 import NovoCartaoForm, { TIPO_CARTAO_CONFIG } from "./NovoCartaoForm";
 import PainelQuestoes from "./PainelQuestoes";
+import type { VisorPdfHandle } from "./VisorPdf";
 
 // pdf.js só carrega quando o leitor abre (bundle pesado — não entra no load da aba)
 const VisorPdf = dynamic(() => import("./VisorPdf"), { ssr: false });
@@ -19,7 +20,8 @@ const VisorPdf = dynamic(() => import("./VisorPdf"), { ssr: false });
 // ─── Leitor fullscreen ───────────────────────────────────────────────────────
 
 export default function LeitorPdf({
-  pdf, blob, topicos, onAtualizarPagina, onAtualizarPdf, onUpdateTopicos, onRegistrarSessao, onAdicionarCartas, minutosMetaRestantes, onFechar,
+  pdf, blob, topicos, onAtualizarPagina, onAtualizarPdf, onUpdateTopicos, onRegistrarSessao,
+  onAdicionarCartas, minutosMetaRestantes, paginaAbertura, paginaFimAlvo, onFechar,
 }: {
   pdf: PdfEstudo;
   blob: Blob;
@@ -33,6 +35,11 @@ export default function LeitorPdf({
   // trilha dinâmica: minutos que faltavam (na abertura do leitor) pro bloco de hoje desta
   // matéria — quando o cronômetro da sessão cruza esse valor, avisa que a meta do dia foi batida
   minutosMetaRestantes?: number;
+  // deep link vindo da Trilha (bloco com PDF+intervalo mapeado pro tópico): abre já nessa página
+  // em vez de pdf.paginaAtual, e avisa quando o usuário passa de paginaFimAlvo. Ausente = abertura
+  // genérica (comportamento de sempre).
+  paginaAbertura?: number;
+  paginaFimAlvo?: number;
   onFechar: () => void;
 }) {
   // cronômetro: conta sozinho desde a abertura; pausável. Ao fechar com ≥1 min, a sessão vira
@@ -40,9 +47,31 @@ export default function LeitorPdf({
   const [segundos, setSegundos] = useState(0);
   const [pausado, setPausado] = useState(false);
   const segundosRef = useRef(0);
-  const paginaInicialRef = useRef(pdf.paginaAtual);
+  // abertura por deep link pode mandar pra uma página ANTERIOR à já lida (revisitar um tópico
+  // passado) — paginaInicialRef só serve pra "onde abrir o visor". paginaAtualNaAberturaRef é o
+  // bookmark de retomada DE VERDADE no momento da abertura, sempre igual a pdf.paginaAtual (não
+  // ao ponto de abertura do deep link) — usado como baseline de "páginas lidas" na sessão (ver
+  // encerrarSessao), pra uma revisita a um tópico anterior não inflar esse número artificialmente
+  const paginaInicialRef = useRef(paginaAbertura ?? pdf.paginaAtual);
+  const paginaAtualNaAberturaRef = useRef(pdf.paginaAtual);
+  const visorRef = useRef<VisorPdfHandle>(null);
   const pdfRef = useRef(pdf);
   pdfRef.current = pdf;
+
+  // commitarPagina: mesmo canal usado por "Parei aqui" e pelo campo "Parei na pág." — numa
+  // sessão de deep link (revisita a um tópico anterior), nunca deixa o bookmark de retomada
+  // recuar pra trás do que já tinha sido alcançado antes dessa sessão (regra explícita: o
+  // bookmark é sempre o ponto mais avançado já lido, revisitar conteúdo antigo não desfaz isso)
+  const commitarPagina = (pagina: number) => {
+    if (paginaAbertura !== undefined && pagina < paginaAtualNaAberturaRef.current) return;
+    onAtualizarPagina(pagina);
+  };
+
+  // aviso de "passou do conteúdo indicado" — dispara UMA vez por sessão (não fica reabrindo a
+  // cada scroll além do alvo); "Continuar mesmo assim" só fecha o aviso, não desativa o alerta
+  // de verdade pra sempre (reabrir o leitor nessa mesma sessão de novo pode avisar de novo)
+  const [avisoFimPagina, setAvisoFimPagina] = useState(false);
+  const avisoMostradoRef = useRef(false);
 
   // cartão MANUAL sem grifo: botões na barra (ao lado de "Parei aqui") abrem o formulário do
   // tipo escolhido (Monstro / V ou F / Tesouro) direto, já travado na matéria/tópico do PDF —
@@ -149,6 +178,17 @@ export default function LeitorPdf({
     toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   };
 
+  // dispara o aviso de "passou do conteúdo indicado" UMA vez por sessão, na primeira vez que a
+  // página visível cruza paginaFimAlvo — reaberto o leitor de novo (nova sessão), pode avisar de
+  // novo; "Continuar mesmo assim" só fecha o card, não impede reaparecer se sair e voltar
+  const handlePaginaVisivel = (pagina: number) => {
+    setPaginaVisivel(pagina);
+    if (paginaFimAlvo !== undefined && pagina > paginaFimAlvo && !avisoMostradoRef.current) {
+      avisoMostradoRef.current = true;
+      setAvisoFimPagina(true);
+    }
+  };
+
   // aviso da trilha dinâmica: dispara UMA vez quando a sessão atual cobre o que faltava do
   // bloco de hoje desta matéria (o restante veio congelado da abertura — as sessões só entram
   // no calendário ao fechar o leitor, então o cronômetro é a única fonte "ao vivo")
@@ -175,7 +215,7 @@ export default function LeitorPdf({
     const p = pdfRef.current;
     const minutos = Math.round(segundosRef.current / 60);
     if (minutos >= 1 && onRegistrarSessao) {
-      const paginasLidas = p.paginaAtual - paginaInicialRef.current;
+      const paginasLidas = p.paginaAtual - paginaAtualNaAberturaRef.current;
       onRegistrarSessao(
         minutos,
         "estudo",
@@ -233,7 +273,7 @@ export default function LeitorPdf({
 
         <button
           type="button"
-          onClick={() => onAtualizarPagina(paginaVisivel)}
+          onClick={() => commitarPagina(paginaVisivel)}
           title={`Marcar que você parou na página visível (${paginaVisivel})`}
           className="hidden sm:flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-muted text-muted-foreground hover:bg-accent transition-colors flex-shrink-0"
         >
@@ -300,7 +340,7 @@ export default function LeitorPdf({
         <InputPaginaLeitor
           key={`${pdf.id}:${pdf.paginaAtual}`}
           pdf={pdf}
-          onCommit={onAtualizarPagina}
+          onCommit={commitarPagina}
         />
         <span className="hidden sm:block text-[11px] text-muted-foreground flex-shrink-0">de {pdf.totalPaginas}</span>
 
@@ -357,9 +397,10 @@ export default function LeitorPdf({
       <div className="flex-1 flex min-h-0 relative">
         <div className="flex-1 min-w-0 flex flex-col">
           <VisorPdf
+            ref={visorRef}
             blob={blob}
             paginaInicial={Math.max(1, Math.min(paginaInicialRef.current || 1, pdf.totalPaginas))}
-            onPaginaVisivel={setPaginaVisivel}
+            onPaginaVisivel={handlePaginaVisivel}
           />
         </div>
 
@@ -387,6 +428,44 @@ export default function LeitorPdf({
           onSalvar={salvarCartaManual}
           onCancelar={() => setCartaForm(null)}
         />
+      )}
+
+      {/* aviso de fim de conteúdo indicado (atividade da Trilha com página final mapeada) —
+          bloqueante (mesmo padrão do NovoCartaoForm), com opção de voltar pra página alvo ou
+          seguir lendo mesmo assim; não impede scroll nenhum, só avisa */}
+      {avisoFimPagina && paginaFimAlvo !== undefined && (
+        <div
+          className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4"
+          onClick={() => setAvisoFimPagina(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-2xl w-full max-w-sm p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" /> Você passou do conteúdo indicado
+            </div>
+            <p className="text-xs text-muted-foreground">
+              A atividade da Trilha pedia leitura até a página {paginaFimAlvo} — você já está na página {paginaVisivel}.
+            </p>
+            <div className="flex items-center gap-2 justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  visorRef.current?.scrollParaPagina(paginaFimAlvo);
+                  setAvisoFimPagina(false);
+                }}
+                className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-foreground hover:bg-accent transition-colors"
+              >
+                Voltar à página {paginaFimAlvo}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAvisoFimPagina(false)}
+                className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors"
+              >
+                Continuar mesmo assim
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* toast de confirmação */}

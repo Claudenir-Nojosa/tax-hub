@@ -21,6 +21,15 @@ function fmtDataCurta(dateKey: string): string {
   return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
 }
 
+// pedido de abertura de um PDF específico numa página específica — só existe quando o bloco tem
+// um PdfEstudo com o intervalo do tópico mapeado (ver resolverPaginaBloco em trilha-dinamica.ts);
+// sem isso, "Ler PDF" cai no comportamento genérico (troca de aba, sem deep link)
+export interface AberturaPdfSolicitada {
+  pdfId: string;
+  paginaInicio?: number;
+  paginaFim?: number;
+}
+
 // ─── Conteúdo: bloco de leitura de uma matéria ───────────────────────────────
 
 export function CorpoBloco({
@@ -28,11 +37,17 @@ export function CorpoBloco({
 }: {
   b: BlocoEstudoSemana;
   materiasAtivas: (MateriaDef | MateriaConcurso)[];
-  onIrParaBiblioteca?: () => void;
+  onIrParaBiblioteca?: (abertura?: AberturaPdfSolicitada) => void;
   onMarcarEstudado: () => void;
 }) {
   const cor = resolverCorMateria(b.materia, materiasAtivas);
   const perc = Math.min(100, Math.round((b.minutosFeitosSemana / Math.max(1, b.minutosAlvoSemana)) * 100));
+  const abrirLeitor = () => {
+    if (!onIrParaBiblioteca) return;
+    onIrParaBiblioteca(
+      b.pdfId ? { pdfId: b.pdfId, paginaInicio: b.paginaInicio, paginaFim: b.paginaFim } : undefined
+    );
+  };
   return (
     <div className="flex items-center gap-3">
       <div className="flex-1 min-w-0">
@@ -40,7 +55,10 @@ export function CorpoBloco({
           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cor.dot}`} />
           <span className="text-sm font-semibold text-foreground dark:text-foreground truncate">{b.materia}</span>
         </div>
-        <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={b.topico}>tópico atual: {b.topico}</div>
+        <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={b.topico}>
+          tópico atual: {b.topico}
+          {b.paginaInicio && b.paginaFim && ` (págs. ${b.paginaInicio}–${b.paginaFim})`}
+        </div>
         <div className="mt-1.5 flex items-center gap-2">
           <div className="flex-1 bg-muted dark:bg-muted rounded-full h-1.5 overflow-hidden">
             <div className={`h-full rounded-full transition-all duration-500 ${b.concluido ? "bg-emerald-500" : "bg-primary/50"}`} style={{ width: `${perc}%` }} />
@@ -49,7 +67,7 @@ export function CorpoBloco({
         </div>
       </div>
       {!b.concluido && onIrParaBiblioteca && (
-        <button type="button" onClick={onIrParaBiblioteca} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-medium flex items-center gap-1">
+        <button type="button" onClick={abrirLeitor} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-medium flex items-center gap-1">
           Ler PDF <ArrowRight className="h-3 w-3" />
         </button>
       )}
