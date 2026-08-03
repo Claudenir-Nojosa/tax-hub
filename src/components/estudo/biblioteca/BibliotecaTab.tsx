@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, ChevronDown, ChevronRight, FileStack, Library, Plus, X } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, FileStack, Library, Plus, Sparkles, X } from "lucide-react";
 import {
   MATERIAS, calcularPagPorHora,
   type AtividadeCalendario, type AtividadeTipo, type Carta, type MateriaConcurso, type MateriaDef,
-  type PdfEstudo, type TopicoState,
+  type PdfEstudo, type TopicoPaginas, type TopicoState,
 } from "@/lib/estudo-data";
 import {
   salvarArquivoPdf, obterArquivoPdf, excluirArquivoPdf, contarPaginasPdf,
@@ -16,6 +16,7 @@ import EstudoHero from "../ui/EstudoHero";
 import { alvoLeituraPdf, fmtEta } from "./biblioteca-utils";
 import FormPdf from "./FormPdf";
 import FormPdfLote from "./FormPdfLote";
+import SugestaoLoteModal from "./SugestaoLoteModal";
 import PdfRow from "./PdfRow";
 import LeitorPdf from "./LeitorPdf";
 
@@ -83,6 +84,7 @@ export default function BibliotecaTab({
 
   const [formAberto, setFormAberto] = useState(false);
   const [formLoteAberto, setFormLoteAberto] = useState(false);
+  const [sugestaoLoteAberta, setSugestaoLoteAberta] = useState(false);
   const [editando, setEditando] = useState<PdfEstudo | null>(null);
   const [lendo, setLendo] = useState<PdfEstudo | null>(null);
   const [blobLeitura, setBlobLeitura] = useState<Blob | null>(null);
@@ -167,6 +169,24 @@ export default function BibliotecaTab({
       return novo;
     });
     onChange([...registros, ...pdfs]);
+  };
+
+  // sugestão de páginas por IA em lote (SugestaoLoteModal): já vem revisado/confirmado pelo
+  // usuário — só aplica os intervalos em cima dos PDFs existentes, um único onChange (mesmo
+  // motivo do salvarPdfsEmLote acima: nunca um onChange por item)
+  const aplicarSugestoesEmLote = (patches: { id: string; intervalos: TopicoPaginas[] }[]) => {
+    if (patches.length === 0) return;
+    onChange(
+      pdfs.map((p) => {
+        const patch = patches.find((x) => x.id === p.id);
+        if (!patch) return p;
+        return {
+          ...p,
+          intervalosPaginas: [...(p.intervalosPaginas ?? []), ...patch.intervalos],
+          atualizadoEm: new Date().toISOString(),
+        };
+      })
+    );
   };
 
   // anexar/reanexar arquivo numa entrada já existente (ex.: cadastrada de outro dispositivo, sem
@@ -288,7 +308,7 @@ export default function BibliotecaTab({
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <button
               type="button"
-              onClick={() => { setEditando(null); setPresetNovoPdf(null); setFormAberto((v) => !v); setFormLoteAberto(false); }}
+              onClick={() => { setEditando(null); setPresetNovoPdf(null); setFormAberto((v) => !v); setFormLoteAberto(false); setSugestaoLoteAberta(false); }}
               className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
             >
               {formAberto && !editando ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
@@ -296,13 +316,24 @@ export default function BibliotecaTab({
             </button>
             <button
               type="button"
-              onClick={() => { setEditando(null); setFormAberto(false); setFormLoteAberto((v) => !v); }}
+              onClick={() => { setEditando(null); setFormAberto(false); setFormLoteAberto((v) => !v); setSugestaoLoteAberta(false); }}
               className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
               title="Anexar vários PDFs de uma vez e linkar por tópico pelo nome do arquivo"
             >
               {formLoteAberto ? <X className="h-3.5 w-3.5" /> : <FileStack className="h-3.5 w-3.5" />}
               {formLoteAberto ? "Fechar" : "Vários PDFs"}
             </button>
+            {pdfs.length > 0 && (
+              <button
+                type="button"
+                onClick={() => { setEditando(null); setFormAberto(false); setFormLoteAberto(false); setSugestaoLoteAberta((v) => !v); }}
+                className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
+                title="Roda a sugestão de páginas por IA em todos os PDFs que ainda não têm intervalo salvo, com revisão antes de aplicar"
+              >
+                {sugestaoLoteAberta ? <X className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+                {sugestaoLoteAberta ? "Fechar" : "Sugerir páginas (IA)"}
+              </button>
+            )}
           </div>
         </div>
         {pdfs.length > 0 && (
@@ -335,6 +366,15 @@ export default function BibliotecaTab({
           materiasAtivas={materiasAtivas}
           onSalvarLote={salvarPdfsEmLote}
           onFechar={() => setFormLoteAberto(false)}
+        />
+      )}
+
+      {sugestaoLoteAberta && (
+        <SugestaoLoteModal
+          pdfs={pdfs}
+          materiasAtivas={materiasAtivas}
+          onAplicar={aplicarSugestoesEmLote}
+          onFechar={() => setSugestaoLoteAberta(false)}
         />
       )}
 
