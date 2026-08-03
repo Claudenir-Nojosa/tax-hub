@@ -15,6 +15,10 @@ import { fecharLacunasIntervalos } from "./biblioteca-utils";
 interface Props {
   pdfs: PdfEstudo[];
   materiasAtivas: (MateriaDef | MateriaConcurso)[];
+  // quando informado, restringe a sugestão em lote aos PDFs dessa matéria só — mesmo fluxo,
+  // mesmo componente, só muda o filtro inicial (botão "Sugerir com IA" no cabeçalho de cada
+  // matéria na Biblioteca, ao lado do "Sugerir páginas (IA)" geral que continua cobrindo tudo)
+  materiaFiltro?: string;
   onAplicar: (patches: { id: string; intervalos: TopicoPaginas[] }[]) => void;
   onFechar: () => void;
 }
@@ -32,11 +36,14 @@ interface LinhaRevisao {
 
 type StatusPdf = "processando" | "feito" | "erro";
 
-export default function SugestaoLoteModal({ pdfs, onAplicar, onFechar }: Props) {
+export default function SugestaoLoteModal({ pdfs, materiaFiltro, onAplicar, onFechar }: Props) {
   // só entram PDFs com pelo menos 1 tópico marcado que AINDA não tem intervalo salvo — não
-  // reprocessa (nem arrisca sobrescrever) o que já foi revisado e confirmado antes
+  // reprocessa (nem arrisca sobrescrever) o que já foi revisado e confirmado antes. Com
+  // materiaFiltro, restringe ANTES disso aos PDFs daquela matéria só.
   const [alvos] = useState(() =>
-    pdfs.filter((p) => (p.topicos ?? []).some((t) => !p.intervalosPaginas?.some((ip) => ip.topico === t)))
+    pdfs
+      .filter((p) => !materiaFiltro || p.materia === materiaFiltro)
+      .filter((p) => (p.topicos ?? []).some((t) => !p.intervalosPaginas?.some((ip) => ip.topico === t)))
   );
 
   const [fase, setFase] = useState<"resumo" | "processando" | "revisao">("resumo");
@@ -149,7 +156,8 @@ export default function SugestaoLoteModal({ pdfs, onAplicar, onFechar }: Props) 
     <div className="bg-card rounded-xl border border-border p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-          <Sparkles className="h-4 w-4 text-primary" /> Sugerir páginas para todos os PDFs
+          <Sparkles className="h-4 w-4 text-primary" />
+          {materiaFiltro ? `Sugerir páginas — ${materiaFiltro}` : "Sugerir páginas para todos os PDFs"}
         </h3>
         <button
           type="button"
@@ -163,7 +171,9 @@ export default function SugestaoLoteModal({ pdfs, onAplicar, onFechar }: Props) 
       {fase === "resumo" && (
         alvos.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            Todos os PDFs com tópico marcado já têm intervalo de páginas salvo — nada pra sugerir.
+            {materiaFiltro
+              ? `Todos os PDFs de ${materiaFiltro} com tópico marcado já têm intervalo de páginas salvo — nada pra sugerir.`
+              : "Todos os PDFs com tópico marcado já têm intervalo de páginas salvo — nada pra sugerir."}
           </p>
         ) : (
           <>

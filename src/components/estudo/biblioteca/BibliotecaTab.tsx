@@ -53,6 +53,10 @@ function agruparPorTopico(
   }).map(([topico, itens]) => ({ topico, itens }));
 }
 
+// sentinela do escopo "todas as matérias" da sugestão em lote — precisa ser truthy (uma matéria
+// de verdade nunca se chama isso) pra diferenciar de null (modal fechada) nos checks `&&`
+const ESCOPO_TODAS = "__todas__";
+
 interface Props {
   pdfs: PdfEstudo[];
   calendario: Record<string, AtividadeCalendario[]>;
@@ -84,7 +88,9 @@ export default function BibliotecaTab({
 
   const [formAberto, setFormAberto] = useState(false);
   const [formLoteAberto, setFormLoteAberto] = useState(false);
-  const [sugestaoLoteAberta, setSugestaoLoteAberta] = useState(false);
+  // escopo da sugestão em lote: null = fechada, ESCOPO_TODAS = todas as matérias (botão do
+  // cabeçalho), ou o nome de uma matéria (botão "Sugerir com IA" no cabeçalho daquela seção)
+  const [sugestaoLoteEscopo, setSugestaoLoteEscopo] = useState<string | null>(null);
   const [editando, setEditando] = useState<PdfEstudo | null>(null);
   const [lendo, setLendo] = useState<PdfEstudo | null>(null);
   const [blobLeitura, setBlobLeitura] = useState<Blob | null>(null);
@@ -179,6 +185,16 @@ export default function BibliotecaTab({
   // antiga, não duplicar.
   const aplicarSugestoesEmLote = (patches: { id: string; intervalos: TopicoPaginas[] }[]) => {
     if (patches.length === 0) return;
+    // expande a(s) matéria(s) afetadas — sem isso, aplicar sugestão numa matéria colapsada some
+    // com o resultado da vista até o usuário abrir a seção manualmente
+    setExpandidos((prev) => {
+      const novo = { ...prev };
+      for (const patch of patches) {
+        const materia = pdfs.find((p) => p.id === patch.id)?.materia;
+        if (materia) novo[materia] = true;
+      }
+      return novo;
+    });
     onChange(
       pdfs.map((p) => {
         const patch = patches.find((x) => x.id === p.id);
@@ -314,7 +330,7 @@ export default function BibliotecaTab({
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <button
               type="button"
-              onClick={() => { setEditando(null); setPresetNovoPdf(null); setFormAberto((v) => !v); setFormLoteAberto(false); setSugestaoLoteAberta(false); }}
+              onClick={() => { setEditando(null); setPresetNovoPdf(null); setFormAberto((v) => !v); setFormLoteAberto(false); setSugestaoLoteEscopo(null); }}
               className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
             >
               {formAberto && !editando ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
@@ -322,7 +338,7 @@ export default function BibliotecaTab({
             </button>
             <button
               type="button"
-              onClick={() => { setEditando(null); setFormAberto(false); setFormLoteAberto((v) => !v); setSugestaoLoteAberta(false); }}
+              onClick={() => { setEditando(null); setFormAberto(false); setFormLoteAberto((v) => !v); setSugestaoLoteEscopo(null); }}
               className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
               title="Anexar vários PDFs de uma vez e linkar por tópico pelo nome do arquivo"
             >
@@ -332,12 +348,12 @@ export default function BibliotecaTab({
             {pdfs.length > 0 && (
               <button
                 type="button"
-                onClick={() => { setEditando(null); setFormAberto(false); setFormLoteAberto(false); setSugestaoLoteAberta((v) => !v); }}
+                onClick={() => { setEditando(null); setFormAberto(false); setFormLoteAberto(false); setSugestaoLoteEscopo((v) => (v === ESCOPO_TODAS ? null : ESCOPO_TODAS)); }}
                 className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
                 title="Roda a sugestão de páginas por IA em todos os PDFs que ainda não têm intervalo salvo, com revisão antes de aplicar"
               >
-                {sugestaoLoteAberta ? <X className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-                {sugestaoLoteAberta ? "Fechar" : "Sugerir páginas (IA)"}
+                {sugestaoLoteEscopo === ESCOPO_TODAS ? <X className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+                {sugestaoLoteEscopo === ESCOPO_TODAS ? "Fechar" : "Sugerir páginas (IA)"}
               </button>
             )}
           </div>
@@ -375,12 +391,13 @@ export default function BibliotecaTab({
         />
       )}
 
-      {sugestaoLoteAberta && (
+      {sugestaoLoteEscopo && (
         <SugestaoLoteModal
           pdfs={pdfs}
           materiasAtivas={materiasAtivas}
+          materiaFiltro={sugestaoLoteEscopo === ESCOPO_TODAS ? undefined : sugestaoLoteEscopo}
           onAplicar={aplicarSugestoesEmLote}
-          onFechar={() => setSugestaoLoteAberta(false)}
+          onFechar={() => setSugestaoLoteEscopo(null)}
         />
       )}
 
@@ -422,22 +439,32 @@ export default function BibliotecaTab({
 
           return (
             <div key={materia} className="bg-card rounded-xl border border-border overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setExpandidos((prev) => ({ ...prev, [materia]: !aberto }))}
-                className="w-full flex items-center gap-2 px-4 py-2.5 border-b border-border dark:border-border bg-muted/50 hover:bg-muted dark:hover:bg-accent transition-colors text-left"
-              >
-                {aberto ? (
-                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                ) : (
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                )}
-                <span className={`w-2.5 h-2.5 rounded-full ${cor.dot} flex-shrink-0`} />
-                <span className="text-sm font-semibold text-foreground dark:text-foreground flex-1">{materia}</span>
-                <span className="text-[11px] text-muted-foreground flex-shrink-0">
-                  {lista.length} PDF{lista.length !== 1 ? "s" : ""} · {perc}% lido
-                </span>
-              </button>
+              <div className="w-full flex items-center gap-1 pl-4 pr-2 py-2 border-b border-border dark:border-border bg-muted/50">
+                <button
+                  type="button"
+                  onClick={() => setExpandidos((prev) => ({ ...prev, [materia]: !aberto }))}
+                  className="flex-1 min-w-0 flex items-center gap-2 py-0.5 text-left"
+                >
+                  {aberto ? (
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  )}
+                  <span className={`w-2.5 h-2.5 rounded-full ${cor.dot} flex-shrink-0`} />
+                  <span className="text-sm font-semibold text-foreground dark:text-foreground truncate">{materia}</span>
+                  <span className="text-[11px] text-muted-foreground flex-shrink-0">
+                    {lista.length} PDF{lista.length !== 1 ? "s" : ""} · {perc}% lido
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEditando(null); setFormAberto(false); setFormLoteAberto(false); setSugestaoLoteEscopo((v) => (v === materia ? null : materia)); }}
+                  title={`Sugerir páginas por IA só nos PDFs de ${materia}`}
+                  className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors flex-shrink-0"
+                >
+                  {sugestaoLoteEscopo === materia ? <X className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+                </button>
+              </div>
               {aberto && (
                 <div className="divide-y divide-border dark:divide-border">
                   {porTopico.map(({ topico, itens }) => (
