@@ -262,17 +262,29 @@ export interface TopicoPaginas {
   paginaFim: number;
 }
 
-// divisão manual do PDF em capítulos (só nome + página de início — o fim é sempre derivado: a
-// página anterior ao início do próximo capítulo, e o do último vai até paginaConteudoFim/
-// totalPaginas). TODOS os capítulos de um PdfEstudo pertencem ao MESMO tópico — o(s) de
-// `topicos` — não tem campo de tópico por capítulo porque, na prática, um PDF cobre um tópico só
-// (mesma convenção de `topicos?.[0]` já usada em LeitorPdf/BibliotecaTab). A Trilha usa isso pra
-// sequenciar a leitura capítulo a capítulo (ver proximoBlocoCapitulos em trilha-dinamica.ts), em
-// vez de sempre oferecer o tópico inteiro de uma vez — capítulos curtos são agrupados até renderem
-// uma atividade de duração razoável.
+// divisão manual do PDF em capítulos. `paginaFim` é OPCIONAL — cadastrado pelo FormPdf.tsx (fluxo
+// rápido, só início) ele fica ausente e é DERIVADO (a página anterior ao início do próximo
+// capítulo, o do último vai até paginaConteudoFim/totalPaginas); cadastrado/editado de dentro do
+// leitor (PainelCapitulos.tsx, com o PDF na tela — dá pra "usar a página atual" tanto pro início
+// quanto pro fim) normalmente vem explícito. TODOS os capítulos de um PdfEstudo pertencem ao
+// MESMO tópico — o(s) de `topicos` — não tem campo de tópico por capítulo porque, na prática, um
+// PDF cobre um tópico só (mesma convenção de `topicos?.[0]` já usada em LeitorPdf/BibliotecaTab).
+// Um capítulo pode ter `subcapitulos` (mesmo shape, um nível só — não recursivo); quando tem, a
+// Trilha sequencia pelos SUBcapítulos (mais granular), não pelo capítulo inteiro de uma vez. A
+// Trilha usa tudo isso pra ler capítulo a capítulo (ver resolverCapitulos/proximoBlocoCapitulos em
+// trilha-dinamica.ts), em vez de sempre oferecer o tópico inteiro — capítulos/subcapítulos curtos
+// são agrupados até renderem uma atividade de duração razoável.
+export interface SubcapituloPdf {
+  nome: string;
+  paginaInicio: number;
+  paginaFim?: number;
+}
+
 export interface CapituloPdf {
   nome: string;
   paginaInicio: number;
+  paginaFim?: number;
+  subcapitulos?: SubcapituloPdf[];
 }
 
 export interface PdfEstudo {

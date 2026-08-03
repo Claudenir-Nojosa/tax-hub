@@ -29,23 +29,31 @@ arquivo se as regras mudarem.
    salvar). Sem mapeamento pro tópico, "Ler PDF" cai no comportamento antigo (abre onde parou,
    sem aviso).
    - **Capítulos manuais (2026-08-03, substitui a sugestão por IA na prática — o usuário achou a
-     versão índice-por-tópico ruim)**: `PdfEstudo.capitulos?: CapituloPdf[]` — lista digitada à
-     mão em `FormPdf.tsx` (só nome + página de início; o fim é sempre calculado: a página anterior
-     ao início do próximo capítulo, e o do último vai até `paginaConteudoFim`/`totalPaginas`).
-     TODOS os capítulos de um PDF pertencem ao MESMO tópico (o de `topicos`) — sem campo de tópico
-     por capítulo, porque um PDF cobre um tópico só, na prática (mesma convenção de `topicos?.[0]`
-     já usada no resto da Biblioteca). Quando o PDF resolvido pro tópico atual tem `capitulos`,
-     `resolverPaginaBloco` (`trilha-dinamica.ts`) usa `proximoBlocoCapitulos` em vez do
-     `intervalosPaginas` inteiro: acha o primeiro capítulo ainda não lido (`paginaAtual` do PDF,
-     que só avança) e agrupa os PRÓXIMOS capítulos consecutivos até estimar
-     `MINUTOS_ALVO_ATIVIDADE_CAPITULO` (30min) de leitura no ritmo de páginas/hora do usuário —
-     capítulos curtos (ex.: 2 páginas) somem sozinhos dentro do grupo, sem virar uma atividade
-     ridiculamente pequena na Trilha. O bloco ganha `capituloLabel` ("Capítulo 3 de 6: Crédito
-     Tributário" ou "Capítulos 4-5 de 6") — `CorpoBloco` (`TrilhaLinhas.tsx`) mostra isso no lugar
-     do intervalo de página cru. Sem estado de "capítulo concluído" separado: o mesmo bookmark
-     `paginaAtual` decide tudo, exatamente como já decidia "PDF lido" antes disso existir. PDFs
-     sem `capitulos` continuam no comportamento de `intervalosPaginas` de sempre — nada migrado
-     automaticamente, os dois convivem.
+     versão índice-por-tópico ruim)**: `PdfEstudo.capitulos?: CapituloPdf[]` — nome + página de
+     início + `paginaFim?` OPCIONAL + `subcapitulos?` (mesmo shape, um nível só). Dois jeitos de
+     cadastrar: rápido em `FormPdf.tsx` (só início — o fim fica ausente, DERIVADO depois: a página
+     anterior ao início do próximo capítulo, o do último vai até `paginaConteudoFim`/`totalPaginas`)
+     ou, de dentro do leitor (`PainelCapitulos.tsx`, botão "Capítulos" na barra do `LeitorPdf.tsx`,
+     dockado ao lado do PDF como o painel de Questões), com início E FIM explícitos — cada campo
+     tem um botão "usar página atual" pra preencher com a página que está vendo, sem digitar; avisa
+     (sem travar) quando o fim declarado passa de `paginaConteudoFim`. TODOS os capítulos de um PDF
+     pertencem ao MESMO tópico (o de `topicos`) — sem campo de tópico por capítulo, porque um PDF
+     cobre um tópico só, na prática (mesma convenção de `topicos?.[0]` já usada no resto da
+     Biblioteca). `resolverCapitulos` (`trilha-dinamica.ts`) primeiro ACHATA capítulos+subcapítulos
+     numa lista única, na ordem de leitura (um capítulo COM subcapítulos vira um item por
+     subcapítulo — mais granular, é isso que a Trilha sequencia; sem subcapítulos, o capítulo
+     inteiro é o item), depois resolve o `paginaFim` de cada item (o declarado, ou derivado do
+     próximo item quando ausente). Quando o PDF resolvido pro tópico atual tem `capitulos`,
+     `resolverPaginaBloco` usa `proximoBlocoCapitulos` em vez do `intervalosPaginas` inteiro: acha
+     o primeiro item ainda não lido (`paginaAtual` do PDF, que só avança) e agrupa os PRÓXIMOS itens
+     consecutivos até estimar `MINUTOS_ALVO_ATIVIDADE_CAPITULO` (30min) de leitura no ritmo de
+     páginas/hora do usuário — itens curtos (ex.: 2 páginas) somem sozinhos dentro do grupo, sem
+     virar uma atividade ridiculamente pequena na Trilha. O bloco ganha `capituloLabel` ("Capítulo 3
+     de 6: Crédito Tributário" ou "Capítulos 4-5 de 6") — `CorpoBloco` (`TrilhaLinhas.tsx`) mostra
+     isso no lugar do intervalo de página cru. Sem estado de "capítulo concluído" separado: o mesmo
+     bookmark `paginaAtual` decide tudo, exatamente como já decidia "PDF lido" antes disso existir.
+     PDFs sem `capitulos` continuam no comportamento de `intervalosPaginas` de sempre — nada
+     migrado automaticamente, os dois convivem.
 3. **Questões escalonadas A-D**: cada tópico tem 4 grupos de questões — os cadernos A/B/C/D do
    Edital (grupo "feito" = acertos+erros > 0). Concluir o tópico k libera: grupo **A do k-1**,
    **B do k-2**, **C do k-3**, **D do k-4**. Quando a teoria da matéria acaba, a "cauda" (grupos

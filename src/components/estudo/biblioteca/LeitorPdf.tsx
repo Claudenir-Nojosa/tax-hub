@@ -3,14 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
-import { AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, Clock, ClipboardList, Flag, ListChecks, Pause, Play } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, Clock, ClipboardList, Flag, Layers, ListChecks, Pause, Play } from "lucide-react";
 import {
   gerarQuestoesGrupos, topicoKey,
-  type Alternativa, type AtividadeTipo, type Carta, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
+  type Alternativa, type AtividadeTipo, type Carta, type CapituloPdf, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
 } from "@/lib/estudo-data";
 import { fmtCrono, novaCartaManual, sincronizarCadernoComQuestoes } from "./biblioteca-utils";
 import InputPaginaLeitor from "./InputPaginaLeitor";
 import NovoCartaoForm, { TIPO_CARTAO_CONFIG } from "./NovoCartaoForm";
+import PainelCapitulos from "./PainelCapitulos";
 import PainelQuestoes from "./PainelQuestoes";
 import type { VisorPdfHandle } from "./VisorPdf";
 
@@ -102,6 +103,9 @@ export default function LeitorPdf({
 
   // painel de questões escalonadas (grupos A-D) do tópico do PDF — geração, marcação e "refazer"
   const [painelQuestoesAberto, setPainelQuestoesAberto] = useState(false);
+  // painel de capítulos (PainelCapitulos.tsx) — os dois painéis dockam no mesmo lugar (ao lado do
+  // PDF em telas grandes), então são mutuamente exclusivos: abrir um fecha o outro
+  const [capitulosAberto, setCapitulosAberto] = useState(false);
   const segundosQuestoesRef = useRef(0);
   const [segundosQuestoes, setSegundosQuestoes] = useState(0);
 
@@ -306,10 +310,23 @@ export default function LeitorPdf({
           </button>
         )}
 
+        {/* capítulos (opcional, com subcapítulos) — a Trilha sequencia a leitura por eles quando
+            definidos; dockado no mesmo lugar do painel de Questões, então fecha um ao abrir o outro */}
+        <button
+          type="button"
+          onClick={() => { setCapitulosAberto((v) => !v); setPainelQuestoesAberto(false); }}
+          title="Capítulos do PDF — divida a leitura pra Trilha sequenciar, clique de novo pra fechar"
+          className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors flex-shrink-0 ${
+            (pdf.capitulos?.length ?? 0) > 0 ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-accent"
+          }`}
+        >
+          <Layers className="h-4 w-4" />
+        </button>
+
         {/* questões escalonadas do tópico (grupos A-D) — botões de criar cartão continuam ao lado */}
         <button
           type="button"
-          onClick={() => setPainelQuestoesAberto((v) => !v)}
+          onClick={() => { setPainelQuestoesAberto((v) => !v); setCapitulosAberto(false); }}
           title="Questões do tópico (grupos A-D) — clique de novo pra fechar"
           className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors flex-shrink-0 ${
             pdf.questoes ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -414,6 +431,17 @@ export default function LeitorPdf({
             onMarcarAlternativa={marcarAlternativa}
             onRefazer={refazerQuestoes}
             onFechar={() => setPainelQuestoesAberto(false)}
+          />
+        )}
+
+        {capitulosAberto && (
+          <PainelCapitulos
+            capitulos={pdf.capitulos ?? []}
+            paginaVisivel={paginaVisivel}
+            totalPaginas={pdf.totalPaginas}
+            paginaConteudoFim={pdf.paginaConteudoFim}
+            onAtualizar={(capitulos: CapituloPdf[]) => onAtualizarPdf({ capitulos: capitulos.length > 0 ? capitulos : undefined })}
+            onFechar={() => setCapitulosAberto(false)}
           />
         )}
       </div>

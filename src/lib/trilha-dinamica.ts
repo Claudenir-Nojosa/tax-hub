@@ -437,25 +437,48 @@ export function minutosEstudoNaSemana(
   return total;
 }
 
-export interface CapituloResolvido extends CapituloPdf {
+export interface CapituloResolvido {
+  nome: string; // já combinado com o nome do capítulo-pai quando é um subcapítulo ("Cap — Sub")
+  paginaInicio: number;
   paginaFim: number;
   lido: boolean;
 }
 
-// dá o paginaFim de cada capítulo (a página anterior ao início do próximo; o último vai até o fim
-// do conteúdo) e se já foi lido — sem estado de "capítulo concluído" separado: o bookmark
-// `paginaAtual` (que só avança, nunca recua — ver LeitorPdf) já basta, do mesmo jeito que decide
-// se o PDF inteiro foi lido.
+// achata capítulos + subcapítulos numa lista única, na ordem de leitura: um capítulo COM
+// subcapítulos vira um item por subcapítulo (mais granular — é isso que a Trilha vai sequenciar);
+// um capítulo SEM subcapítulos entra ele mesmo. Cada item guarda o paginaFim DECLARADO (se o
+// usuário informou, ver PainelCapitulos.tsx/FormPdf.tsx) — undefined quando só o início foi
+// preenchido, pra resolverCapitulos derivar depois.
+function achatarCapitulos(capitulos: CapituloPdf[]): { nome: string; paginaInicio: number; paginaFimDeclarado?: number }[] {
+  const achatados: { nome: string; paginaInicio: number; paginaFimDeclarado?: number }[] = [];
+  const ordenados = [...capitulos].sort((a, b) => a.paginaInicio - b.paginaInicio);
+  for (const cap of ordenados) {
+    if (cap.subcapitulos && cap.subcapitulos.length > 0) {
+      const subs = [...cap.subcapitulos].sort((a, b) => a.paginaInicio - b.paginaInicio);
+      for (const sub of subs) {
+        achatados.push({ nome: `${cap.nome} — ${sub.nome}`, paginaInicio: sub.paginaInicio, paginaFimDeclarado: sub.paginaFim });
+      }
+    } else {
+      achatados.push({ nome: cap.nome, paginaInicio: cap.paginaInicio, paginaFimDeclarado: cap.paginaFim });
+    }
+  }
+  return achatados;
+}
+
+// dá o paginaFim de cada capítulo/subcapítulo (o declarado pelo usuário — ver achatarCapitulos —
+// ou, se ausente, a página anterior ao início do próximo item; o último vai até o fim do
+// conteúdo) e se já foi lido — sem estado de "concluído" separado: o bookmark `paginaAtual` (que
+// só avança, nunca recua — ver LeitorPdf) já basta, do mesmo jeito que decide se o PDF inteiro
+// foi lido.
 export function resolverCapitulos(
   pdf: Pick<PdfEstudo, "capitulos" | "paginaAtual" | "totalPaginas" | "paginaConteudoFim">
 ): CapituloResolvido[] {
-  const capitulos = pdf.capitulos ?? [];
-  if (capitulos.length === 0) return [];
-  const ordenados = [...capitulos].sort((a, b) => a.paginaInicio - b.paginaInicio);
+  const achatados = achatarCapitulos(pdf.capitulos ?? []);
+  if (achatados.length === 0) return [];
   const fimDocumento = pdf.paginaConteudoFim ?? pdf.totalPaginas;
-  return ordenados.map((c, i) => {
-    const paginaFim = i === ordenados.length - 1 ? fimDocumento : ordenados[i + 1].paginaInicio - 1;
-    return { ...c, paginaFim, lido: pdf.paginaAtual >= paginaFim };
+  return achatados.map((c, i) => {
+    const paginaFim = c.paginaFimDeclarado ?? (i === achatados.length - 1 ? fimDocumento : achatados[i + 1].paginaInicio - 1);
+    return { nome: c.nome, paginaInicio: c.paginaInicio, paginaFim, lido: pdf.paginaAtual >= paginaFim };
   });
 }
 
