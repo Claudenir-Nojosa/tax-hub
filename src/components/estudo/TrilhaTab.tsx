@@ -12,13 +12,14 @@ import {
   type MateriaDef, type PdfEstudo, type TopicoState, type TrilhaDinamicaState,
 } from "@/lib/estudo-data";
 import {
-  computarMetaSemana, criarTrilhaDinamica,
-  type MetaSemana, type QuestaoLiberada, type ReforcoGrupo, type RevisaoLinkPendente,
+  computarMetaSemana, criarTrilhaDinamica, estimativaConclusaoTrilha,
+  type EstimativaConclusao, type MetaSemana, type QuestaoLiberada, type ReforcoGrupo,
+  type ReforcoImediatoPendente, type RevisaoLinkPendente,
 } from "@/lib/trilha-dinamica";
 import { fmtHoras, gerarMensagemGustavo } from "./trilha/trilha-ui";
 import {
-  CardMateria, CorpoBloco, CorpoCartas, CorpoQuestoes, CorpoReforcos, CorpoRevisao30,
-  CorpoRevisoesLink, type AberturaPdfSolicitada,
+  CardMateria, CorpoBloco, CorpoCartas, CorpoQuestoes, CorpoReforcos, CorpoReforcosImediatos,
+  CorpoRevisao30, CorpoRevisoesLink, type AberturaPdfSolicitada,
 } from "./trilha/TrilhaLinhas";
 import ProgressRing from "./ui/ProgressRing";
 import EstudoHero from "./ui/EstudoHero";
@@ -53,6 +54,41 @@ interface Props {
 function fmtDataCurta(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
+
+function fmtDataLonga(dateKey: string): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+}
+
+// card de estimativa de conclusão de TODA a trilha (não só a semana) — sem dado suficiente em
+// algum dos dois eixos (leitura, questões), mostra "ainda calculando" em vez de um número inventado
+function CardEstimativa({ estimativa }: { estimativa: EstimativaConclusao }) {
+  const aindaCalculando = estimativa.semanasRestantes === null || estimativa.dataPrevista === null;
+  return (
+    <div className="bg-card rounded-2xl border border-border p-4 sm:p-5">
+      <div className="flex items-center gap-2 mb-2">
+        <CalendarClock className="h-4 w-4 text-indigo-500 flex-shrink-0" />
+        <span className="text-sm font-bold text-foreground dark:text-foreground">Estimativa de conclusão da trilha</span>
+      </div>
+      {aindaCalculando ? (
+        <p className="text-xs text-muted-foreground">
+          Ainda calculando — registre mais páginas lidas (Timer/leitor de PDF) e tarefas de questões concluídas pra essa previsão aparecer.
+        </p>
+      ) : (
+        <>
+          <p className="text-sm text-foreground">
+            No ritmo atual, previsão de concluir toda a trilha em{" "}
+            <strong>{fmtDataLonga(estimativa.dataPrevista!)}</strong> (~{Math.max(1, Math.ceil(estimativa.semanasRestantes!))} semana{Math.max(1, Math.ceil(estimativa.semanasRestantes!)) !== 1 ? "s" : ""}).
+          </p>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+            <span>{estimativa.paginasRestantes} pág{estimativa.paginasRestantes !== 1 ? "s" : ""}. de teoria restantes · {fmtHoras(Math.round(estimativa.horasLeituraRestante! * 60))} de leitura</span>
+            <span>{estimativa.tarefasQuestoesRestantes} tarefa{estimativa.tarefasQuestoesRestantes !== 1 ? "s" : ""} de questões restantes · {fmtHoras(Math.round(estimativa.horasQuestoesRestante! * 60))}</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 // bolha de fala do Gustavo — mesmo padrão visual da que já existe no Dashboard, aqui ancorada no
@@ -98,6 +134,13 @@ export default function TrilhaTab({
     if (!trilha?.ativa) return null;
     return computarMetaSemana({ hoje, trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs });
   }, [trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs, hoje]);
+
+  // estimativa sobre a trilha INTEIRA (não só a semana) — independente de `meta`, calculada
+  // sempre que a trilha está ativa, pra alimentar o card no fim da página
+  const estimativa: EstimativaConclusao | null = useMemo(() => {
+    if (!trilha?.ativa) return null;
+    return estimativaConclusaoTrilha({ hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs });
+  }, [trilha, hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs]);
 
   // registra a DATA de conclusão de matérias recém-100% (agenda a revisão de 30 questões pra
   // DIAS_REVISAO_MATERIA dias depois) — sem carry-over de semana: cada MetaSemana é recalculada
@@ -151,6 +194,18 @@ export default function TrilhaTab({
         ...estado,
         revisoesLink: { ...estado.revisoesLink, [r.checkpoint]: { acertos, erros, atualizadoEm: dateKeyLocal() } },
       },
+    });
+  };
+
+  // registro do reforço rápido (link curto pós-estudo) — grava reforcoImediatoFeito, o que faz o
+  // tópico sumir de analisarReforcosImediatos (é "faça uma vez", sem cooldown/reaparecimento)
+  const registrarReforcoImediato = (r: ReforcoImediatoPendente, acertos: number, erros: number) => {
+    const key = topicoKey(r.materia, r.topico);
+    const estado = topicos[key];
+    if (!estado) return;
+    onUpdateTopicos({
+      ...topicos,
+      [key]: { ...estado, reforcoImediatoFeito: { acertos, erros, atualizadoEm: dateKeyLocal() } },
     });
   };
 
@@ -331,9 +386,7 @@ export default function TrilhaTab({
               className={primeiraSecao === "reforcoImediato" ? anelDestaque : undefined}
               acao={primeiraSecao === "reforcoImediato" ? <BadgeComeceAqui /> : undefined}
             >
-              {/* LinhaReforcoImediato chega na Fase 6, junto com o campo linkReforcoImediato na
-                  aba Questões — a seção já fica pronta pra receber, só não popula nada ainda. */}
-              <div className="text-xs text-muted-foreground">Cadastre um link de reforço curto (aba Questões) pra ele aparecer aqui.</div>
+              <CorpoReforcosImediatos reforcos={meta.reforcosImediatos} materiasAtivas={materiasAtivas} onRegistrar={registrarReforcoImediato} />
             </SectionCard>
           )}
 
@@ -373,6 +426,8 @@ export default function TrilhaTab({
           ))}
         </div>
       </div>
+
+      {estimativa && <CardEstimativa estimativa={estimativa} />}
     </div>
   );
 }

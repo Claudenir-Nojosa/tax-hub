@@ -1,5 +1,5 @@
 import {
-  dateKeyLocal, topicoKey, calcularPerc,
+  calcularPagPorHora, dateKeyLocal, topicoKey, calcularPerc,
   type AtividadeCalendario, type ChecklistRevisaoLink, type EstudoConfigCiclo, type Grupo,
   type PdfEstudo, type TopicoState, type TrilhaDinamicaState,
 } from "./estudo-data";
@@ -533,6 +533,109 @@ export function computarMetaSemana(params: {
     revisarCartas: ehDomingoCartas && !cartasFeitaHoje,
     proximoDomingoCartas: proximoDom,
     analises,
+  };
+}
+
+// ─── Estimativa de conclusão da trilha inteira ──────────────────────────────
+
+// última página que conta como "conteúdo" do PDF — mesma regra de alvoLeituraPdf em
+// biblioteca-utils.ts, reescrita aqui pra não puxar um import de componente pra dentro do motor
+function alvoLeituraPdf(pdf: Pick<PdfEstudo, "totalPaginas" | "paginaConteudoFim">): number {
+  return pdf.paginaConteudoFim ?? pdf.totalPaginas;
+}
+
+export interface EstimativaConclusao {
+  paginasRestantes: number;
+  horasLeituraRestante: number | null; // null = ainda sem páginas/hora suficiente pra estimar
+  tarefasQuestoesRestantes: number;
+  horasQuestoesRestante: number | null; // null = ainda sem tarefa de questões concluída pra tirar a média
+  semanasRestantes: number | null; // null = falta dado em algum dos dois eixos, ou sem horas/semana configuradas
+  dataPrevista: string | null; // dateKey
+}
+
+// Estimativa de quando a trilha INTEIRA termina (não só a semana corrente) — soma páginas de
+// teoria que faltam ler em todos os PDFs das matérias ativas (dividido pela velocidade real de
+// leitura, calcularPagPorHora) com o tempo estimado das tarefas de questões que ainda faltam
+// (grupos A-D, checkpoints 7/30d do link e reforços imediatos — só os que têm link cadastrado;
+// revisão de 30 questões de matéria concluída fica de fora de propósito, é rara e só acontece uma
+// vez por matéria), tudo dividido pelo ritmo semanal configurado no Ciclo. Sem dado suficiente em
+// algum dos dois eixos = "ainda calculando" em vez de inventar um número (mesmo espírito do
+// fmtEta em biblioteca-utils.ts).
+export function estimativaConclusaoTrilha(params: {
+  hoje?: string;
+  materiasAtivas: MateriaLike[];
+  configCiclo: EstudoConfigCiclo;
+  topicos: Record<string, TopicoState>;
+  calendario: Record<string, AtividadeCalendario[]>;
+  pdfs: PdfEstudo[];
+}): EstimativaConclusao {
+  const { materiasAtivas, configCiclo, topicos, calendario, pdfs } = params;
+  const hoje = params.hoje ?? dateKeyLocal();
+  const ativas = materiasAtivas.filter((m) => configCiclo.materias[m.nome]?.incluir);
+  const nomesAtivos = new Set(ativas.map((m) => m.nome));
+
+  // leitura: páginas de teoria que faltam em TODOS os PDFs das matérias ativas
+  const paginasRestantes = pdfs
+    .filter((p) => nomesAtivos.has(p.materia))
+    .reduce((s, p) => s + Math.max(0, alvoLeituraPdf(p) - p.paginaAtual), 0);
+  const pagPorHora = calcularPagPorHora(calendario);
+  const horasLeituraRestante = pagPorHora !== null && pagPorHora > 0 ? paginasRestantes / pagPorHora : null;
+
+  // questões: minutos totais já gastos em sessões tipo "questoes" / total de tarefas concluídas
+  // (grupos A-D + checkpoints 7/30d + reforços imediatos, só contando quem tem link cadastrado
+  // pros dois últimos — sem link, aquele checkpoint nunca vira tarefa de verdade), aplicado às
+  // tarefas do mesmo tipo que ainda faltam
+  let tarefasConcluidas = 0;
+  let tarefasPendentes = 0;
+  for (const m of ativas) {
+    for (const topico of m.topicos) {
+      const estado = topicos[topicoKey(m.nome, topico)];
+      for (const grupo of GRUPOS_QUESTOES) {
+        if (grupoFeito(estado, grupo)) tarefasConcluidas++;
+        else tarefasPendentes++;
+      }
+      if (estado?.linkRevisao7d) {
+        if (estado.revisoesLink?.d7) tarefasConcluidas++;
+        else tarefasPendentes++;
+      }
+      if (estado?.linkRevisao30d) {
+        if (estado.revisoesLink?.d30) tarefasConcluidas++;
+        else tarefasPendentes++;
+      }
+      if (estado?.linkReforcoImediato) {
+        if (estado.reforcoImediatoFeito) tarefasConcluidas++;
+        else tarefasPendentes++;
+      }
+    }
+  }
+
+  const minutosQuestoesTotal = Object.values(calendario)
+    .flat()
+    .filter((a) => a.tipo === "questoes")
+    .reduce((s, a) => s + a.duracao, 0);
+  const mediaMinutosPorTarefa = tarefasConcluidas > 0 ? minutosQuestoesTotal / tarefasConcluidas : null;
+  const horasQuestoesRestante = mediaMinutosPorTarefa !== null ? (mediaMinutosPorTarefa * tarefasPendentes) / 60 : null;
+
+  const minutosSemana = Object.values(configCiclo.horasPorDia).reduce((s, v) => s + v, 0);
+  const semanasRestantes =
+    horasLeituraRestante !== null && horasQuestoesRestante !== null && minutosSemana > 0
+      ? (horasLeituraRestante + horasQuestoesRestante) / (minutosSemana / 60)
+      : null;
+
+  let dataPrevista: string | null = null;
+  if (semanasRestantes !== null) {
+    const d = parseDateKey(hoje);
+    d.setDate(d.getDate() + Math.ceil(semanasRestantes * 7));
+    dataPrevista = dateKeyLocal(d);
+  }
+
+  return {
+    paginasRestantes,
+    horasLeituraRestante,
+    tarefasQuestoesRestantes: tarefasPendentes,
+    horasQuestoesRestante,
+    semanasRestantes,
+    dataPrevista,
   };
 }
 

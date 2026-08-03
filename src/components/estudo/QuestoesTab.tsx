@@ -7,7 +7,7 @@ import {
 } from "@/lib/estudo-data";
 import { statusRevisaoLink, CHECKPOINTS_REVISAO_LINK, DIAS_REVISAO_MATERIA, type StatusRevisaoLink } from "@/lib/trilha-dinamica";
 import { resolverCorMateria } from "./trilha/trilha-ui";
-import { ChevronDown, ChevronRight, ExternalLink, Search, Link2, Trophy } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Search, Link2, Trophy, Zap } from "lucide-react";
 
 interface Props {
   topicos: Record<string, TopicoState>;
@@ -108,6 +108,12 @@ export default function QuestoesTab({ topicos, onUpdate, configCiclo, onUpdateCo
     onUpdate({ ...topicos, [key]: { ...estado, [campo]: link.trim() || undefined } });
   };
 
+  const updateLinkReforcoImediato = (materia: string, topico: string, link: string) => {
+    const key = topicoKey(materia, topico);
+    const estado = topicos[key] ?? defaultTopicoState();
+    onUpdate({ ...topicos, [key]: { ...estado, linkReforcoImediato: link.trim() || undefined } });
+  };
+
   const updateLinkMateria = (materia: string, link: string) => {
     const cfg = configCiclo.materias[materia] ?? { incluir: true, peso: 1 as const, prioridade: "Baixa" as const, divisao: "A" as const };
     onUpdateConfigCiclo({
@@ -144,9 +150,11 @@ export default function QuestoesTab({ topicos, onUpdate, configCiclo, onUpdateCo
         <span>
           Cadastre o link do caderno de questões de cada tópico (ex.: TecConcursos) — um pra
           revisão de {CHECKPOINTS_REVISAO_LINK[0].dias} dias e outro pra de {CHECKPOINTS_REVISAO_LINK[1].dias} dias, contados a
-          partir de quando os 4 grupos A-D dele ficam completos no Edital. Cada matéria também
-          tem um link próprio pra revisão de 30 questões, que libera {DIAS_REVISAO_MATERIA} dias
-          depois dela bater 100%. Clicando na atividade na Trilha, o link abre direto.
+          partir de quando os 4 grupos A-D dele ficam completos no Edital. Um terceiro link, curto
+          (até 10 questões), é o reforço rápido — aparece na Trilha assim que o tópico é marcado
+          como estudado, pra praticar na hora. Cada matéria também tem um link próprio pra revisão
+          de 30 questões, que libera {DIAS_REVISAO_MATERIA} dias depois dela bater 100%. Clicando
+          na atividade na Trilha, o link abre direto.
         </span>
       </div>
 
@@ -235,6 +243,19 @@ export default function QuestoesTab({ topicos, onUpdate, configCiclo, onUpdateCo
                               onChange={(v) => updateLinkTopico(m.nome, t, "d30", v)}
                               placeholder="Link da revisão de 30 dias"
                             />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span title="Reforço rápido — até 10 questões" className="w-6 flex-shrink-0 flex items-center justify-center">
+                              <Zap className="h-3 w-3 text-orange-500" />
+                            </span>
+                            <LinkInput
+                              value={estado?.linkReforcoImediato ?? ""}
+                              onChange={(v) => updateLinkReforcoImediato(m.nome, t, v)}
+                              placeholder="Link do reforço rápido (até 10 questões)"
+                            />
+                            {estado?.reforcoImediatoFeito && (
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 flex-shrink-0" title="Reforço rápido já feito">✓</span>
+                            )}
                           </div>
                         </div>
                       </div>

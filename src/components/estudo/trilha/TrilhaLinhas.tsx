@@ -7,7 +7,7 @@ import {
 } from "@/lib/estudo-data";
 import {
   type AnaliseMateria, type BlocoEstudoSemana, type QuestaoLiberada,
-  type ReforcoGrupo, type Revisao30, type RevisaoLinkPendente,
+  type ReforcoGrupo, type ReforcoImediatoPendente, type Revisao30, type RevisaoLinkPendente,
 } from "@/lib/trilha-dinamica";
 import { resolverCorMateria, fmtHoras } from "./trilha-ui";
 import ProgressRing from "../ui/ProgressRing";
@@ -124,6 +124,94 @@ export function CorpoQuestoes({
           <LinhaQuestao key={q.id} q={q} materiasAtivas={materiasAtivas} onRegistrar={onRegistrar} />
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Reforço rápido: link curto pós-estudo, uma vez por tópico ──────────────
+
+export function CorpoReforcosImediatos({
+  reforcos, materiasAtivas, onRegistrar,
+}: {
+  reforcos: ReforcoImediatoPendente[];
+  materiasAtivas: (MateriaDef | MateriaConcurso)[];
+  onRegistrar: (r: ReforcoImediatoPendente, acertos: number, erros: number) => void;
+}) {
+  return (
+    <div>
+      <div className="text-sm font-semibold text-foreground dark:text-foreground">
+        {reforcos.length} tópico{reforcos.length !== 1 ? "s" : ""} recém-estudado{reforcos.length !== 1 ? "s" : ""} com reforço pendente
+      </div>
+      <div className="text-[11px] text-muted-foreground mb-2">
+        Caderno curto (até 10 questões) pra praticar na hora — some assim que você registra o resultado.
+      </div>
+      <div className="space-y-1 max-h-64 overflow-y-auto pr-1 -mr-1">
+        {reforcos.map((r) => (
+          <LinhaReforcoImediato key={r.id} r={r} materiasAtivas={materiasAtivas} onRegistrar={onRegistrar} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LinhaReforcoImediato({
+  r, materiasAtivas, onRegistrar,
+}: {
+  r: ReforcoImediatoPendente;
+  materiasAtivas: (MateriaDef | MateriaConcurso)[];
+  onRegistrar: (r: ReforcoImediatoPendente, acertos: number, erros: number) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [acertos, setAcertos] = useState("");
+  const [erros, setErros] = useState("");
+  const cor = resolverCorMateria(r.materia, materiasAtivas);
+  const podeSalvar = acertos !== "" && erros !== "" && Number(acertos) + Number(erros) > 0;
+
+  const abrirEExpandir = () => {
+    window.open(r.link, "_blank", "noopener,noreferrer");
+    setAberto(true);
+  };
+
+  return (
+    <div className="rounded-lg hover:bg-accent dark:hover:bg-muted/40 px-2 py-1.5 -mx-2 transition-colors">
+      <div className="w-full flex items-center gap-2.5">
+        <button type="button" onClick={abrirEExpandir} title="Abrir questões" className="flex-1 min-w-0 flex items-center gap-2.5 text-left">
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
+          <div className="flex-1 min-w-0">
+            <span className="text-sm text-foreground">{r.materia}</span>
+            <span className="text-xs text-muted-foreground"> · tópico {r.ordemTopico}: </span>
+            <span className="text-xs text-muted-foreground" title={r.topico}>{r.topico.length > 50 ? r.topico.slice(0, 50) + "…" : r.topico}</span>
+          </div>
+          <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+        </button>
+        <button type="button" onClick={() => setAberto((v) => !v)} title="Registrar resultado" className="flex-shrink-0 p-1 -m-1">
+          <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${aberto ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+      {aberto && (
+        <div className="mt-2 flex items-center gap-2 pl-1 flex-wrap">
+          <a
+            href={r.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] text-primary hover:underline flex items-center gap-1 flex-shrink-0"
+          >
+            <ExternalLink className="h-3 w-3" /> Abrir questões
+          </a>
+          <label className="text-[11px] text-muted-foreground">Acertos</label>
+          <input type="number" min={0} value={acertos} onChange={(e) => setAcertos(e.target.value)} className="w-16 bg-muted border border-border rounded-md px-2 py-1 text-sm text-foreground dark:text-foreground outline-none focus:border-emerald-400" />
+          <label className="text-[11px] text-muted-foreground">Erros</label>
+          <input type="number" min={0} value={erros} onChange={(e) => setErros(e.target.value)} className="w-16 bg-muted border border-border rounded-md px-2 py-1 text-sm text-foreground dark:text-foreground outline-none focus:border-emerald-400" />
+          <button
+            type="button"
+            disabled={!podeSalvar}
+            onClick={() => onRegistrar(r, Number(acertos), Number(erros))}
+            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-medium"
+          >
+            Salvar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
