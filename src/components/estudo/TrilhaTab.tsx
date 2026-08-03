@@ -7,14 +7,14 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  MATERIAS, calcularStreakDias, dateKeyLocal, topicoKey,
+  MATERIAS, calcularStreakDias, dateKeyLocal, diasSemAtividade, topicoKey,
   type AtividadeCalendario, type EstudoConfigCiclo, type Grupo, type MateriaConcurso,
   type MateriaDef, type PdfEstudo, type TopicoState, type TrilhaDinamicaState,
 } from "@/lib/estudo-data";
 import {
-  computarMetaSemana, criarTrilhaDinamica, estimativaConclusaoTrilha,
-  type EstimativaConclusao, type MetaSemana, type QuestaoLiberada, type ReforcoGrupo,
-  type ReforcoImediatoPendente, type RevisaoLinkPendente,
+  analisarHistoricoSemanas, computarMetaSemana, criarTrilhaDinamica, diffDias,
+  estimativaConclusaoTrilha, type EstimativaConclusao, type MetaSemana, type QuestaoLiberada,
+  type ReforcoGrupo, type ReforcoImediatoPendente, type RevisaoLinkPendente, type SemanaHistorico,
 } from "@/lib/trilha-dinamica";
 import { fmtHoras, gerarMensagemGustavo } from "./trilha/trilha-ui";
 import {
@@ -93,8 +93,16 @@ function CardEstimativa({ estimativa }: { estimativa: EstimativaConclusao }) {
 
 // bolha de fala do Gustavo — mesmo padrão visual da que já existe no Dashboard, aqui ancorada no
 // topo da própria Trilha; texto vem de gerarMensagemGustavo (fonte única, mesma fala nos 2 lugares)
-function GustavoBubble({ meta, nomeUsuario, streakDias }: { meta: MetaSemana; nomeUsuario?: string; streakDias: number }) {
-  const { titulo, corpo } = gerarMensagemGustavo(meta, { nomeUsuario, streakDias });
+function GustavoBubble({
+  meta, nomeUsuario, streakDias, diasInativo, historico,
+}: {
+  meta: MetaSemana;
+  nomeUsuario?: string;
+  streakDias: number;
+  diasInativo: number;
+  historico: SemanaHistorico[];
+}) {
+  const { titulo, corpo } = gerarMensagemGustavo(meta, { nomeUsuario, streakDias, diasSemAtividade: diasInativo, historico });
   return (
     <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2">
       <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md flex-shrink-0">
@@ -237,6 +245,12 @@ export default function TrilhaTab({
     onUpdateTrilha(undefined);
   };
 
+  const historico = analisarHistoricoSemanas({ hoje, trilha, configCiclo, calendario });
+  // capado nos dias desde a ativação — sem isso, uma trilha recém-ativada sem nenhum histórico de
+  // calendário mostraria "90 dias sem atividade" (teto do diasSemAtividade), como se o usuário
+  // tivesse abandonado algo que nem começou
+  const diasInativo = Math.min(diasSemAtividade(calendario), Math.max(0, diffDias(trilha.iniciadaEm, hoje)));
+
   const blocosFeitos = meta.blocos.filter((b) => b.concluido).length;
   const percBlocos = meta.blocos.length > 0 ? Math.round((blocosFeitos / meta.blocos.length) * 100) : 0;
   const materiasEmRevisao = meta.analises.filter(
@@ -264,7 +278,7 @@ export default function TrilhaTab({
   return (
     <div className="space-y-4">
       {/* bolha do Gustavo */}
-      <GustavoBubble meta={meta} nomeUsuario={nomeUsuario} streakDias={streakDias} />
+      <GustavoBubble meta={meta} nomeUsuario={nomeUsuario} streakDias={streakDias} diasInativo={diasInativo} historico={historico} />
 
       {/* hero da semana */}
       <EstudoHero

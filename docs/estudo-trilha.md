@@ -68,6 +68,29 @@ arquivo se as regras mudarem.
     (`session.user.name`) e aponta a próxima atividade pendente, na mesma ordem de prioridade que
     define qual seção ganha o destaque "Comece aqui": conteúdo > questões/reforços A-D > reforço
     rápido > revisão (link 7/30d, revisão de matéria, cartas).
+12. **Gustavo cobra a evolução** (2026-08-03, mesmo dia da reformulação semanal, a pedido do
+    usuário — "quero que o Gustavo acompanhe minha rotina, ajuste meu planejamento quando eu
+    atraso e me cobre minha evolução"). Sinais novos, cada um checado em `computarMetaSemana`
+    (por semana) ou `analisarHistoricoSemanas` (por várias semanas), com a PRIORIDADE decidida em
+    `gerarMensagemGustavo` — a primeira condição verdadeira "ganha" a mensagem da vez:
+    1. **Inatividade** (`diasSemAtividade`, `estudo-data.ts`): 2+ dias corridos sem nenhuma
+       atividade no calendário → "Cadê você? 👀". Capado nos dias desde `trilha.iniciadaEm`
+       (`diffDias`) pra uma trilha recém-ativada não aparecer como "abandonada" antes mesmo de
+       começar.
+    2. **Atraso NESTA semana** (`MetaSemana.atrasado`/`ritmoNecessarioMinDia`): comparado o
+       realizado com o proporcional esperado até hoje (`minutosSemana * diasDecorridos/7`), só
+       dispara a partir do 2º dia da semana e exigindo estar bem abaixo (60%) do esperado — evita
+       cobrar na segunda de manhã ou por uma variação normal do dia a dia. A mensagem recalcula o
+       ritmo necessário nos dias que restam (`ritmoNecessarioMinDia`) SEM mexer em nada salvo —
+       é só orientação em tempo real.
+    3. **Tendência fraca em várias semanas** (`SemanaHistorico`, `analisarHistoricoSemanas`):
+       últimas `JANELA_TENDENCIA` (3) semanas COMPLETAS todas abaixo de `LIMIAR_TENDENCIA_FRACA_
+       PERC` (50%) → sugestão de reduzir as horas semanais no Ciclo. É só sugestão — o usuário
+       aprova manualmente no Ciclo de Estudos, nada muda sozinho. Exige pelo menos 2 semanas de
+       histórico (não soa alarme com uma amostra de 1 semana ruim, que pode ter sido pontual).
+    4. **Fluxo normal** (item 11 acima) ganha uma nota comparativa opcional quando a semana
+       passada teve um resultado bem diferente (±20 pontos) do que está dando essa semana — ex.:
+       "(semana passada: 45%)".
 
 ## 2. Arquitetura: derivar > persistir
 
@@ -97,6 +120,13 @@ sabem se é dia ou semana, reaproveitadas sem alteração desde o modelo diário
   cartas. `MateriaLike = {nome, topicos}` — aceita `MateriaDef`, `MateriaConcurso`, `MateriaBase`.
 - `estimativaConclusaoTrilha({hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs})` →
   ver regra 10.
+- `analisarHistoricoSemanas({hoje, trilha, configCiclo, calendario, maxSemanas?})` → últimas
+  semanas COMPLETAS (não inclui a atual), mais recente primeiro, cada uma com `percCumprido`
+  (0-100). A META de cada semana passada usa a config ATUAL do Ciclo (mesma simplificação do
+  resto do motor — não existe snapshot histórico de `configCiclo` em lugar nenhum do app); só o
+  REALIZADO é histórico de verdade, vindo do `calendario`. Ver regra 12.
+- `MetaSemana.percCumpridoSemana`/`ritmoNecessarioMinDia`/`atrasado` (computados dentro de
+  `computarMetaSemana`) → ver regra 12.
 - `criarTrilhaDinamica()` → estado inicial na ativação (não seta mais `grupoCiclo`).
 
 **Removidos no corte pra semanal** (sem atalho de compatibilidade, mesmo padrão de outras trocas
@@ -199,3 +229,11 @@ src/app/api/ai/pdf-topicos-paginas/route.ts  sugestão de intervalo de páginas 
   um PDF de verdade anexado — não testável numa conta de dev vazia; validado por leitura de código
   + `tsc` limpo em todo o fluxo (`TrilhaLinhas` → `page.tsx` → `BibliotecaTab` → `LeitorPdf` →
   `VisorPdf`).
+- Gustavo cobrando evolução (regra 12): testado ao vivo o caminho "trilha recém-ativada, dia 1 da
+  semana, sem histórico" (mensagem normal de sempre, sem "Cadê você" nem "atrasado" — confirma o
+  capping de `diasSemAtividade` contra `trilha.iniciadaEm` e o guard `diasDecorridos >= 2`
+  funcionando). Os 3 caminhos que dependem de dados que só existem depois de dias/semanas de uso
+  real (inatividade 2+ dias, atraso mid-semana, tendência fraca em 3 semanas) NÃO foram exercidos
+  ao vivo — não dá pra simular "3 semanas atrás" numa conta de teste sem estado histórico de
+  verdade; validados por `tsc` limpo + leitura de código (a lógica de prioridade em
+  `gerarMensagemGustavo` é determinística e coberta por raciocínio manual dos 3 cenários).

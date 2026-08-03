@@ -10,13 +10,14 @@ import {
   calcularStreakDias,
   calcularPagPorHora,
   dateKeyLocal,
+  diasSemAtividade,
   type EstudoState,
   type TopicoState,
   type MateriaConcurso,
   type MateriaBase,
   topicoKey,
 } from "@/lib/estudo-data";
-import { computarMetaSemana } from "@/lib/trilha-dinamica";
+import { analisarHistoricoSemanas, computarMetaSemana, diffDias } from "@/lib/trilha-dinamica";
 import { gerarMensagemGustavo, resolverCorMateria } from "./trilha/trilha-ui";
 import { alvoLeituraPdf } from "./biblioteca/biblioteca-utils";
 import EstudoHero from "./ui/EstudoHero";
@@ -55,7 +56,17 @@ function MensagemDoDia({ state, materiasConcurso, nomeUsuario }: { state: Estudo
     pdfs: state.pdfs,
   });
   const streakDias = calcularStreakDias(state.calendario);
-  const { titulo, corpo } = gerarMensagemGustavo(meta, { nomeUsuario, streakDias });
+  const historico = analisarHistoricoSemanas({ trilha, configCiclo: state.configCiclo, calendario: state.calendario });
+  // capado nos dias desde a ativação — sem isso, uma trilha recém-ativada sem nenhum histórico
+  // de calendário mostraria "90 dias sem atividade" (teto do diasSemAtividade), o que soa como se
+  // o usuário tivesse abandonado algo que nem começou
+  const diasInativo = Math.min(diasSemAtividade(state.calendario), Math.max(0, diffDias(trilha.iniciadaEm, dateKeyLocal())));
+  const { titulo, corpo } = gerarMensagemGustavo(meta, {
+    nomeUsuario,
+    streakDias,
+    diasSemAtividade: diasInativo,
+    historico,
+  });
 
   return (
     <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2">

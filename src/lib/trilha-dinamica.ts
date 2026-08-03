@@ -360,6 +360,9 @@ export interface MetaSemana {
   revisarCartas: boolean; // hoje é domingo de cartas e ainda não marcada
   proximoDomingoCartas: string; // dateKey do próximo domingo de cartas (informativo)
   analises: AnaliseMateria[]; // por matéria ativa (pra UI de progresso)
+  percCumpridoSemana: number; // 0-100, minutos feitos / minutos alvo da semana (capado em 100)
+  ritmoNecessarioMinDia: number | null; // minutos/dia nos dias que restam pra fechar a semana; null se não houver o que fechar
+  atrasado: boolean; // ritmo até hoje significativamente abaixo do proporcional esperado (ver computarMetaSemana)
 }
 
 function parseDateKey(key: string): Date {
@@ -367,7 +370,7 @@ function parseDateKey(key: string): Date {
   return new Date(y, m - 1, d);
 }
 
-function diffDias(a: string, b: string): number {
+export function diffDias(a: string, b: string): number {
   return Math.round((parseDateKey(b).getTime() - parseDateKey(a).getTime()) / 86400000);
 }
 
@@ -408,13 +411,14 @@ export function distribuirMinutosPorPeso(minutosSemana: number, pesos: number[])
   return bases;
 }
 
-// soma os minutos de "estudo" da matéria em todos os dias do intervalo [inicio, fim] (equivalente
-// semanal do antigo minutosEstudoHoje) — janela pequena (7 dias), sem preocupação de performance
+// soma os minutos de "estudo" em todos os dias do intervalo [inicio, fim] (equivalente semanal do
+// antigo minutosEstudoHoje) — janela pequena (7 dias), sem preocupação de performance. Sem
+// `materia`, soma de TODAS as matérias (usado pelo histórico de semanas passadas).
 export function minutosEstudoNaSemana(
   calendario: Record<string, AtividadeCalendario[]>,
   inicio: string,
   fim: string,
-  materia: string
+  materia?: string
 ): number {
   let total = 0;
   const cursor = parseDateKey(inicio);
@@ -422,7 +426,7 @@ export function minutosEstudoNaSemana(
   while (cursor.getTime() <= fimData.getTime()) {
     const key = dateKeyLocal(cursor);
     total += (calendario[key] ?? [])
-      .filter((a) => a.tipo === "estudo" && a.materia === materia)
+      .filter((a) => a.tipo === "estudo" && (materia === undefined || a.materia === materia))
       .reduce((s, a) => s + a.duracao, 0);
     cursor.setDate(cursor.getDate() + 1);
   }
@@ -519,12 +523,30 @@ export function computarMetaSemana(params: {
         return dateKeyLocal(base);
       })();
 
+  // acompanhamento de ritmo (Gustavo "cobra a evolução"): quanto já foi feito essa semana vs o
+  // que seria proporcionalmente esperado até HOJE, e quantos minutos/dia faltam nos dias restantes
+  // (hoje incluso) pra fechar a meta — mesmo se a semana ainda não estiver "atrasada" oficialmente
+  const blocosConcluidos = blocos.length > 0 && blocos.every((b) => b.concluido);
+  const totalMinutosFeitos = blocos.reduce((s, b) => s + b.minutosFeitosSemana, 0);
+  const percCumpridoSemana = minutosSemana > 0 ? Math.min(100, Math.round((totalMinutosFeitos / minutosSemana) * 100)) : 0;
+  const diasDecorridos = Math.min(7, diffDias(inicioSemana, hoje) + 1); // 1..7
+  const diasRestantes = 7 - diasDecorridos + 1; // hoje incluso, 7..1
+  const ritmoNecessarioMinDia = minutosSemana > 0 && diasRestantes > 0 && !blocosConcluidos
+    ? Math.max(0, Math.ceil((minutosSemana - totalMinutosFeitos) / diasRestantes))
+    : null;
+  // só considera "atrasado" a partir do 2º dia da semana (não cobra na segunda de manhã) e exige
+  // estar bem abaixo (60%) do proporcional esperado até hoje — evita soar o alarme por variação
+  // normal do dia a dia
+  const minutosEsperadosAteHoje = minutosSemana * (diasDecorridos / 7);
+  const atrasado = minutosSemana > 0 && diasDecorridos >= 2 && !blocosConcluidos
+    && totalMinutosFeitos < minutosEsperadosAteHoje * 0.6;
+
   return {
     inicioSemana,
     fimSemana,
     minutosSemana,
     blocos,
-    blocosConcluidos: blocos.length > 0 && blocos.every((b) => b.concluido),
+    blocosConcluidos,
     questoesPendentes: analises.flatMap((a) => a.questoesLiberadas),
     reforcos: ativas.flatMap((m) => analisarReforcos(m, topicos, hoje)),
     reforcosImediatos: ativas.flatMap((m) => analisarReforcosImediatos(m, topicos)),
@@ -533,7 +555,58 @@ export function computarMetaSemana(params: {
     revisarCartas: ehDomingoCartas && !cartasFeitaHoje,
     proximoDomingoCartas: proximoDom,
     analises,
+    percCumpridoSemana,
+    ritmoNecessarioMinDia,
+    atrasado,
   };
+}
+
+// ─── Histórico de semanas passadas (comparação + tendência) ────────────────
+
+export interface SemanaHistorico {
+  inicioSemana: string; // dateKey da segunda
+  fimSemana: string; // dateKey do domingo
+  minutosMeta: number;
+  minutosFeitos: number;
+  percCumprido: number; // 0-100, capado
+}
+
+// Últimas semanas COMPLETAS (não inclui a atual), mais recente primeiro — usado pelo Gustavo pra
+// comparar ("semana passada: X%") e detectar tendência fraca (gerarMensagemGustavo em trilha-ui.ts
+// decide os limiares). A META de cada semana passada usa a config ATUAL do Ciclo — mesma
+// simplificação já adotada no resto do motor (não existe snapshot histórico de configCiclo em
+// lugar nenhum do app); só o REALIZADO é histórico de verdade, vindo direto do calendário.
+export function analisarHistoricoSemanas(params: {
+  hoje?: string;
+  trilha: TrilhaDinamicaState;
+  configCiclo: EstudoConfigCiclo;
+  calendario: Record<string, AtividadeCalendario[]>;
+  maxSemanas?: number;
+}): SemanaHistorico[] {
+  const { trilha, configCiclo, calendario } = params;
+  const hoje = params.hoje ?? dateKeyLocal();
+  const maxSemanas = params.maxSemanas ?? 8;
+  const minutosMeta = Object.values(configCiclo.horasPorDia).reduce((s, v) => s + v, 0);
+
+  const resultado: SemanaHistorico[] = [];
+  const cursor = parseDateKey(semanaAtual(hoje).inicio);
+  for (let i = 0; i < maxSemanas; i++) {
+    cursor.setDate(cursor.getDate() - 7);
+    const inicioSemana = dateKeyLocal(cursor);
+    if (inicioSemana < trilha.iniciadaEm) break;
+    const fimData = new Date(cursor);
+    fimData.setDate(fimData.getDate() + 6);
+    const fimSemana = dateKeyLocal(fimData);
+    const minutosFeitos = minutosEstudoNaSemana(calendario, inicioSemana, fimSemana);
+    resultado.push({
+      inicioSemana,
+      fimSemana,
+      minutosMeta,
+      minutosFeitos,
+      percCumprido: minutosMeta > 0 ? Math.min(100, Math.round((minutosFeitos / minutosMeta) * 100)) : 0,
+    });
+  }
+  return resultado;
 }
 
 // ─── Estimativa de conclusão da trilha inteira ──────────────────────────────

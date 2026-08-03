@@ -2,7 +2,7 @@ import {
   CORES_MATERIA, COR_MATERIA_PADRAO,
   type MateriaBase, type MateriaConcurso, type MateriaDef,
 } from "@/lib/estudo-data";
-import type { MetaSemana } from "@/lib/trilha-dinamica";
+import type { MetaSemana, SemanaHistorico } from "@/lib/trilha-dinamica";
 
 // Helpers de apresentação compartilhados entre as abas do Estudo (Trilha, Biblioteca etc.).
 // STATUS_CONFIG/TIPO_CONFIG/fmtData da trilha antiga foram removidos junto com ela.
@@ -94,34 +94,81 @@ export interface MensagemGustavo {
   corpo: string;
 }
 
+// nº de semanas passadas usadas pra decidir "tendência fraca" (recalibrar a meta) — precisa de
+// pelo menos 2 pra não soar alarme com uma amostra de 1 semana ruim (pode ter sido pontual: viagem,
+// prova, imprevisto)
+const JANELA_TENDENCIA = 3;
+const LIMIAR_TENDENCIA_FRACA_PERC = 50;
+
 // Gustavo é o "consultor de estudos" da Trilha — a mesma mensagem (gerada aqui uma vez só) aparece
 // tanto na bolha do Dashboard quanto no topo da aba Trilha, pra nunca dessincronizar o que ele diz
 // nos dois lugares. Cumprimenta pelo primeiro nome quando disponível (session.user.name), sem
 // quebrar o texto quando ausente.
+//
+// Prioridade das mensagens (a primeira condição verdadeira "ganha"):
+// 1. Inatividade (2+ dias sem nenhuma atividade) — o sinal mais urgente de acompanhamento.
+// 2. Atraso NESTA semana (`meta.atrasado`, calculado em computarMetaSemana) — Gustavo recalcula o
+//    ritmo necessário pros dias que restam pra ainda fechar a meta (sem mexer em nada salvo).
+// 3. Tendência fraca em várias semanas seguidas — sugestão de recalibrar as horas no Ciclo (é só
+//    sugestão: o usuário aprova, nada muda sozinho).
+// 4. Fluxo normal (próxima atividade pendente), com uma nota comparativa opcional quando a semana
+//    passada teve um resultado bem diferente do que está dando essa semana.
 export function gerarMensagemGustavo(
   meta: MetaSemana,
-  opts: { nomeUsuario?: string; streakDias: number }
+  opts: { nomeUsuario?: string; streakDias: number; diasSemAtividade?: number; historico?: SemanaHistorico[] }
 ): MensagemGustavo {
-  const { nomeUsuario, streakDias } = opts;
+  const { nomeUsuario, streakDias, diasSemAtividade = 0, historico = [] } = opts;
   const saudacao = nomeUsuario ? `Olá, ${nomeUsuario}! ` : "";
-  const proxima = proximaAtividade(meta);
 
+  if (diasSemAtividade >= 2) {
+    return {
+      titulo: `${saudacao}Cadê você? 👀`,
+      corpo: `Já fazem ${diasSemAtividade} dias sem nenhuma atividade registrada. Bora retomar hoje?`,
+    };
+  }
+
+  if (meta.atrasado && meta.ritmoNecessarioMinDia !== null) {
+    return {
+      titulo: `${saudacao}Você está atrasado na meta desta semana`,
+      corpo: `Só ${meta.percCumpridoSemana}% feito até agora — nos dias que restam, dá uns ${fmtHoras(meta.ritmoNecessarioMinDia)}/dia pra recuperar.`,
+    };
+  }
+
+  const ultimasSemanas = historico.slice(0, JANELA_TENDENCIA);
+  const tendenciaFraca = ultimasSemanas.length >= 2 && ultimasSemanas.every((s) => s.percCumprido < LIMIAR_TENDENCIA_FRACA_PERC);
+  if (tendenciaFraca) {
+    const media = Math.round(ultimasSemanas.reduce((s, w) => s + w.percCumprido, 0) / ultimasSemanas.length);
+    return {
+      titulo: `${saudacao}Vamos ajustar o ritmo?`,
+      corpo: `Nas últimas ${ultimasSemanas.length} semanas você fechou em média ${media}% da meta — talvez valha reduzir as horas semanais no Ciclo pra ficar mais sustentável.`,
+    };
+  }
+
+  // nota comparativa opcional (só quando a diferença é notável — evita ruído toda vez) pro fluxo
+  // normal abaixo, que já tem seu próprio corpo de mensagem
+  const notaComparativa = (() => {
+    const anterior = historico[0]?.percCumprido;
+    if (anterior === undefined || Math.abs(meta.percCumpridoSemana - anterior) < 20) return "";
+    return ` (semana passada: ${anterior}%)`;
+  })();
+
+  const proxima = proximaAtividade(meta);
   if (!proxima) {
     return {
       titulo: `${saudacao}Tudo em dia por aqui! 🎉`,
-      corpo: streakDias > 0
+      corpo: (streakDias > 0
         ? `Você já está há ${streakDias} dia${streakDias !== 1 ? "s" : ""} sem parar — continue assim pra manter a sequência.`
-        : "Nada pendente no checklist desta semana.",
+        : "Nada pendente no checklist desta semana.") + notaComparativa,
     };
   }
   if (proxima.ehNova) {
     return {
       titulo: `${saudacao}Sua atividade desta semana é:`,
-      corpo: `${proxima.titulo} — ${proxima.subtitulo}`,
+      corpo: `${proxima.titulo} — ${proxima.subtitulo}${notaComparativa}`,
     };
   }
   return {
     titulo: `${saudacao}Vi que você ainda não fez:`,
-    corpo: `${proxima.titulo} · ${proxima.subtitulo}`,
+    corpo: `${proxima.titulo} · ${proxima.subtitulo}${notaComparativa}`,
   };
 }

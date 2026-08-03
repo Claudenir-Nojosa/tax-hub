@@ -583,6 +583,22 @@ export function calcularMedia(cadernos: Record<Grupo, TopicoCaderno>): number {
   return Math.round(soma / grupos.length);
 }
 
+// dias corridos desde a última atividade registrada (qualquer tipo, mesmo critério do streak) —
+// 0 = tem atividade hoje, N = a última foi há N dias. Teto de 90 dias: além disso a distinção
+// deixa de importar pro aviso de inatividade do Gustavo, e evita um loop sem limite numa conta
+// muito antiga sem uso recente.
+export function diasSemAtividade(calendario: Record<string, AtividadeCalendario[]>, hoje: Date = new Date()): number {
+  const TETO_DIAS = 90;
+  const dia = new Date(hoje);
+  dia.setHours(0, 0, 0, 0);
+  for (let n = 0; n <= TETO_DIAS; n++) {
+    const key = dateKeyLocal(dia);
+    if (calendario[key] && calendario[key].length > 0) return n;
+    dia.setDate(dia.getDate() - 1);
+  }
+  return TETO_DIAS;
+}
+
 export function calcularStreakDias(calendario: Record<string, AtividadeCalendario[]>): number {
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
