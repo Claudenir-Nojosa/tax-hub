@@ -1,6 +1,6 @@
 import {
   dateKeyLocal, defaultTopicoState, topicoKey,
-  type Carta, type Grupo, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
+  type Carta, type Grupo, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoPaginas, type TopicoState,
 } from "@/lib/estudo-data";
 import { fmtHoras } from "../trilha/trilha-ui";
 
@@ -10,6 +10,28 @@ const GRUPOS: Grupo[] = ["A", "B", "C", "D"];
 // (páginas depois disso são só questão), senão o total do arquivo (comportamento de sempre)
 export function alvoLeituraPdf(pdf: Pick<PdfEstudo, "totalPaginas" | "paginaConteudoFim">): number {
   return pdf.paginaConteudoFim ?? pdf.totalPaginas;
+}
+
+// Estica os intervalos de página pra cobrir o PDF INTEIRO, sem nenhuma lacuna — a IA (ou o
+// usuário) só precisa acertar ONDE CADA TÓPICO COMEÇA (é isso que o índice do PDF informa com
+// confiança); o fim de cada um é sempre "uma página antes do início do próximo", e as pontas
+// (primeiro tópico e último) vão até a borda do documento. Assim, à medida que o usuário conclui
+// os tópicos de um PDF pela Trilha, ele acaba lendo o PDF inteiro — não só os trechos que bateram
+// exatamente com o nome de um tópico do edital (o que deixava buracos: introdução antes do
+// primeiro tópico, ou assuntos do índice sem tópico correspondente, nunca entravam em nenhuma
+// atividade de leitura).
+export function fecharLacunasIntervalos(
+  intervalos: TopicoPaginas[],
+  pdf: Pick<PdfEstudo, "totalPaginas" | "paginaConteudoFim">
+): TopicoPaginas[] {
+  if (intervalos.length === 0) return intervalos;
+  const ordenados = [...intervalos].sort((a, b) => a.paginaInicio - b.paginaInicio);
+  const fimDocumento = alvoLeituraPdf(pdf);
+  return ordenados.map((iv, i) => ({
+    ...iv,
+    paginaInicio: i === 0 ? 1 : iv.paginaInicio,
+    paginaFim: i === ordenados.length - 1 ? fimDocumento : ordenados[i + 1].paginaInicio - 1,
+  }));
 }
 
 export function novoId(): string {

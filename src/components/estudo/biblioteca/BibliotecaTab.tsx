@@ -173,16 +173,22 @@ export default function BibliotecaTab({
 
   // sugestão de páginas por IA em lote (SugestaoLoteModal): já vem revisado/confirmado pelo
   // usuário — só aplica os intervalos em cima dos PDFs existentes, um único onChange (mesmo
-  // motivo do salvarPdfsEmLote acima: nunca um onChange por item)
+  // motivo do salvarPdfsEmLote acima: nunca um onChange por item). Substitui POR TÓPICO (não só
+  // concatena): o modal agora pode reajustar o fim de um tópico já salvo pra fechar lacuna com um
+  // tópico vizinho recém-descoberto, então um mesmo tópico no patch precisa SUBSTITUIR a entrada
+  // antiga, não duplicar.
   const aplicarSugestoesEmLote = (patches: { id: string; intervalos: TopicoPaginas[] }[]) => {
     if (patches.length === 0) return;
     onChange(
       pdfs.map((p) => {
         const patch = patches.find((x) => x.id === p.id);
         if (!patch) return p;
+        const semSubstituidos = (p.intervalosPaginas ?? []).filter(
+          (ip) => !patch.intervalos.some((n) => n.topico === ip.topico)
+        );
         return {
           ...p,
-          intervalosPaginas: [...(p.intervalosPaginas ?? []), ...patch.intervalos],
+          intervalosPaginas: [...semSubstituidos, ...patch.intervalos],
           atualizadoEm: new Date().toISOString(),
         };
       })

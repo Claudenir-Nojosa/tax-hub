@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { ChevronDown, FileUp, Loader2, Sparkles, X } from "lucide-react";
 import type { MateriaConcurso, MateriaDef, PdfEstudo, TopicoPaginas } from "@/lib/estudo-data";
 import { contarPaginasPdf, obterArquivoPdf } from "@/lib/pdf-storage";
-import { novoId } from "./biblioteca-utils";
+import { fecharLacunasIntervalos, novoId } from "./biblioteca-utils";
 
 // intervalo em edição por tópico — strings (inputs controlados); só vira TopicoPaginas de
 // verdade no salvar, e só pros tópicos com início E fim preenchidos (parcial não quebra nada,
@@ -117,6 +117,22 @@ export default function FormPdf({
         const novo = { ...prev };
         for (const it of data.intervalos!) {
           novo[it.topico] = { inicio: String(it.paginaInicio), fim: String(it.paginaFim) };
+        }
+        // estica os intervalos pra cobrir o PDF inteiro (sem lacuna entre um tópico e o
+        // próximo, começando na pág. 1 e indo até o fim do conteúdo) — usa todos os tópicos
+        // deste PDF que já têm início/fim válidos, não só os que a IA acabou de sugerir agora
+        if (Number.isFinite(paginasNum)) {
+          const completos: TopicoPaginas[] = topicosAlvo
+            .map((t) => {
+              const par = novo[t];
+              const inicio = par ? parseInt(par.inicio) : NaN;
+              const fim = par ? parseInt(par.fim) : NaN;
+              return Number.isFinite(inicio) && Number.isFinite(fim) ? { topico: t, paginaInicio: inicio, paginaFim: fim } : null;
+            })
+            .filter((x): x is TopicoPaginas => x !== null);
+          for (const f of fecharLacunasIntervalos(completos, { totalPaginas: paginasNum, paginaConteudoFim: pdfParaEditar?.paginaConteudoFim })) {
+            novo[f.topico] = { inicio: String(f.paginaInicio), fim: String(f.paginaFim) };
+          }
         }
         return novo;
       });

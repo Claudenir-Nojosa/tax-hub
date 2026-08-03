@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, Loader2, Sparkles, X } from "lucide-react";
 import type { MateriaConcurso, MateriaDef, PdfEstudo, TopicoPaginas } from "@/lib/estudo-data";
 import { obterArquivoPdf } from "@/lib/pdf-storage";
+import { fecharLacunasIntervalos } from "./biblioteca-utils";
 
 // Sugestão de intervalo de páginas por IA em LOTE, pra todos os PDFs da Biblioteca de uma vez —
 // mesma rota /api/ai/pdf-topicos-paginas usada no "Sugerir com IA" do FormPdf.tsx (Fase 5), só
@@ -41,7 +42,15 @@ export default function SugestaoLoteModal({ pdfs, onAplicar, onFechar }: Props) 
   const [fase, setFase] = useState<"resumo" | "processando" | "revisao">("resumo");
   const [status, setStatus] = useState<Record<string, StatusPdf>>({});
   const [concluidos, setConcluidos] = useState(0);
+  // mensagem REAL do erro por PDF (antes só existia um texto genérico fixo na tela, que
+  // chutava "arquivo ausente ou sem texto legível" sem checar qual dos dois — ou se era outra
+  // causa (timeout, rate limit da IA etc.) — de verdade aconteceu
   const [erros, setErros] = useState<Record<string, string>>({});
+  // PDFs onde a IA achou MENOS intervalos do que tópicos foram pedidos — cobertura parcial,
+  // silenciosa até agora (o PDF só aparecia na lista de "sucesso" com menos linhas, sem
+  // nenhum aviso de que sobrou tópico sem sugestão)
+  const [parciais, setParciais] = useState<Record<string, { encontrados: number; esperados: number }>>({});
+  const [mostrarDetalheErros, setMostrarDetalheErros] = useState(false);
   const [linhas, setLinhas] = useState<LinhaRevisao[]>([]);
 
   const iniciar = async () => {
@@ -49,6 +58,7 @@ export default function SugestaoLoteModal({ pdfs, onAplicar, onFechar }: Props) 
     setFase("processando");
     const todasLinhas: LinhaRevisao[] = [];
     const novosErros: Record<string, string> = {};
+    const novosParciais: Record<string, { encontrados: number; esperados: number }> = {};
     for (const pdf of alvos) {
       setStatus((s) => ({ ...s, [pdf.id]: "processando" }));
       const topicosAlvo = (pdf.topicos ?? []).filter((t) => !pdf.intervalosPaginas?.some((ip) => ip.topico === t));
@@ -67,15 +77,34 @@ export default function SugestaoLoteModal({ pdfs, onAplicar, onFechar }: Props) 
         };
         if (!res.ok) throw new Error(data.error ?? `Erro ${res.status}`);
 
-        for (const it of data.intervalos ?? []) {
+        const encontrados = data.intervalos?.length ?? 0;
+        if (encontrados < topicosAlvo.length) {
+          novosParciais[pdf.id] = { encontrados, esperados: topicosAlvo.length };
+        }
+
+        // funde com o que já tava salvo e fecha as lacunas — cobre o PDF inteiro (pág. 1 até o
+        // fim do conteúdo), não só os trechos que a IA achou pra cada tópico isoladamente. Só
+        // entra na revisão quem é novo OU cujo valor mudou por causa do fechamento de lacuna —
+        // não reabre pra revisão o que já tava salvo e não mudou nada.
+        const jaSalvos = pdf.intervalosPaginas ?? [];
+        const novosDaIA: TopicoPaginas[] = (data.intervalos ?? []).map((it) => ({
+          topico: it.topico,
+          paginaInicio: it.paginaInicio,
+          paginaFim: it.paginaFim,
+        }));
+        const completos = [...jaSalvos.filter((s) => !novosDaIA.some((n) => n.topico === s.topico)), ...novosDaIA];
+        for (const f of fecharLacunasIntervalos(completos, pdf)) {
+          const salvoAntes = jaSalvos.find((s) => s.topico === f.topico);
+          const mudou = !salvoAntes || salvoAntes.paginaInicio !== f.paginaInicio || salvoAntes.paginaFim !== f.paginaFim;
+          if (!mudou) continue;
           todasLinhas.push({
-            key: `${pdf.id}::${it.topico}`,
+            key: `${pdf.id}::${f.topico}`,
             pdfId: pdf.id,
             pdfNome: pdf.nome,
             materia: pdf.materia,
-            topico: it.topico,
-            inicio: String(it.paginaInicio),
-            fim: String(it.paginaFim),
+            topico: f.topico,
+            inicio: String(f.paginaInicio),
+            fim: String(f.paginaFim),
             incluir: true,
           });
         }
@@ -89,6 +118,7 @@ export default function SugestaoLoteModal({ pdfs, onAplicar, onFechar }: Props) 
     // ordena por matéria/PDF/tópico só pra ficar fácil de escanear na revisão
     todasLinhas.sort((a, b) => a.materia.localeCompare(b.materia) || a.pdfNome.localeCompare(b.pdfNome) || a.topico.localeCompare(b.topico));
     setErros(novosErros);
+    setParciais(novosParciais);
     setLinhas(todasLinhas);
     setFase("revisao");
   };
@@ -191,11 +221,45 @@ export default function SugestaoLoteModal({ pdfs, onAplicar, onFechar }: Props) 
           {Object.keys(erros).length > 0 && (() => {
             const n = Object.keys(erros).length;
             return (
-              <div className="mb-3 text-[11px] text-amber-600 dark:text-amber-400">
-                {n} PDF{n !== 1 ? "s" : ""} não {n !== 1 ? "puderam" : "pôde"} ser analisado{n !== 1 ? "s" : ""} (arquivo ausente ou sem texto legível) — confira manualmente depois.
+              <div className="mb-3 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setMostrarDetalheErros((v) => !v)}
+                  className="text-amber-600 dark:text-amber-400 underline decoration-dotted underline-offset-2"
+                >
+                  {n} PDF{n !== 1 ? "s" : ""} não {n !== 1 ? "puderam" : "pôde"} ser analisado{n !== 1 ? "s" : ""} — {mostrarDetalheErros ? "ocultar" : "ver"} motivo de cada um
+                </button>
+                {mostrarDetalheErros && (
+                  <div className="mt-1.5 max-h-40 overflow-y-auto space-y-0.5 rounded-md bg-muted dark:bg-muted p-2">
+                    {Object.entries(erros).map(([pdfId, msg]) => {
+                      const nome = alvos.find((p) => p.id === pdfId)?.nome ?? pdfId;
+                      return (
+                        <div key={pdfId} className="flex gap-1.5 text-muted-foreground">
+                          <span className="text-foreground truncate max-w-[45%]" title={nome}>{nome}</span>
+                          <span className="flex-shrink-0">— {msg}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })()}
+          {Object.keys(parciais).length > 0 && (
+            <div className="mb-3 text-[11px] text-amber-600 dark:text-amber-400">
+              {Object.keys(parciais).length} PDF{Object.keys(parciais).length !== 1 ? "s" : ""} tiveram só PARTE dos tópicos mapeados (a IA não achou marcação própria pra alguns — o fechamento de lacuna grudou essas páginas no tópico vizinho, então o PDF continua coberto por inteiro, só sem um intervalo específico pra cada tópico; separe manualmente se isso importar):
+              <div className="mt-1 max-h-32 overflow-y-auto space-y-0.5 rounded-md bg-muted dark:bg-muted p-2 text-muted-foreground">
+                {Object.entries(parciais).map(([pdfId, p]) => {
+                  const nome = alvos.find((a) => a.id === pdfId)?.nome ?? pdfId;
+                  return (
+                    <div key={pdfId} className="truncate" title={nome}>
+                      {nome} — {p.encontrados} de {p.esperados} tópico{p.esperados !== 1 ? "s" : ""}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {linhas.length === 0 ? (
             <p className="text-xs text-muted-foreground mt-2">A IA não conseguiu identificar páginas em nenhum dos PDFs analisados.</p>
           ) : (
