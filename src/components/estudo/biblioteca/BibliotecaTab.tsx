@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { BookOpen, ChevronDown, ChevronRight, FileStack, Library, Plus, Sparkles, X } from "lucide-react";
 import {
   MATERIAS, calcularPagPorHora,
-  type AtividadeCalendario, type AtividadeTipo, type Carta, type MateriaConcurso, type MateriaDef,
-  type PdfEstudo, type TopicoPaginas, type TopicoState,
+  type AtividadeCalendario, type AtividadeTipo, type CapituloPdf, type Carta, type MateriaConcurso, type MateriaDef,
+  type PdfEstudo, type TopicoState,
 } from "@/lib/estudo-data";
 import {
   salvarArquivoPdf, obterArquivoPdf, excluirArquivoPdf, contarPaginasPdf,
@@ -177,13 +177,12 @@ export default function BibliotecaTab({
     onChange([...registros, ...pdfs]);
   };
 
-  // sugestão de páginas por IA em lote (SugestaoLoteModal): já vem revisado/confirmado pelo
-  // usuário — só aplica os intervalos em cima dos PDFs existentes, um único onChange (mesmo
-  // motivo do salvarPdfsEmLote acima: nunca um onChange por item). Substitui POR TÓPICO (não só
-  // concatena): o modal agora pode reajustar o fim de um tópico já salvo pra fechar lacuna com um
-  // tópico vizinho recém-descoberto, então um mesmo tópico no patch precisa SUBSTITUIR a entrada
-  // antiga, não duplicar.
-  const aplicarSugestoesEmLote = (patches: { id: string; intervalos: TopicoPaginas[] }[]) => {
+  // sugestão de CAPÍTULOS por IA em lote (SugestaoLoteModal): já vem revisado/confirmado pelo
+  // usuário — só aplica em cima dos PDFs existentes, um único onChange (mesmo motivo do
+  // salvarPdfsEmLote acima: nunca um onChange por item). O modal só entra PDF que ainda não tem
+  // NENHUM capítulo (ver alvos em SugestaoLoteModal.tsx), então é sempre uma atribuição direta —
+  // nunca precisa mesclar com capítulos já existentes.
+  const aplicarSugestoesEmLote = (patches: { id: string; capitulos: CapituloPdf[] }[]) => {
     if (patches.length === 0) return;
     // expande a(s) matéria(s) afetadas — sem isso, aplicar sugestão numa matéria colapsada some
     // com o resultado da vista até o usuário abrir a seção manualmente
@@ -199,14 +198,7 @@ export default function BibliotecaTab({
       pdfs.map((p) => {
         const patch = patches.find((x) => x.id === p.id);
         if (!patch) return p;
-        const semSubstituidos = (p.intervalosPaginas ?? []).filter(
-          (ip) => !patch.intervalos.some((n) => n.topico === ip.topico)
-        );
-        return {
-          ...p,
-          intervalosPaginas: [...semSubstituidos, ...patch.intervalos],
-          atualizadoEm: new Date().toISOString(),
-        };
+        return { ...p, capitulos: patch.capitulos, atualizadoEm: new Date().toISOString() };
       })
     );
   };
@@ -350,10 +342,10 @@ export default function BibliotecaTab({
                 type="button"
                 onClick={() => { setEditando(null); setFormAberto(false); setFormLoteAberto(false); setSugestaoLoteEscopo((v) => (v === ESCOPO_TODAS ? null : ESCOPO_TODAS)); }}
                 className="flex items-center gap-1.5 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium transition-colors"
-                title="Roda a sugestão de páginas por IA em todos os PDFs que ainda não têm intervalo salvo, com revisão antes de aplicar"
+                title="Roda a sugestão de capítulos por IA em todos os PDFs que ainda não têm nenhum capítulo, com revisão antes de aplicar"
               >
                 {sugestaoLoteEscopo === ESCOPO_TODAS ? <X className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-                {sugestaoLoteEscopo === ESCOPO_TODAS ? "Fechar" : "Sugerir páginas (IA)"}
+                {sugestaoLoteEscopo === ESCOPO_TODAS ? "Fechar" : "Sugerir capítulos (IA)"}
               </button>
             )}
           </div>
@@ -459,7 +451,7 @@ export default function BibliotecaTab({
                 <button
                   type="button"
                   onClick={() => { setEditando(null); setFormAberto(false); setFormLoteAberto(false); setSugestaoLoteEscopo((v) => (v === materia ? null : materia)); }}
-                  title={`Sugerir páginas por IA só nos PDFs de ${materia}`}
+                  title={`Sugerir capítulos por IA só nos PDFs de ${materia}`}
                   className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors flex-shrink-0"
                 >
                   {sugestaoLoteEscopo === materia ? <X className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
