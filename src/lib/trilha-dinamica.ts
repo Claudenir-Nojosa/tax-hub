@@ -1,36 +1,44 @@
 import {
   dateKeyLocal, topicoKey, calcularPerc,
   type AtividadeCalendario, type ChecklistRevisaoLink, type EstudoConfigCiclo, type Grupo,
-  type TopicoState, type TrilhaDinamicaState,
+  type PdfEstudo, type TopicoState, type TrilhaDinamicaState,
 } from "./estudo-data";
 
 // forma mínima de matéria que o motor precisa — MateriaDef, MateriaConcurso e MateriaBase são
 // todas estruturalmente compatíveis
 export type MateriaLike = { nome: string; topicos: string[] };
 
-// Motor da TRILHA DINÂMICA — funções puras que derivam a meta do dia do estado real (nada de
+// Motor da TRILHA DINÂMICA — funções puras que derivam a meta da SEMANA do estado real (nada de
 // plano pré-gerado). As regras são o método pessoal do usuário, à risca:
 //
-// 1. ESTUDO: o dia pertence a um grupo do ciclo (A/B/C). As horas do dia (Ciclo de Estudos)
-//    são divididas igualmente entre as matérias daquele grupo que ainda têm teoria pendente —
-//    ex.: 3h e 3 matérias = 1h cada, no TÓPICO ATUAL (primeiro não estudado) de cada uma. O
-//    progresso vem do calendário de hoje (sessões de estudo por matéria — leitor de PDF/Timer).
+// 1. ESTUDO: a semana cobre TODAS as matérias ativas ao mesmo tempo (não mais um grupo A/B/C por
+//    dia). As horas da semana (soma de horasPorDia no Ciclo) são divididas PROPORCIONALMENTE ao
+//    peso entre as matérias que ainda têm teoria pendente — ex.: 15h/semana, 3 matérias de peso
+//    igual = 5h cada, no TÓPICO ATUAL (primeiro não estudado) de cada uma. O progresso vem do
+//    calendário da semana corrente (segunda a domingo) — sessões de estudo por matéria (leitor
+//    de PDF/Timer). Quando um PDF tem o intervalo de páginas do tópico mapeado
+//    (PdfEstudo.intervalosPaginas), o bloco carrega pdfId/paginaInicio/paginaFim pra abrir o
+//    leitor já no lugar certo.
 // 2. QUESTÕES ESCALONADAS: cada tópico tem 4 grupos de questões (A-D, os cadernos do Edital).
 //    Concluir o tópico i+1 LIBERA o grupo A do tópico i; concluir i+2 libera o B do i; i+3 o C;
 //    i+4 o D. Quando a teoria da matéria termina, os grupos restantes (a "cauda") ficam todos
 //    liberados. Grupo "feito" = caderno com acertos+erros > 0.
-// 3. MATÉRIA 100% = teoria toda + 4 grupos de todos os tópicos feitos → DIAS_REVISAO_MATERIA
+// 3. REFORÇO IMEDIATO: assim que um tópico é marcado como estudado, se tiver um
+//    linkReforcoImediato cadastrado (caderno curto, até ~10 questões), ele aparece na trilha uma
+//    única vez — pra prática ativa logo depois de estudar, sem esperar o escalonamento A-D.
+// 4. MATÉRIA 100% = teoria toda + 4 grupos de todos os tópicos feitos → DIAS_REVISAO_MATERIA
 //    dias depois entra a atividade "revisão da matéria: 30 questões englobando todos os
 //    tópicos" (modo revisão), com link próprio (ConfigMateria.linkRevisaoMateria).
-// 4. CARTAS: a cada 2 domingos (14 dias), atividade de revisar as cartas.
-// 5. MUTÁVEL: o grupo do ciclo só avança quando os blocos de estudo do dia foram entregues; a
-//    meta de amanhã depende do que foi feito hoje.
-// 6. TEMPO PONDERADO: o tempo do dia é dividido PROPORCIONALMENTE ao peso (1 ou 2) configurado
-//    por matéria no Ciclo — não mais sempre igual (distribuirMinutosPorPeso).
-// 7. REFORÇO: um grupo "feito" com acerto abaixo de LIMIAR_REFORCO_PERC volta a aparecer na
+// 5. CARTAS: a cada 2 domingos (14 dias), atividade de revisar as cartas.
+// 6. SEM DÍVIDA ACUMULADA: cada semana é recalculada do zero a partir do peso configurado — se
+//    uma matéria não bate a meta de horas numa semana, a semana seguinte não "soma" o que faltou,
+//    só reparte de novo (decisão explícita do usuário: mais simples, sem estado novo).
+// 7. TEMPO PONDERADO: o tempo da semana é dividido PROPORCIONALMENTE ao peso (1 ou 2) configurado
+//    por matéria no Ciclo (distribuirMinutosPorPeso).
+// 8. REFORÇO A-D: um grupo "feito" com acerto abaixo de LIMIAR_REFORCO_PERC volta a aparecer na
 //    trilha (seção separada de "questões liberadas") depois de REFORCO_COOLDOWN_DIAS sem
 //    atualização — 0% e 100% deixam de ser tratados igual.
-// 8. REVISÃO DO LINK: cada tópico tem UM link de questões (aba Questões, ex.: TecConcursos —
+// 9. REVISÃO DO LINK: cada tópico tem UM link de questões (aba Questões, ex.: TecConcursos —
 //    substituiu os 4 links por grupo). Quando os 4 grupos A-D do tópico ficam feitos, a revisão
 //    das questões do link entra na trilha em DOIS checkpoints INDEPENDENTES (CHECKPOINTS_
 //    REVISAO_LINK: 7 e 30 dias depois, cada um contado da mesma data de conclusão). Registrado o
@@ -39,8 +47,6 @@ export type MateriaLike = { nome: string; topicos: string[] };
 //    prazo, sem depender do primeiro ter sido feito.
 
 export const GRUPOS_QUESTOES: Grupo[] = ["A", "B", "C", "D"];
-const GRUPOS_CICLO = ["A", "B", "C"] as const;
-export type GrupoCiclo = (typeof GRUPOS_CICLO)[number];
 
 // limiar de acerto abaixo do qual um grupo "feito" é considerado fraco e pode ressurgir como
 // reforço — mesmo corte que o Edital já usa pra colorir o % de acerto (PercBadge), consistente
@@ -58,8 +64,6 @@ export const CHECKPOINTS_REVISAO_LINK: { id: ChecklistRevisaoLink; dias: number 
 // dias de espera após a matéria bater 100% até a revisão de 30 questões liberar (2026-07-29:
 // era "no dia seguinte" (1 dia), corrigido a pedido do usuário)
 export const DIAS_REVISAO_MATERIA = 3;
-
-const DIAS_SEMANA = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"] as const;
 
 // ─── Análise por matéria (tudo derivado de topicos/cadernos) ────────────────
 
@@ -286,14 +290,54 @@ export function analisarRevisoesLink(
   return pendentes;
 }
 
-// ─── Meta do dia ─────────────────────────────────────────────────────────────
+// ─── Reforço imediato (link curto, pós-estudo) ──────────────────────────────
 
-export interface BlocoEstudo {
+export interface ReforcoImediatoPendente {
+  id: string; // estável: `ri:${materia}:${topico}`
   materia: string;
-  topico: string; // tópico atual da matéria
-  minutosAlvo: number;
-  minutosFeitos: number; // sessões de "estudo" de HOJE dessa matéria (leitor de PDF/Timer)
+  topico: string;
+  ordemTopico: number; // 1-based no edital
+  link: string;
+}
+
+// tópicos recém-estudados com um link de reforço curto cadastrado (aba Questões) e ainda não
+// registrado — aparece UMA vez, sem cooldown/reaparecimento (distinto do reforço A-D, que é sobre
+// desempenho fraco recorrente; aqui é só "pratique logo depois de estudar")
+export function analisarReforcosImediatos(
+  materia: MateriaLike,
+  topicos: Record<string, TopicoState>
+): ReforcoImediatoPendente[] {
+  const nomes = materia.topicos;
+  const pendentes: ReforcoImediatoPendente[] = [];
+  for (let i = 0; i < nomes.length; i++) {
+    const estado = topicos[topicoKey(materia.nome, nomes[i])];
+    if (!estado?.estudado || !estado.linkReforcoImediato || estado.reforcoImediatoFeito) continue;
+    pendentes.push({
+      id: `ri:${materia.nome}:${nomes[i]}`,
+      materia: materia.nome,
+      topico: nomes[i],
+      ordemTopico: i + 1,
+      link: estado.linkReforcoImediato,
+    });
+  }
+  return pendentes;
+}
+
+// ─── Meta da SEMANA ──────────────────────────────────────────────────────────
+
+export interface BlocoEstudoSemana {
+  materia: string;
+  topico: string; // tópico atual da matéria, recalculado ao vivo (primeiro não-estudado) — se o
+                   // usuário termina mais de um tópico na mesma semana, a próxima leitura desse
+                   // mesmo bloco já mostra o tópico seguinte, sem replanejar nada
+  minutosAlvoSemana: number;
+  minutosFeitosSemana: number; // sessões de "estudo" da SEMANA corrente dessa matéria
   concluido: boolean;
+  // resolvido via PdfEstudo.intervalosPaginas quando existe um PDF da matéria com o intervalo do
+  // tópico mapeado; ausente = "Ler PDF" cai no comportamento genérico (sem página/aviso)
+  pdfId?: string;
+  paginaInicio?: number;
+  paginaFim?: number;
 }
 
 export interface Revisao30 {
@@ -302,16 +346,17 @@ export interface Revisao30 {
   link?: string; // ConfigMateria.linkRevisaoMateria — clicar na atividade abre direto
 }
 
-export interface MetaDia {
-  data: string; // dateKey
-  grupoCiclo: GrupoCiclo; // grupo EFETIVO do dia (pula grupos sem teoria pendente)
-  minutosDia: number; // total de minutos de estudo configurados pra hoje no Ciclo
-  blocos: BlocoEstudo[];
+export interface MetaSemana {
+  inicioSemana: string; // dateKey da segunda-feira
+  fimSemana: string; // dateKey do domingo
+  minutosSemana: number; // total de minutos de estudo configurados pra semana no Ciclo
+  blocos: BlocoEstudoSemana[];
   blocosConcluidos: boolean; // todos os blocos entregues (false se não há blocos)
   questoesPendentes: QuestaoLiberada[]; // todas as matérias ativas
-  reforcos: ReforcoGrupo[]; // grupos já feitos mas com desempenho fraco, esfriados (distinto de questoesPendentes)
-  revisoesLink: RevisaoLinkPendente[]; // revisão das questões do link, 7 dias após os 4 grupos A-D
-  revisoes30: Revisao30[]; // devidas hoje (matéria concluída ontem ou antes, revisão ainda não feita)
+  reforcos: ReforcoGrupo[]; // grupos já feitos mas com desempenho fraco, esfriados
+  reforcosImediatos: ReforcoImediatoPendente[]; // links curtos pós-estudo, ainda não feitos
+  revisoesLink: RevisaoLinkPendente[]; // revisão das questões do link, 7/30 dias após os 4 grupos A-D
+  revisoes30: Revisao30[]; // devidas (matéria concluída há DIAS_REVISAO_MATERIA+ dias, revisão ainda não feita)
   revisarCartas: boolean; // hoje é domingo de cartas e ainda não marcada
   proximoDomingoCartas: string; // dateKey do próximo domingo de cartas (informativo)
   analises: AnaliseMateria[]; // por matéria ativa (pra UI de progresso)
@@ -333,50 +378,29 @@ export function proximoDomingo(aPartirDe: string): string {
   return dateKeyLocal(d);
 }
 
-export function grupoCicloSeguinte(g: GrupoCiclo): GrupoCiclo {
-  return GRUPOS_CICLO[(GRUPOS_CICLO.indexOf(g) + 1) % 3];
+// semana ISO (segunda a domingo) que contém `hoje` — fonte única de "qual semana é essa" pro
+// motor inteiro (janela de minutosEstudoNaSemana e cabeçalho da MetaSemana)
+export function semanaAtual(hoje: string = dateKeyLocal()): { inicio: string; fim: string } {
+  const d = parseDateKey(hoje);
+  const diaSemana = d.getDay(); // 0=domingo..6=sábado
+  const diffSegunda = diaSemana === 0 ? -6 : 1 - diaSemana;
+  const inicio = new Date(d);
+  inicio.setDate(inicio.getDate() + diffSegunda);
+  const fim = new Date(inicio);
+  fim.setDate(fim.getDate() + 6);
+  return { inicio: dateKeyLocal(inicio), fim: dateKeyLocal(fim) };
 }
 
-function materiasDoGrupo(
-  grupo: GrupoCiclo,
-  configCiclo: EstudoConfigCiclo,
-  materiasAtivas: MateriaLike[]
-): MateriaLike[] {
-  return materiasAtivas.filter((m) => {
-    const cfg = configCiclo.materias[m.nome];
-    return cfg?.incluir && cfg.divisao === grupo;
-  });
-}
-
-// grupo efetivo do dia: começa no grupo salvo e pula (A→B→C→A) grupos que não têm NENHUMA
-// matéria com teoria pendente — um grupo 100% teorizado não rende bloco de estudo
-export function resolverGrupoEfetivo(
-  grupoSalvo: GrupoCiclo,
-  configCiclo: EstudoConfigCiclo,
-  materiasAtivas: MateriaLike[],
-  topicos: Record<string, TopicoState>
-): GrupoCiclo {
-  let g = grupoSalvo;
-  for (let i = 0; i < 3; i++) {
-    const comTeoria = materiasDoGrupo(g, configCiclo, materiasAtivas).some(
-      (m) => analisarMateria(m, topicos).topicoAtual !== null
-    );
-    if (comTeoria) return g;
-    g = grupoCicloSeguinte(g);
-  }
-  return grupoSalvo; // nenhuma teoria pendente em nenhum grupo — tanto faz
-}
-
-// distribui minutosDia proporcionalmente aos pesos (maiores restos / Hamilton): cada matéria
-// recebe floor(peso/pesoTotal * minutosDia) e os minutos que sobram do arredondamento (no
+// distribui minutosSemana proporcionalmente aos pesos (maiores restos / Hamilton): cada matéria
+// recebe floor(peso/pesoTotal * minutosSemana) e os minutos que sobram do arredondamento (no
 // máximo pesos.length - 1) vão 1 a 1 pras matérias com maior parte fracionária perdida — nenhum
-// minuto desaparece, ao contrário de um Math.floor(minutosDia/n) fixo pra todo mundo.
-export function distribuirMinutosPorPeso(minutosDia: number, pesos: number[]): number[] {
+// minuto desaparece, ao contrário de um Math.floor(minutosSemana/n) fixo pra todo mundo.
+export function distribuirMinutosPorPeso(minutosSemana: number, pesos: number[]): number[] {
   const pesoTotal = pesos.reduce((s, p) => s + p, 0);
-  if (pesoTotal <= 0 || minutosDia <= 0) return pesos.map(() => 0);
-  const brutos = pesos.map((p) => (p / pesoTotal) * minutosDia);
+  if (pesoTotal <= 0 || minutosSemana <= 0) return pesos.map(() => 0);
+  const brutos = pesos.map((p) => (p / pesoTotal) * minutosSemana);
   const bases = brutos.map((v) => Math.floor(v));
-  const sobra = minutosDia - bases.reduce((s, v) => s + v, 0);
+  const sobra = minutosSemana - bases.reduce((s, v) => s + v, 0);
   const porResto = brutos
     .map((v, i) => ({ i, resto: v - bases[i] }))
     .sort((a, b) => b.resto - a.resto);
@@ -384,61 +408,90 @@ export function distribuirMinutosPorPeso(minutosDia: number, pesos: number[]): n
   return bases;
 }
 
-export function minutosEstudoHoje(
+// soma os minutos de "estudo" da matéria em todos os dias do intervalo [inicio, fim] (equivalente
+// semanal do antigo minutosEstudoHoje) — janela pequena (7 dias), sem preocupação de performance
+export function minutosEstudoNaSemana(
   calendario: Record<string, AtividadeCalendario[]>,
-  hoje: string,
+  inicio: string,
+  fim: string,
   materia: string
 ): number {
-  return (calendario[hoje] ?? [])
-    .filter((a) => a.tipo === "estudo" && a.materia === materia)
-    .reduce((s, a) => s + a.duracao, 0);
+  let total = 0;
+  const cursor = parseDateKey(inicio);
+  const fimData = parseDateKey(fim);
+  while (cursor.getTime() <= fimData.getTime()) {
+    const key = dateKeyLocal(cursor);
+    total += (calendario[key] ?? [])
+      .filter((a) => a.tipo === "estudo" && a.materia === materia)
+      .reduce((s, a) => s + a.duracao, 0);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return total;
 }
 
-export function computarMetaDia(params: {
+// acha o PDF da matéria que tem o intervalo de páginas do tópico mapeado — se mais de um PDF
+// cobrir o mesmo tópico com intervalo definido, vence o primeiro em ordem de `pdfs` (a lista já
+// vem mais-recente-primeiro de EstudoState.pdfs, então isso é "o mapeamento mais recente vence")
+function resolverPaginaBloco(
+  materia: string,
+  topico: string,
+  pdfs: PdfEstudo[]
+): { pdfId: string; paginaInicio: number; paginaFim: number } | undefined {
+  for (const pdf of pdfs) {
+    if (pdf.materia !== materia) continue;
+    const intervalo = pdf.intervalosPaginas?.find((ip) => ip.topico === topico);
+    if (intervalo) return { pdfId: pdf.id, paginaInicio: intervalo.paginaInicio, paginaFim: intervalo.paginaFim };
+  }
+  return undefined;
+}
+
+export function computarMetaSemana(params: {
   hoje?: string;
   trilha: TrilhaDinamicaState;
   configCiclo: EstudoConfigCiclo;
   materiasAtivas: MateriaLike[];
   topicos: Record<string, TopicoState>;
   calendario: Record<string, AtividadeCalendario[]>;
-}): MetaDia {
-  const { trilha, configCiclo, materiasAtivas, topicos, calendario } = params;
+  pdfs: PdfEstudo[];
+}): MetaSemana {
+  const { trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs } = params;
   const hoje = params.hoje ?? dateKeyLocal();
-  const diaSemana = DIAS_SEMANA[parseDateKey(hoje).getDay()];
+  const { inicio: inicioSemana, fim: fimSemana } = semanaAtual(hoje);
+
   // ATENÇÃO à unidade: apesar do NOME, `configCiclo.horasPorDia` guarda MINUTOS — o CicloTab
-  // grava `horas * 60` (updateHoras) e divide por 60 pra exibir. Multiplicar por 60 aqui de novo
-  // foi um bug real (meta de "180h/5400min" num dia de 3h, reportado pelo usuário).
-  const minutosDia = configCiclo.horasPorDia[diaSemana] ?? 0;
+  // grava `horas * 60` (updateHoras) e divide por 60 pra exibir. "Total semanal" é literalmente
+  // essa soma, já exibida no Ciclo — usar o mesmo cálculo aqui garante que os dois nunca divergem.
+  const minutosSemana = Object.values(configCiclo.horasPorDia).reduce((s, m) => s + m, 0);
 
-  const grupoEfetivo = resolverGrupoEfetivo(trilha.grupoCiclo ?? "A", configCiclo, materiasAtivas, topicos);
-
-  // matérias ativas no ciclo (qualquer grupo) — questões/revisões aparecem independente do dia
   const ativas = materiasAtivas.filter((m) => configCiclo.materias[m.nome]?.incluir);
   const analises = ativas.map((m) => analisarMateria(m, topicos));
 
-  // blocos de estudo: matérias do grupo do dia com teoria pendente, tempo dividido
-  // PROPORCIONALMENTE ao peso configurado no Ciclo (peso 2 = ~2x o tempo de peso 1) — antes era
-  // sempre dividido igual, ignorando o peso que o usuário já configura
-  const materiasBloco = materiasDoGrupo(grupoEfetivo, configCiclo, materiasAtivas)
-    .map((m) => analises.find((a) => a.materia === m.nome) ?? analisarMateria(m, topicos))
-    .filter((a) => a.topicoAtual !== null);
+  // blocos de leitura: TODAS as matérias ativas com teoria pendente (não mais um grupo por dia),
+  // tempo semanal dividido PROPORCIONALMENTE ao peso configurado no Ciclo
+  const materiasBloco = analises.filter((a) => a.topicoAtual !== null);
   const pesosBloco = materiasBloco.map((a) => configCiclo.materias[a.materia]?.peso ?? 1);
-  const minutosPorMateria = distribuirMinutosPorPeso(minutosDia, pesosBloco);
-  const blocos: BlocoEstudo[] = minutosDia > 0
+  const minutosPorMateria = distribuirMinutosPorPeso(minutosSemana, pesosBloco);
+  const blocos: BlocoEstudoSemana[] = minutosSemana > 0
     ? materiasBloco.map((a, i) => {
-        const feitos = minutosEstudoHoje(calendario, hoje, a.materia);
+        const feitos = minutosEstudoNaSemana(calendario, inicioSemana, fimSemana, a.materia);
         const minutosAlvo = minutosPorMateria[i];
+        const topico = a.topicoAtual as string;
+        const range = resolverPaginaBloco(a.materia, topico, pdfs);
         return {
           materia: a.materia,
-          topico: a.topicoAtual as string,
-          minutosAlvo,
-          minutosFeitos: feitos,
+          topico,
+          minutosAlvoSemana: minutosAlvo,
+          minutosFeitosSemana: feitos,
           concluido: feitos >= minutosAlvo,
+          pdfId: range?.pdfId,
+          paginaInicio: range?.paginaInicio,
+          paginaFim: range?.paginaFim,
         };
       })
     : [];
 
-  // revisões de 30 questões: devidas A PARTIR DO DIA SEGUINTE à conclusão, até serem feitas
+  // revisões de 30 questões: idêntico ao modelo anterior — já é baseado em diferença de datas,
+  // não em dia-da-semana/grupo, então não muda com a virada pra meta semanal
   const revisoes30: Revisao30[] = Object.entries(trilha.conclusaoMaterias)
     .filter(([nome, dataConclusao]) => {
       if (diffDias(dataConclusao, hoje) < DIAS_REVISAO_MATERIA) return false;
@@ -450,7 +503,8 @@ export function computarMetaDia(params: {
       link: configCiclo.materias[materia]?.linkRevisaoMateria,
     }));
 
-  // cartas: domingos a cada 14 dias da âncora; "feita" via marcação ou atividade tipo "cartas"
+  // cartas: domingos a cada 14 dias da âncora; "feita" via marcação ou atividade tipo "cartas" —
+  // idêntico ao modelo anterior
   const dif = diffDias(trilha.ancoraCartas, hoje);
   const ehDomingoCartas = parseDateKey(hoje).getDay() === 0 && dif >= 0 && dif % 14 === 0;
   const cartasFeitaHoje =
@@ -466,13 +520,14 @@ export function computarMetaDia(params: {
       })();
 
   return {
-    data: hoje,
-    grupoCiclo: grupoEfetivo,
-    minutosDia,
+    inicioSemana,
+    fimSemana,
+    minutosSemana,
     blocos,
     blocosConcluidos: blocos.length > 0 && blocos.every((b) => b.concluido),
     questoesPendentes: analises.flatMap((a) => a.questoesLiberadas),
     reforcos: ativas.flatMap((m) => analisarReforcos(m, topicos, hoje)),
+    reforcosImediatos: ativas.flatMap((m) => analisarReforcosImediatos(m, topicos)),
     revisoesLink: ativas.flatMap((m) => analisarRevisoesLink(m, topicos, hoje)),
     revisoes30,
     revisarCartas: ehDomingoCartas && !cartasFeitaHoje,
@@ -486,7 +541,6 @@ export function criarTrilhaDinamica(hoje: string = dateKeyLocal()): TrilhaDinami
   return {
     ativa: true,
     iniciadaEm: hoje,
-    grupoCiclo: "A",
     conclusaoMaterias: {},
     revisoes30Feitas: {},
     ancoraCartas: proximoDomingo(hoje),

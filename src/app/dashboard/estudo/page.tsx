@@ -25,7 +25,7 @@ import {
   type PdfEstudo,
   MATERIAS,
 } from "@/lib/estudo-data";
-import { computarMetaDia } from "@/lib/trilha-dinamica";
+import { computarMetaSemana } from "@/lib/trilha-dinamica";
 import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
@@ -406,17 +406,18 @@ export default function EstudoPage() {
     return filtrarTopicosExcluidos(materias, state.topicosExcluidos);
   }, [concursoAtivo?.materias, state.topicosExcluidos]);
 
-  // minutos que faltam pra fechar o bloco de estudo de HOJE de cada matéria (trilha dinâmica) —
-  // o leitor de PDF usa isso pra avisar "meta do dia concluída" no meio da sessão
+  // minutos que faltam pra fechar o bloco de estudo da SEMANA de cada matéria (trilha dinâmica) —
+  // o leitor de PDF usa isso pra avisar "meta da semana concluída" no meio da sessão (dispara bem
+  // mais raro que o antigo "meta do dia", já que o alvo agora é semanal)
   const metaMinutosRestantes = (() => {
     const t = state.trilhaDinamica;
     if (!t?.ativa) return undefined;
-    const meta = computarMetaDia({
+    const meta = computarMetaSemana({
       trilha: t, configCiclo: state.configCiclo, materiasAtivas: materiasFiltradas ?? MATERIAS,
-      topicos: state.topicos, calendario: state.calendario,
+      topicos: state.topicos, calendario: state.calendario, pdfs: state.pdfs,
     });
     const rec: Record<string, number> = {};
-    for (const b of meta.blocos) rec[b.materia] = Math.max(0, b.minutosAlvo - b.minutosFeitos);
+    for (const b of meta.blocos) rec[b.materia] = Math.max(0, b.minutosAlvoSemana - b.minutosFeitosSemana);
     return rec;
   })();
 
@@ -574,6 +575,7 @@ export default function EstudoPage() {
               topicos={state.topicos}
               configCiclo={state.configCiclo}
               calendario={state.calendario}
+              pdfs={state.pdfs}
               materiasConcurso={materiasFiltradas}
               onUpdateTrilha={updateTrilhaDinamica}
               onUpdateTopicos={updateTopicos}

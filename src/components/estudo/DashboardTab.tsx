@@ -16,7 +16,7 @@ import {
   type MateriaBase,
   topicoKey,
 } from "@/lib/estudo-data";
-import { computarMetaDia } from "@/lib/trilha-dinamica";
+import { computarMetaSemana } from "@/lib/trilha-dinamica";
 import { proximaAtividade, resolverCorMateria } from "./trilha/trilha-ui";
 import { alvoLeituraPdf } from "./biblioteca/biblioteca-utils";
 import EstudoHero from "./ui/EstudoHero";
@@ -36,20 +36,21 @@ function fmtDataCurtaBR(dateKey: string): string {
 }
 
 // Bolha de mensagem "estilo Duolingo" — a primeira coisa que o usuário vê no Dashboard, apontando
-// numa frase só o que fazer agora. Puramente narrativa: reusa o mesmo MetaDia que o CardTrilha já
-// calcula, só escolhe UM item (proximaAtividade) e o transforma numa fala curta. Sem trilha ativa
-// ou sem materiasAtivas, some — o CTA "Ative sua trilha" do CardTrilha já cobre esse caso.
+// numa frase só o que fazer agora. Puramente narrativa: reusa a mesma MetaSemana que o CardTrilha
+// já calcula, só escolhe UM item (proximaAtividade) e o transforma numa fala curta. Sem trilha
+// ativa ou sem materiasAtivas, some — o CTA "Ative sua trilha" do CardTrilha já cobre esse caso.
 function MensagemDoDia({ state, materiasConcurso }: { state: EstudoState; materiasConcurso?: MateriaBase[] }) {
   const trilha = state.trilhaDinamica;
   if (!trilha?.ativa) return null;
 
   const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
-  const meta = computarMetaDia({
+  const meta = computarMetaSemana({
     trilha,
     configCiclo: state.configCiclo,
     materiasAtivas,
     topicos: state.topicos,
     calendario: state.calendario,
+    pdfs: state.pdfs,
   });
   const proxima = proximaAtividade(meta);
   const streakDias = calcularStreakDias(state.calendario);
@@ -100,7 +101,7 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
         <div className="flex-1">
           <div className="text-sm font-semibold text-foreground">Ative sua trilha dinâmica</div>
           <div className="text-xs text-muted-foreground">
-            Meta diária calculada do seu progresso real — estudo por PDF, questões escalonadas A-D e revisões.
+            Meta semanal calculada do seu progresso real — estudo por PDF, questões escalonadas A-D e revisões.
           </div>
         </div>
         {onIrParaTrilha && <ArrowRight className="h-4 w-4 text-emerald-500 flex-shrink-0" />}
@@ -108,12 +109,13 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
     );
   }
 
-  const meta = computarMetaDia({
+  const meta = computarMetaSemana({
     trilha,
     configCiclo: state.configCiclo,
     materiasAtivas,
     topicos: state.topicos,
     calendario: state.calendario,
+    pdfs: state.pdfs,
   });
   const feitos = meta.blocos.filter((b) => b.concluido).length;
   const perc = meta.blocos.length > 0 ? Math.round((feitos / meta.blocos.length) * 100) : 0;
@@ -135,7 +137,7 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
-              Grupo {meta.grupoCiclo}
+              {fmtDataCurtaBR(meta.inicioSemana)}–{fmtDataCurtaBR(meta.fimSemana)}
             </span>
             <span className="hidden sm:flex items-center gap-1 text-[11px] text-muted-foreground">
               <CalendarDays className="h-3 w-3" /> Iniciada: {fmtDataCurtaBR(trilha.iniciadaEm)}
@@ -168,7 +170,7 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
           <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {meta.analises.length} matéria{meta.analises.length !== 1 ? "s" : ""}</span>
           <span className="flex items-center gap-1"><ListChecks className="h-3 w-3" /> {totalAtividades} atividade{totalAtividades !== 1 ? "s" : ""}</span>
           {meta.blocosConcluidos && (
-            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold ml-auto"><CheckCircle2 className="h-3 w-3" /> dia entregue</span>
+            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold ml-auto"><CheckCircle2 className="h-3 w-3" /> semana entregue</span>
           )}
         </div>
 

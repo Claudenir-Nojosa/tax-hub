@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings2, Clock, RotateCcw } from "lucide-react";
+import { Settings2, Clock } from "lucide-react";
 import { MATERIAS, type EstudoConfigCiclo, type ConfigMateria, type MateriaBase } from "@/lib/estudo-data";
 import SectionCard from "./ui/SectionCard";
 import { Switch } from "@/components/ui/switch";
@@ -59,13 +59,6 @@ export default function CicloTab({ config, onChange, materiasConcurso }: Props) 
 
   const totalMin = Object.values(config.horasPorDia).reduce((a, b) => a + b, 0);
 
-  const materiasAtivas = MATERIAS_ATIVAS.filter((m) => config.materias[m.nome]?.incluir);
-  const divisoes = {
-    A: materiasAtivas.filter((m) => config.materias[m.nome]?.divisao === "A"),
-    B: materiasAtivas.filter((m) => config.materias[m.nome]?.divisao === "B"),
-    C: materiasAtivas.filter((m) => config.materias[m.nome]?.divisao === "C"),
-  };
-
   return (
     <div className="space-y-6">
       {/* Configuração de matérias */}
@@ -81,8 +74,7 @@ export default function CicloTab({ config, onChange, materiasConcurso }: Props) 
               <TableHead className="pl-5 sm:pl-6">Matéria</TableHead>
               <TableHead className="text-center">Incluir</TableHead>
               <TableHead className="text-center">Peso</TableHead>
-              <TableHead className="text-center">Prioridade</TableHead>
-              <TableHead className="text-center pr-5 sm:pr-6">Divisão</TableHead>
+              <TableHead className="text-center pr-5 sm:pr-6">Prioridade</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -113,7 +105,7 @@ export default function CicloTab({ config, onChange, materiasConcurso }: Props) 
                       <option value={2}>2 — Alto</option>
                     </select>
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-center pr-5 sm:pr-6">
                     <select
                       value={cfg?.prioridade ?? "Baixa"}
                       onChange={(e) => updateMateria(m.nome, "prioridade", e.target.value)}
@@ -121,18 +113,6 @@ export default function CicloTab({ config, onChange, materiasConcurso }: Props) 
                     >
                       <option value="Alta">Alta</option>
                       <option value="Baixa">Baixa</option>
-                    </select>
-                  </TableCell>
-                  <TableCell className="text-center pr-5 sm:pr-6">
-                    <select
-                      value={cfg?.divisao ?? "A"}
-                      onChange={(e) => updateMateria(m.nome, "divisao", e.target.value as "A" | "B" | "C")}
-                      disabled={!cfg?.incluir}
-                      className="text-xs border border-border rounded bg-card text-foreground px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
-                    >
-                      <option value="A">A</option>
-                      <option value="B">B</option>
-                      <option value="C">C</option>
                     </select>
                   </TableCell>
                 </TableRow>
@@ -185,33 +165,6 @@ export default function CicloTab({ config, onChange, materiasConcurso }: Props) 
           })}
         </div>
       </SectionCard>
-
-      {/* Ciclo ativo */}
-      {materiasAtivas.length > 0 && (
-        <SectionCard titulo="Ciclo Ativo — Divisão das Matérias" icone={RotateCcw}>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {(["A", "B", "C"] as const).map((div) => (
-              <div key={div} className="rounded-lg border border-border p-3">
-                <div className="text-sm font-semibold text-foreground mb-2">
-                  Divisão {div}
-                  <span className="ml-1.5 text-xs font-normal text-muted-foreground">({divisoes[div].length} matérias)</span>
-                </div>
-                <div className="space-y-1">
-                  {divisoes[div].length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">Nenhuma matéria</p>
-                  ) : (
-                    divisoes[div].map((m) => (
-                      <div key={m.nome} className="text-xs px-2 py-1 rounded bg-muted text-foreground">
-                        {m.nome}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      )}
     </div>
   );
 }

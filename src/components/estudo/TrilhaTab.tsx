@@ -9,11 +9,11 @@ import type { LucideIcon } from "lucide-react";
 import {
   MATERIAS, calcularStreakDias, dateKeyLocal, topicoKey, GRUPO_LABEL, GRUPO_BADGE,
   type AtividadeCalendario, type EstudoConfigCiclo, type Grupo, type MateriaConcurso,
-  type MateriaDef, type TopicoState, type TrilhaDinamicaState,
+  type MateriaDef, type PdfEstudo, type TopicoState, type TrilhaDinamicaState,
 } from "@/lib/estudo-data";
 import {
-  computarMetaDia, criarTrilhaDinamica, grupoCicloSeguinte, resolverGrupoEfetivo,
-  type AnaliseMateria, type BlocoEstudo, type MetaDia, type QuestaoLiberada,
+  computarMetaSemana, criarTrilhaDinamica,
+  type AnaliseMateria, type BlocoEstudoSemana, type MetaSemana, type QuestaoLiberada,
   type ReforcoGrupo, type Revisao30, type RevisaoLinkPendente,
 } from "@/lib/trilha-dinamica";
 import { fmtHoras, resolverCorMateria, TIPO_ITEM_COR, type TipoPasso } from "./trilha/trilha-ui";
@@ -36,6 +36,7 @@ interface Props {
   topicos: Record<string, TopicoState>;
   configCiclo: EstudoConfigCiclo;
   calendario: Record<string, AtividadeCalendario[]>;
+  pdfs: PdfEstudo[];
   materiasConcurso?: MateriaConcurso[];
   onUpdateTrilha: (trilha: TrilhaDinamicaState | undefined) => void;
   onUpdateTopicos: (topicos: Record<string, TopicoState>) => void;
@@ -56,7 +57,7 @@ function fmtDataLonga(dateKey: string): string {
 }
 
 export default function TrilhaTab({
-  trilha, topicos, configCiclo, calendario, materiasConcurso,
+  trilha, topicos, configCiclo, calendario, pdfs, materiasConcurso,
   onUpdateTrilha, onUpdateTopicos, onIrParaCiclo, onIrParaBiblioteca, onIrParaCartas,
 }: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
@@ -66,13 +67,15 @@ export default function TrilhaTab({
   const temMateriasNoCiclo = materiasAtivas.some((m) => configCiclo.materias[m.nome]?.incluir);
   const streakDias = calcularStreakDias(calendario);
 
-  const meta: MetaDia | null = useMemo(() => {
+  const meta: MetaSemana | null = useMemo(() => {
     if (!trilha?.ativa) return null;
-    return computarMetaDia({ hoje, trilha, configCiclo, materiasAtivas, topicos, calendario });
-  }, [trilha, configCiclo, materiasAtivas, topicos, calendario, hoje]);
+    return computarMetaSemana({ hoje, trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs });
+  }, [trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs, hoje]);
 
-  // ── bookkeeping 1: registra a DATA de conclusão de matérias recém-100% (agenda a revisão de
-  // 30 questões pro dia seguinte)
+  // registra a DATA de conclusão de matérias recém-100% (agenda a revisão de 30 questões pra
+  // DIAS_REVISAO_MATERIA dias depois) — sem carry-over de semana: cada MetaSemana é recalculada
+  // do zero a cada render, não existe mais "avançar o ciclo" pra persistir (decisão do usuário:
+  // se uma matéria não bate a meta de horas numa semana, a semana seguinte só reparte de novo).
   useEffect(() => {
     if (!trilha?.ativa || !meta) return;
     const novas = meta.analises.filter((a) => a.materiaConcluida && !trilha.conclusaoMaterias[a.materia]);
@@ -80,18 +83,6 @@ export default function TrilhaTab({
     const conclusaoMaterias = { ...trilha.conclusaoMaterias };
     for (const a of novas) conclusaoMaterias[a.materia] = hoje;
     onUpdateTrilha({ ...trilha, conclusaoMaterias });
-  }, [trilha, meta, hoje, onUpdateTrilha]);
-
-  // ── bookkeeping 2: entregou todos os blocos do dia → o ciclo avança (1x por dia). Sem
-  // entrega, amanhã repete o mesmo grupo — é isso que torna a trilha "mutável pela entrega".
-  useEffect(() => {
-    if (!trilha?.ativa || !meta) return;
-    if (!meta.blocosConcluidos || trilha.grupoCicloAvancadoEm === hoje) return;
-    onUpdateTrilha({
-      ...trilha,
-      grupoCiclo: grupoCicloSeguinte(meta.grupoCiclo),
-      grupoCicloAvancadoEm: hoje,
-    });
   }, [trilha, meta, hoje, onUpdateTrilha]);
 
   if (!trilha?.ativa || !meta) {
@@ -241,7 +232,7 @@ export default function TrilhaTab({
 
   return (
     <div className="space-y-4">
-      {/* hero do dia */}
+      {/* hero da semana */}
       <EstudoHero
         acaoCanto={
           <button
@@ -258,22 +249,22 @@ export default function TrilhaTab({
           <ProgressRing perc={meta.blocos.length > 0 ? percBlocos : 0} size={80} espessura={7}>
             <div className="text-center leading-none">
               <div className="text-lg font-bold">{meta.blocos.length > 0 ? `${percBlocos}%` : "—"}</div>
-              <div className="text-[9px] text-emerald-100 uppercase tracking-wide mt-0.5">hoje</div>
+              <div className="text-[9px] text-emerald-100 uppercase tracking-wide mt-0.5">semana</div>
             </div>
           </ProgressRing>
           <div className="flex-1 min-w-0">
             <div className="text-[11px] uppercase tracking-wider text-emerald-100 font-semibold mb-0.5">
-              {fmtDataLonga(meta.data)}
+              Semana de {fmtDataCurta(meta.inicioSemana)} a {fmtDataCurta(meta.fimSemana)}
             </div>
             <div className="text-lg sm:text-xl font-bold leading-snug">
               {meta.blocosConcluidos
-                ? "Meta de hoje entregue! 🎉"
+                ? "Meta da semana entregue! 🎉"
                 : meta.blocos.length > 0
-                  ? `Grupo ${meta.grupoCiclo} · ${blocosFeitos}/${meta.blocos.length} blocos`
-                  : "Dia livre de blocos"}
+                  ? `${blocosFeitos}/${meta.blocos.length} blocos da semana`
+                  : "Semana livre de blocos"}
             </div>
             <div className="text-xs text-emerald-100 mt-1">
-              {meta.minutosDia > 0 ? `${fmtHoras(meta.minutosDia)} de estudo hoje` : "Sem horas configuradas pra hoje"}
+              {meta.minutosSemana > 0 ? `${fmtHoras(meta.minutosSemana)} de estudo essa semana` : "Sem horas configuradas pra essa semana"}
               {pendencias > 0 && ` · ${pendencias} pendência${pendencias !== 1 ? "s" : ""} no checklist`}
             </div>
           </div>
@@ -289,15 +280,6 @@ export default function TrilhaTab({
             </div>
           )}
         </div>
-        {meta.blocosConcluidos && (
-          <div className="mt-4 text-xs bg-white/15 backdrop-blur-sm rounded-lg px-3 py-2 flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 flex-shrink-0" />
-            Amanhã o ciclo segue pro{" "}
-            {/* grupo EFETIVO de amanhã: se o grupo seguinte não tiver matéria com teoria
-                pendente, o motor pula pra frente — mostrar o que de fato vai acontecer */}
-            <b>grupo {resolverGrupoEfetivo(grupoCicloSeguinte(meta.grupoCiclo), configCiclo, materiasAtivas, topicos)}</b>.
-          </div>
-        )}
         {!meta.revisarCartas && (
           <div className="mt-3 text-[11px] text-emerald-100/90 flex items-center gap-1.5">
             <CalendarClock className="h-3 w-3 flex-shrink-0" />
@@ -306,9 +288,9 @@ export default function TrilhaTab({
         )}
       </EstudoHero>
 
-      {/* checklist único do dia */}
+      {/* checklist único da semana */}
       <div className="bg-card rounded-2xl border border-border p-4 sm:p-5">
-        <div className="text-sm font-bold text-foreground dark:text-foreground mb-4">Sua trilha de hoje</div>
+        <div className="text-sm font-bold text-foreground dark:text-foreground mb-4">Sua trilha desta semana</div>
         {passos.length === 0 ? (
           <div className="py-8 text-center">
             <div className="h-14 w-14 rounded-full bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center mx-auto mb-3">
@@ -385,13 +367,13 @@ function PassoLinha({
 function CorpoBloco({
   b, materiasAtivas, onIrParaBiblioteca, onMarcarEstudado,
 }: {
-  b: BlocoEstudo;
+  b: BlocoEstudoSemana;
   materiasAtivas: (MateriaDef | MateriaConcurso)[];
   onIrParaBiblioteca?: () => void;
   onMarcarEstudado: () => void;
 }) {
   const cor = resolverCorMateria(b.materia, materiasAtivas);
-  const perc = Math.min(100, Math.round((b.minutosFeitos / Math.max(1, b.minutosAlvo)) * 100));
+  const perc = Math.min(100, Math.round((b.minutosFeitosSemana / Math.max(1, b.minutosAlvoSemana)) * 100));
   return (
     <div className="flex items-center gap-3">
       <div className="flex-1 min-w-0">
@@ -404,7 +386,7 @@ function CorpoBloco({
           <div className="flex-1 bg-muted dark:bg-muted rounded-full h-1.5 overflow-hidden">
             <div className={`h-full rounded-full transition-all duration-500 ${b.concluido ? "bg-emerald-500" : "bg-primary/50"}`} style={{ width: `${perc}%` }} />
           </div>
-          <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{b.minutosFeitos}/{b.minutosAlvo}min</span>
+          <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{fmtHoras(b.minutosFeitosSemana)}/{fmtHoras(b.minutosAlvoSemana)}</span>
         </div>
       </div>
       {!b.concluido && onIrParaBiblioteca && (
@@ -754,12 +736,12 @@ function Intro({
   onIrParaCiclo?: () => void;
 }) {
   const regras: { icone: LucideIcon; cor: string; texto: string }[] = [
-    { icone: Clock, cor: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary", texto: "Cada dia pertence a um grupo do ciclo (A/B/C). As horas do dia são divididas entre as matérias do grupo — ex.: 3h e 3 matérias = 1h de PDF em cada, no tópico atual. O tempo é monitorado pelo leitor de PDF." },
+    { icone: Clock, cor: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary", texto: "A semana cobre todas as matérias ativas de uma vez. As horas semanais (Ciclo de Estudos) são divididas proporcionalmente ao peso de cada matéria com teoria pendente, no tópico atual de cada uma. O tempo é monitorado pelo leitor de PDF." },
     { icone: ListChecks, cor: "bg-teal-100 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400", texto: "Concluir um tópico libera questões dos anteriores: grupo A do último, B do penúltimo, C do antepenúltimo, D do anterior a esse — até fechar os 4 grupos de todos os tópicos." },
     { icone: ExternalLink, cor: "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400", texto: "Cadastrado o link de questões do tópico (aba Questões), 7 e 30 dias após concluir os 4 grupos A-D a trilha pede pra refazer essas questões em cada checkpoint — abaixo de 70% volta como reforço." },
     { icone: Trophy, cor: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400", texto: "Matéria 100% (teoria + todos os grupos) entra em modo revisão: 3 dias depois, 30 questões englobando todos os tópicos dela, pelo link cadastrado na aba Questões." },
     { icone: Layers, cor: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400", texto: "A cada 2 domingos, revisão das cartas." },
-    { icone: Sparkles, cor: "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400", texto: "Trilha 100% mutável: o ciclo só avança quando você entrega os blocos do dia — a meta de amanhã depende do que você fez hoje." },
+    { icone: Sparkles, cor: "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400", texto: "Sem dívida acumulada: cada semana é recalculada do zero com base no peso configurado — se você não bate a meta de uma semana, a semana seguinte só reparte de novo, sem carregar o que faltou." },
   ];
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -769,7 +751,7 @@ function Intro({
         </div>
         <div className="text-xl font-bold mb-1">Trilha dinâmica</div>
         <p className="text-sm text-emerald-100">
-          Sua meta diária calculada automaticamente do seu progresso real — sem plano fixo, ela se adapta ao que você entrega.
+          Sua meta semanal calculada automaticamente do seu progresso real — sem plano fixo, ela se adapta ao que você entrega.
         </p>
       </EstudoHero>
       <div className="bg-card rounded-2xl border border-border divide-y divide-border dark:divide-border">
@@ -785,7 +767,7 @@ function Intro({
       {!temMateriasNoCiclo && (
         <div className="rounded-xl border-2 border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 text-xs text-foreground flex items-center gap-2">
           <Settings2 className="h-4 w-4 text-amber-500 flex-shrink-0" />
-          <span className="flex-1">Nenhuma matéria incluída no Ciclo de Estudos — configure o ciclo primeiro (grupos A/B/C e horas por dia).</span>
+          <span className="flex-1">Nenhuma matéria incluída no Ciclo de Estudos — configure o ciclo primeiro (peso e horas por dia).</span>
           {onIrParaCiclo && (
             <button type="button" onClick={onIrParaCiclo} className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium whitespace-nowrap">Ir pro Ciclo</button>
           )}
