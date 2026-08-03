@@ -28,6 +28,24 @@ arquivo se as regras mudarem.
    página com `unpdf`, pede pro `gpt-4o` localizar os tópicos, sempre com revisão humana antes de
    salvar). Sem mapeamento pro tópico, "Ler PDF" cai no comportamento antigo (abre onde parou,
    sem aviso).
+   - **Capítulos manuais (2026-08-03, substitui a sugestão por IA na prática — o usuário achou a
+     versão índice-por-tópico ruim)**: `PdfEstudo.capitulos?: CapituloPdf[]` — lista digitada à
+     mão em `FormPdf.tsx` (só nome + página de início; o fim é sempre calculado: a página anterior
+     ao início do próximo capítulo, e o do último vai até `paginaConteudoFim`/`totalPaginas`).
+     TODOS os capítulos de um PDF pertencem ao MESMO tópico (o de `topicos`) — sem campo de tópico
+     por capítulo, porque um PDF cobre um tópico só, na prática (mesma convenção de `topicos?.[0]`
+     já usada no resto da Biblioteca). Quando o PDF resolvido pro tópico atual tem `capitulos`,
+     `resolverPaginaBloco` (`trilha-dinamica.ts`) usa `proximoBlocoCapitulos` em vez do
+     `intervalosPaginas` inteiro: acha o primeiro capítulo ainda não lido (`paginaAtual` do PDF,
+     que só avança) e agrupa os PRÓXIMOS capítulos consecutivos até estimar
+     `MINUTOS_ALVO_ATIVIDADE_CAPITULO` (30min) de leitura no ritmo de páginas/hora do usuário —
+     capítulos curtos (ex.: 2 páginas) somem sozinhos dentro do grupo, sem virar uma atividade
+     ridiculamente pequena na Trilha. O bloco ganha `capituloLabel` ("Capítulo 3 de 6: Crédito
+     Tributário" ou "Capítulos 4-5 de 6") — `CorpoBloco` (`TrilhaLinhas.tsx`) mostra isso no lugar
+     do intervalo de página cru. Sem estado de "capítulo concluído" separado: o mesmo bookmark
+     `paginaAtual` decide tudo, exatamente como já decidia "PDF lido" antes disso existir. PDFs
+     sem `capitulos` continuam no comportamento de `intervalosPaginas` de sempre — nada migrado
+     automaticamente, os dois convivem.
 3. **Questões escalonadas A-D**: cada tópico tem 4 grupos de questões — os cadernos A/B/C/D do
    Edital (grupo "feito" = acertos+erros > 0). Concluir o tópico k libera: grupo **A do k-1**,
    **B do k-2**, **C do k-3**, **D do k-4**. Quando a teoria da matéria acaba, a "cauda" (grupos

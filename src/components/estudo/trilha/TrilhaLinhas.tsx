@@ -57,8 +57,14 @@ export function CorpoBloco({
         </div>
         <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={b.topico}>
           tópico atual: {b.topico}
-          {b.paginaInicio && b.paginaFim && ` (págs. ${b.paginaInicio}–${b.paginaFim})`}
+          {b.paginaInicio && b.paginaFim && !b.capituloLabel && ` (págs. ${b.paginaInicio}–${b.paginaFim})`}
         </div>
+        {b.capituloLabel && (
+          <div className="text-[11px] text-primary truncate mt-0.5" title={b.capituloLabel}>
+            {b.capituloLabel}
+            {b.paginaInicio && b.paginaFim && ` (págs. ${b.paginaInicio}–${b.paginaFim})`}
+          </div>
+        )}
         <div className="mt-1.5 flex items-center gap-2">
           <div className="flex-1 bg-muted dark:bg-muted rounded-full h-1.5 overflow-hidden">
             <div className={`h-full rounded-full transition-all duration-500 ${b.concluido ? "bg-emerald-500" : "bg-primary/50"}`} style={{ width: `${perc}%` }} />

@@ -1,7 +1,7 @@
 import {
   calcularPagPorHora, dateKeyLocal, topicoKey, calcularPerc,
-  type AtividadeCalendario, type ChecklistRevisaoLink, type EstudoConfigCiclo, type Grupo,
-  type PdfEstudo, type TopicoState, type TrilhaDinamicaState,
+  type AtividadeCalendario, type CapituloPdf, type ChecklistRevisaoLink, type EstudoConfigCiclo,
+  type Grupo, type PdfEstudo, type TopicoState, type TrilhaDinamicaState,
 } from "./estudo-data";
 
 // forma mínima de matéria que o motor precisa — MateriaDef, MateriaConcurso e MateriaBase são
@@ -333,11 +333,15 @@ export interface BlocoEstudoSemana {
   minutosAlvoSemana: number;
   minutosFeitosSemana: number; // sessões de "estudo" da SEMANA corrente dessa matéria
   concluido: boolean;
-  // resolvido via PdfEstudo.intervalosPaginas quando existe um PDF da matéria com o intervalo do
-  // tópico mapeado; ausente = "Ler PDF" cai no comportamento genérico (sem página/aviso)
+  // resolvido via PdfEstudo.intervalosPaginas (ou capitulos, quando definidos — ver
+  // resolverPaginaBloco) quando existe um PDF da matéria com o intervalo do tópico mapeado;
+  // ausente = "Ler PDF" cai no comportamento genérico (sem página/aviso)
   pdfId?: string;
   paginaInicio?: number;
   paginaFim?: number;
+  // só presente quando o PDF tem capítulos manuais — "Capítulo 2 de 6: Crédito Tributário" etc.,
+  // pra Trilha mostrar EM QUAL capítulo a atividade de leitura está, não só o tópico inteiro
+  capituloLabel?: string;
 }
 
 export interface Revisao30 {
@@ -433,16 +437,107 @@ export function minutosEstudoNaSemana(
   return total;
 }
 
-// acha o PDF da matéria que tem o intervalo de páginas do tópico mapeado — se mais de um PDF
-// cobrir o mesmo tópico com intervalo definido, vence o primeiro em ordem de `pdfs` (a lista já
-// vem mais-recente-primeiro de EstudoState.pdfs, então isso é "o mapeamento mais recente vence")
+export interface CapituloResolvido extends CapituloPdf {
+  paginaFim: number;
+  lido: boolean;
+}
+
+// dá o paginaFim de cada capítulo (a página anterior ao início do próximo; o último vai até o fim
+// do conteúdo) e se já foi lido — sem estado de "capítulo concluído" separado: o bookmark
+// `paginaAtual` (que só avança, nunca recua — ver LeitorPdf) já basta, do mesmo jeito que decide
+// se o PDF inteiro foi lido.
+export function resolverCapitulos(
+  pdf: Pick<PdfEstudo, "capitulos" | "paginaAtual" | "totalPaginas" | "paginaConteudoFim">
+): CapituloResolvido[] {
+  const capitulos = pdf.capitulos ?? [];
+  if (capitulos.length === 0) return [];
+  const ordenados = [...capitulos].sort((a, b) => a.paginaInicio - b.paginaInicio);
+  const fimDocumento = pdf.paginaConteudoFim ?? pdf.totalPaginas;
+  return ordenados.map((c, i) => {
+    const paginaFim = i === ordenados.length - 1 ? fimDocumento : ordenados[i + 1].paginaInicio - 1;
+    return { ...c, paginaFim, lido: pdf.paginaAtual >= paginaFim };
+  });
+}
+
+// agrupa capítulos curtos até render uma atividade de leitura de duração razoável — sem isso, um
+// capítulo de 2 páginas viraria uma atividade separada na Trilha, ridiculamente pequena
+const MINUTOS_ALVO_ATIVIDADE_CAPITULO = 30;
+
+export interface BlocoCapitulos {
+  paginaInicio: number;
+  paginaFim: number;
+  nomes: string[]; // 1 nome = capítulo único; 2+ = vários capítulos agrupados nessa atividade
+  primeiroIndice: number; // 1-based, pra UI mostrar "Capítulo 3 de 6" / "Capítulos 3-4 de 6"
+  ultimoIndice: number;
+  total: number;
+}
+
+// próximo trecho de leitura dentro dos capítulos do PDF: a partir do primeiro ainda não lido,
+// junta capítulos CONSECUTIVOS até estimar ~MINUTOS_ALVO_ATIVIDADE_CAPITULO de leitura no ritmo
+// de páginas/hora do usuário (calcularPagPorHora) — sem ritmo conhecido ainda, agrupa 1 capítulo
+// por vez (nada pra estimar). undefined quando o PDF não tem capítulos manuais, ou todos já foram
+// lidos.
+export function proximoBlocoCapitulos(
+  pdf: Pick<PdfEstudo, "capitulos" | "paginaAtual" | "totalPaginas" | "paginaConteudoFim">,
+  pagPorHora: number | null
+): BlocoCapitulos | undefined {
+  const resolvidos = resolverCapitulos(pdf);
+  if (resolvidos.length === 0) return undefined;
+  const primeiroIdx = resolvidos.findIndex((c) => !c.lido);
+  if (primeiroIdx === -1) return undefined;
+
+  const nomes: string[] = [];
+  let minutosAcumulados = 0;
+  let ultimoIdx = primeiroIdx;
+  for (let i = primeiroIdx; i < resolvidos.length; i++) {
+    const c = resolvidos[i];
+    nomes.push(c.nome);
+    ultimoIdx = i;
+    if (!pagPorHora || pagPorHora <= 0) break; // sem ritmo conhecido, não dá pra estimar duração
+    const paginas = c.paginaFim - c.paginaInicio + 1;
+    minutosAcumulados += (paginas / pagPorHora) * 60;
+    if (minutosAcumulados >= MINUTOS_ALVO_ATIVIDADE_CAPITULO) break;
+  }
+  return {
+    paginaInicio: resolvidos[primeiroIdx].paginaInicio,
+    paginaFim: resolvidos[ultimoIdx].paginaFim,
+    nomes,
+    primeiroIndice: primeiroIdx + 1,
+    ultimoIndice: ultimoIdx + 1,
+    total: resolvidos.length,
+  };
+}
+
+function rotuloBlocoCapitulos(bloco: BlocoCapitulos): string {
+  return bloco.nomes.length > 1
+    ? `Capítulos ${bloco.primeiroIndice}-${bloco.ultimoIndice} de ${bloco.total}`
+    : `Capítulo ${bloco.primeiroIndice} de ${bloco.total}: ${bloco.nomes[0]}`;
+}
+
+// acha o PDF da matéria que cobre o tópico — se tiver capítulos manuais definidos, usa o PRÓXIMO
+// trecho de leitura (sequencial, capítulo a capítulo); senão cai no intervalo de página mapeado
+// pro tópico inteiro (intervalosPaginas), comportamento de sempre. Se mais de um PDF cobrir o
+// mesmo tópico, vence o primeiro em ordem de `pdfs` (a lista já vem mais-recente-primeiro de
+// EstudoState.pdfs, então isso é "o mapeamento mais recente vence").
 function resolverPaginaBloco(
   materia: string,
   topico: string,
-  pdfs: PdfEstudo[]
-): { pdfId: string; paginaInicio: number; paginaFim: number } | undefined {
+  pdfs: PdfEstudo[],
+  pagPorHora: number | null
+): { pdfId: string; paginaInicio: number; paginaFim: number; capituloLabel?: string } | undefined {
   for (const pdf of pdfs) {
     if (pdf.materia !== materia) continue;
+    if (pdf.topicos?.includes(topico) && (pdf.capitulos?.length ?? 0) > 0) {
+      const bloco = proximoBlocoCapitulos(pdf, pagPorHora);
+      if (bloco) {
+        return {
+          pdfId: pdf.id,
+          paginaInicio: bloco.paginaInicio,
+          paginaFim: bloco.paginaFim,
+          capituloLabel: rotuloBlocoCapitulos(bloco),
+        };
+      }
+    }
     const intervalo = pdf.intervalosPaginas?.find((ip) => ip.topico === topico);
     if (intervalo) return { pdfId: pdf.id, paginaInicio: intervalo.paginaInicio, paginaFim: intervalo.paginaFim };
   }
@@ -469,6 +564,7 @@ export function computarMetaSemana(params: {
 
   const ativas = materiasAtivas.filter((m) => configCiclo.materias[m.nome]?.incluir);
   const analises = ativas.map((m) => analisarMateria(m, topicos));
+  const pagPorHora = calcularPagPorHora(calendario);
 
   // blocos de leitura: TODAS as matérias ativas com teoria pendente (não mais um grupo por dia),
   // tempo semanal dividido PROPORCIONALMENTE ao peso configurado no Ciclo
@@ -480,7 +576,7 @@ export function computarMetaSemana(params: {
         const feitos = minutosEstudoNaSemana(calendario, inicioSemana, fimSemana, a.materia);
         const minutosAlvo = minutosPorMateria[i];
         const topico = a.topicoAtual as string;
-        const range = resolverPaginaBloco(a.materia, topico, pdfs);
+        const range = resolverPaginaBloco(a.materia, topico, pdfs, pagPorHora);
         return {
           materia: a.materia,
           topico,
@@ -490,6 +586,7 @@ export function computarMetaSemana(params: {
           pdfId: range?.pdfId,
           paginaInicio: range?.paginaInicio,
           paginaFim: range?.paginaFim,
+          capituloLabel: range?.capituloLabel,
         };
       })
     : [];

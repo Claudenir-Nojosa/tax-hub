@@ -262,6 +262,19 @@ export interface TopicoPaginas {
   paginaFim: number;
 }
 
+// divisão manual do PDF em capítulos (só nome + página de início — o fim é sempre derivado: a
+// página anterior ao início do próximo capítulo, e o do último vai até paginaConteudoFim/
+// totalPaginas). TODOS os capítulos de um PdfEstudo pertencem ao MESMO tópico — o(s) de
+// `topicos` — não tem campo de tópico por capítulo porque, na prática, um PDF cobre um tópico só
+// (mesma convenção de `topicos?.[0]` já usada em LeitorPdf/BibliotecaTab). A Trilha usa isso pra
+// sequenciar a leitura capítulo a capítulo (ver proximoBlocoCapitulos em trilha-dinamica.ts), em
+// vez de sempre oferecer o tópico inteiro de uma vez — capítulos curtos são agrupados até renderem
+// uma atividade de duração razoável.
+export interface CapituloPdf {
+  nome: string;
+  paginaInicio: number;
+}
+
 export interface PdfEstudo {
   id: string;
   nome: string; // ex.: "Aula 05 — ICMS: fato gerador"
@@ -275,8 +288,11 @@ export interface PdfEstudo {
   paginaConteudoFim?: number;
   // mapeamento de página por tópico coberto — subconjunto de `topicos` (nem todo tópico precisa
   // estar mapeado); ausente/tópico não mapeado = sem intervalo conhecido, "Ler PDF" cai no
-  // comportamento genérico (abre no início, sem aviso de fim de conteúdo)
+  // comportamento genérico (abre no início, sem aviso de fim de conteúdo). Quando `capitulos`
+  // está preenchido, ele manda na Trilha em vez disso — `intervalosPaginas` fica como estava,
+  // sem migração, pros PDFs que ainda não foram divididos em capítulo.
   intervalosPaginas?: TopicoPaginas[];
+  capitulos?: CapituloPdf[];
   questoes?: PdfQuestoes;
   criadoEm: string;
   atualizadoEm?: string;

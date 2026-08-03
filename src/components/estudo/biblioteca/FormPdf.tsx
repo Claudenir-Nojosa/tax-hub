@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ChevronDown, FileUp, Loader2, Sparkles, X } from "lucide-react";
-import type { MateriaConcurso, MateriaDef, PdfEstudo, TopicoPaginas } from "@/lib/estudo-data";
+import { ChevronDown, FileUp, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
+import type { CapituloPdf, MateriaConcurso, MateriaDef, PdfEstudo, TopicoPaginas } from "@/lib/estudo-data";
 import { contarPaginasPdf, obterArquivoPdf } from "@/lib/pdf-storage";
 import { fecharLacunasIntervalos, novoId } from "./biblioteca-utils";
 
@@ -17,6 +17,30 @@ function intervalosIniciais(pdf?: PdfEstudo): IntervalosEmEdicao {
     mapa[ip.topico] = { inicio: String(ip.paginaInicio), fim: String(ip.paginaFim) };
   }
   return mapa;
+}
+
+// capítulo em edição — string controlada pra página início, igual ao padrão dos intervalos acima
+type CapituloEmEdicao = { nome: string; paginaInicio: string };
+
+function capitulosIniciais(pdf?: PdfEstudo): CapituloEmEdicao[] {
+  return (pdf?.capitulos ?? []).map((c) => ({ nome: c.nome, paginaInicio: String(c.paginaInicio) }));
+}
+
+// página final de CADA capítulo, na ORDEM DE ÍNDICE do array `linhas` (não a ordem por página) —
+// só pra pré-visualização no form: a página anterior ao início do próximo capítulo (por número de
+// página, não por posição na lista), e o último vai até o fim do conteúdo/total. null quando a
+// página de início daquela linha ainda não é um número válido.
+function previewFimCapitulos(linhas: CapituloEmEdicao[], totalPaginas: number, paginaConteudoFim?: number): (number | null)[] {
+  const validos = linhas
+    .map((l, i) => ({ i, inicio: parseInt(l.paginaInicio) }))
+    .filter((x) => Number.isFinite(x.inicio) && x.inicio >= 1)
+    .sort((a, b) => a.inicio - b.inicio);
+  const fimDocumento = paginaConteudoFim ?? totalPaginas;
+  const porIndice = new Map<number, number>();
+  validos.forEach((v, pos) => {
+    porIndice.set(v.i, pos === validos.length - 1 ? fimDocumento : validos[pos + 1].inicio - 1);
+  });
+  return linhas.map((_, i) => porIndice.get(i) ?? null);
 }
 
 // ─── Form de cadastro/edição ─────────────────────────────────────────────────
@@ -43,6 +67,7 @@ export default function FormPdf({
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [mostrarTopicos, setMostrarTopicos] = useState((pdfParaEditar?.topicos?.length ?? 0) > 0 || !!presetTopico);
   const [intervalos, setIntervalos] = useState<IntervalosEmEdicao>(intervalosIniciais(pdfParaEditar));
+  const [capitulos, setCapitulos] = useState<CapituloEmEdicao[]>(capitulosIniciais(pdfParaEditar));
   const [salvasAgora, setSalvasAgora] = useState(0);
   const [flash, setFlash] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -77,6 +102,15 @@ export default function FormPdf({
       if (!Number.isFinite(inicio) || !Number.isFinite(fim) || inicio < 1 || fim < inicio) continue;
       resultado.push({ topico: t, paginaInicio: inicio, paginaFim: fim });
     }
+    return resultado.length > 0 ? resultado : undefined;
+  };
+
+  // só entram capítulos com nome E página de início válidos — um capítulo incompleto some sozinho
+  // do que é salvo, sem travar o resto (mesma filosofia dos intervalos por tópico acima)
+  const construirCapitulos = (): CapituloPdf[] | undefined => {
+    const resultado = capitulos
+      .map((c) => ({ nome: c.nome.trim(), paginaInicio: parseInt(c.paginaInicio) }))
+      .filter((c) => c.nome !== "" && Number.isFinite(c.paginaInicio) && c.paginaInicio >= 1);
     return resultado.length > 0 ? resultado : undefined;
   };
 
@@ -149,6 +183,7 @@ export default function FormPdf({
     try {
       const topicos = [...topicosSel].filter((t) => topicosDaMateria.includes(t));
       const intervalosPaginas = construirIntervalosPaginas(topicos);
+      const capitulosPdf = construirCapitulos();
       if (pdfParaEditar) {
         await onSalvar(
           {
@@ -157,6 +192,7 @@ export default function FormPdf({
             materia,
             topicos: topicos.length > 0 ? topicos : undefined,
             intervalosPaginas,
+            capitulos: capitulosPdf,
             totalPaginas: paginasNum,
             paginaAtual: Math.min(pdfParaEditar.paginaAtual, paginasNum),
             atualizadoEm: new Date().toISOString(),
@@ -171,6 +207,7 @@ export default function FormPdf({
             materia,
             topicos: topicos.length > 0 ? topicos : undefined,
             intervalosPaginas,
+            capitulos: capitulosPdf,
             totalPaginas: paginasNum,
             paginaAtual: 0,
             criadoEm: new Date().toISOString(),
@@ -184,6 +221,7 @@ export default function FormPdf({
         setTotalPaginas("");
         setTopicosSel(new Set(presetTopico ? [presetTopico] : []));
         setIntervalos({});
+        setCapitulos([]);
         setArquivo(null);
         setPaginasDetectadas(false);
         setSalvasAgora((n) => n + 1);
@@ -366,6 +404,61 @@ export default function FormPdf({
               );
             })}
           </div>
+        </div>
+      )}
+
+      {topicosSel.size > 0 && (
+        <div className="mb-3">
+          <div className="text-[11px] font-medium text-muted-foreground mb-1.5">
+            Capítulos (opcional) — divida a leitura em pedaços: a Trilha manda um capítulo (ou um
+            grupinho de capítulos curtos, se forem rápidos) de cada vez, na ordem, em vez do
+            tópico inteiro de uma só tacada. Só o nome e a página de início; o fim de cada um é
+            sempre a página anterior ao início do próximo.
+          </div>
+          {capitulos.length > 0 && (
+            <div className="space-y-1.5 mb-1.5">
+              {(() => {
+                const fins = previewFimCapitulos(capitulos, paginasNum, pdfParaEditar?.paginaConteudoFim);
+                return capitulos.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2 rounded-lg border border-border dark:border-border px-2.5 py-1.5">
+                    <input
+                      type="text"
+                      value={c.nome}
+                      onChange={(e) => setCapitulos((prev) => prev.map((x, xi) => (xi === i ? { ...x, nome: e.target.value } : x)))}
+                      placeholder={`Capítulo ${i + 1}`}
+                      className="flex-1 min-w-0 text-xs border border-border rounded-md px-2 py-1 bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                    />
+                    <label className="text-[10px] text-muted-foreground flex-shrink-0">pág.</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={c.paginaInicio}
+                      onChange={(e) => setCapitulos((prev) => prev.map((x, xi) => (xi === i ? { ...x, paginaInicio: e.target.value } : x)))}
+                      placeholder="início"
+                      className="w-16 text-xs border border-border rounded-md px-2 py-1 bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                    />
+                    <span className="text-[10px] text-muted-foreground flex-shrink-0 w-16">
+                      até {fins[i] ?? "?"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCapitulos((prev) => prev.filter((_, xi) => xi !== i))}
+                      className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors flex-shrink-0"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setCapitulos((prev) => [...prev, { nome: "", paginaInicio: "" }])}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium text-primary hover:bg-primary/10 transition-colors"
+          >
+            <Plus className="h-3 w-3" /> Adicionar capítulo
+          </button>
         </div>
       )}
 
