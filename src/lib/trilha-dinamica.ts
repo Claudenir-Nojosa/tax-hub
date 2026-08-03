@@ -410,7 +410,7 @@ export function computarMetaDia(params: {
   // foi um bug real (meta de "180h/5400min" num dia de 3h, reportado pelo usuário).
   const minutosDia = configCiclo.horasPorDia[diaSemana] ?? 0;
 
-  const grupoEfetivo = resolverGrupoEfetivo(trilha.grupoCiclo, configCiclo, materiasAtivas, topicos);
+  const grupoEfetivo = resolverGrupoEfetivo(trilha.grupoCiclo ?? "A", configCiclo, materiasAtivas, topicos);
 
   // matérias ativas no ciclo (qualquer grupo) — questões/revisões aparecem independente do dia
   const ativas = materiasAtivas.filter((m) => configCiclo.materias[m.nome]?.incluir);

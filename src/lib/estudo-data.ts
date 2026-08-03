@@ -66,6 +66,11 @@ export interface TopicoState {
   linkRevisao30d?: string;
   // um resultado por checkpoint — independentes entre si (fazer o de 7 dias não altera o de 30)
   revisoesLink?: Partial<Record<ChecklistRevisaoLink, RevisaoLinkTopico>>;
+  // link de um caderno CURTO (até ~10 questões) pra praticar logo depois de marcar o tópico como
+  // estudado — reforço imediato, distinto do escalonamento A-D e dos checkpoints de 7/30 dias.
+  // Cadastrado na aba Questões. Some da Trilha assim que reforcoImediatoFeito é registrado.
+  linkReforcoImediato?: string;
+  reforcoImediatoFeito?: RevisaoLinkTopico;
   // nível de importância do tópico pro edital (ausente = não definido) — só indicação visual no
   // Edital, não afeta cálculo de progresso/XP/Ciclo/Trilha
   importancia?: NivelImportancia;
@@ -175,10 +180,12 @@ export const TRILHA_NIVEL_CONFIG: Record<TrilhaNivelMateria, { label: string; cu
 export interface TrilhaDinamicaState {
   ativa: boolean;
   iniciadaEm: string; // dateKey
-  // posição do ciclo A/B/C — avança quando os blocos de estudo do dia são todos entregues
-  // (trilha "mutável": sem entrega, o dia seguinte repete o mesmo grupo)
-  grupoCiclo: "A" | "B" | "C";
-  grupoCicloAvancadoEm?: string; // dateKey do último avanço (impede avançar 2x no mesmo dia)
+  /** @deprecated modelo diário por grupo A/B/C substituído pela meta semanal (computarMetaSemana
+   * em trilha-dinamica.ts, cobre todas as matérias ativas de uma vez). Mantido opcional só pra não
+   * quebrar trilhas antigas persistidas — não é mais lido pelo motor. */
+  grupoCiclo?: "A" | "B" | "C";
+  /** @deprecated ver grupoCiclo acima */
+  grupoCicloAvancadoEm?: string;
   // matéria 100% (todos os tópicos estudados + 4 grupos de questões de cada tópico feitos):
   // a data de conclusão agenda a revisão de 30 questões pro DIA SEGUINTE
   conclusaoMaterias: Record<string, string>; // nome -> dateKey da conclusão
@@ -245,6 +252,16 @@ export function gerarQuestoesGrupos(total: number): QuestaoResultado[] {
   return resultados;
 }
 
+// intervalo de páginas de UM tópico dentro de um PdfEstudo específico — permite abrir o leitor já
+// na página certa e avisar quando o usuário passa da página final indicada (ver TrilhaTab "Ler
+// PDF" e LeitorPdf paginaAbertura/paginaFimAlvo). Preenchido manualmente ou sugerido por IA
+// (/api/ai/pdf-topicos-paginas), sempre com revisão humana antes de salvar.
+export interface TopicoPaginas {
+  topico: string;
+  paginaInicio: number;
+  paginaFim: number;
+}
+
 export interface PdfEstudo {
   id: string;
   nome: string; // ex.: "Aula 05 — ICMS: fato gerador"
@@ -256,6 +273,10 @@ export interface PdfEstudo {
   // ausente, o PDF inteiro conta como conteúdo (comportamento antigo, compatível com PDFs já
   // cadastrados). É esse valor (não totalPaginas) que define "terminei de ler" e o % de leitura.
   paginaConteudoFim?: number;
+  // mapeamento de página por tópico coberto — subconjunto de `topicos` (nem todo tópico precisa
+  // estar mapeado); ausente/tópico não mapeado = sem intervalo conhecido, "Ler PDF" cai no
+  // comportamento genérico (abre no início, sem aviso de fim de conteúdo)
+  intervalosPaginas?: TopicoPaginas[];
   questoes?: PdfQuestoes;
   criadoEm: string;
   atualizadoEm?: string;
