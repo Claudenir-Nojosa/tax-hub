@@ -3,17 +3,21 @@ import OpenAI from "openai";
 import { auth } from "../../../../../auth";
 
 // Sugestão por IA da lista de CAPÍTULOS do PDF, direto do índice — usada pelo botão "Sugerir com
-// IA" do PainelCapitulos.tsx (dentro do leitor). Bem mais simples que a antiga rota
-// pdf-topicos-paginas: não tenta casar capítulo com tópico do edital nem adivinhar onde cada um
-// TERMINA (isso já é derivado automaticamente em trilha-dinamica.ts a partir do início do
-// próximo) — só extrai, do índice, nome + página de início de cada capítulo de TEORIA, pulando
-// introdução/apresentação do curso e as seções de exercício no final. Nunca aplica sozinho: o
-// resultado só pré-preenche o painel, sempre com revisão humana antes de qualquer coisa ser salva.
+// IA" do PainelCapitulos.tsx (dentro do leitor) e do SugestaoLoteModal.tsx (em lote). Bem mais
+// simples que a antiga rota pdf-topicos-paginas: não tenta casar capítulo com tópico do edital
+// nem adivinhar onde cada um TERMINA (isso já é derivado automaticamente em trilha-dinamica.ts a
+// partir do início do próximo) — só extrai, do índice, nome + página de início de cada capítulo
+// de TEORIA, pulando introdução/apresentação do curso e as seções de exercício no final. Nunca
+// aplica sozinho: o resultado só pré-preenche o painel, sempre com revisão humana antes de
+// qualquer coisa ser salva.
+//
+// Recebe TEXTO já extraído (JSON), não o arquivo — o binário de uma aula do Estratégia (100+
+// páginas) passa fácil do limite de body de uma function do Vercel (~4,5MB, deu 413 num PDF de
+// 138 páginas), mesmo motivo pelo qual pdf-storage.ts nunca manda o PDF inteiro pra uma function.
+// A extração roda no NAVEGADOR (extrairTextoIndice em biblioteca-utils.ts) — só o texto das
+// primeiras páginas (poucos KB) chega até aqui.
 
 export const maxDuration = 60;
-
-const MAX_CHARS_INDICE = 20_000;
-const PAGINAS_INDICE_MAX = 10;
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -43,7 +47,8 @@ Regras:
 - Só inclua um capítulo se você tiver certeza razoável olhando o índice — não invente nem infira pelo conteúdo.
 - Se não houver um índice reconhecível nas páginas enviadas, retorne { "capitulos": [] }.`;
 
-// POST multipart: file (PDF) — sugere nome/paginaInicio de cada capítulo, lendo só o índice
+// POST JSON: { texto } — texto já extraído das primeiras páginas (ver extrairTextoIndice no
+// cliente) — sugere nome/paginaInicio de cada capítulo, lendo só o índice
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -51,28 +56,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "OPENAI_API_KEY não configurada" }, { status: 500 });
   }
 
-  const formData = await req.formData();
-  const file = formData.get("file") as File | null;
-  if (!file) return NextResponse.json({ error: "Arquivo não enviado" }, { status: 400 });
+  const body = (await req.json().catch(() => null)) as { texto?: string } | null;
+  const texto = body?.texto ?? "";
+  if (texto.trim().length < 50) {
+    return NextResponse.json(
+      { error: "Não achei texto legível nas primeiras páginas (PDF escaneado, ou sem índice logo no início)" },
+      { status: 400 }
+    );
+  }
 
   try {
-    const uint8 = new Uint8Array(await file.arrayBuffer());
-    const { extractText } = await import("unpdf");
-    const { text: paginas } = await extractText(uint8, { mergePages: false });
-
-    let texto = "";
-    for (let i = 0; i < Math.min(paginas.length, PAGINAS_INDICE_MAX); i++) {
-      const bloco = `--- Página ${i + 1} ---\n${paginas[i]}\n\n`;
-      if (texto.length + bloco.length > MAX_CHARS_INDICE) break;
-      texto += bloco;
-    }
-    if (texto.trim().length < 50) {
-      return NextResponse.json(
-        { error: "Não achei texto legível nas primeiras páginas (PDF escaneado, ou sem índice logo no início)" },
-        { status: 400 }
-      );
-    }
-
     const response = await client.chat.completions.create({
       model: "gpt-4o",
       max_tokens: 2000,

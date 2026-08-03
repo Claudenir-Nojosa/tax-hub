@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, Loader2, Sparkles, X } from "lucide-react";
 import type { CapituloPdf, MateriaConcurso, MateriaDef, PdfEstudo } from "@/lib/estudo-data";
 import { obterArquivoPdf } from "@/lib/pdf-storage";
+import { extrairTextoIndice } from "./biblioteca-utils";
 
 // Sugestão de CAPÍTULOS por IA em LOTE, pra vários PDFs de uma vez — mesma rota
 // /api/ai/pdf-capitulos usada no botão "Sugerir com IA" do PainelCapitulos.tsx (dentro do
@@ -71,10 +72,16 @@ export default function SugestaoLoteModal({ pdfs, materiaFiltro, onAplicar, onFe
         const blob = pdf.arquivoEnviado ? await obterArquivoPdf(pdf.id) : null;
         if (!blob) throw new Error("arquivo não encontrado no Storage");
 
-        const form = new FormData();
-        form.append("file", blob, `${pdf.nome}.pdf`);
+        // extração roda no NAVEGADOR — mandar o PDF inteiro pra rota estoura o limite de body de
+        // uma function do Vercel (~4,5MB, deu 413 real num PDF de 138 páginas)
+        const texto = await extrairTextoIndice(blob);
+        if (texto.trim().length < 50) throw new Error("sem texto legível nas primeiras páginas (PDF escaneado?)");
 
-        const res = await fetch("/api/ai/pdf-capitulos", { method: "POST", body: form });
+        const res = await fetch("/api/ai/pdf-capitulos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ texto }),
+        });
         const data = (await res.json().catch(() => ({}))) as {
           capitulos?: { nome: string; paginaInicio: number }[];
           error?: string;

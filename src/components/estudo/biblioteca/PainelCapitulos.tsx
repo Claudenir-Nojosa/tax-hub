@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Layers, Loader2, Plus, Sparkles, Target, Trash2, X } from "lucide-react";
 import type { CapituloPdf, SubcapituloPdf } from "@/lib/estudo-data";
+import { extrairTextoIndice } from "./biblioteca-utils";
 
 // Painel de capítulos — aberto de dentro do leitor (botão "Capítulos" na barra), dockado ao lado
 // do PDF em telas grandes (mesmo tratamento do PainelQuestoes.tsx). Ao contrário do cadastro
@@ -63,15 +64,15 @@ function paraCapitulosPdf(linhas: LinhaCap[]): CapituloPdf[] {
 }
 
 export default function PainelCapitulos({
-  capitulos, paginaVisivel, totalPaginas, paginaConteudoFim, blob, nomeArquivo, onAtualizar, onFechar,
+  capitulos, paginaVisivel, totalPaginas, paginaConteudoFim, blob, onAtualizar, onFechar,
 }: {
   capitulos: CapituloPdf[];
   paginaVisivel: number;
   totalPaginas: number;
   paginaConteudoFim?: number;
-  // arquivo já em memória no leitor — reaproveitado pra mandar pra IA sem baixar de novo
+  // arquivo já em memória no leitor — reaproveitado pra extrair o texto do índice sem baixar de
+  // novo (extração roda no cliente, não manda o PDF inteiro pra rota — ver extrairTextoIndice)
   blob: Blob;
-  nomeArquivo: string;
   onAtualizar: (capitulos: CapituloPdf[]) => void;
   onFechar: () => void;
 }) {
@@ -127,9 +128,16 @@ export default function PainelCapitulos({
     setSugerindo(true);
     setErroSugestao(null);
     try {
-      const form = new FormData();
-      form.append("file", blob, nomeArquivo);
-      const res = await fetch("/api/ai/pdf-capitulos", { method: "POST", body: form });
+      const texto = await extrairTextoIndice(blob);
+      if (texto.trim().length < 50) {
+        setErroSugestao("Não achei texto legível nas primeiras páginas (PDF escaneado?)");
+        return;
+      }
+      const res = await fetch("/api/ai/pdf-capitulos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto }),
+      });
       const data = (await res.json().catch(() => ({}))) as {
         capitulos?: { nome: string; paginaInicio: number }[];
         error?: string;

@@ -38,6 +38,25 @@ export function novoId(): string {
   return `pdf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// extrai o texto das primeiras páginas do PDF (onde normalmente está o índice/sumário) — rodado
+// no NAVEGADOR, nunca mandando o binário do PDF pra uma rota de API: aulas do Estratégia passam
+// de 100 páginas fácil e o arquivo inteiro estoura o limite de body de uma function do Vercel
+// (~4,5MB, deu 413 real num PDF de 138 páginas) — mesmo motivo pelo qual pdf-storage.ts nunca
+// manda o PDF inteiro pra uma function. Usado por PainelCapitulos.tsx e SugestaoLoteModal.tsx
+// antes de chamar /api/ai/pdf-capitulos, que só recebe o texto já extraído (poucos KB).
+export async function extrairTextoIndice(blob: Blob, maxPaginas = 10, maxChars = 20_000): Promise<string> {
+  const { extractText } = await import("unpdf");
+  const uint8 = new Uint8Array(await blob.arrayBuffer());
+  const { text: paginas } = await extractText(uint8, { mergePages: false });
+  let texto = "";
+  for (let i = 0; i < Math.min(paginas.length, maxPaginas); i++) {
+    const bloco = `--- Página ${i + 1} ---\n${paginas[i]}\n\n`;
+    if (texto.length + bloco.length > maxChars) break;
+    texto += bloco;
+  }
+  return texto;
+}
+
 export function fmtEta(paginasRestantes: number, pagPorHora: number | null): string | null {
   if (pagPorHora === null || pagPorHora <= 0 || paginasRestantes <= 0) return null;
   return fmtHoras(Math.round((paginasRestantes / pagPorHora) * 60));
