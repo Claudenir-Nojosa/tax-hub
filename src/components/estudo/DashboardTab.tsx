@@ -17,7 +17,7 @@ import {
   topicoKey,
 } from "@/lib/estudo-data";
 import { computarMetaSemana } from "@/lib/trilha-dinamica";
-import { proximaAtividade, resolverCorMateria } from "./trilha/trilha-ui";
+import { gerarMensagemGustavo, resolverCorMateria } from "./trilha/trilha-ui";
 import { alvoLeituraPdf } from "./biblioteca/biblioteca-utils";
 import EstudoHero from "./ui/EstudoHero";
 import StatTile from "./ui/StatTile";
@@ -27,6 +27,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 interface Props {
   state: EstudoState;
   materiasConcurso?: MateriaBase[];
+  nomeUsuario?: string;
   onIrParaTrilha?: () => void;
 }
 
@@ -35,11 +36,12 @@ function fmtDataCurtaBR(dateKey: string): string {
   return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
-// Bolha de mensagem "estilo Duolingo" — a primeira coisa que o usuário vê no Dashboard, apontando
-// numa frase só o que fazer agora. Puramente narrativa: reusa a mesma MetaSemana que o CardTrilha
-// já calcula, só escolhe UM item (proximaAtividade) e o transforma numa fala curta. Sem trilha
-// ativa ou sem materiasAtivas, some — o CTA "Ative sua trilha" do CardTrilha já cobre esse caso.
-function MensagemDoDia({ state, materiasConcurso }: { state: EstudoState; materiasConcurso?: MateriaBase[] }) {
+// Bolha de fala do Gustavo (consultor de estudos) — a primeira coisa que o usuário vê no
+// Dashboard, apontando numa frase só o que fazer agora. Puramente narrativa: reusa a mesma
+// MetaSemana que o CardTrilha já calcula e o mesmo texto que aparece no topo da própria Trilha
+// (gerarMensagemGustavo, fonte única — nunca dessincroniza entre os dois lugares). Sem trilha
+// ativa, some — o CTA "Ative sua trilha" do CardTrilha já cobre esse caso.
+function MensagemDoDia({ state, materiasConcurso, nomeUsuario }: { state: EstudoState; materiasConcurso?: MateriaBase[]; nomeUsuario?: string }) {
   const trilha = state.trilhaDinamica;
   if (!trilha?.ativa) return null;
 
@@ -52,23 +54,8 @@ function MensagemDoDia({ state, materiasConcurso }: { state: EstudoState; materi
     calendario: state.calendario,
     pdfs: state.pdfs,
   });
-  const proxima = proximaAtividade(meta);
   const streakDias = calcularStreakDias(state.calendario);
-
-  let titulo: string;
-  let corpo: string;
-  if (!proxima) {
-    titulo = "Tudo em dia por aqui! 🎉";
-    corpo = streakDias > 0
-      ? `Você já está há ${streakDias} dia${streakDias !== 1 ? "s" : ""} sem parar — volte amanhã pra manter a sequência.`
-      : "Nada pendente no checklist de hoje.";
-  } else if (proxima.ehNova) {
-    titulo = "Sua atividade de hoje é:";
-    corpo = `${proxima.titulo} — ${proxima.subtitulo}`;
-  } else {
-    titulo = "Vi que você ainda não fez:";
-    corpo = `${proxima.titulo} · ${proxima.subtitulo}`;
-  }
+  const { titulo, corpo } = gerarMensagemGustavo(meta, { nomeUsuario, streakDias });
 
   return (
     <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2">
@@ -333,7 +320,7 @@ function MetaDiaria({ state }: { state: EstudoState }) {
   );
 }
 
-export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }: Props) {
+export default function DashboardTab({ state, materiasConcurso, nomeUsuario, onIrParaTrilha }: Props) {
   const MATERIAS_ATIVAS: MateriaBase[] = materiasConcurso ?? MATERIAS;
   const xp = calcularXP(state.topicos, state.calendario, state.cartas);
   const nivel = calcularNivel(xp);
@@ -374,7 +361,7 @@ export default function DashboardTab({ state, materiasConcurso, onIrParaTrilha }
   return (
     <div className="space-y-6">
       {/* Mensagem estilo Duolingo — a próxima atividade num tom de conversa */}
-      <MensagemDoDia state={state} materiasConcurso={materiasConcurso} />
+      <MensagemDoDia state={state} materiasConcurso={materiasConcurso} nomeUsuario={nomeUsuario} />
 
       {/* Meta diária */}
       <MetaDiaria state={state} />

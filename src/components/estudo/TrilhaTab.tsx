@@ -1,35 +1,39 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import {
-  AlertTriangle, ArrowRight, BookOpen, CalendarClock, Check, ChevronDown, Clock, ExternalLink,
-  Flame, Layers, ListChecks, Route, Settings2, Sparkles, Target, Trash2, Trophy,
+  BookOpen, CalendarClock, Check, Clock, Compass, ExternalLink, Flame, Layers, ListChecks,
+  Route, Settings2, Sparkles, Target, Trash2, Trophy, Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  MATERIAS, calcularStreakDias, dateKeyLocal, topicoKey, GRUPO_LABEL, GRUPO_BADGE,
+  MATERIAS, calcularStreakDias, dateKeyLocal, topicoKey,
   type AtividadeCalendario, type EstudoConfigCiclo, type Grupo, type MateriaConcurso,
   type MateriaDef, type PdfEstudo, type TopicoState, type TrilhaDinamicaState,
 } from "@/lib/estudo-data";
 import {
   computarMetaSemana, criarTrilhaDinamica,
-  type AnaliseMateria, type BlocoEstudoSemana, type MetaSemana, type QuestaoLiberada,
-  type ReforcoGrupo, type Revisao30, type RevisaoLinkPendente,
+  type MetaSemana, type QuestaoLiberada, type ReforcoGrupo, type RevisaoLinkPendente,
 } from "@/lib/trilha-dinamica";
-import { fmtHoras, resolverCorMateria, TIPO_ITEM_COR, type TipoPasso } from "./trilha/trilha-ui";
+import { fmtHoras, gerarMensagemGustavo } from "./trilha/trilha-ui";
+import {
+  CardMateria, CorpoBloco, CorpoCartas, CorpoQuestoes, CorpoReforcos, CorpoRevisao30,
+  CorpoRevisoesLink,
+} from "./trilha/TrilhaLinhas";
 import ProgressRing from "./ui/ProgressRing";
 import EstudoHero from "./ui/EstudoHero";
+import SectionCard from "./ui/SectionCard";
 
-// Trilha DINÂMICA — nada de plano pré-gerado: a meta de HOJE é derivada na hora do estado real
+// Trilha DINÂMICA — nada de plano pré-gerado: a meta da SEMANA é derivada na hora do estado real
 // (tópicos estudados, cadernos A-D, sessões do calendário) pelas regras do método do usuário
 // (src/lib/trilha-dinamica.ts). Este componente só apresenta a meta e grava o bookkeeping mínimo
-// (posição do ciclo, datas de conclusão de matéria, revisões feitas) — se o usuário não entrega
-// o dia, o grupo do ciclo não avança e a meta de amanhã "espera" por ele.
+// (datas de conclusão de matéria, revisões feitas) — cada semana é recalculada do zero, sem
+// dívida acumulada entre semanas (decisão do usuário).
 //
-// Visual: um único "checklist" vertical (timeline) reúne tudo que é acionável hoje — blocos de
-// estudo, questões liberadas, revisão de 30 e cartas — em vez de cards soltos sem hierarquia.
-// Cores de cada TIPO de item (estudo/questões/revisão/cartas) são fixas (ver TIPO_ITEM), não
-// dinâmicas por matéria, pra evitar classes Tailwind interpoladas (não são detectadas pelo JIT).
+// Visual: hero da semana + bolha do Gustavo (consultor de estudos) + seções por TIPO de
+// atividade (Conteúdo / Questões / Reforço rápido / Revisão), cada uma em seu próprio card —
+// mais fácil de escanear que uma lista única intercalada. A primeira seção com algo pendente
+// (na mesma ordem de prioridade usada pela fala do Gustavo) ganha um destaque "Comece aqui".
 
 interface Props {
   trilha?: TrilhaDinamicaState;
@@ -38,6 +42,7 @@ interface Props {
   calendario: Record<string, AtividadeCalendario[]>;
   pdfs: PdfEstudo[];
   materiasConcurso?: MateriaConcurso[];
+  nomeUsuario?: string;
   onUpdateTrilha: (trilha: TrilhaDinamicaState | undefined) => void;
   onUpdateTopicos: (topicos: Record<string, TopicoState>) => void;
   onIrParaCiclo?: () => void;
@@ -50,14 +55,36 @@ function fmtDataCurta(dateKey: string): string {
   return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
 }
 
-function fmtDataLonga(dateKey: string): string {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  const s = new Date(y, m - 1, d).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
-  return s.charAt(0).toUpperCase() + s.slice(1);
+// bolha de fala do Gustavo — mesmo padrão visual da que já existe no Dashboard, aqui ancorada no
+// topo da própria Trilha; texto vem de gerarMensagemGustavo (fonte única, mesma fala nos 2 lugares)
+function GustavoBubble({ meta, nomeUsuario, streakDias }: { meta: MetaSemana; nomeUsuario?: string; streakDias: number }) {
+  const { titulo, corpo } = gerarMensagemGustavo(meta, { nomeUsuario, streakDias });
+  return (
+    <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2">
+      <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md flex-shrink-0">
+        <Compass className="h-6 w-6 text-white" />
+      </div>
+      <div className="flex-1 min-w-0 bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+        <div className="text-sm font-bold text-foreground dark:text-foreground">{titulo}</div>
+        <div className="text-sm text-muted-foreground mt-0.5">{corpo}</div>
+      </div>
+    </div>
+  );
 }
 
+// pill "Comece aqui" — marca a primeira seção (na ordem de prioridade) que tem algo pendente
+function BadgeComeceAqui() {
+  return (
+    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex-shrink-0">
+      Comece aqui
+    </span>
+  );
+}
+
+const anelDestaque = "ring-2 ring-emerald-400 dark:ring-emerald-500";
+
 export default function TrilhaTab({
-  trilha, topicos, configCiclo, calendario, pdfs, materiasConcurso,
+  trilha, topicos, configCiclo, calendario, pdfs, materiasConcurso, nomeUsuario,
   onUpdateTrilha, onUpdateTopicos, onIrParaCiclo, onIrParaBiblioteca, onIrParaCartas,
 }: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
@@ -160,78 +187,30 @@ export default function TrilhaTab({
   const materiasEmRevisao = meta.analises.filter(
     (a) => a.materiaConcluida && (trilha.revisoes30Feitas[a.materia] ?? []).length > 0
   );
-  const pendencias = meta.questoesPendentes.length + meta.reforcos.length + meta.revisoesLink.length + meta.revisoes30.length + (meta.revisarCartas ? 1 : 0);
+  const pendencias = meta.questoesPendentes.length + meta.reforcos.length + meta.reforcosImediatos.length
+    + meta.revisoesLink.length + meta.revisoes30.length + (meta.revisarCartas ? 1 : 0);
 
-  // ── monta o checklist único do dia ────────────────────────────────────────
-  type Passo = { id: string; tipo: TipoPasso; concluido: boolean; icone: LucideIcon; corpo: React.ReactNode };
-  const passos: Passo[] = [];
+  const temSecaoConteudo = meta.blocos.length > 0;
+  const temSecaoQuestoes = meta.reforcos.length > 0 || meta.questoesPendentes.length > 0;
+  const temSecaoReforcoImediato = meta.reforcosImediatos.length > 0;
+  const temSecaoRevisao = meta.revisoesLink.length > 0 || meta.revisoes30.length > 0 || meta.revisarCartas;
+  const semNadaPendente = !temSecaoConteudo && !temSecaoQuestoes && !temSecaoReforcoImediato && !temSecaoRevisao;
 
-  for (const b of meta.blocos) {
-    passos.push({
-      id: `bloco-${b.materia}`,
-      tipo: "estudo",
-      concluido: b.concluido,
-      icone: BookOpen,
-      corpo: (
-        <CorpoBloco
-          b={b}
-          materiasAtivas={materiasAtivas}
-          onIrParaBiblioteca={onIrParaBiblioteca}
-          onMarcarEstudado={() => marcarTopicoEstudado(b.materia, b.topico)}
-        />
-      ),
-    });
-  }
-  if (meta.reforcos.length > 0) {
-    passos.push({
-      id: "reforcos",
-      tipo: "reforco",
-      concluido: false,
-      icone: AlertTriangle,
-      corpo: <CorpoReforcos reforcos={meta.reforcos} materiasAtivas={materiasAtivas} onRegistrar={registrarReforco} />,
-    });
-  }
-  if (meta.questoesPendentes.length > 0) {
-    passos.push({
-      id: "questoes",
-      tipo: "questoes",
-      concluido: false,
-      icone: ListChecks,
-      corpo: <CorpoQuestoes questoes={meta.questoesPendentes} materiasAtivas={materiasAtivas} onRegistrar={registrarQuestoes} />,
-    });
-  }
-  if (meta.revisoesLink.length > 0) {
-    passos.push({
-      id: "revisoes-link",
-      tipo: "linkQuestoes",
-      concluido: false,
-      icone: ExternalLink,
-      corpo: <CorpoRevisoesLink revisoes={meta.revisoesLink} materiasAtivas={materiasAtivas} onRegistrar={registrarRevisaoLink} />,
-    });
-  }
-  for (const r of meta.revisoes30) {
-    passos.push({
-      id: `revisao-${r.materia}`,
-      tipo: "revisao",
-      concluido: false,
-      icone: Trophy,
-      corpo: <CorpoRevisao30 r={r} onMarcar={() => marcarRevisao30(r.materia)} />,
-    });
-  }
-  if (meta.revisarCartas) {
-    passos.push({
-      id: "cartas",
-      tipo: "cartas",
-      concluido: false,
-      icone: Layers,
-      corpo: <CorpoCartas onIrParaCartas={onIrParaCartas} onMarcar={marcarCartasFeitas} />,
-    });
-  }
-  // primeiro passo ainda não concluído — é ele que ganha o destaque de "comece por aqui"
-  const idxPassoAtual = passos.findIndex((p) => !p.concluido);
+  // primeira seção com algo pendente, na mesma ordem de prioridade da fala do Gustavo
+  // (estudo > reforço/questões > reforço rápido > revisão) — só ela ganha o destaque visual
+  const primeiraSecao: "conteudo" | "questoes" | "reforcoImediato" | "revisao" | null = (() => {
+    if (meta.blocos.some((b) => !b.concluido)) return "conteudo";
+    if (meta.reforcos.length > 0 || meta.questoesPendentes.length > 0) return "questoes";
+    if (meta.reforcosImediatos.length > 0) return "reforcoImediato";
+    if (meta.revisoesLink.length > 0 || meta.revisoes30.length > 0 || meta.revisarCartas) return "revisao";
+    return null;
+  })();
 
   return (
     <div className="space-y-4">
+      {/* bolha do Gustavo */}
+      <GustavoBubble meta={meta} nomeUsuario={nomeUsuario} streakDias={streakDias} />
+
       {/* hero da semana */}
       <EstudoHero
         acaoCanto={
@@ -288,10 +267,9 @@ export default function TrilhaTab({
         )}
       </EstudoHero>
 
-      {/* checklist único da semana */}
-      <div className="bg-card rounded-2xl border border-border p-4 sm:p-5">
-        <div className="text-sm font-bold text-foreground dark:text-foreground mb-4">Sua trilha desta semana</div>
-        {passos.length === 0 ? (
+      {/* seções por tipo de atividade */}
+      {semNadaPendente ? (
+        <div className="bg-card rounded-2xl border border-border p-4 sm:p-5">
           <div className="py-8 text-center">
             <div className="h-14 w-14 rounded-full bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center mx-auto mb-3">
               <Check className="h-7 w-7 text-emerald-500" />
@@ -301,14 +279,87 @@ export default function TrilhaTab({
               Nada pendente no checklist agora — volte mais tarde ou aproveite pra descansar.
             </div>
           </div>
-        ) : (
-          <div>
-            {passos.map((p, i) => (
-              <PassoLinha key={p.id} passo={p} ultimo={i === passos.length - 1} atual={i === idxPassoAtual} />
-            ))}
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <>
+          {temSecaoConteudo && (
+            <SectionCard
+              titulo="Conteúdo"
+              icone={BookOpen}
+              corIcone="bg-primary"
+              className={primeiraSecao === "conteudo" ? anelDestaque : undefined}
+              acao={primeiraSecao === "conteudo" ? <BadgeComeceAqui /> : undefined}
+            >
+              <div className="space-y-3">
+                {meta.blocos.map((b) => (
+                  <CorpoBloco
+                    key={b.materia}
+                    b={b}
+                    materiasAtivas={materiasAtivas}
+                    onIrParaBiblioteca={onIrParaBiblioteca}
+                    onMarcarEstudado={() => marcarTopicoEstudado(b.materia, b.topico)}
+                  />
+                ))}
+              </div>
+            </SectionCard>
+          )}
+
+          {temSecaoQuestoes && (
+            <SectionCard
+              titulo="Questões"
+              icone={ListChecks}
+              corIcone="bg-teal-500"
+              className={primeiraSecao === "questoes" ? anelDestaque : undefined}
+              acao={primeiraSecao === "questoes" ? <BadgeComeceAqui /> : undefined}
+            >
+              <div className="space-y-4">
+                {meta.reforcos.length > 0 && (
+                  <CorpoReforcos reforcos={meta.reforcos} materiasAtivas={materiasAtivas} onRegistrar={registrarReforco} />
+                )}
+                {meta.questoesPendentes.length > 0 && (
+                  <CorpoQuestoes questoes={meta.questoesPendentes} materiasAtivas={materiasAtivas} onRegistrar={registrarQuestoes} />
+                )}
+              </div>
+            </SectionCard>
+          )}
+
+          {temSecaoReforcoImediato && (
+            <SectionCard
+              titulo="Reforço rápido"
+              icone={Zap}
+              corIcone="bg-orange-500"
+              className={primeiraSecao === "reforcoImediato" ? anelDestaque : undefined}
+              acao={primeiraSecao === "reforcoImediato" ? <BadgeComeceAqui /> : undefined}
+            >
+              {/* LinhaReforcoImediato chega na Fase 6, junto com o campo linkReforcoImediato na
+                  aba Questões — a seção já fica pronta pra receber, só não popula nada ainda. */}
+              <div className="text-xs text-muted-foreground">Cadastre um link de reforço curto (aba Questões) pra ele aparecer aqui.</div>
+            </SectionCard>
+          )}
+
+          {temSecaoRevisao && (
+            <SectionCard
+              titulo="Revisão"
+              icone={Trophy}
+              corIcone="bg-amber-500"
+              className={primeiraSecao === "revisao" ? anelDestaque : undefined}
+              acao={primeiraSecao === "revisao" ? <BadgeComeceAqui /> : undefined}
+            >
+              <div className="space-y-4">
+                {meta.revisoesLink.length > 0 && (
+                  <CorpoRevisoesLink revisoes={meta.revisoesLink} materiasAtivas={materiasAtivas} onRegistrar={registrarRevisaoLink} />
+                )}
+                {meta.revisoes30.map((r) => (
+                  <CorpoRevisao30 key={r.materia} r={r} onMarcar={() => marcarRevisao30(r.materia)} />
+                ))}
+                {meta.revisarCartas && (
+                  <CorpoCartas onIrParaCartas={onIrParaCartas} onMarcar={marcarCartasFeitas} />
+                )}
+              </div>
+            </SectionCard>
+          )}
+        </>
+      )}
 
       {/* progresso por matéria */}
       <div className="bg-card rounded-2xl border border-border p-4 sm:p-5">
@@ -326,406 +377,6 @@ export default function TrilhaTab({
   );
 }
 
-// ─── Linha do checklist (timeline vertical conectada) ──────────────────────────
-
-function PassoLinha({
-  passo, ultimo, atual,
-}: {
-  passo: { tipo: TipoPasso; concluido: boolean; icone: LucideIcon; corpo: React.ReactNode };
-  ultimo: boolean;
-  atual: boolean;
-}) {
-  const Icone = passo.icone;
-  return (
-    <div className={`flex gap-3 rounded-xl transition-colors ${atual ? "-mx-2 px-2 py-1.5 bg-emerald-50/70 dark:bg-emerald-950/25" : ""}`}>
-      <div className="flex flex-col items-center flex-shrink-0">
-        <div
-          className={`h-9 w-9 rounded-full flex items-center justify-center transition-shadow ${
-            passo.concluido
-              ? "bg-emerald-500 text-white"
-              : atual
-                ? `${TIPO_ITEM_COR[passo.tipo]} ring-2 ring-emerald-400 dark:ring-emerald-500 ring-offset-2 ring-offset-card shadow-md`
-                : TIPO_ITEM_COR[passo.tipo]
-          }`}
-        >
-          {passo.concluido ? <Check className="h-4 w-4" /> : <Icone className="h-4 w-4" />}
-        </div>
-        {!ultimo && <div className="w-0.5 flex-1 min-h-[16px] bg-muted my-1 rounded-full" />}
-      </div>
-      <div className={`flex-1 min-w-0 ${ultimo ? "" : "pb-5"}`}>
-        {atual && (
-          <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide mb-1">
-            Comece por aqui
-          </div>
-        )}
-        {passo.corpo}
-      </div>
-    </div>
-  );
-}
-
-function CorpoBloco({
-  b, materiasAtivas, onIrParaBiblioteca, onMarcarEstudado,
-}: {
-  b: BlocoEstudoSemana;
-  materiasAtivas: (MateriaDef | MateriaConcurso)[];
-  onIrParaBiblioteca?: () => void;
-  onMarcarEstudado: () => void;
-}) {
-  const cor = resolverCorMateria(b.materia, materiasAtivas);
-  const perc = Math.min(100, Math.round((b.minutosFeitosSemana / Math.max(1, b.minutosAlvoSemana)) * 100));
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cor.dot}`} />
-          <span className="text-sm font-semibold text-foreground dark:text-foreground truncate">{b.materia}</span>
-        </div>
-        <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={b.topico}>tópico atual: {b.topico}</div>
-        <div className="mt-1.5 flex items-center gap-2">
-          <div className="flex-1 bg-muted dark:bg-muted rounded-full h-1.5 overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-500 ${b.concluido ? "bg-emerald-500" : "bg-primary/50"}`} style={{ width: `${perc}%` }} />
-          </div>
-          <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{fmtHoras(b.minutosFeitosSemana)}/{fmtHoras(b.minutosAlvoSemana)}</span>
-        </div>
-      </div>
-      {!b.concluido && onIrParaBiblioteca && (
-        <button type="button" onClick={onIrParaBiblioteca} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-medium flex items-center gap-1">
-          Ler PDF <ArrowRight className="h-3 w-3" />
-        </button>
-      )}
-      {b.concluido && (
-        <button type="button" onClick={onMarcarEstudado} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium flex items-center gap-1">
-          <Check className="h-3 w-3" /> Marcar como estudado
-        </button>
-      )}
-    </div>
-  );
-}
-
-function CorpoReforcos({
-  reforcos, materiasAtivas, onRegistrar,
-}: {
-  reforcos: ReforcoGrupo[];
-  materiasAtivas: (MateriaDef | MateriaConcurso)[];
-  onRegistrar: (r: ReforcoGrupo, acertos: number, erros: number) => void;
-}) {
-  return (
-    <div>
-      <div className="text-sm font-semibold text-foreground dark:text-foreground">
-        {reforcos.length} grupo{reforcos.length !== 1 ? "s" : ""} pra reforçar
-      </div>
-      <div className="text-[11px] text-muted-foreground mb-2">
-        Desempenho abaixo de {"70%"} — refaça e atualize o resultado.
-      </div>
-      <div className="space-y-1 max-h-64 overflow-y-auto pr-1 -mr-1">
-        {reforcos.map((r) => (
-          <LinhaReforco key={r.id} r={r} materiasAtivas={materiasAtivas} onRegistrar={onRegistrar} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CorpoQuestoes({
-  questoes, materiasAtivas, onRegistrar,
-}: {
-  questoes: QuestaoLiberada[];
-  materiasAtivas: (MateriaDef | MateriaConcurso)[];
-  onRegistrar: (q: QuestaoLiberada, acertos: number, erros: number) => void;
-}) {
-  return (
-    <div>
-      <div className="text-sm font-semibold text-foreground dark:text-foreground">
-        {questoes.length} questõe{questoes.length !== 1 ? "s" : ""} liberada{questoes.length !== 1 ? "s" : ""}
-      </div>
-      <div className="text-[11px] text-muted-foreground mb-2">Escalonadas pelos tópicos concluídos — sem prazo, ficam acumuladas até você registrar.</div>
-      <div className="space-y-1 max-h-64 overflow-y-auto pr-1 -mr-1">
-        {questoes.map((q) => (
-          <LinhaQuestao key={q.id} q={q} materiasAtivas={materiasAtivas} onRegistrar={onRegistrar} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CorpoRevisoesLink({
-  revisoes, materiasAtivas, onRegistrar,
-}: {
-  revisoes: RevisaoLinkPendente[];
-  materiasAtivas: (MateriaDef | MateriaConcurso)[];
-  onRegistrar: (r: RevisaoLinkPendente, acertos: number, erros: number) => void;
-}) {
-  return (
-    <div>
-      <div className="text-sm font-semibold text-foreground dark:text-foreground">
-        {revisoes.length} revisão{revisoes.length !== 1 ? "ões" : ""} de questões do link
-      </div>
-      <div className="text-[11px] text-muted-foreground mb-2">
-        7 e 30 dias após concluir os 4 grupos A-D do tópico — refaça as questões do link cadastrado na aba Questões.
-      </div>
-      <div className="space-y-1 max-h-64 overflow-y-auto pr-1 -mr-1">
-        {revisoes.map((r) => (
-          <LinhaRevisaoLink key={r.id} r={r} materiasAtivas={materiasAtivas} onRegistrar={onRegistrar} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function LinhaRevisaoLink({
-  r, materiasAtivas, onRegistrar,
-}: {
-  r: RevisaoLinkPendente;
-  materiasAtivas: (MateriaDef | MateriaConcurso)[];
-  onRegistrar: (r: RevisaoLinkPendente, acertos: number, erros: number) => void;
-}) {
-  const [aberto, setAberto] = useState(false);
-  const [acertos, setAcertos] = useState(r.reforco ? String(r.acertosAtual ?? "") : "");
-  const [erros, setErros] = useState(r.reforco ? String(r.errosAtual ?? "") : "");
-  const cor = resolverCorMateria(r.materia, materiasAtivas);
-  const podeSalvar = acertos !== "" && erros !== "" && Number(acertos) + Number(erros) > 0;
-
-  // clicar na atividade vai direto pro link (nova aba) E revela o form de registro — assim
-  // quando o usuário volta de fazer as questões, os campos já estão à mostra pra preencher
-  const abrirEExpandir = () => {
-    window.open(r.link, "_blank", "noopener,noreferrer");
-    setAberto(true);
-  };
-
-  return (
-    <div className="rounded-lg hover:bg-accent dark:hover:bg-muted/40 px-2 py-1.5 -mx-2 transition-colors">
-      <div className="w-full flex items-center gap-2.5">
-        <button type="button" onClick={abrirEExpandir} title="Abrir questões" className="flex-1 min-w-0 flex items-center gap-2.5 text-left">
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
-          <div className="flex-1 min-w-0">
-            <span className="text-sm text-foreground">{r.materia}</span>
-            <span className="text-xs text-muted-foreground"> · tópico {r.ordemTopico}: </span>
-            <span className="text-xs text-muted-foreground" title={r.topico}>{r.topico.length > 50 ? r.topico.slice(0, 50) + "…" : r.topico}</span>
-          </div>
-          <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 flex-shrink-0">{r.dias}d</span>
-          {r.reforco && <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 flex-shrink-0">reforço</span>}
-          <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-        </button>
-        <button type="button" onClick={() => setAberto((v) => !v)} title="Registrar resultado" className="flex-shrink-0 p-1 -m-1">
-          <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${aberto ? "rotate-180" : ""}`} />
-        </button>
-      </div>
-      {aberto && (
-        <div className="mt-2 flex items-center gap-2 pl-1 flex-wrap">
-          <a
-            href={r.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[11px] text-primary hover:underline flex items-center gap-1 flex-shrink-0"
-          >
-            <ExternalLink className="h-3 w-3" /> Abrir questões
-          </a>
-          {r.reforco && <span className="text-[10px] text-muted-foreground">{r.acertosAtual} acerto{r.acertosAtual !== 1 ? "s" : ""} / {r.errosAtual} erro{r.errosAtual !== 1 ? "s" : ""} — refaça e atualize</span>}
-          <label className="text-[11px] text-muted-foreground">Acertos</label>
-          <input type="number" min={0} value={acertos} onChange={(e) => setAcertos(e.target.value)} className="w-16 bg-muted border border-border rounded-md px-2 py-1 text-sm text-foreground dark:text-foreground outline-none focus:border-emerald-400" />
-          <label className="text-[11px] text-muted-foreground">Erros</label>
-          <input type="number" min={0} value={erros} onChange={(e) => setErros(e.target.value)} className="w-16 bg-muted border border-border rounded-md px-2 py-1 text-sm text-foreground dark:text-foreground outline-none focus:border-emerald-400" />
-          <button
-            type="button"
-            disabled={!podeSalvar}
-            onClick={() => onRegistrar(r, Number(acertos), Number(erros))}
-            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-medium"
-          >
-            Salvar
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CorpoRevisao30({ r, onMarcar }: { r: Revisao30; onMarcar: () => void }) {
-  return (
-    <div className="flex items-center gap-3">
-      {/* clicar na atividade vai direto pro link (nova aba) — sem link cadastrado (aba
-          Questões), o botão fica desabilitado em vez de quebrar */}
-      <button
-        type="button"
-        onClick={() => r.link && window.open(r.link, "_blank", "noopener,noreferrer")}
-        disabled={!r.link}
-        title={r.link ? "Abrir questões" : "Cadastre o link na aba Questões"}
-        className="flex-1 min-w-0 text-left disabled:cursor-default"
-      >
-        <div className="text-sm font-semibold text-foreground dark:text-foreground flex items-center gap-1.5">
-          {r.materia} — revisão da matéria
-          {r.link && <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
-        </div>
-        <div className="text-[11px] text-muted-foreground">
-          100% concluída em {fmtDataCurta(r.concluidaEm)} — <b>30 questões englobando todos os tópicos</b> (não 30 por tópico).
-        </div>
-      </button>
-      <button type="button" onClick={onMarcar} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-medium">
-        Concluí
-      </button>
-    </div>
-  );
-}
-
-function CorpoCartas({
-  onIrParaCartas, onMarcar,
-}: {
-  onIrParaCartas?: () => void;
-  onMarcar: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold text-foreground dark:text-foreground">Revisar as cartas</div>
-        <div className="text-[11px] text-muted-foreground">A cada 2 domingos (14 dias)</div>
-      </div>
-      <div className="flex gap-1.5 flex-shrink-0">
-        {onIrParaCartas && (
-          <button type="button" onClick={onIrParaCartas} className="px-2.5 py-1.5 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-[11px] font-medium flex items-center gap-1">
-            Ir <ArrowRight className="h-3 w-3" />
-          </button>
-        )}
-        <button type="button" onClick={onMarcar} className="px-2.5 py-1.5 rounded-lg border border-fuchsia-300 dark:border-fuchsia-700 text-fuchsia-600 dark:text-fuchsia-300 text-[11px] font-medium">
-          Marquei
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Card de progresso por matéria (mini anel) ─────────────────────────────────
-
-function CardMateria({
-  a, materiasAtivas, emRevisao,
-}: {
-  a: AnaliseMateria;
-  materiasAtivas: (MateriaDef | MateriaConcurso)[];
-  emRevisao: boolean;
-}) {
-  const cor = resolverCorMateria(a.materia, materiasAtivas);
-  const totalUnidades = a.totalTopicos * 5; // teoria (x1) + questões (4 grupos)
-  const feitas = a.topicosEstudados + a.gruposFeitos;
-  const perc = totalUnidades > 0 ? Math.round((feitas / totalUnidades) * 100) : 0;
-  return (
-    <div className="rounded-xl border border-border dark:border-border p-3 flex flex-col items-center text-center gap-1.5">
-      <ProgressRing
-        perc={perc}
-        size={56}
-        espessura={5}
-        corStroke={a.materiaConcluida ? "stroke-amber-500" : "stroke-emerald-500"}
-        corTrilho="stroke-border"
-      >
-        {a.materiaConcluida ? <Trophy className="h-4 w-4 text-amber-500" /> : <span className="text-xs font-bold text-foreground dark:text-foreground">{perc}%</span>}
-      </ProgressRing>
-      <span className="w-full flex items-center justify-center gap-1">
-        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
-        <span className="text-[11px] font-medium text-foreground truncate" title={a.materia}>{a.materia}</span>
-      </span>
-      <span className="text-[10px] text-muted-foreground">
-        {a.materiaConcluida ? (emRevisao ? "em revisão" : "100% concluída") : `teoria ${a.topicosEstudados}/${a.totalTopicos} · questões ${a.gruposFeitos}/${a.totalTopicos * 4}`}
-      </span>
-    </div>
-  );
-}
-
-// ─── Linha de questão liberada (registro inline de acertos/erros) ────────────
-
-function LinhaQuestao({
-  q, materiasAtivas, onRegistrar,
-}: {
-  q: QuestaoLiberada;
-  materiasAtivas: (MateriaDef | MateriaConcurso)[];
-  onRegistrar: (q: QuestaoLiberada, acertos: number, erros: number) => void;
-}) {
-  const [aberto, setAberto] = useState(false);
-  const [acertos, setAcertos] = useState("");
-  const [erros, setErros] = useState("");
-  const cor = resolverCorMateria(q.materia, materiasAtivas);
-  const podeSalvar = acertos !== "" && erros !== "" && Number(acertos) + Number(erros) > 0;
-
-  return (
-    <div className="rounded-lg hover:bg-accent dark:hover:bg-muted/40 px-2 py-1.5 -mx-2 transition-colors">
-      <button type="button" onClick={() => setAberto((v) => !v)} className="w-full flex items-center gap-2.5 text-left">
-        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${GRUPO_BADGE[q.grupo]}`}>{GRUPO_LABEL[q.grupo]}</span>
-        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
-        <div className="flex-1 min-w-0">
-          <span className="text-sm text-foreground">{q.materia}</span>
-          <span className="text-xs text-muted-foreground"> · tópico {q.ordemTopico}: </span>
-          <span className="text-xs text-muted-foreground" title={q.topico}>{q.topico.length > 50 ? q.topico.slice(0, 50) + "…" : q.topico}</span>
-        </div>
-        <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground flex-shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
-      </button>
-      {aberto && (
-        <div className="mt-2 flex items-center gap-2 pl-1">
-          <span className="text-[10px] text-muted-foreground flex-1">{q.motivo}</span>
-          <label className="text-[11px] text-muted-foreground">Acertos</label>
-          <input type="number" min={0} value={acertos} onChange={(e) => setAcertos(e.target.value)} className="w-16 bg-muted border border-border rounded-md px-2 py-1 text-sm text-foreground dark:text-foreground outline-none focus:border-emerald-400" />
-          <label className="text-[11px] text-muted-foreground">Erros</label>
-          <input type="number" min={0} value={erros} onChange={(e) => setErros(e.target.value)} className="w-16 bg-muted border border-border rounded-md px-2 py-1 text-sm text-foreground dark:text-foreground outline-none focus:border-emerald-400" />
-          <button
-            type="button"
-            disabled={!podeSalvar}
-            onClick={() => onRegistrar(q, Number(acertos), Number(erros))}
-            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-medium"
-          >
-            Salvar
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Linha de grupo pra reforçar — igual à de questão liberada, mas com os inputs pré-preenchidos
-// (o usuário está corrigindo um resultado existente, não começando do zero) e um badge de % ────
-
-function LinhaReforco({
-  r, materiasAtivas, onRegistrar,
-}: {
-  r: ReforcoGrupo;
-  materiasAtivas: (MateriaDef | MateriaConcurso)[];
-  onRegistrar: (r: ReforcoGrupo, acertos: number, erros: number) => void;
-}) {
-  const [aberto, setAberto] = useState(false);
-  const [acertos, setAcertos] = useState(String(r.acertos));
-  const [erros, setErros] = useState(String(r.erros));
-  const cor = resolverCorMateria(r.materia, materiasAtivas);
-  const podeSalvar = acertos !== "" && erros !== "" && Number(acertos) + Number(erros) > 0;
-
-  return (
-    <div className="rounded-lg hover:bg-accent dark:hover:bg-muted/40 px-2 py-1.5 -mx-2 transition-colors">
-      <button type="button" onClick={() => setAberto((v) => !v)} className="w-full flex items-center gap-2.5 text-left">
-        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${GRUPO_BADGE[r.grupo]}`}>{GRUPO_LABEL[r.grupo]}</span>
-        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
-        <div className="flex-1 min-w-0">
-          <span className="text-sm text-foreground">{r.materia}</span>
-          <span className="text-xs text-muted-foreground"> · tópico {r.ordemTopico}: </span>
-          <span className="text-xs text-muted-foreground" title={r.topico}>{r.topico.length > 50 ? r.topico.slice(0, 50) + "…" : r.topico}</span>
-        </div>
-        <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 flex-shrink-0">{r.perc}%</span>
-        <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground flex-shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
-      </button>
-      {aberto && (
-        <div className="mt-2 flex items-center gap-2 pl-1">
-          <span className="text-[10px] text-muted-foreground flex-1">{r.acertos} acerto{r.acertos !== 1 ? "s" : ""} / {r.erros} erro{r.erros !== 1 ? "s" : ""} — refaça e atualize</span>
-          <label className="text-[11px] text-muted-foreground">Acertos</label>
-          <input type="number" min={0} value={acertos} onChange={(e) => setAcertos(e.target.value)} className="w-16 bg-muted border border-border rounded-md px-2 py-1 text-sm text-foreground dark:text-foreground outline-none focus:border-emerald-400" />
-          <label className="text-[11px] text-muted-foreground">Erros</label>
-          <input type="number" min={0} value={erros} onChange={(e) => setErros(e.target.value)} className="w-16 bg-muted border border-border rounded-md px-2 py-1 text-sm text-foreground dark:text-foreground outline-none focus:border-emerald-400" />
-          <button
-            type="button"
-            disabled={!podeSalvar}
-            onClick={() => onRegistrar(r, Number(acertos), Number(erros))}
-            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-medium"
-          >
-            Salvar
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Tela de ativação ─────────────────────────────────────────────────────────
 
 function Intro({
@@ -738,6 +389,7 @@ function Intro({
   const regras: { icone: LucideIcon; cor: string; texto: string }[] = [
     { icone: Clock, cor: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary", texto: "A semana cobre todas as matérias ativas de uma vez. As horas semanais (Ciclo de Estudos) são divididas proporcionalmente ao peso de cada matéria com teoria pendente, no tópico atual de cada uma. O tempo é monitorado pelo leitor de PDF." },
     { icone: ListChecks, cor: "bg-teal-100 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400", texto: "Concluir um tópico libera questões dos anteriores: grupo A do último, B do penúltimo, C do antepenúltimo, D do anterior a esse — até fechar os 4 grupos de todos os tópicos." },
+    { icone: Zap, cor: "bg-orange-100 text-orange-600 dark:bg-orange-950/60 dark:text-orange-400", texto: "Reforço rápido: cadastre um link de questões curto (até 10) pra um tópico e ele aparece assim que você marca esse tópico como estudado — prática ativa, sem esperar o escalonamento A-D." },
     { icone: ExternalLink, cor: "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400", texto: "Cadastrado o link de questões do tópico (aba Questões), 7 e 30 dias após concluir os 4 grupos A-D a trilha pede pra refazer essas questões em cada checkpoint — abaixo de 70% volta como reforço." },
     { icone: Trophy, cor: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400", texto: "Matéria 100% (teoria + todos os grupos) entra em modo revisão: 3 dias depois, 30 questões englobando todos os tópicos dela, pelo link cadastrado na aba Questões." },
     { icone: Layers, cor: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400", texto: "A cada 2 domingos, revisão das cartas." },

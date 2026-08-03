@@ -511,6 +511,7 @@ export default function EstudoPage() {
             <DashboardTab
               state={state}
               materiasConcurso={materiasFiltradas}
+              nomeUsuario={primeiroNome}
               onIrParaTrilha={() => setActiveTab("trilha")}
             />
           )}
@@ -577,6 +578,7 @@ export default function EstudoPage() {
               calendario={state.calendario}
               pdfs={state.pdfs}
               materiasConcurso={materiasFiltradas}
+              nomeUsuario={primeiroNome}
               onUpdateTrilha={updateTrilhaDinamica}
               onUpdateTopicos={updateTopicos}
               onIrParaCiclo={() => setActiveTab("ciclo")}

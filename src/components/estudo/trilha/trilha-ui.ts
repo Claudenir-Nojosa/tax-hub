@@ -88,3 +88,40 @@ export function proximaAtividade(meta: MetaSemana): ProximaAtividade | null {
   }
   return null;
 }
+
+export interface MensagemGustavo {
+  titulo: string;
+  corpo: string;
+}
+
+// Gustavo é o "consultor de estudos" da Trilha — a mesma mensagem (gerada aqui uma vez só) aparece
+// tanto na bolha do Dashboard quanto no topo da aba Trilha, pra nunca dessincronizar o que ele diz
+// nos dois lugares. Cumprimenta pelo primeiro nome quando disponível (session.user.name), sem
+// quebrar o texto quando ausente.
+export function gerarMensagemGustavo(
+  meta: MetaSemana,
+  opts: { nomeUsuario?: string; streakDias: number }
+): MensagemGustavo {
+  const { nomeUsuario, streakDias } = opts;
+  const saudacao = nomeUsuario ? `Olá, ${nomeUsuario}! ` : "";
+  const proxima = proximaAtividade(meta);
+
+  if (!proxima) {
+    return {
+      titulo: `${saudacao}Tudo em dia por aqui! 🎉`,
+      corpo: streakDias > 0
+        ? `Você já está há ${streakDias} dia${streakDias !== 1 ? "s" : ""} sem parar — continue assim pra manter a sequência.`
+        : "Nada pendente no checklist desta semana.",
+    };
+  }
+  if (proxima.ehNova) {
+    return {
+      titulo: `${saudacao}Sua atividade desta semana é:`,
+      corpo: `${proxima.titulo} — ${proxima.subtitulo}`,
+    };
+  }
+  return {
+    titulo: `${saudacao}Vi que você ainda não fez:`,
+    corpo: `${proxima.titulo} · ${proxima.subtitulo}`,
+  };
+}
