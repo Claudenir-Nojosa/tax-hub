@@ -1,9 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ChevronDown, FileUp, Loader2, X } from "lucide-react";
+import { ChevronDown, FileUp, Loader2, Sparkles, X } from "lucide-react";
 import type { MateriaConcurso, MateriaDef, PdfEstudo, TopicoPaginas } from "@/lib/estudo-data";
-import { contarPaginasPdf } from "@/lib/pdf-storage";
+import { contarPaginasPdf, obterArquivoPdf } from "@/lib/pdf-storage";
 import { novoId } from "./biblioteca-utils";
 
 // intervalo em edição por tópico — strings (inputs controlados); só vira TopicoPaginas de
@@ -46,6 +46,8 @@ export default function FormPdf({
   const [salvasAgora, setSalvasAgora] = useState(0);
   const [flash, setFlash] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [sugerindo, setSugerindo] = useState(false);
+  const [erroSugestao, setErroSugestao] = useState<string | null>(null);
   const arquivoRef = useRef<HTMLInputElement>(null);
 
   const topicosDaMateria = materiasAtivas.find((m) => m.nome === materia)?.topicos ?? [];
@@ -76,6 +78,53 @@ export default function FormPdf({
       resultado.push({ topico: t, paginaInicio: inicio, paginaFim: fim });
     }
     return resultado.length > 0 ? resultado : undefined;
+  };
+
+  // pede pra IA sugerir início/fim por tópico e PRÉ-PREENCHE os campos manuais da seção acima —
+  // nunca salva sozinha, o usuário revisa (e pode corrigir) antes de clicar em "Adicionar/Salvar"
+  const sugerirComIA = async () => {
+    if (sugerindo) return;
+    const topicosAlvo = [...topicosSel].filter((t) => topicosDaMateria.includes(t));
+    if (topicosAlvo.length === 0) return;
+
+    setSugerindo(true);
+    setErroSugestao(null);
+    try {
+      // PDF novo ainda não enviado: usa o arquivo local escolhido. PDF em edição sem arquivo novo
+      // anexado: baixa o já hospedado no Storage (mesmo helper que o leitor usa).
+      const blob: Blob | File | null = arquivo ?? (pdfParaEditar?.arquivoEnviado ? await obterArquivoPdf(pdfParaEditar.id) : null);
+      if (!blob) {
+        setErroSugestao("Anexe o arquivo PDF primeiro pra IA conseguir ler o conteúdo");
+        return;
+      }
+
+      const form = new FormData();
+      form.append("file", blob, arquivo?.name ?? `${pdfParaEditar?.nome ?? "documento"}.pdf`);
+      form.append("topicos", JSON.stringify(topicosAlvo));
+
+      const res = await fetch("/api/ai/pdf-topicos-paginas", { method: "POST", body: form });
+      const data = (await res.json().catch(() => ({}))) as {
+        intervalos?: { topico: string; paginaInicio: number; paginaFim: number }[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? `Erro ${res.status}`);
+
+      if (!data.intervalos || data.intervalos.length === 0) {
+        setErroSugestao("A IA não conseguiu identificar as páginas desses tópicos nesse PDF");
+        return;
+      }
+      setIntervalos((prev) => {
+        const novo = { ...prev };
+        for (const it of data.intervalos!) {
+          novo[it.topico] = { inicio: String(it.paginaInicio), fim: String(it.paginaFim) };
+        }
+        return novo;
+      });
+    } catch (e) {
+      setErroSugestao(e instanceof Error ? e.message : "Erro ao sugerir com IA");
+    } finally {
+      setSugerindo(false);
+    }
   };
 
   const salvar = async () => {
@@ -257,9 +306,22 @@ export default function FormPdf({
 
       {topicosSel.size > 0 && (
         <div className="mb-3">
-          <div className="text-[11px] font-medium text-muted-foreground mb-1.5">
-            Intervalo de páginas por tópico (opcional) — a Trilha abre o leitor já na página certa e avisa quando você passa da página final
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <div className="text-[11px] font-medium text-muted-foreground">
+              Intervalo de páginas por tópico (opcional) — a Trilha abre o leitor já na página certa e avisa quando você passa da página final
+            </div>
+            <button
+              type="button"
+              onClick={sugerirComIA}
+              disabled={sugerindo}
+              className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium text-primary hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-wait"
+              title="Pede pra IA ler o PDF e sugerir as páginas de cada tópico marcado (você revisa antes de salvar)"
+            >
+              {sugerindo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+              {sugerindo ? "Analisando…" : "Sugerir com IA"}
+            </button>
           </div>
+          {erroSugestao && <div className="text-[10px] text-red-500 dark:text-red-400 mb-1.5">{erroSugestao}</div>}
           <div className="space-y-1.5">
             {[...topicosSel].filter((t) => topicosDaMateria.includes(t)).map((t) => {
               const par = intervalos[t] ?? { inicio: "", fim: "" };
