@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Trophy } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Lock, Trophy } from "lucide-react";
 import {
   GRUPO_LABEL, GRUPO_BADGE, type MateriaConcurso, type MateriaDef,
 } from "@/lib/estudo-data";
@@ -56,6 +56,27 @@ export function CorpoBloco({
   // subtarefas só fazem sentido quando o bloco agrupa MAIS de um capítulo — com 1 só, o
   // capituloLabel acima já mostra tudo que precisa
   const mostrarSubtarefas = (b.capitulos?.length ?? 0) > 1;
+
+  // bloqueado = ainda não é a vez dessa matéria na cadeia do grupo de hoje (ver grupoDoDia em
+  // trilha-dinamica.ts) — mostra só um preview, sem botão nem subtarefas clicáveis, até a
+  // atividade anterior do grupo ser concluída hoje
+  if (b.bloqueado) {
+    return (
+      <div className="flex items-center gap-3 opacity-50">
+        <Lock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cor.dot}`} />
+            <span className="text-sm font-semibold text-foreground truncate">{b.materia}</span>
+          </div>
+          <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={b.capituloLabel ?? b.topico}>
+            {b.capituloLabel ?? `tópico atual: ${b.topico}`} — libera ao concluir a atividade anterior
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-3">
@@ -63,6 +84,11 @@ export function CorpoBloco({
           <div className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cor.dot}`} />
             <span className="text-sm font-semibold text-foreground dark:text-foreground truncate">{b.materia}</span>
+            {b.concluidoHoje && !b.concluido && (
+              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 flex-shrink-0">
+                <CheckCircle2 className="h-3 w-3" /> feito hoje
+              </span>
+            )}
           </div>
           <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={b.topico}>
             tópico atual: {b.topico}
@@ -87,7 +113,7 @@ export function CorpoBloco({
             <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{fmtHoras(b.minutosFeitosSemana)}/{fmtHoras(b.minutosAlvoSemana)} na semana</span>
           </div>
         </div>
-        {!b.concluido && onIrParaBiblioteca && (
+        {!b.concluido && !b.concluidoHoje && onIrParaBiblioteca && (
           <button type="button" onClick={abrirLeitor} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-medium flex items-center gap-1">
             Ler PDF <ArrowRight className="h-3 w-3" />
           </button>

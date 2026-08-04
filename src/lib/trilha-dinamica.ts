@@ -11,10 +11,18 @@ export type MateriaLike = { nome: string; topicos: string[] };
 // Motor da TRILHA DINÂMICA — funções puras que derivam a meta da SEMANA do estado real (nada de
 // plano pré-gerado). As regras são o método pessoal do usuário, à risca:
 //
-// 1. ESTUDO: a semana cobre TODAS as matérias ativas ao mesmo tempo (não mais um grupo A/B/C por
-//    dia). As horas da semana (soma de horasPorDia no Ciclo) são divididas PROPORCIONALMENTE ao
-//    peso entre as matérias que ainda têm teoria pendente — ex.: 15h/semana, 3 matérias de peso
-//    igual = 5h cada, no TÓPICO ATUAL (primeiro não estudado) de cada uma. O progresso vem do
+// 1. ESTUDO: as matérias ativas com teoria pendente são divididas em GRUPOS A/B/C
+//    (ConfigMateria.divisao) — cada dia mostra só o grupo do dia, num RODÍZIO contínuo ancorado em
+//    TrilhaDinamicaState.iniciadaEm (dia 0=A, 1=B, 2=C, 3=A...; ver grupoDoDia). Dentro do grupo
+//    do dia, as matérias formam uma CADEIA sequencial: só a primeira ainda não concluída HOJE fica
+//    desbloqueada (com o próximo trecho de leitura pra ela); as demais aparecem bloqueadas,
+//    liberando uma a uma conforme a anterior é concluída no dia — não é mais "todas as matérias
+//    ativas ao mesmo tempo". As horas de HOJE (horasPorDia no Ciclo) são divididas
+//    PROPORCIONALMENTE ao peso só entre as matérias do grupo de hoje (não entre todas as ativas),
+//    o que dá um trecho por atividade mais substancial. Já o ALVO DA SEMANA de cada matéria
+//    (quando ela conta como "concluída" essa semana, o que libera avançar de tópico) continua
+//    sendo a fração proporcional ao peso do total semanal entre TODAS as matérias ativas — só a
+//    apresentação diária virou em cadeia por grupo, a meta em si não mudou. O progresso vem do
 //    calendário da semana corrente (segunda a domingo) — sessões de estudo por matéria (leitor
 //    de PDF/Timer). Quando um PDF tem o intervalo de páginas do tópico mapeado
 //    (PdfEstudo.intervalosPaginas), o bloco carrega pdfId/paginaInicio/paginaFim pra abrir o
@@ -435,6 +443,13 @@ export interface BlocoEstudoSemana {
   minutosAlvoHoje: number;
   minutosFeitosHoje: number;
   concluido: boolean;
+  // true quando minutosFeitosHoje já bateu minutosAlvoHoje — decide a cadeia dentro do grupo do
+  // dia (ver grupoDoDia/computarMetaSemana): a primeira matéria do grupo ainda não concluidoHoje é
+  // a única desbloqueada, as seguintes ficam bloqueado=true até essa ser concluída
+  concluidoHoje: boolean;
+  // true = ainda não é a vez dessa matéria na cadeia de hoje (alguma anterior do grupo ainda não
+  // foi concluída hoje) — UI mostra sem o botão "Ler PDF", só como próxima da fila
+  bloqueado: boolean;
   // resolvido via PdfEstudo.intervalosPaginas (ou capitulos, quando definidos — ver
   // resolverPaginaBloco) quando existe um PDF da matéria com o intervalo do tópico mapeado;
   // ausente = "Ler PDF" cai no comportamento genérico (sem página/aviso)
@@ -460,8 +475,11 @@ export interface MetaSemana {
   inicioSemana: string; // dateKey da segunda-feira
   fimSemana: string; // dateKey do domingo
   minutosSemana: number; // total de minutos de estudo configurados pra semana no Ciclo
-  blocos: BlocoEstudoSemana[];
-  blocosConcluidos: boolean; // todos os blocos entregues (false se não há blocos)
+  grupoHoje: GrupoCiclo; // grupo do rodízio A/B/C ativo hoje (ver grupoDoDia) — só as matérias
+                         // desse grupo aparecem em `blocos`
+  blocos: BlocoEstudoSemana[]; // cadeia do grupo de hoje (não mais TODAS as matérias ativas)
+  blocosConcluidos: boolean; // meta da SEMANA inteira entregue (todas as matérias ativas, não só
+                              // o grupo de hoje — ver progressoSemanal em computarMetaSemana)
   questoesPendentes: QuestaoLiberada[]; // todas as matérias ativas
   reforcos: ReforcoGrupo[]; // grupos já feitos mas com desempenho fraco, esfriados
   reforcosImediatos: ReforcoImediatoPendente[]; // links curtos pós-estudo, ainda não feitos
@@ -491,6 +509,19 @@ const CHAVES_DIA_SEMANA: (keyof EstudoConfigCiclo["horasPorDia"])[] = [
 ];
 export function chaveDiaSemana(dataKey: string): keyof EstudoConfigCiclo["horasPorDia"] {
   return CHAVES_DIA_SEMANA[parseDateKey(dataKey).getDay()];
+}
+
+export type GrupoCiclo = "A" | "B" | "C";
+const GRUPOS_CICLO: GrupoCiclo[] = ["A", "B", "C"];
+
+// grupo do CICLO (A/B/C) ativo em `hoje` — rodízio contínuo de 1 dia por grupo, ancorado no dia em
+// que a trilha foi ativada (não no dia da semana): dia 0 (iniciadaEm) = A, dia 1 = B, dia 2 = C,
+// dia 3 = A de novo... `diffDias` pode dar negativo só em cenário degenerado (hoje antes da
+// ativação, não deveria acontecer no uso real) — `((n % 3) + 3) % 3` garante índice válido mesmo
+// assim.
+export function grupoDoDia(hoje: string, ancora: string): GrupoCiclo {
+  const dias = diffDias(ancora, hoje);
+  return GRUPOS_CICLO[((dias % 3) + 3) % 3];
 }
 
 export function proximoDomingo(aPartirDe: string): string {
@@ -765,28 +796,47 @@ export function computarMetaSemana(params: {
   const analises = ativas.map((m) => analisarMateria(m, topicos));
   const pagPorHora = calcularPagPorHora(calendario);
 
-  // blocos de leitura: TODAS as matérias ativas com teoria pendente (não mais um grupo por dia),
-  // tempo semanal dividido PROPORCIONALMENTE ao peso configurado no Ciclo — isso continua
-  // valendo pra meta/barra de progresso da SEMANA (minutosAlvoSemana).
+  // alvo/feito da SEMANA: continua sendo TODAS as matérias ativas com teoria pendente, tempo
+  // semanal dividido PROPORCIONALMENTE ao peso configurado no Ciclo — é o que decide quando cada
+  // matéria "fecha" a semana (minutosAlvoSemana/concluido) e alimenta o agregado da semana toda
+  // (blocosConcluidos/percCumpridoSemana/atrasado, mais abaixo) e NÃO muda com o rodízio A/B/C.
   const materiasBloco = analises.filter((a) => a.topicoAtual !== null);
   const pesosBloco = materiasBloco.map((a) => configCiclo.materias[a.materia]?.peso ?? 1);
   const minutosPorMateria = distribuirMinutosPorPeso(minutosSemana, pesosBloco);
-  // mas o TRECHO DE CAPÍTULOS oferecido em cada atividade usa o alvo de HOJE (horasPorDia do dia
-  // da semana, mesmos pesos) — não o da semana inteira. Sem isso, uma matéria com poucos capítulos
-  // curtos acumulava até bater o alvo semanal inteiro numa atividade só ("Capítulos 1-8 de 12"),
-  // em vez de uma atividade do tamanho de UM dia de estudo (pedido explícito do usuário: "não
-  // quero que apareça 4,5,6,7... quero dividido por dia, como se fosse o ciclo"). A soma dos
-  // alvos de hoje de todas as matérias ativas já bate com horasPorDia[hoje] (mesma distribuição
-  // proporcional, só que aplicada ao dia em vez da semana) — e a soma de todo dia da semana pra
-  // uma mesma matéria continua batendo com o alvo semanal dela, já que é o mesmo Ciclo/pesos.
+  const progressoSemanal = materiasBloco.map((a, i) => ({
+    materia: a.materia,
+    minutosAlvo: minutosPorMateria[i],
+    minutosFeitos: minutosEstudoNaSemana(calendario, inicioSemana, fimSemana, a.materia),
+  }));
+  const minutosAlvoSemanaPorMateria = new Map(progressoSemanal.map((p) => [p.materia, p.minutosAlvo]));
+  const minutosFeitosSemanaPorMateria = new Map(progressoSemanal.map((p) => [p.materia, p.minutosFeitos]));
+
+  // rodízio A/B/C (grupoDoDia): só as matérias do GRUPO DE HOJE ficam visíveis na trilha, e só
+  // entre elas horasPorDia[hoje] é repartido por peso — dá um trecho por atividade bem mais
+  // substancial do que dividir entre TODAS as matérias ativas (pedido explícito do usuário: dividir
+  // as ~9 matérias em ciclo A/B/C em vez de mostrar a semana inteira de uma vez).
+  const grupoHoje = grupoDoDia(hoje, trilha.iniciadaEm);
+  const materiasGrupoHoje = materiasBloco.filter(
+    (a) => (configCiclo.materias[a.materia]?.divisao ?? "A") === grupoHoje
+  );
+  const pesosGrupoHoje = materiasGrupoHoje.map((a) => configCiclo.materias[a.materia]?.peso ?? 1);
   const minutosHoje = configCiclo.horasPorDia[chaveDiaSemana(hoje)];
-  const minutosHojePorMateria = distribuirMinutosPorPeso(minutosHoje, pesosBloco);
+  const minutosHojePorMateria = distribuirMinutosPorPeso(minutosHoje, pesosGrupoHoje);
+
+  // cadeia sequencial dentro do grupo de hoje: só a primeira matéria ainda não concluída HOJE fica
+  // desbloqueada; as seguintes ficam bloqueadas até a anterior fechar o minutosAlvoHoje dela
+  // (pedido explícito do usuário: "1 atividade concluindo libera a atividade 2, e por aí em diante")
+  const dadosGrupoHoje = materiasGrupoHoje.map((a, i) => {
+    const feitosHoje = minutosEstudoNaSemana(calendario, hoje, hoje, a.materia);
+    const minutosAlvoHoje = minutosHojePorMateria[i];
+    return { a, feitosHoje, minutosAlvoHoje, concluidoHoje: minutosAlvoHoje > 0 && feitosHoje >= minutosAlvoHoje };
+  });
+  const idxPrimeiraNaoFeita = dadosGrupoHoje.findIndex((d) => !d.concluidoHoje);
+
   const blocos: BlocoEstudoSemana[] = minutosSemana > 0
-    ? materiasBloco.map((a, i) => {
-        const feitos = minutosEstudoNaSemana(calendario, inicioSemana, fimSemana, a.materia);
-        const feitosHoje = minutosEstudoNaSemana(calendario, hoje, hoje, a.materia);
-        const minutosAlvo = minutosPorMateria[i];
-        const minutosAlvoHoje = minutosHojePorMateria[i];
+    ? dadosGrupoHoje.map(({ a, feitosHoje, minutosAlvoHoje, concluidoHoje }, i) => {
+        const minutosAlvo = minutosAlvoSemanaPorMateria.get(a.materia) ?? 0;
+        const feitos = minutosFeitosSemanaPorMateria.get(a.materia) ?? 0;
         const topico = a.topicoAtual as string;
         const range = resolverPaginaBloco(a.materia, topico, pdfs, pagPorHora, minutosAlvoHoje, capitulosConcluidos);
         return {
@@ -797,6 +847,8 @@ export function computarMetaSemana(params: {
           minutosAlvoHoje,
           minutosFeitosHoje: feitosHoje,
           concluido: feitos >= minutosAlvo,
+          concluidoHoje,
+          bloqueado: idxPrimeiraNaoFeita !== -1 && i > idxPrimeiraNaoFeita,
           pdfId: range?.pdfId,
           paginaInicio: range?.paginaInicio,
           paginaFim: range?.paginaFim,
@@ -837,9 +889,11 @@ export function computarMetaSemana(params: {
 
   // acompanhamento de ritmo (Gustavo "cobra a evolução"): quanto já foi feito essa semana vs o
   // que seria proporcionalmente esperado até HOJE, e quantos minutos/dia faltam nos dias restantes
-  // (hoje incluso) pra fechar a meta — mesmo se a semana ainda não estiver "atrasada" oficialmente
-  const blocosConcluidos = blocos.length > 0 && blocos.every((b) => b.concluido);
-  const totalMinutosFeitos = blocos.reduce((s, b) => s + b.minutosFeitosSemana, 0);
+  // (hoje incluso) pra fechar a meta — mesmo se a semana ainda não estiver "atrasada" oficialmente.
+  // Usa progressoSemanal (TODAS as matérias ativas) e não `blocos` (que agora é só o grupo de
+  // hoje) — senão o % da semana oscilaria conforme o grupo do dia, em vez de refletir a semana toda.
+  const blocosConcluidos = progressoSemanal.length > 0 && progressoSemanal.every((p) => p.minutosFeitos >= p.minutosAlvo);
+  const totalMinutosFeitos = progressoSemanal.reduce((s, p) => s + p.minutosFeitos, 0);
   const percCumpridoSemana = minutosSemana > 0 ? Math.min(100, Math.round((totalMinutosFeitos / minutosSemana) * 100)) : 0;
   const diasDecorridos = Math.min(7, diffDias(inicioSemana, hoje) + 1); // 1..7
   const diasRestantes = 7 - diasDecorridos + 1; // hoje incluso, 7..1
@@ -857,6 +911,7 @@ export function computarMetaSemana(params: {
     inicioSemana,
     fimSemana,
     minutosSemana,
+    grupoHoje,
     blocos,
     blocosConcluidos,
     questoesPendentes: analises.flatMap((a) => a.questoesLiberadas),

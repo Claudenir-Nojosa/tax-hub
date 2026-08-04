@@ -67,14 +67,18 @@ export default function CicloTab({ config, onChange, materiasConcurso }: Props) 
         icone={Settings2}
         contentClassName="-mx-5 sm:-mx-6 -mb-5 sm:-mb-6"
       >
-        <p className="text-xs text-muted-foreground px-5 sm:px-6 pb-3 -mt-2">Defina quais matérias incluir no ciclo de estudos</p>
+        <p className="text-xs text-muted-foreground px-5 sm:px-6 pb-3 -mt-2">
+          Defina quais matérias incluir no ciclo de estudos. O Grupo decide o RODÍZIO da Trilha —
+          cada dia mostra só as matérias de um grupo por vez, uma atividade de cada vez.
+        </p>
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead className="pl-5 sm:pl-6">Matéria</TableHead>
               <TableHead className="text-center">Incluir</TableHead>
               <TableHead className="text-center">Peso</TableHead>
-              <TableHead className="text-center pr-5 sm:pr-6">Prioridade</TableHead>
+              <TableHead className="text-center">Prioridade</TableHead>
+              <TableHead className="text-center pr-5 sm:pr-6">Grupo</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -105,7 +109,7 @@ export default function CicloTab({ config, onChange, materiasConcurso }: Props) 
                       <option value={2}>2 — Alto</option>
                     </select>
                   </TableCell>
-                  <TableCell className="text-center pr-5 sm:pr-6">
+                  <TableCell className="text-center">
                     <select
                       value={cfg?.prioridade ?? "Baixa"}
                       onChange={(e) => updateMateria(m.nome, "prioridade", e.target.value)}
@@ -113,6 +117,17 @@ export default function CicloTab({ config, onChange, materiasConcurso }: Props) 
                     >
                       <option value="Alta">Alta</option>
                       <option value="Baixa">Baixa</option>
+                    </select>
+                  </TableCell>
+                  <TableCell className="text-center pr-5 sm:pr-6">
+                    <select
+                      value={cfg?.divisao ?? "A"}
+                      onChange={(e) => updateMateria(m.nome, "divisao", e.target.value)}
+                      className="text-xs border border-border rounded bg-card text-foreground px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="C">C</option>
                     </select>
                   </TableCell>
                 </TableRow>

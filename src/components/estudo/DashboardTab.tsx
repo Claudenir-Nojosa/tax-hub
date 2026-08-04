@@ -122,7 +122,7 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
     pdfs: state.pdfs,
     blocos: state.blocos,
   });
-  const feitos = meta.blocos.filter((b) => b.concluido).length;
+  const feitos = meta.blocos.filter((b) => b.concluidoHoje).length;
   const perc = meta.blocos.length > 0 ? Math.round((feitos / meta.blocos.length) * 100) : 0;
   const pendencias = meta.questoesPendentes.length + meta.reforcos.length + meta.revisoes30.length + (meta.revisarCartas ? 1 : 0);
   const totalAtividades = meta.blocos.length + pendencias;
@@ -195,7 +195,7 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
               <div
                 key={b.materia}
                 title={b.materia}
-                className={`h-1.5 flex-1 ${b.concluido ? cor.dot : "bg-muted dark:bg-muted"}`}
+                className={`h-1.5 flex-1 ${b.concluidoHoje ? cor.dot : "bg-muted dark:bg-muted"}`}
               />
             );
           })}
