@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import Image from "next/image";
 import {
-  BookOpen, CalendarClock, Check, Clock, Compass, ExternalLink, Flame, Layers, ListChecks,
+  BookOpen, CalendarClock, Check, Clock, ExternalLink, Flame, Layers, ListChecks,
   Route, Settings2, Sparkles, Target, Trash2, Trophy, Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -16,7 +17,7 @@ import {
   estimativaConclusaoTrilha, type EstimativaConclusao, type MetaSemana, type QuestaoLiberada,
   type ReforcoGrupo, type ReforcoImediatoPendente, type RevisaoLinkPendente, type SemanaHistorico,
 } from "@/lib/trilha-dinamica";
-import { fmtHoras, gerarMensagemGustavo } from "./trilha/trilha-ui";
+import { fmtHoras, gerarMensagemGustavo, useMensagemGustavoIA } from "./trilha/trilha-ui";
 import {
   CardMateria, CorpoBloco, CorpoCartas, CorpoQuestoes, CorpoReforcos, CorpoReforcosImediatos,
   CorpoRevisao30, CorpoRevisoesLink, type AberturaPdfSolicitada,
@@ -102,12 +103,11 @@ function GustavoBubble({
   diasInativo: number;
   historico: SemanaHistorico[];
 }) {
-  const { titulo, corpo } = gerarMensagemGustavo(meta, { nomeUsuario, streakDias, diasSemAtividade: diasInativo, historico });
+  const mensagemBase = gerarMensagemGustavo(meta, { nomeUsuario, streakDias, diasSemAtividade: diasInativo, historico });
+  const { titulo, corpo, humor } = useMensagemGustavoIA(mensagemBase, nomeUsuario);
   return (
     <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2">
-      <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md flex-shrink-0">
-        <Compass className="h-6 w-6 text-white" />
-      </div>
+      <Image src={`/${humor}.png`} alt="Gustavo" width={56} height={56} className="flex-shrink-0 object-contain" />
       <div className="flex-1 min-w-0 bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
         <div className="text-sm font-bold text-foreground dark:text-foreground">{titulo}</div>
         <div className="text-sm text-muted-foreground mt-0.5">{corpo}</div>

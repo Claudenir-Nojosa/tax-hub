@@ -342,6 +342,10 @@ export interface BlocoEstudoSemana {
   // só presente quando o PDF tem capítulos manuais — "Capítulo 2 de 6: Crédito Tributário" etc.,
   // pra Trilha mostrar EM QUAL capítulo a atividade de leitura está, não só o tópico inteiro
   capituloLabel?: string;
+  // capítulos/subcapítulos individuais que compõem esse bloco (só quando capituloLabel existe) —
+  // a UI lista cada um como subtarefa clicável ("Ler capítulo N"), abrindo o leitor direto naquele
+  // trecho; cada item já sabe se foi lido (via pdf.paginaAtual, o mesmo bookmark de sempre)
+  capitulos?: CapituloBlocoItem[];
 }
 
 export interface Revisao30 {
@@ -497,10 +501,21 @@ const MINUTOS_ALVO_ATIVIDADE_CAPITULO_PISO = 30;
 // páginas registrada (calcularPagPorHora nunca deixa de priorizar dado real quando existe).
 const PAG_POR_HORA_PADRAO = 15;
 
+// um item da lista de subtarefas de um bloco agrupado — o CapituloResolvido de sempre, mais o
+// índice GLOBAL (1-based, entre TODOS os capítulos do PDF) pra UI numerar certo mesmo quando o
+// bloco não começa no capítulo 1 (ex.: "Capítulo 4: Regras Gerais de Acentuação")
+export interface CapituloBlocoItem extends CapituloResolvido {
+  indice: number;
+}
+
 export interface BlocoCapitulos {
   paginaInicio: number;
   paginaFim: number;
-  nomes: string[]; // 1 nome = capítulo único; 2+ = vários capítulos agrupados nessa atividade
+  // capítulos/subcapítulos resolvidos que compõem essa atividade, na ordem de leitura — 1 item =
+  // capítulo único; 2+ = vários agrupados pra bater o minutosAlvo da semana. Cada um já traz seu
+  // próprio paginaInicio/paginaFim/lido (ver resolverCapitulos), pra a UI listar como subtarefas
+  // clicáveis (abrir o leitor direto naquele capítulo) em vez de só um rótulo agregado.
+  capitulos: CapituloBlocoItem[];
   primeiroIndice: number; // 1-based, pra UI mostrar "Capítulo 3 de 6" / "Capítulos 3-4 de 6"
   ultimoIndice: number;
   total: number;
@@ -527,12 +542,12 @@ export function proximoBlocoCapitulos(
 
   const alvo = Math.max(minutosAlvo, MINUTOS_ALVO_ATIVIDADE_CAPITULO_PISO);
   const ritmo = pagPorHora && pagPorHora > 0 ? pagPorHora : PAG_POR_HORA_PADRAO;
-  const nomes: string[] = [];
+  const capitulos: CapituloBlocoItem[] = [];
   let minutosAcumulados = 0;
   let ultimoIdx = primeiroIdx;
   for (let i = primeiroIdx; i < resolvidos.length; i++) {
     const c = resolvidos[i];
-    nomes.push(c.nome);
+    capitulos.push({ ...c, indice: i + 1 });
     ultimoIdx = i;
     const paginas = c.paginaFim - c.paginaInicio + 1;
     minutosAcumulados += (paginas / ritmo) * 60;
@@ -541,7 +556,7 @@ export function proximoBlocoCapitulos(
   return {
     paginaInicio: resolvidos[primeiroIdx].paginaInicio,
     paginaFim: resolvidos[ultimoIdx].paginaFim,
-    nomes,
+    capitulos,
     primeiroIndice: primeiroIdx + 1,
     ultimoIndice: ultimoIdx + 1,
     total: resolvidos.length,
@@ -549,9 +564,9 @@ export function proximoBlocoCapitulos(
 }
 
 function rotuloBlocoCapitulos(bloco: BlocoCapitulos): string {
-  return bloco.nomes.length > 1
+  return bloco.capitulos.length > 1
     ? `Capítulos ${bloco.primeiroIndice}-${bloco.ultimoIndice} de ${bloco.total}`
-    : `Capítulo ${bloco.primeiroIndice} de ${bloco.total}: ${bloco.nomes[0]}`;
+    : `Capítulo ${bloco.primeiroIndice} de ${bloco.total}: ${bloco.capitulos[0].nome}`;
 }
 
 // acha o PDF da matéria que cobre o tópico — se tiver capítulos manuais definidos, usa o PRÓXIMO
@@ -565,7 +580,7 @@ function resolverPaginaBloco(
   pdfs: PdfEstudo[],
   pagPorHora: number | null,
   minutosAlvo: number
-): { pdfId: string; paginaInicio: number; paginaFim: number; capituloLabel?: string } | undefined {
+): { pdfId: string; paginaInicio: number; paginaFim: number; capituloLabel?: string; capitulos?: CapituloBlocoItem[] } | undefined {
   for (const pdf of pdfs) {
     if (pdf.materia !== materia) continue;
     if (pdf.topicos?.includes(topico) && (pdf.capitulos?.length ?? 0) > 0) {
@@ -576,6 +591,7 @@ function resolverPaginaBloco(
           paginaInicio: bloco.paginaInicio,
           paginaFim: bloco.paginaFim,
           capituloLabel: rotuloBlocoCapitulos(bloco),
+          capitulos: bloco.capitulos,
         };
       }
     }
@@ -627,6 +643,7 @@ export function computarMetaSemana(params: {
           pdfId: range?.pdfId,
           paginaInicio: range?.paginaInicio,
           paginaFim: range?.paginaFim,
+          capitulos: range?.capitulos,
           capituloLabel: range?.capituloLabel,
         };
       })

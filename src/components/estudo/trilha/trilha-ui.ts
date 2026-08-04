@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   CORES_MATERIA, COR_MATERIA_PADRAO,
   type MateriaBase, type MateriaConcurso, type MateriaDef,
@@ -89,9 +90,15 @@ export function proximaAtividade(meta: MetaSemana): ProximaAtividade | null {
   return null;
 }
 
+// qual PNG do Gustavo (coruja mascote, /public/{humor}.png) ilustra a bolha — decidido junto com
+// o texto em gerarMensagemGustavo, pela mesma prioridade de cenário (nunca escolhido à parte,
+// senão a cara do Gustavo poderia dessincronizar do que ele está dizendo)
+export type HumorGustavo = "feliz" | "nervoso" | "triste" | "normal";
+
 export interface MensagemGustavo {
   titulo: string;
   corpo: string;
+  humor: HumorGustavo;
 }
 
 // nº de semanas passadas usadas pra decidir "tendência fraca" (recalibrar a meta) — precisa de
@@ -124,6 +131,7 @@ export function gerarMensagemGustavo(
     return {
       titulo: `${saudacao}Cadê você? 👀`,
       corpo: `Já fazem ${diasSemAtividade} dias sem nenhuma atividade registrada. Bora retomar hoje?`,
+      humor: "triste",
     };
   }
 
@@ -131,6 +139,7 @@ export function gerarMensagemGustavo(
     return {
       titulo: `${saudacao}Você está atrasado na meta desta semana`,
       corpo: `Só ${meta.percCumpridoSemana}% feito até agora — nos dias que restam, dá uns ${fmtHoras(meta.ritmoNecessarioMinDia)}/dia pra recuperar.`,
+      humor: "nervoso",
     };
   }
 
@@ -141,6 +150,7 @@ export function gerarMensagemGustavo(
     return {
       titulo: `${saudacao}Vamos ajustar o ritmo?`,
       corpo: `Nas últimas ${ultimasSemanas.length} semanas você fechou em média ${media}% da meta — talvez valha reduzir as horas semanais no Ciclo pra ficar mais sustentável.`,
+      humor: "nervoso",
     };
   }
 
@@ -159,16 +169,71 @@ export function gerarMensagemGustavo(
       corpo: (streakDias > 0
         ? `Você já está há ${streakDias} dia${streakDias !== 1 ? "s" : ""} sem parar — continue assim pra manter a sequência.`
         : "Nada pendente no checklist desta semana.") + notaComparativa,
+      humor: "feliz",
     };
   }
   if (proxima.ehNova) {
     return {
       titulo: `${saudacao}Sua atividade desta semana é:`,
       corpo: `${proxima.titulo} — ${proxima.subtitulo}${notaComparativa}`,
+      humor: "normal",
     };
   }
   return {
     titulo: `${saudacao}Vi que você ainda não fez:`,
     corpo: `${proxima.titulo} · ${proxima.subtitulo}${notaComparativa}`,
+    humor: "normal",
   };
+}
+
+// cache em memória (nível de módulo) — evita rechamar a IA pra reescrever o MESMO texto
+// determinístico quando o usuário troca de aba (Dashboard <-> Trilha, mesmo texto-base nos dois)
+// ou o componente remonta; limpa sozinho ao recarregar a página, é só uma economia de chamadas.
+// Só guarda titulo/corpo — o `humor` NUNCA passa pela IA, vem sempre direto do `base` atual (ver
+// useMensagemGustavoIA), então não faz sentido cacheá-lo junto.
+const cacheMensagemGustavoIA = new Map<string, { titulo: string; corpo: string }>();
+
+// pega a mensagem DETERMINÍSTICA de gerarMensagemGustavo (sempre pronta na hora, sem depender de
+// rede) e pede pra /api/ai/gustavo-mensagem reescrever titulo+corpo com um tom mais motivador e
+// variado — PRESERVANDO todo fato (números, nomes de matéria/tópico, ver o prompt da rota). Nunca
+// deixa a tela vazia enquanto espera: mostra a versão determinística até a reescrita chegar, e
+// continua nela pra sempre se a chamada falhar (sem tela quebrada por causa da IA). `humor` (qual
+// PNG do Gustavo mostrar) não é texto — não passa pela IA, é sempre o de `base`, fresco a cada
+// render, pra nunca dessincronizar da cara do Gustavo com o que ele está de fato dizendo agora.
+export function useMensagemGustavoIA(base: MensagemGustavo, nomeUsuario?: string): MensagemGustavo {
+  const chave = `${base.titulo}|||${base.corpo}`;
+  const [texto, setTexto] = useState<{ titulo: string; corpo: string }>(
+    () => cacheMensagemGustavoIA.get(chave) ?? { titulo: base.titulo, corpo: base.corpo }
+  );
+
+  useEffect(() => {
+    const cacheada = cacheMensagemGustavoIA.get(chave);
+    if (cacheada) {
+      setTexto(cacheada);
+      return;
+    }
+    setTexto({ titulo: base.titulo, corpo: base.corpo });
+    let cancelado = false;
+    fetch("/api/ai/gustavo-mensagem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ titulo: base.titulo, corpo: base.corpo, nomeUsuario }),
+    })
+      .then((r) => (r.ok ? (r.json() as Promise<{ titulo?: string; corpo?: string }>) : null))
+      .then((data) => {
+        if (cancelado || !data?.titulo || !data?.corpo) return;
+        const reescrita = { titulo: data.titulo, corpo: data.corpo };
+        cacheMensagemGustavoIA.set(chave, reescrita);
+        setTexto(reescrita);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+    // `chave` já resume todo o conteúdo textual de `base` (novo objeto a cada render) — usar
+    // `base` direto nas deps faria o efeito rodar de novo a cada render, mesmo com o MESMO texto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chave, nomeUsuario]);
+
+  return { titulo: texto.titulo, corpo: texto.corpo, humor: base.humor };
 }

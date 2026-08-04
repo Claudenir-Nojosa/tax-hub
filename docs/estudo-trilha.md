@@ -66,6 +66,15 @@ arquivo se as regras mudarem.
      de 6: Crédito Tributário" ou "Capítulos 4-5 de 6") — `CorpoBloco` (`TrilhaLinhas.tsx`) mostra
      isso no lugar do intervalo de página cru. Sem estado de "capítulo concluído" separado: o mesmo
      bookmark `paginaAtual` decide tudo, exatamente como já decidia "PDF lido" antes disso existir.
+   - **Subtarefas por capítulo (2026-08-03)**: quando o bloco agrupa MAIS de um capítulo,
+     `BlocoEstudoSemana.capitulos?: CapituloBlocoItem[]` carrega cada um deles (o `CapituloResolvido`
+     de sempre + `indice` GLOBAL 1-based, pra numerar certo mesmo quando o bloco não começa no
+     capítulo 1 — ex.: "Capítulo 4: Regras Gerais de Acentuação"). `CorpoBloco` renderiza isso como
+     uma lista de subtarefas clicáveis abaixo da atividade principal — cada linha abre o leitor
+     DIRETO naquele capítulo (`onIrParaBiblioteca({ pdfId, paginaInicio, paginaFim })` do próprio
+     capítulo, não do bloco inteiro) e mostra check preenchido quando `cap.lido` (mesmo bookmark
+     `paginaAtual`, sem estado novo). Com 1 capítulo só no bloco, a lista não aparece — o
+     `capituloLabel` singular já basta.
      PDFs sem `capitulos` continuam no comportamento de `intervalosPaginas` de sempre — nada
      migrado automaticamente, os dois convivem.
 3. **Questões escalonadas A-D**: cada tópico tem 4 grupos de questões — os cadernos A/B/C/D do
@@ -108,6 +117,24 @@ arquivo se as regras mudarem.
     (`session.user.name`) e aponta a próxima atividade pendente, na mesma ordem de prioridade que
     define qual seção ganha o destaque "Comece aqui": conteúdo > questões/reforços A-D > reforço
     rápido > revisão (link 7/30d, revisão de matéria, cartas).
+    **Reescrita por IA (2026-08-03)**: `gerarMensagemGustavo` continua 100% determinística (nenhum
+    fato sai dela sem ser calculado de verdade) — mas o TEXTO que aparece na tela agora passa por
+    `/api/ai/gustavo-mensagem` (gpt-4o, temperature alta pra variar a cada chamada), que reescreve
+    título+corpo com um tom mais motivador/pessoal, SEM poder inventar, remover ou alterar nenhum
+    fato (número, nome de matéria/tópico, percentual — regra explícita no prompt da rota). O hook
+    `useMensagemGustavoIA` (`trilha-ui.ts`) orquestra isso: mostra a versão determinística na hora
+    (sem esperar rede, sem flash de loading), chama a rota em `useEffect`, e troca pela reescrita
+    quando chega — falha da IA não quebra nada, só fica na versão determinística pra sempre. Cache
+    em memória por conteúdo (chave = `titulo|||corpo`) evita rechamar a IA pra reescrever a MESMA
+    mensagem só porque o usuário trocou de aba (Dashboard ↔ Trilha, mesmo texto-base nos dois).
+    **Avatar por humor (2026-08-03)**: cada cenário de `gerarMensagemGustavo` também define um
+    `humor: "feliz" | "nervoso" | "triste" | "normal"` (mesmo objeto `MensagemGustavo`, campo que
+    NUNCA passa pela IA — a rota só reescreve titulo/corpo, `useMensagemGustavoIA` sempre devolve o
+    `humor` fresco do `base` atual). `MensagemDoDia`/`GustavoBubble` trocaram o ícone genérico
+    (Compass) por `<Image src={`/${humor}.png`} .../>` — 4 PNGs de uma coruja mascote em
+    `/public` (`feliz.png`, `nervoso.png`, `triste.png`, `normal.png`), mapeados 1:1 com a
+    prioridade de cenário: inatividade→triste, atraso/tendência fraca→nervoso, tudo em dia→feliz,
+    fluxo normal (atividade nova ou pendente)→normal.
 12. **Gustavo cobra a evolução** (2026-08-03, mesmo dia da reformulação semanal, a pedido do
     usuário — "quero que o Gustavo acompanhe minha rotina, ajuste meu planejamento quando eu
     atraso e me cobre minha evolução"). Sinais novos, cada um checado em `computarMetaSemana`

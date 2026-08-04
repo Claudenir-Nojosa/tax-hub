@@ -1,6 +1,7 @@
 "use client";
 
-import { BookOpen, HelpCircle, Target, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles, Gauge, Route, Compass, ArrowRight, Trophy, Library, Flag, CalendarDays, ListChecks } from "lucide-react";
+import Image from "next/image";
+import { BookOpen, HelpCircle, Target, Medal, BarChart3, TrendingUp, Flame, CheckCircle2, Sparkles, Gauge, Route, ArrowRight, Trophy, Library, Flag, CalendarDays, ListChecks } from "lucide-react";
 import {
   NIVEL_CONFIG,
   CONQUISTAS,
@@ -18,7 +19,7 @@ import {
   topicoKey,
 } from "@/lib/estudo-data";
 import { analisarHistoricoSemanas, computarMetaSemana, diffDias } from "@/lib/trilha-dinamica";
-import { gerarMensagemGustavo, resolverCorMateria } from "./trilha/trilha-ui";
+import { gerarMensagemGustavo, resolverCorMateria, useMensagemGustavoIA } from "./trilha/trilha-ui";
 import { alvoLeituraPdf } from "./biblioteca/biblioteca-utils";
 import EstudoHero from "./ui/EstudoHero";
 import StatTile from "./ui/StatTile";
@@ -44,35 +45,39 @@ function fmtDataCurtaBR(dateKey: string): string {
 // ativa, some — o CTA "Ative sua trilha" do CardTrilha já cobre esse caso.
 function MensagemDoDia({ state, materiasConcurso, nomeUsuario }: { state: EstudoState; materiasConcurso?: MateriaBase[]; nomeUsuario?: string }) {
   const trilha = state.trilhaDinamica;
-  if (!trilha?.ativa) return null;
+  const ativa = !!trilha?.ativa;
 
+  // mensagem-base sempre calculada (com fallback vazio quando a trilha não está ativa) — o hook
+  // de reescrita por IA precisa ser chamado incondicionalmente em TODO render, senão o `return
+  // null` abaixo (que só acontece às vezes) quebraria as Rules of Hooks
   const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
-  const meta = computarMetaSemana({
-    trilha,
-    configCiclo: state.configCiclo,
-    materiasAtivas,
-    topicos: state.topicos,
-    calendario: state.calendario,
-    pdfs: state.pdfs,
-  });
-  const streakDias = calcularStreakDias(state.calendario);
-  const historico = analisarHistoricoSemanas({ trilha, configCiclo: state.configCiclo, calendario: state.calendario });
-  // capado nos dias desde a ativação — sem isso, uma trilha recém-ativada sem nenhum histórico
-  // de calendário mostraria "90 dias sem atividade" (teto do diasSemAtividade), o que soa como se
-  // o usuário tivesse abandonado algo que nem começou
-  const diasInativo = Math.min(diasSemAtividade(state.calendario), Math.max(0, diffDias(trilha.iniciadaEm, dateKeyLocal())));
-  const { titulo, corpo } = gerarMensagemGustavo(meta, {
-    nomeUsuario,
-    streakDias,
-    diasSemAtividade: diasInativo,
-    historico,
-  });
+  const mensagemBase = ativa && trilha
+    ? gerarMensagemGustavo(
+        computarMetaSemana({
+          trilha,
+          configCiclo: state.configCiclo,
+          materiasAtivas,
+          topicos: state.topicos,
+          calendario: state.calendario,
+          pdfs: state.pdfs,
+        }),
+        {
+          nomeUsuario,
+          streakDias: calcularStreakDias(state.calendario),
+          // capado nos dias desde a ativação — sem isso, uma trilha recém-ativada sem nenhum
+          // histórico de calendário mostraria "90 dias sem atividade" (teto do diasSemAtividade),
+          // o que soa como se o usuário tivesse abandonado algo que nem começou
+          diasSemAtividade: Math.min(diasSemAtividade(state.calendario), Math.max(0, diffDias(trilha.iniciadaEm, dateKeyLocal()))),
+          historico: analisarHistoricoSemanas({ trilha, configCiclo: state.configCiclo, calendario: state.calendario }),
+        }
+      )
+    : { titulo: "", corpo: "", humor: "normal" as const };
+  const { titulo, corpo, humor } = useMensagemGustavoIA(mensagemBase, nomeUsuario);
+  if (!ativa) return null;
 
   return (
     <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2">
-      <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-md flex-shrink-0">
-        <Compass className="h-6 w-6 text-white" />
-      </div>
+      <Image src={`/${humor}.png`} alt="Gustavo" width={56} height={56} className="flex-shrink-0 object-contain" />
       <div className="flex-1 min-w-0 bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
         <div className="text-sm font-bold text-foreground dark:text-foreground">{titulo}</div>
         <div className="text-sm text-muted-foreground mt-0.5">{corpo}</div>

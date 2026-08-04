@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Check, ChevronDown, ExternalLink, Trophy } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Trophy } from "lucide-react";
 import {
   GRUPO_LABEL, GRUPO_BADGE, type MateriaConcurso, type MateriaDef,
 } from "@/lib/estudo-data";
@@ -48,39 +48,73 @@ export function CorpoBloco({
       b.pdfId ? { pdfId: b.pdfId, paginaInicio: b.paginaInicio, paginaFim: b.paginaFim } : undefined
     );
   };
+  const abrirCapitulo = (cap: { paginaInicio: number; paginaFim: number }) => {
+    if (!onIrParaBiblioteca || !b.pdfId) return;
+    onIrParaBiblioteca({ pdfId: b.pdfId, paginaInicio: cap.paginaInicio, paginaFim: cap.paginaFim });
+  };
+  // subtarefas só fazem sentido quando o bloco agrupa MAIS de um capítulo — com 1 só, o
+  // capituloLabel acima já mostra tudo que precisa
+  const mostrarSubtarefas = (b.capitulos?.length ?? 0) > 1;
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cor.dot}`} />
-          <span className="text-sm font-semibold text-foreground dark:text-foreground truncate">{b.materia}</span>
-        </div>
-        <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={b.topico}>
-          tópico atual: {b.topico}
-          {b.paginaInicio && b.paginaFim && !b.capituloLabel && ` (págs. ${b.paginaInicio}–${b.paginaFim})`}
-        </div>
-        {b.capituloLabel && (
-          <div className="text-[11px] text-primary truncate mt-0.5" title={b.capituloLabel}>
-            {b.capituloLabel}
-            {b.paginaInicio && b.paginaFim && ` (págs. ${b.paginaInicio}–${b.paginaFim})`}
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cor.dot}`} />
+            <span className="text-sm font-semibold text-foreground dark:text-foreground truncate">{b.materia}</span>
           </div>
+          <div className="text-[11px] text-muted-foreground truncate mt-0.5" title={b.topico}>
+            tópico atual: {b.topico}
+            {b.paginaInicio && b.paginaFim && !b.capituloLabel && ` (págs. ${b.paginaInicio}–${b.paginaFim})`}
+          </div>
+          {b.capituloLabel && (
+            <div className="text-[11px] text-primary truncate mt-0.5" title={b.capituloLabel}>
+              {b.capituloLabel}
+              {b.paginaInicio && b.paginaFim && ` (págs. ${b.paginaInicio}–${b.paginaFim})`}
+            </div>
+          )}
+          <div className="mt-1.5 flex items-center gap-2">
+            <div className="flex-1 bg-muted dark:bg-muted rounded-full h-1.5 overflow-hidden">
+              <div className={`h-full rounded-full transition-all duration-500 ${b.concluido ? "bg-emerald-500" : "bg-primary/50"}`} style={{ width: `${perc}%` }} />
+            </div>
+            <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{fmtHoras(b.minutosFeitosSemana)}/{fmtHoras(b.minutosAlvoSemana)}</span>
+          </div>
+        </div>
+        {!b.concluido && onIrParaBiblioteca && (
+          <button type="button" onClick={abrirLeitor} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-medium flex items-center gap-1">
+            Ler PDF <ArrowRight className="h-3 w-3" />
+          </button>
         )}
-        <div className="mt-1.5 flex items-center gap-2">
-          <div className="flex-1 bg-muted dark:bg-muted rounded-full h-1.5 overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-500 ${b.concluido ? "bg-emerald-500" : "bg-primary/50"}`} style={{ width: `${perc}%` }} />
-          </div>
-          <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{fmtHoras(b.minutosFeitosSemana)}/{fmtHoras(b.minutosAlvoSemana)}</span>
-        </div>
+        {b.concluido && (
+          <button type="button" onClick={onMarcarEstudado} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium flex items-center gap-1">
+            <Check className="h-3 w-3" /> Marcar como estudado
+          </button>
+        )}
       </div>
-      {!b.concluido && onIrParaBiblioteca && (
-        <button type="button" onClick={abrirLeitor} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-medium flex items-center gap-1">
-          Ler PDF <ArrowRight className="h-3 w-3" />
-        </button>
-      )}
-      {b.concluido && (
-        <button type="button" onClick={onMarcarEstudado} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium flex items-center gap-1">
-          <Check className="h-3 w-3" /> Marcar como estudado
-        </button>
+      {mostrarSubtarefas && (
+        <div className="pl-3.5 ml-0.5 border-l-2 border-muted dark:border-muted space-y-0.5">
+          {b.capitulos!.map((cap) => (
+            <button
+              key={cap.indice}
+              type="button"
+              onClick={() => abrirCapitulo(cap)}
+              disabled={!onIrParaBiblioteca || !b.pdfId}
+              className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 -ml-1 hover:bg-muted/60 dark:hover:bg-muted/40 disabled:hover:bg-transparent"
+            >
+              {cap.lido ? (
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
+              ) : (
+                <Circle className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0" />
+              )}
+              <span
+                className={`text-[11px] truncate ${cap.lido ? "text-muted-foreground line-through" : "text-foreground dark:text-foreground"}`}
+                title={cap.nome}
+              >
+                Capítulo {cap.indice}: {cap.nome}
+              </span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
