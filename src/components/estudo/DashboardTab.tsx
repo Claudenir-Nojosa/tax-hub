@@ -87,9 +87,10 @@ function MensagemDoDia({ state, materiasConcurso, nomeUsuario }: { state: Estudo
   );
 }
 
-// Card da meta de HOJE da trilha dinâmica — resumo dos blocos de estudo do dia e pendências;
-// sem trilha ativa vira CTA pra ativar. Visual: eyebrow + badge do grupo, barra grossa com
-// marcador, contagem de matérias/atividades, chips coloridos por matéria (cor real do Edital).
+// Card da meta atual da trilha dinâmica — resumo da cadeia de atividades da semana (todas as
+// matérias com teoria pendente, ordenadas por grupo) e pendências; sem trilha ativa vira CTA pra
+// ativar. Visual: eyebrow + badge do grupo, barra grossa com marcador, contagem de
+// matérias/atividades, chips coloridos por matéria (cor real do Edital).
 function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: EstudoState; materiasConcurso?: MateriaBase[]; onIrParaTrilha?: () => void }) {
   const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
   const trilha = state.trilhaDinamica;
@@ -122,7 +123,7 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
     pdfs: state.pdfs,
     blocos: state.blocos,
   });
-  const feitos = meta.blocos.filter((b) => b.concluidoHoje).length;
+  const feitos = meta.blocos.filter((b) => b.concluidaAtividade).length;
   const perc = meta.blocos.length > 0 ? Math.round((feitos / meta.blocos.length) * 100) : 0;
   const pendencias = meta.questoesPendentes.length + meta.reforcos.length + meta.revisoes30.length + (meta.revisarCartas ? 1 : 0);
   const totalAtividades = meta.blocos.length + pendencias;
@@ -195,7 +196,7 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
               <div
                 key={b.materia}
                 title={b.materia}
-                className={`h-1.5 flex-1 ${b.concluidoHoje ? cor.dot : "bg-muted dark:bg-muted"}`}
+                className={`h-1.5 flex-1 ${b.concluidaAtividade ? cor.dot : "bg-muted dark:bg-muted"}`}
               />
             );
           })}

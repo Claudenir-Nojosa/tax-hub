@@ -206,9 +206,9 @@ export const TRILHA_NIVEL_CONFIG: Record<TrilhaNivelMateria, { label: string; cu
 export interface TrilhaDinamicaState {
   ativa: boolean;
   iniciadaEm: string; // dateKey
-  /** @deprecated cursor de grupo A/B/C avançado manualmente — substituído pelo rodízio calculado
-   * ao vivo (grupoDoDia em trilha-dinamica.ts, ancorado em iniciadaEm, sem estado próprio pra
-   * avançar). Mantido opcional só pra não quebrar trilhas antigas persistidas — não é mais lido
+  /** @deprecated cursor de grupo A/B/C avançado manualmente — substituído pela cadeia da semana
+   * inteira ordenada por grupo (computarMetaSemana em trilha-dinamica.ts), sem cursor próprio pra
+   * avançar. Mantido opcional só pra não quebrar trilhas antigas persistidas — não é mais lido
    * pelo motor. */
   grupoCiclo?: "A" | "B" | "C";
   /** @deprecated ver grupoCiclo acima */

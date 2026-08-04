@@ -57,9 +57,10 @@ export function CorpoBloco({
   // capituloLabel acima já mostra tudo que precisa
   const mostrarSubtarefas = (b.capitulos?.length ?? 0) > 1;
 
-  // bloqueado = ainda não é a vez dessa matéria na cadeia do grupo de hoje (ver grupoDoDia em
+  // bloqueado = ainda não é a vez dessa matéria na cadeia da semana (ver computarMetaSemana em
   // trilha-dinamica.ts) — mostra só um preview, sem botão nem subtarefas clicáveis, até a
-  // atividade anterior do grupo ser concluída hoje
+  // atividade anterior da cadeia ser concluída (não é mais só "hoje": fica assim até concluir,
+  // mesmo que leve mais de um dia)
   if (b.bloqueado) {
     return (
       <div className="flex items-center gap-3 opacity-50">
@@ -84,9 +85,9 @@ export function CorpoBloco({
           <div className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cor.dot}`} />
             <span className="text-sm font-semibold text-foreground dark:text-foreground truncate">{b.materia}</span>
-            {b.concluidoHoje && !b.concluido && (
+            {b.concluidaAtividade && !b.concluido && (
               <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 flex-shrink-0">
-                <CheckCircle2 className="h-3 w-3" /> feito hoje
+                <CheckCircle2 className="h-3 w-3" /> concluída
               </span>
             )}
           </div>
@@ -100,11 +101,12 @@ export function CorpoBloco({
               {b.paginaInicio && b.paginaFim && ` (págs. ${b.paginaInicio}–${b.paginaFim})`}
             </div>
           )}
-          {/* alvo de HOJE, do tamanho do trecho mostrado — sem isso o número ao lado da barra
-              (semanal) parecia "desproporcional" comparado a um trecho de poucas páginas
-              (ex.: "23min/1h20" ao lado de só 9 páginas — o 1h20 era da semana toda) */}
+          {/* alvo desta ATIVIDADE (trecho do tamanho de um dia), não o da semana inteira — sem
+              isso o número ao lado da barra (semanal) parecia "desproporcional" comparado a um
+              trecho de poucas páginas (ex.: "23min/1h20" ao lado de só 9 páginas — o 1h20 era da
+              semana toda) */}
           <div className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
-            Hoje: {fmtHoras(b.minutosFeitosHoje)} de {fmtHoras(b.minutosAlvoHoje)}
+            Nesta atividade: {fmtHoras(b.minutosFeitosSemana)} de {fmtHoras(b.minutosAlvoAtividade)}
           </div>
           <div className="mt-1.5 flex items-center gap-2">
             <div className="flex-1 bg-muted dark:bg-muted rounded-full h-1.5 overflow-hidden">
@@ -113,7 +115,7 @@ export function CorpoBloco({
             <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{fmtHoras(b.minutosFeitosSemana)}/{fmtHoras(b.minutosAlvoSemana)} na semana</span>
           </div>
         </div>
-        {!b.concluido && !b.concluidoHoje && onIrParaBiblioteca && (
+        {!b.concluido && !b.concluidaAtividade && onIrParaBiblioteca && (
           <button type="button" onClick={abrirLeitor} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-medium flex items-center gap-1">
             Ler PDF <ArrowRight className="h-3 w-3" />
           </button>

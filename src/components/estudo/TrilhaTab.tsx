@@ -270,9 +270,9 @@ export default function TrilhaTab({
   // tivesse abandonado algo que nem começou
   const diasInativo = Math.min(diasSemAtividade(calendario), Math.max(0, diffDias(trilha.iniciadaEm, hoje)));
 
-  // progresso da CADEIA de hoje (grupo do dia) — diferente do anel do hero, que reflete a semana
-  // inteira (meta.percCumpridoSemana, já agregado sobre TODAS as matérias ativas)
-  const blocosFeitosHoje = meta.blocos.filter((b) => b.concluidoHoje).length;
+  // progresso da CADEIA (atividades concluídas na cadeia da semana) — diferente do anel do hero,
+  // que reflete a meta da semana inteira (meta.percCumpridoSemana)
+  const atividadesFeitas = meta.blocos.filter((b) => b.concluidaAtividade).length;
   const materiasEmRevisao = meta.analises.filter(
     (a) => a.materiaConcluida && (trilha.revisoes30Feitas[a.materia] ?? []).length > 0
   );
@@ -288,7 +288,7 @@ export default function TrilhaTab({
   // primeira seção com algo pendente, na mesma ordem de prioridade da fala do Gustavo
   // (estudo > reforço/questões > reforço rápido > revisão) — só ela ganha o destaque visual
   const primeiraSecao: "conteudo" | "questoes" | "reforcoImediato" | "revisao" | null = (() => {
-    if (meta.blocos.some((b) => !b.concluidoHoje && !b.bloqueado)) return "conteudo";
+    if (meta.blocos.some((b) => !b.concluidaAtividade && !b.bloqueado)) return "conteudo";
     if (meta.reforcos.length > 0 || meta.questoesPendentes.length > 0) return "questoes";
     if (meta.reforcosImediatos.length > 0) return "reforcoImediato";
     if (meta.revisoesLink.length > 0 || meta.revisoes30.length > 0 || meta.revisarCartas) return "revisao";
@@ -322,14 +322,14 @@ export default function TrilhaTab({
           </ProgressRing>
           <div className="flex-1 min-w-0">
             <div className="text-[11px] uppercase tracking-wider text-emerald-100 font-semibold mb-0.5">
-              Semana de {fmtDataCurta(meta.inicioSemana)} a {fmtDataCurta(meta.fimSemana)} · Ciclo do dia: grupo {meta.grupoHoje}
+              Semana de {fmtDataCurta(meta.inicioSemana)} a {fmtDataCurta(meta.fimSemana)} · Grupo atual: {meta.grupoAtual}
             </div>
             <div className="text-lg sm:text-xl font-bold leading-snug">
               {meta.blocosConcluidos
                 ? "Meta da semana entregue! 🎉"
                 : meta.blocos.length > 0
-                  ? `${blocosFeitosHoje}/${meta.blocos.length} atividades de hoje`
-                  : "Sem leitura pendente no grupo de hoje"}
+                  ? `${atividadesFeitas}/${meta.blocos.length} atividades da cadeia`
+                  : "Sem leitura pendente"}
             </div>
             <div className="text-xs text-emerald-100 mt-1">
               {meta.minutosSemana > 0 ? `${fmtHoras(meta.minutosSemana)} de estudo essa semana` : "Sem horas configuradas pra essa semana"}
@@ -477,7 +477,7 @@ function Intro({
   onIrParaCiclo?: () => void;
 }) {
   const regras: { icone: LucideIcon; cor: string; texto: string }[] = [
-    { icone: Clock, cor: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary", texto: "As matérias ativas são divididas em 3 grupos (A/B/C, configurável no Ciclo) e cada dia mostra só o grupo da vez, num rodízio contínuo. Dentro do grupo, as atividades formam uma cadeia: só a primeira fica desbloqueada, concluir libera a próxima — as horas de hoje são divididas proporcionalmente ao peso só entre as matérias do grupo do dia. A meta da semana de cada matéria continua sendo a fração do total semanal entre todas as matérias ativas. O tempo é monitorado pelo leitor de PDF." },
+    { icone: Clock, cor: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary", texto: "As matérias ativas são divididas em 3 grupos (A/B/C, configurável no Ciclo), que decidem a ORDEM de uma cadeia com TODAS as atividades da semana: primeiro as do grupo A, depois B, depois C. Só a primeira atividade fica desbloqueada — concluir libera a próxima, mesmo que seja de outro grupo e no mesmo dia, se você tiver tempo/vontade. Cada trecho é do tamanho de um dia (dividido proporcionalmente ao peso entre as matérias do mesmo grupo). A meta da semana de cada matéria continua sendo a fração do total semanal entre todas as matérias ativas. O tempo é monitorado pelo leitor de PDF." },
     { icone: ListChecks, cor: "bg-teal-100 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400", texto: "Concluir um tópico libera questões dos anteriores: grupo A do último, B do penúltimo, C do antepenúltimo, D do anterior a esse — até fechar os 4 grupos de todos os tópicos." },
     { icone: Zap, cor: "bg-orange-100 text-orange-600 dark:bg-orange-950/60 dark:text-orange-400", texto: "Reforço rápido: cadastre um link de questões curto (até 10) pra um tópico e ele aparece assim que você marca esse tópico como estudado — prática ativa, sem esperar o escalonamento A-D." },
     { icone: ExternalLink, cor: "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400", texto: "Cadastrado o link de questões do tópico (aba Questões), 7 e 30 dias após concluir os 4 grupos A-D a trilha pede pra refazer essas questões em cada checkpoint — abaixo de 70% volta como reforço." },

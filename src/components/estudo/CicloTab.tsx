@@ -68,8 +68,9 @@ export default function CicloTab({ config, onChange, materiasConcurso }: Props) 
         contentClassName="-mx-5 sm:-mx-6 -mb-5 sm:-mb-6"
       >
         <p className="text-xs text-muted-foreground px-5 sm:px-6 pb-3 -mt-2">
-          Defina quais matérias incluir no ciclo de estudos. O Grupo decide o RODÍZIO da Trilha —
-          cada dia mostra só as matérias de um grupo por vez, uma atividade de cada vez.
+          Defina quais matérias incluir no ciclo de estudos. O Grupo decide a ORDEM da cadeia na
+          Trilha — todas as matérias aparecem, mas bloqueadas: primeiro as do grupo A, depois B,
+          depois C, uma atividade de cada vez, liberando a próxima conforme você conclui.
         </p>
         <Table>
           <TableHeader>
