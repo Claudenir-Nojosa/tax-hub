@@ -74,11 +74,17 @@ export function CorpoBloco({
               {b.paginaInicio && b.paginaFim && ` (págs. ${b.paginaInicio}–${b.paginaFim})`}
             </div>
           )}
+          {/* alvo de HOJE, do tamanho do trecho mostrado — sem isso o número ao lado da barra
+              (semanal) parecia "desproporcional" comparado a um trecho de poucas páginas
+              (ex.: "23min/1h20" ao lado de só 9 páginas — o 1h20 era da semana toda) */}
+          <div className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
+            Hoje: {fmtHoras(b.minutosFeitosHoje)} de {fmtHoras(b.minutosAlvoHoje)}
+          </div>
           <div className="mt-1.5 flex items-center gap-2">
             <div className="flex-1 bg-muted dark:bg-muted rounded-full h-1.5 overflow-hidden">
               <div className={`h-full rounded-full transition-all duration-500 ${b.concluido ? "bg-emerald-500" : "bg-primary/50"}`} style={{ width: `${perc}%` }} />
             </div>
-            <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{fmtHoras(b.minutosFeitosSemana)}/{fmtHoras(b.minutosAlvoSemana)}</span>
+            <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{fmtHoras(b.minutosFeitosSemana)}/{fmtHoras(b.minutosAlvoSemana)} na semana</span>
           </div>
         </div>
         {!b.concluido && onIrParaBiblioteca && (

@@ -427,6 +427,13 @@ export interface BlocoEstudoSemana {
                    // mesmo bloco já mostra o tópico seguinte, sem replanejar nada
   minutosAlvoSemana: number;
   minutosFeitosSemana: number; // sessões de "estudo" da SEMANA corrente dessa matéria
+  // alvo/feito de HOJE (mesma divisão proporcional por peso do Ciclo, só que aplicada a
+  // horasPorDia[hoje] em vez da soma da semana) — é o número que bate com o trecho de capítulos
+  // oferecido (também dimensionado pelo alvo de hoje, ver computarMetaSemana); mostrar o alvo da
+  // SEMANA ao lado de um trecho pensado pra UM dia é o que gerava a sensação de "desproporcional"
+  // (ex.: "23min/1h20" ao lado de só 9 páginas — o "1h20" era da semana inteira, não do trecho).
+  minutosAlvoHoje: number;
+  minutosFeitosHoje: number;
   concluido: boolean;
   // resolvido via PdfEstudo.intervalosPaginas (ou capitulos, quando definidos — ver
   // resolverPaginaBloco) quando existe um PDF da matéria com o intervalo do tópico mapeado;
@@ -777,14 +784,18 @@ export function computarMetaSemana(params: {
   const blocos: BlocoEstudoSemana[] = minutosSemana > 0
     ? materiasBloco.map((a, i) => {
         const feitos = minutosEstudoNaSemana(calendario, inicioSemana, fimSemana, a.materia);
+        const feitosHoje = minutosEstudoNaSemana(calendario, hoje, hoje, a.materia);
         const minutosAlvo = minutosPorMateria[i];
+        const minutosAlvoHoje = minutosHojePorMateria[i];
         const topico = a.topicoAtual as string;
-        const range = resolverPaginaBloco(a.materia, topico, pdfs, pagPorHora, minutosHojePorMateria[i], capitulosConcluidos);
+        const range = resolverPaginaBloco(a.materia, topico, pdfs, pagPorHora, minutosAlvoHoje, capitulosConcluidos);
         return {
           materia: a.materia,
           topico,
           minutosAlvoSemana: minutosAlvo,
           minutosFeitosSemana: feitos,
+          minutosAlvoHoje,
+          minutosFeitosHoje: feitosHoje,
           concluido: feitos >= minutosAlvo,
           pdfId: range?.pdfId,
           paginaInicio: range?.paginaInicio,

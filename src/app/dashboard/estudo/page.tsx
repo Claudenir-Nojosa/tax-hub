@@ -587,6 +587,7 @@ export default function EstudoPage() {
               metaMinutosRestantes={metaMinutosRestantes}
               aberturaSolicitada={aberturaPdf}
               onAberturaConsumida={() => setAberturaPdf(null)}
+              capitulosConcluidos={state.capitulosConcluidos}
             />
           )}
 

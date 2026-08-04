@@ -23,7 +23,7 @@ const VisorPdf = dynamic(() => import("./VisorPdf"), { ssr: false });
 
 export default function LeitorPdf({
   pdf, blob, topicos, onAtualizarPagina, onAtualizarPdf, onUpdateTopicos, onRegistrarSessao,
-  onAdicionarCartas, minutosMetaRestantes, paginaAbertura, paginaFimAlvo, onFechar,
+  onAdicionarCartas, minutosMetaRestantes, paginaAbertura, paginaFimAlvo, onFechar, capitulosConcluidos,
 }: {
   pdf: PdfEstudo;
   blob: Blob;
@@ -43,6 +43,10 @@ export default function LeitorPdf({
   paginaAbertura?: number;
   paginaFimAlvo?: number;
   onFechar: () => void;
+  // capítulos marcados como lidos manualmente (checkbox da Trilha) — sem isso o leitor não sabe
+  // que um capítulo já foi concluído sem ser lido agora, e o aviso de fim de capítulo dispara
+  // retroativo pra ele assim que a leitura abre depois desse ponto
+  capitulosConcluidos?: string[];
 }) {
   // cronômetro: conta sozinho desde a abertura; pausável. Ao fechar com ≥1 min, a sessão vira
   // atividade de Estudo no calendário da matéria/tópico do PDF (páginas = delta do "parei na pág.")
@@ -74,18 +78,28 @@ export default function LeitorPdf({
   // próprio, senão sobra só o paginaFimAlvo único vindo do deep link da Trilha (comportamento de
   // sempre pra PDF sem capítulos). Sem isso, ler o 2º capítulo em seguida do 1º não avisava mais
   // nada — só a fronteira do clique original (o 1º) era observada.
+  const resolvidosCapitulos = useMemo(() => {
+    if (!pdf.capitulos || pdf.capitulos.length === 0) return [];
+    return resolverCapitulos(pdf, capitulosConcluidos ?? []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdf.capitulos, pdf.id, pdf.paginaConteudoFim, pdf.totalPaginas, pdf.paginaAtual, capitulosConcluidos]);
   const limitesCapitulos = useMemo(() => {
-    if (pdf.capitulos && pdf.capitulos.length > 0) {
-      return resolverCapitulos(pdf).map((c) => c.paginaFim).sort((a, b) => a - b);
+    if (resolvidosCapitulos.length > 0) {
+      return resolvidosCapitulos.map((c) => c.paginaFim).sort((a, b) => a - b);
     }
     return paginaFimAlvo !== undefined ? [paginaFimAlvo] : [];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdf.capitulos, pdf.id, pdf.paginaConteudoFim, pdf.totalPaginas, paginaFimAlvo]);
+  }, [resolvidosCapitulos, paginaFimAlvo]);
   const [avisoFimPagina, setAvisoFimPagina] = useState(false);
   const [limiteAvisado, setLimiteAvisado] = useState<number | undefined>(undefined);
   // maior limite já avisado nessa sessão — só avança, então recruzar o mesmo limite (voltar e
-  // ler de novo) não reabre o aviso, mas o PRÓXIMO limite ainda cruza normalmente
-  const ultimoLimiteAvisadoRef = useRef(0);
+  // ler de novo) não reabre o aviso, mas o PRÓXIMO limite ainda cruza normalmente. Começa já
+  // pulando os limites de capítulos que JÁ estavam concluídos antes desta sessão (lidos de
+  // verdade ou marcados manualmente via checkbox da Trilha) — sem isso, abrir o leitor depois de
+  // ter marcado alguns capítulos como feitos disparava o aviso retroativo pra eles assim que a
+  // página visível já estivesse à frente (ex.: deep link abrindo direto no capítulo seguinte).
+  const ultimoLimiteAvisadoRef = useRef(
+    resolvidosCapitulos.filter((c) => c.lido).reduce((max, c) => Math.max(max, c.paginaFim), 0)
+  );
 
   // cartão MANUAL sem grifo: botões na barra (ao lado de "Parei aqui") abrem o formulário do
   // tipo escolhido (Monstro / V ou F / Tesouro) direto, já travado na matéria/tópico do PDF —

@@ -77,11 +77,15 @@ interface Props {
   // consumido uma vez (abre o leitor + onAberturaConsumida) e não de novo até um pedido novo
   aberturaSolicitada?: AberturaPdfSolicitada | null;
   onAberturaConsumida?: () => void;
+  // capítulos marcados como lidos manualmente (checkbox da Trilha, chaveCapitulo em
+  // trilha-dinamica.ts) — o leitor precisa saber disso pro aviso de "passou do conteúdo
+  // indicado" não disparar retroativo pra capítulos que já foram concluídos sem ler de novo
+  capitulosConcluidos?: string[];
 }
 
 export default function BibliotecaTab({
   pdfs, calendario, onChange, materiasConcurso, topicos, onUpdateTopicos, onRegistrarSessao,
-  onAdicionarCartas, metaMinutosRestantes, aberturaSolicitada, onAberturaConsumida,
+  onAdicionarCartas, metaMinutosRestantes, aberturaSolicitada, onAberturaConsumida, capitulosConcluidos,
 }: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
     materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
@@ -519,6 +523,7 @@ export default function BibliotecaTab({
           paginaAbertura={aberturaAtual?.paginaInicio}
           paginaFimAlvo={aberturaAtual?.paginaFim}
           onFechar={fecharLeitor}
+          capitulosConcluidos={capitulosConcluidos}
         />
       )}
     </div>
