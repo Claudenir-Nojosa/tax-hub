@@ -477,6 +477,15 @@ export function diffDias(a: string, b: string): number {
   return Math.round((parseDateKey(b).getTime() - parseDateKey(a).getTime()) / 86400000);
 }
 
+// chave de EstudoConfigCiclo.horasPorDia pro dia da semana de `dataKey` — índice bate direto com
+// Date.getDay() (0=domingo..6=sábado), mesma ordem usada aqui.
+const CHAVES_DIA_SEMANA: (keyof EstudoConfigCiclo["horasPorDia"])[] = [
+  "domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado",
+];
+export function chaveDiaSemana(dataKey: string): keyof EstudoConfigCiclo["horasPorDia"] {
+  return CHAVES_DIA_SEMANA[parseDateKey(dataKey).getDay()];
+}
+
 export function proximoDomingo(aPartirDe: string): string {
   const d = parseDateKey(aPartirDe);
   const falta = (7 - d.getDay()) % 7; // 0 se já é domingo
@@ -750,16 +759,27 @@ export function computarMetaSemana(params: {
   const pagPorHora = calcularPagPorHora(calendario);
 
   // blocos de leitura: TODAS as matérias ativas com teoria pendente (não mais um grupo por dia),
-  // tempo semanal dividido PROPORCIONALMENTE ao peso configurado no Ciclo
+  // tempo semanal dividido PROPORCIONALMENTE ao peso configurado no Ciclo — isso continua
+  // valendo pra meta/barra de progresso da SEMANA (minutosAlvoSemana).
   const materiasBloco = analises.filter((a) => a.topicoAtual !== null);
   const pesosBloco = materiasBloco.map((a) => configCiclo.materias[a.materia]?.peso ?? 1);
   const minutosPorMateria = distribuirMinutosPorPeso(minutosSemana, pesosBloco);
+  // mas o TRECHO DE CAPÍTULOS oferecido em cada atividade usa o alvo de HOJE (horasPorDia do dia
+  // da semana, mesmos pesos) — não o da semana inteira. Sem isso, uma matéria com poucos capítulos
+  // curtos acumulava até bater o alvo semanal inteiro numa atividade só ("Capítulos 1-8 de 12"),
+  // em vez de uma atividade do tamanho de UM dia de estudo (pedido explícito do usuário: "não
+  // quero que apareça 4,5,6,7... quero dividido por dia, como se fosse o ciclo"). A soma dos
+  // alvos de hoje de todas as matérias ativas já bate com horasPorDia[hoje] (mesma distribuição
+  // proporcional, só que aplicada ao dia em vez da semana) — e a soma de todo dia da semana pra
+  // uma mesma matéria continua batendo com o alvo semanal dela, já que é o mesmo Ciclo/pesos.
+  const minutosHoje = configCiclo.horasPorDia[chaveDiaSemana(hoje)];
+  const minutosHojePorMateria = distribuirMinutosPorPeso(minutosHoje, pesosBloco);
   const blocos: BlocoEstudoSemana[] = minutosSemana > 0
     ? materiasBloco.map((a, i) => {
         const feitos = minutosEstudoNaSemana(calendario, inicioSemana, fimSemana, a.materia);
         const minutosAlvo = minutosPorMateria[i];
         const topico = a.topicoAtual as string;
-        const range = resolverPaginaBloco(a.materia, topico, pdfs, pagPorHora, minutosAlvo, capitulosConcluidos);
+        const range = resolverPaginaBloco(a.materia, topico, pdfs, pagPorHora, minutosHojePorMateria[i], capitulosConcluidos);
         return {
           materia: a.materia,
           topico,
