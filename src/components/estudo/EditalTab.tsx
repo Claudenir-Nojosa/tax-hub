@@ -151,7 +151,10 @@ export default function EditalTab({ topicos, onUpdate, materiasConcurso, pdfs = 
   );
 
   const toggleEstudado = (materia: string, topico: string) => {
-    updateTopico(materia, topico, (prev) => ({ ...prev, estudado: !prev.estudado }));
+    updateTopico(materia, topico, (prev) => {
+      const estudado = !prev.estudado;
+      return { ...prev, estudado, estudadoEm: estudado ? dateKeyLocal() : undefined };
+    });
   };
 
   const ciclarImportancia = (materia: string, topico: string) => {

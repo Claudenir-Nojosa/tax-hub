@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, Clock, ClipboardList, Flag, Layers, ListChecks, Pause, Play } from "lucide-react";
@@ -8,6 +8,7 @@ import {
   gerarQuestoesGrupos, topicoKey,
   type Alternativa, type AtividadeTipo, type Carta, type CapituloPdf, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
 } from "@/lib/estudo-data";
+import { resolverCapitulos } from "@/lib/trilha-dinamica";
 import { fmtCrono, novaCartaManual, sincronizarCadernoComQuestoes } from "./biblioteca-utils";
 import InputPaginaLeitor from "./InputPaginaLeitor";
 import NovoCartaoForm, { TIPO_CARTAO_CONFIG } from "./NovoCartaoForm";
@@ -68,11 +69,23 @@ export default function LeitorPdf({
     onAtualizarPagina(pagina);
   };
 
-  // aviso de "passou do conteúdo indicado" — dispara UMA vez por sessão (não fica reabrindo a
-  // cada scroll além do alvo); "Continuar mesmo assim" só fecha o aviso, não desativa o alerta
-  // de verdade pra sempre (reabrir o leitor nessa mesma sessão de novo pode avisar de novo)
+  // aviso de "passou do conteúdo indicado" — dispara uma vez por LIMITE cruzado (não só a
+  // primeira vez da sessão): quando o PDF tem capítulos manuais, cada fim de capítulo é um limite
+  // próprio, senão sobra só o paginaFimAlvo único vindo do deep link da Trilha (comportamento de
+  // sempre pra PDF sem capítulos). Sem isso, ler o 2º capítulo em seguida do 1º não avisava mais
+  // nada — só a fronteira do clique original (o 1º) era observada.
+  const limitesCapitulos = useMemo(() => {
+    if (pdf.capitulos && pdf.capitulos.length > 0) {
+      return resolverCapitulos(pdf).map((c) => c.paginaFim).sort((a, b) => a - b);
+    }
+    return paginaFimAlvo !== undefined ? [paginaFimAlvo] : [];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdf.capitulos, pdf.id, pdf.paginaConteudoFim, pdf.totalPaginas, paginaFimAlvo]);
   const [avisoFimPagina, setAvisoFimPagina] = useState(false);
-  const avisoMostradoRef = useRef(false);
+  const [limiteAvisado, setLimiteAvisado] = useState<number | undefined>(undefined);
+  // maior limite já avisado nessa sessão — só avança, então recruzar o mesmo limite (voltar e
+  // ler de novo) não reabre o aviso, mas o PRÓXIMO limite ainda cruza normalmente
+  const ultimoLimiteAvisadoRef = useRef(0);
 
   // cartão MANUAL sem grifo: botões na barra (ao lado de "Parei aqui") abrem o formulário do
   // tipo escolhido (Monstro / V ou F / Tesouro) direto, já travado na matéria/tópico do PDF —
@@ -182,13 +195,15 @@ export default function LeitorPdf({
     toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   };
 
-  // dispara o aviso de "passou do conteúdo indicado" UMA vez por sessão, na primeira vez que a
-  // página visível cruza paginaFimAlvo — reaberto o leitor de novo (nova sessão), pode avisar de
-  // novo; "Continuar mesmo assim" só fecha o card, não impede reaparecer se sair e voltar
+  // dispara o aviso de "passou do conteúdo indicado" a cada NOVO limite cruzado (fim de capítulo,
+  // ou o paginaFimAlvo único quando não há capítulos) — "Continuar mesmo assim" só fecha o card,
+  // não impede o PRÓXIMO limite de avisar quando for cruzado também
   const handlePaginaVisivel = (pagina: number) => {
     setPaginaVisivel(pagina);
-    if (paginaFimAlvo !== undefined && pagina > paginaFimAlvo && !avisoMostradoRef.current) {
-      avisoMostradoRef.current = true;
+    const proximoLimite = limitesCapitulos.find((lim) => lim > ultimoLimiteAvisadoRef.current);
+    if (proximoLimite !== undefined && pagina > proximoLimite) {
+      ultimoLimiteAvisadoRef.current = proximoLimite;
+      setLimiteAvisado(proximoLimite);
       setAvisoFimPagina(true);
     }
   };
@@ -237,12 +252,18 @@ export default function LeitorPdf({
     }
     onFechar();
   };
-  const encerrarRef = useRef(encerrarSessao);
-  encerrarRef.current = encerrarSessao;
+  // Esc é fácil de apertar sem querer (hábito de fechar outra coisa) — em vez de fechar direto,
+  // só ABRE a confirmação; fechar de fato exige clique em "Sair" (2º Esc cancela a confirmação em
+  // vez de confirmar a saída, mesma convenção do resto do app pra diálogos bloqueantes). O botão
+  // de voltar no header continua fechando direto (clique já é uma ação deliberada).
+  const [confirmSair, setConfirmSair] = useState(false);
 
-  // Esc fecha (registrando a sessão) + trava o scroll do body enquanto o leitor está aberto
+  // trava o scroll do body enquanto o leitor está aberto + Esc abre/fecha a confirmação de saída
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") encerrarRef.current(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setConfirmSair((atual) => !atual);
+    };
     document.addEventListener("keydown", onKey);
     const overflowAnterior = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -462,7 +483,7 @@ export default function LeitorPdf({
       {/* aviso de fim de conteúdo indicado (atividade da Trilha com página final mapeada) —
           bloqueante (mesmo padrão do NovoCartaoForm), com opção de voltar pra página alvo ou
           seguir lendo mesmo assim; não impede scroll nenhum, só avisa */}
-      {avisoFimPagina && paginaFimAlvo !== undefined && (
+      {avisoFimPagina && limiteAvisado !== undefined && (
         <div
           className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4"
           onClick={() => setAvisoFimPagina(false)}
@@ -472,18 +493,18 @@ export default function LeitorPdf({
               <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" /> Você passou do conteúdo indicado
             </div>
             <p className="text-xs text-muted-foreground">
-              A atividade da Trilha pedia leitura até a página {paginaFimAlvo} — você já está na página {paginaVisivel}.
+              A atividade da Trilha pedia leitura até a página {limiteAvisado} — você já está na página {paginaVisivel}.
             </p>
             <div className="flex items-center gap-2 justify-end pt-1">
               <button
                 type="button"
                 onClick={() => {
-                  visorRef.current?.scrollParaPagina(paginaFimAlvo);
+                  visorRef.current?.scrollParaPagina(limiteAvisado);
                   setAvisoFimPagina(false);
                 }}
                 className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-foreground hover:bg-accent transition-colors"
               >
-                Voltar à página {paginaFimAlvo}
+                Voltar à página {limiteAvisado}
               </button>
               <button
                 type="button"
@@ -491,6 +512,41 @@ export default function LeitorPdf({
                 className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors"
               >
                 Continuar mesmo assim
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* confirmação de saída (Esc) — mesmo padrão bloqueante do aviso de fim de página; clicar
+          fora ou "Cancelar" só fecha o card, sem sair. O botão de voltar do header não passa por
+          aqui (clique já é deliberado) — só o Esc, fácil de apertar sem querer. */}
+      {confirmSair && (
+        <div
+          className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4"
+          onClick={() => setConfirmSair(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-2xl w-full max-w-sm p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" /> Sair da leitura?
+            </div>
+            <p className="text-xs text-muted-foreground">
+              A sessão até agora é salva normalmente — é só pra confirmar, já que o Esc é fácil de apertar sem querer.
+            </p>
+            <div className="flex items-center gap-2 justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setConfirmSair(false)}
+                className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-foreground hover:bg-accent transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={encerrarSessao}
+                className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors"
+              >
+                Sair
               </button>
             </div>
           </div>

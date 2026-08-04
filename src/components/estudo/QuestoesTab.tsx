@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import {
-  MATERIAS, topicoKey, dateKeyLocal, defaultTopicoState,
-  type TopicoState, type MateriaConcurso, type ChecklistRevisaoLink, type EstudoConfigCiclo,
+  MATERIAS, topicoKey, dateKeyLocal, defaultTopicoState, blocoDoTopico,
+  type TopicoState, type MateriaConcurso, type ChecklistRevisaoLink, type EstudoConfigCiclo, type Bloco,
 } from "@/lib/estudo-data";
-import { statusRevisaoLink, CHECKPOINTS_REVISAO_LINK, DIAS_REVISAO_MATERIA, type StatusRevisaoLink } from "@/lib/trilha-dinamica";
+import {
+  statusRevisaoLink, statusRevisaoLinkBloco, CHECKPOINTS_REVISAO_LINK, DIAS_REVISAO_MATERIA, type StatusRevisaoLink,
+} from "@/lib/trilha-dinamica";
 import { resolverCorMateria } from "./trilha/trilha-ui";
-import { ChevronDown, ChevronRight, ExternalLink, Search, Link2, Trophy, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Search, Link2, Trophy, Zap, Layers, Plus, Trash2 } from "lucide-react";
 
 interface Props {
   topicos: Record<string, TopicoState>;
@@ -15,12 +17,20 @@ interface Props {
   configCiclo: EstudoConfigCiclo;
   onUpdateConfigCiclo: (config: EstudoConfigCiclo) => void;
   materiasConcurso?: MateriaConcurso[]; // se passado, usa em vez de MATERIAS hardcoded
+  blocos: Record<string, Bloco>;
+  onUpdateBlocos: (blocos: Record<string, Bloco>) => void;
 }
 
 // Badge de status de UM checkpoint da revisão do link — mesmo motor da Trilha
 // (statusRevisaoLink), só pra dar contexto de quando o link cadastrado aqui vira tarefa de
 // verdade. `label` prefixa o texto (ex.: "7d") pra distinguir os dois checkpoints lado a lado.
-function StatusBadge({ label, status }: { label?: string; status: StatusRevisaoLink }) {
+function StatusBadge({
+  label, status, pendenteLabel = "conclua os 4 grupos A-D no Edital",
+}: {
+  label?: string;
+  status: StatusRevisaoLink;
+  pendenteLabel?: string;
+}) {
   const prefixo = label ? `${label}: ` : "";
   switch (status.tipo) {
     case "sem_link":
@@ -28,7 +38,7 @@ function StatusBadge({ label, status }: { label?: string; status: StatusRevisaoL
     case "aguardando_grupos":
       return (
         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
-          conclua os 4 grupos A-D no Edital
+          {pendenteLabel}
         </span>
       );
     case "aguardando_prazo":
@@ -91,7 +101,7 @@ function LinkInput({
   );
 }
 
-export default function QuestoesTab({ topicos, onUpdate, configCiclo, onUpdateConfigCiclo, materiasConcurso }: Props) {
+export default function QuestoesTab({ topicos, onUpdate, configCiclo, onUpdateConfigCiclo, materiasConcurso, blocos, onUpdateBlocos }: Props) {
   const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
   const [busca, setBusca] = useState("");
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
@@ -120,6 +130,45 @@ export default function QuestoesTab({ topicos, onUpdate, configCiclo, onUpdateCo
       ...configCiclo,
       materias: { ...configCiclo.materias, [materia]: { ...cfg, linkRevisaoMateria: link.trim() || undefined } },
     });
+  };
+
+  // Blocos (agrupam tópicos que compartilham um único caderno de questões — ver Bloco em
+  // estudo-data.ts) — CRUD simples: cria com nome genérico (editável na hora), qualquer edição é
+  // uma substituição do objeto inteiro em blocos[id].
+  const criarBloco = (materia: string) => {
+    const id = `bloco:${materia}:${Date.now().toString(36)}`;
+    const numero = Object.values(blocos).filter((b) => b.materia === materia).length + 1;
+    onUpdateBlocos({ ...blocos, [id]: { id, materia, nome: `Bloco ${numero}`, topicos: [] } });
+  };
+
+  const atualizarBloco = (id: string, patch: Partial<Bloco>) => {
+    const bloco = blocos[id];
+    if (!bloco) return;
+    onUpdateBlocos({ ...blocos, [id]: { ...bloco, ...patch } });
+  };
+
+  const excluirBloco = (id: string) => {
+    if (!confirm("Excluir esse Bloco? Os tópicos dele voltam a ficar soltos (sem link), o progresso deles não é afetado.")) return;
+    const { [id]: _removido, ...resto } = blocos;
+    onUpdateBlocos(resto);
+  };
+
+  // liga/desliga um tópico num Bloco — tira de qualquer OUTRO bloco da mesma matéria primeiro
+  // (um tópico nunca pertence a 2 blocos ao mesmo tempo)
+  const toggleTopicoNoBloco = (id: string, materia: string, topico: string) => {
+    const bloco = blocos[id];
+    if (!bloco) return;
+    const jaEsta = bloco.topicos.includes(topico);
+    const atualizados = { ...blocos };
+    if (!jaEsta) {
+      for (const outro of Object.values(atualizados)) {
+        if (outro.id !== id && outro.materia === materia && outro.topicos.includes(topico)) {
+          atualizados[outro.id] = { ...outro, topicos: outro.topicos.filter((t) => t !== topico) };
+        }
+      }
+    }
+    atualizados[id] = { ...bloco, topicos: jaEsta ? bloco.topicos.filter((t) => t !== topico) : [...bloco.topicos, topico] };
+    onUpdateBlocos(atualizados);
   };
 
   const materiasFiltradas = materiasAtivas.map((m) => ({
@@ -163,7 +212,10 @@ export default function QuestoesTab({ topicos, onUpdate, configCiclo, onUpdateCo
         {materiasFiltradas.map((m) => {
           const cor = resolverCorMateria(m.nome, materiasAtivas);
           const aberto = expandidos[m.nome] ?? false;
+          const blocosDaMateria = Object.values(blocos).filter((b) => b.materia === m.nome);
           const comLink = m.topicos.filter((t) => {
+            const bloco = blocoDoTopico(blocos, m.nome, t);
+            if (bloco) return !!bloco.linkRevisao7d || !!bloco.linkRevisao30d;
             const estado = topicos[topicoKey(m.nome, t)];
             return !!estado?.linkRevisao7d || !!estado?.linkRevisao30d;
           }).length;
@@ -205,11 +257,100 @@ export default function QuestoesTab({ topicos, onUpdate, configCiclo, onUpdateCo
                     </div>
                   </div>
 
+                  {/* Blocos: agrupam vários tópicos num único caderno de questões (ex.: os
+                      "Blocos de Assuntos" do QuestFlow) — a atividade de questões da Trilha
+                      pra esse bloco só aparece UMA vez, depois que TODOS os tópicos marcados
+                      abaixo estiverem estudados */}
+                  <div className="px-4 py-3 bg-indigo-50/50 dark:bg-indigo-950/10 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                        <Layers className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" /> Blocos de questões
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => criarBloco(m.nome)}
+                        className="flex-shrink-0 flex items-center gap-1 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                      >
+                        <Plus className="h-3 w-3" /> Novo bloco
+                      </button>
+                    </div>
+                    {blocosDaMateria.length === 0 ? (
+                      <p className="text-[10px] text-muted-foreground">
+                        Nenhum bloco — cada tópico usa o link 7d/30d dele mesmo, na lista abaixo. Crie um bloco quando vários tópicos compartilham o MESMO caderno de questões (ex.: um "Bloco" do QuestFlow).
+                      </p>
+                    ) : (
+                      blocosDaMateria.map((bloco) => (
+                        <div key={bloco.id} className="rounded-lg border border-indigo-200 dark:border-indigo-900 bg-card p-2.5 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={bloco.nome}
+                              onChange={(e) => atualizarBloco(bloco.id, { nome: e.target.value })}
+                              className="flex-1 min-w-0 text-xs font-medium border border-border rounded-md px-2 py-1 bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                            />
+                            <span className="text-[10px] text-muted-foreground flex-shrink-0">{bloco.topicos.length} tópico{bloco.topicos.length !== 1 ? "s" : ""}</span>
+                            <button
+                              type="button"
+                              onClick={() => excluirBloco(bloco.id)}
+                              title="Excluir bloco"
+                              className="flex-shrink-0 p-1 rounded text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-1.5">
+                            <div className="flex items-center gap-1 flex-1">
+                              <span className="text-[10px] text-muted-foreground w-6 flex-shrink-0">7d</span>
+                              <LinkInput
+                                value={bloco.linkRevisao7d ?? ""}
+                                onChange={(v) => atualizarBloco(bloco.id, { linkRevisao7d: v.trim() || undefined })}
+                                placeholder="Link da revisão de 7 dias"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1 flex-1">
+                              <span className="text-[10px] text-muted-foreground w-6 flex-shrink-0">30d</span>
+                              <LinkInput
+                                value={bloco.linkRevisao30d ?? ""}
+                                onChange={(v) => atualizarBloco(bloco.id, { linkRevisao30d: v.trim() || undefined })}
+                                placeholder="Link da revisão de 30 dias"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1 border-t border-border">
+                            {m.topicos.map((t) => {
+                              const outroBloco = blocoDoTopico(blocos, m.nome, t);
+                              const nesteBloco = bloco.topicos.includes(t);
+                              const desabilitado = !!outroBloco && !nesteBloco;
+                              return (
+                                <label
+                                  key={t}
+                                  title={desabilitado ? `Já está em "${outroBloco!.nome}"` : t}
+                                  className={`flex items-center gap-1.5 text-[11px] ${desabilitado ? "text-muted-foreground/50 cursor-not-allowed" : "text-foreground cursor-pointer"}`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={nesteBloco}
+                                    disabled={desabilitado}
+                                    onChange={() => toggleTopicoNoBloco(bloco.id, m.nome, t)}
+                                    className="h-3 w-3 flex-shrink-0"
+                                  />
+                                  <span className="truncate max-w-[220px]">{t}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
                   {m.topicos.map((t) => {
                     const key = topicoKey(m.nome, t);
                     const estado = topicos[key];
-                    const status7 = statusRevisaoLink(estado, hoje, "d7");
-                    const status30 = statusRevisaoLink(estado, hoje, "d30");
+                    const bloco = blocoDoTopico(blocos, m.nome, t);
+                    const status7 = bloco ? statusRevisaoLinkBloco(bloco, topicos, hoje, "d7") : statusRevisaoLink(estado, hoje, "d7");
+                    const status30 = bloco ? statusRevisaoLinkBloco(bloco, topicos, hoje, "d30") : statusRevisaoLink(estado, hoje, "d30");
+                    const pendenteLabel = bloco ? "aguardando todos os tópicos do bloco" : "conclua os 4 grupos A-D no Edital";
                     return (
                       <div key={t} className="px-4 py-2.5 flex flex-col sm:flex-row sm:items-start gap-2">
                         <div className="flex-1 min-w-0">
@@ -217,7 +358,7 @@ export default function QuestoesTab({ topicos, onUpdate, configCiclo, onUpdateCo
                           {(status7.tipo !== "sem_link" || status30.tipo !== "sem_link") && (
                             <div className="mt-1 flex flex-wrap gap-1">
                               {status7.tipo === "aguardando_grupos" || status30.tipo === "aguardando_grupos" ? (
-                                <StatusBadge status={{ tipo: "aguardando_grupos" }} />
+                                <StatusBadge status={{ tipo: "aguardando_grupos" }} pendenteLabel={pendenteLabel} />
                               ) : (
                                 <>
                                   <StatusBadge label="7d" status={status7} />
@@ -228,22 +369,30 @@ export default function QuestoesTab({ topicos, onUpdate, configCiclo, onUpdateCo
                           )}
                         </div>
                         <div className="flex flex-col gap-1 flex-shrink-0 w-full sm:w-80">
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-muted-foreground w-6 flex-shrink-0">7d</span>
-                            <LinkInput
-                              value={estado?.linkRevisao7d ?? ""}
-                              onChange={(v) => updateLinkTopico(m.nome, t, "d7", v)}
-                              placeholder="Link da revisão de 7 dias"
-                            />
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-muted-foreground w-6 flex-shrink-0">30d</span>
-                            <LinkInput
-                              value={estado?.linkRevisao30d ?? ""}
-                              onChange={(v) => updateLinkTopico(m.nome, t, "d30", v)}
-                              placeholder="Link da revisão de 30 dias"
-                            />
-                          </div>
+                          {bloco ? (
+                            <div className="text-[11px] text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/30">
+                              <Layers className="h-3 w-3 flex-shrink-0" /> Link gerenciado pelo bloco &quot;{bloco.nome}&quot; acima
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-muted-foreground w-6 flex-shrink-0">7d</span>
+                                <LinkInput
+                                  value={estado?.linkRevisao7d ?? ""}
+                                  onChange={(v) => updateLinkTopico(m.nome, t, "d7", v)}
+                                  placeholder="Link da revisão de 7 dias"
+                                />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-muted-foreground w-6 flex-shrink-0">30d</span>
+                                <LinkInput
+                                  value={estado?.linkRevisao30d ?? ""}
+                                  onChange={(v) => updateLinkTopico(m.nome, t, "d30", v)}
+                                  placeholder="Link da revisão de 30 dias"
+                                />
+                              </div>
+                            </>
+                          )}
                           <div className="flex items-center gap-1">
                             <span title="Reforço rápido — até 10 questões" className="w-6 flex-shrink-0 flex items-center justify-center">
                               <Zap className="h-3 w-3 text-orange-500" />

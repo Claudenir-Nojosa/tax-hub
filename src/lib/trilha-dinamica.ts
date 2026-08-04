@@ -1,7 +1,7 @@
 import {
   calcularPagPorHora, dateKeyLocal, topicoKey, calcularPerc,
-  type AtividadeCalendario, type CapituloPdf, type ChecklistRevisaoLink, type EstudoConfigCiclo,
-  type Grupo, type PdfEstudo, type TopicoState, type TrilhaDinamicaState,
+  type AtividadeCalendario, type Bloco, type CapituloPdf, type ChecklistRevisaoLink, type EstudoConfigCiclo,
+  type Grupo, type PdfEstudo, type RevisaoLinkTopico, type TopicoState, type TrilhaDinamicaState,
 } from "./estudo-data";
 
 // forma mínima de matéria que o motor precisa — MateriaDef, MateriaConcurso e MateriaBase são
@@ -213,27 +213,28 @@ export function linkDoCheckpoint(estado: TopicoState | undefined, checkpoint: Ch
   return checkpoint === "d7" ? estado?.linkRevisao7d : estado?.linkRevisao30d;
 }
 
-// status de UM checkpoint (7 ou 30 dias) de um tópico — usado tanto pra decidir o que aparece na
-// Trilha (analisarRevisoesLink) quanto pro badge informativo da aba Questões. Os dois checkpoints
-// são independentes: cada um com seu próprio link e seu próprio registro em revisoesLink[checkpoint].
-export function statusRevisaoLink(
-  estado: TopicoState | undefined,
-  hoje: string,
-  checkpoint: ChecklistRevisaoLink = "d7"
-): StatusRevisaoLink {
-  if (!estado || !linkDoCheckpoint(estado, checkpoint)) return { tipo: "sem_link" };
-  const todosFeitos = GRUPOS_QUESTOES.every((g) => grupoFeito(estado, g));
-  if (!todosFeitos) return { tipo: "aguardando_grupos" };
+export function linkDoCheckpointBloco(bloco: Bloco, checkpoint: ChecklistRevisaoLink): string | undefined {
+  return checkpoint === "d7" ? bloco.linkRevisao7d : bloco.linkRevisao30d;
+}
 
-  // data de conclusão = a mais recente entre os atualizadoEm dos 4 grupos; se algum grupo feito
-  // não tem atualizadoEm (registro antigo, de antes desse campo existir), considera já elegível
-  // na hora — mesma filosofia do reforço A-D (ausência de data não bloqueia, libera de cara)
-  const datas = GRUPOS_QUESTOES.map((g) => estado.cadernos[g].atualizadoEm).filter((d): d is string => !!d);
-  const dataConclusao = datas.length === 4 ? datas.sort()[datas.length - 1] : "1970-01-01";
-  const diasDesde = diffDias(dataConclusao, hoje);
+// núcleo comum aos dois caminhos (por-tópico e por-Bloco): dado o link, se o pré-requisito pra
+// contar os dias já foi cumprido (4 grupos A-D no caso do tópico; todos os tópicos `estudado` no
+// caso do Bloco) e a data de onde contar os dias, devolve o status do checkpoint. `dataConclusao`
+// ausente = já elegível na hora (mesma filosofia de sempre: falta de data não bloqueia).
+function montarStatusRevisaoLink(
+  link: string | undefined,
+  pronto: boolean,
+  dataConclusao: string | undefined,
+  registro: RevisaoLinkTopico | undefined,
+  hoje: string,
+  checkpoint: ChecklistRevisaoLink
+): StatusRevisaoLink {
+  if (!link) return { tipo: "sem_link" };
+  if (!pronto) return { tipo: "aguardando_grupos" };
+
+  const diasDesde = diffDias(dataConclusao ?? "1970-01-01", hoje);
   const diasAlvo = CHECKPOINTS_REVISAO_LINK.find((c) => c.id === checkpoint)!.dias;
 
-  const registro = estado.revisoesLink?.[checkpoint];
   if (!registro) {
     if (diasDesde < diasAlvo) return { tipo: "aguardando_prazo", diasRestantes: diasAlvo - diasDesde };
     return { tipo: "disponivel" };
@@ -242,10 +243,48 @@ export function statusRevisaoLink(
   return { tipo: "feita", perc, reforco: perc < LIMIAR_REFORCO_PERC };
 }
 
+// status de UM checkpoint (7 ou 30 dias) de um tópico — usado tanto pra decidir o que aparece na
+// Trilha (analisarRevisoesLink) quanto pro badge informativo da aba Questões. Os dois checkpoints
+// são independentes: cada um com seu próprio link e seu próprio registro em revisoesLink[checkpoint].
+// Vale mesmo quando o tópico pertence a um Bloco (a aba Questões usa isso só pra badge
+// informativo do campo por-tópico) — quem decide o que aparece de fato na Trilha é
+// analisarRevisoesLinkMateria, que ignora tópicos cobertos por Bloco nesse caminho.
+export function statusRevisaoLink(
+  estado: TopicoState | undefined,
+  hoje: string,
+  checkpoint: ChecklistRevisaoLink = "d7"
+): StatusRevisaoLink {
+  const link = linkDoCheckpoint(estado, checkpoint);
+  const todosFeitos = !!estado && GRUPOS_QUESTOES.every((g) => grupoFeito(estado, g));
+  // data de conclusão = a mais recente entre os atualizadoEm dos 4 grupos; se algum grupo feito
+  // não tem atualizadoEm (registro antigo, de antes desse campo existir), considera já elegível
+  // na hora
+  const datas = estado ? GRUPOS_QUESTOES.map((g) => estado.cadernos[g].atualizadoEm).filter((d): d is string => !!d) : [];
+  const dataConclusao = datas.length === 4 ? datas.sort()[datas.length - 1] : undefined;
+  return montarStatusRevisaoLink(link, todosFeitos, dataConclusao, estado?.revisoesLink?.[checkpoint], hoje, checkpoint);
+}
+
+// status de UM checkpoint de um BLOCO — pré-requisito é TODOS os tópicos do bloco com `estudado`
+// (não os 4 grupos A-D, que são por-tópico e independentes do Bloco), e a data de conclusão é a
+// mais recente entre os `estudadoEm` desses tópicos.
+export function statusRevisaoLinkBloco(
+  bloco: Bloco,
+  topicos: Record<string, TopicoState>,
+  hoje: string,
+  checkpoint: ChecklistRevisaoLink = "d7"
+): StatusRevisaoLink {
+  const link = linkDoCheckpointBloco(bloco, checkpoint);
+  const estados = bloco.topicos.map((t) => topicos[topicoKey(bloco.materia, t)]);
+  const todosEstudados = bloco.topicos.length > 0 && estados.every((e) => e?.estudado);
+  const datas = estados.map((e) => e?.estudadoEm).filter((d): d is string => !!d);
+  const dataConclusao = datas.length === bloco.topicos.length ? datas.sort()[datas.length - 1] : undefined;
+  return montarStatusRevisaoLink(link, todosEstudados, dataConclusao, bloco.revisoesLink?.[checkpoint], hoje, checkpoint);
+}
+
 export interface RevisaoLinkPendente {
-  id: string; // estável: `rl:${materia}:${topico}:${checkpoint}`
+  id: string; // estável: `rl:${materia}:${topico}:${checkpoint}` (por-tópico) ou `rl:bloco:${blocoId}:${checkpoint}`
   materia: string;
-  topico: string;
+  topico: string; // por-tópico: nome do tópico; por-Bloco: nome do Bloco (rótulo pra UI)
   ordemTopico: number;
   link: string;
   checkpoint: ChecklistRevisaoLink;
@@ -253,12 +292,14 @@ export interface RevisaoLinkPendente {
   reforco: boolean; // true = corrigindo um resultado fraco anterior, não a 1ª tentativa
   acertosAtual?: number; // pré-preenche o form quando é reforço
   errosAtual?: number;
+  blocoId?: string; // presente = veio de um Bloco (registrar grava em Bloco.revisoesLink, não em TopicoState)
 }
 
 // tópicos com revisão do link disponível (1ª vez) ou pedindo reforço (< LIMIAR_REFORCO_PERC e
 // já esfriado, mesmo cooldown do reforço A-D), pros DOIS checkpoints (7 e 30 dias) — igual a
 // analisarReforcos, caminho separado que não interfere na liberação escalonada nem no cálculo de
-// matéria concluída
+// matéria concluída. NÃO filtra tópicos cobertos por Bloco — quem faz isso é
+// analisarRevisoesLinkMateria, o caminho usado pela Trilha de verdade.
 export function analisarRevisoesLink(
   materia: MateriaLike,
   topicos: Record<string, TopicoState>,
@@ -288,6 +329,60 @@ export function analisarRevisoesLink(
     }
   }
   return pendentes;
+}
+
+// mesma lógica de analisarRevisoesLink, mas por BLOCO: uma entrada por Bloco (não por tópico),
+// liberada quando TODOS os tópicos do bloco estão estudados — nunca uma por tópico membro.
+function analisarRevisoesLinkBlocos(
+  blocos: Bloco[],
+  topicos: Record<string, TopicoState>,
+  hoje: string,
+  ordemTopicos: string[] // materia.topicos, pra achar a posição do 1º tópico do bloco (ordenação na UI)
+): RevisaoLinkPendente[] {
+  const pendentes: RevisaoLinkPendente[] = [];
+  for (const bloco of blocos) {
+    const ordemTopico = 1 + Math.min(...bloco.topicos.map((t) => {
+      const idx = ordemTopicos.indexOf(t);
+      return idx === -1 ? ordemTopicos.length : idx;
+    }));
+    for (const cp of CHECKPOINTS_REVISAO_LINK) {
+      const status = statusRevisaoLinkBloco(bloco, topicos, hoje, cp.id);
+      if (status.tipo === "disponivel") {
+        pendentes.push({
+          id: `rl:bloco:${bloco.id}:${cp.id}`, materia: bloco.materia, topico: bloco.nome, ordemTopico,
+          link: linkDoCheckpointBloco(bloco, cp.id)!, checkpoint: cp.id, dias: cp.dias, reforco: false, blocoId: bloco.id,
+        });
+      } else if (status.tipo === "feita" && status.reforco) {
+        const registro = bloco.revisoesLink![cp.id]!;
+        if (diffDias(registro.atualizadoEm, hoje) >= REFORCO_COOLDOWN_DIAS) {
+          pendentes.push({
+            id: `rl:bloco:${bloco.id}:${cp.id}`, materia: bloco.materia, topico: bloco.nome, ordemTopico,
+            link: linkDoCheckpointBloco(bloco, cp.id)!, checkpoint: cp.id, dias: cp.dias, reforco: true,
+            acertosAtual: registro.acertos, errosAtual: registro.erros, blocoId: bloco.id,
+          });
+        }
+      }
+    }
+  }
+  return pendentes;
+}
+
+// caminho de verdade usado pela Trilha (computarMetaSemana): pros tópicos cobertos por um Bloco,
+// UMA atividade por Bloco (não uma por tópico); pros tópicos soltos (sem Bloco), o comportamento
+// por-tópico de sempre. `todosBlocos` vem inteiro (todas as matérias) — filtra aqui pela matéria.
+export function analisarRevisoesLinkMateria(
+  materia: MateriaLike,
+  topicos: Record<string, TopicoState>,
+  todosBlocos: Record<string, Bloco>,
+  hoje: string
+): RevisaoLinkPendente[] {
+  const blocosDaMateria = Object.values(todosBlocos).filter((b) => b.materia === materia.nome);
+  const topicosCobertos = new Set(blocosDaMateria.flatMap((b) => b.topicos));
+  const materiaSemBloco: MateriaLike = { nome: materia.nome, topicos: materia.topicos.filter((t) => !topicosCobertos.has(t)) };
+  return [
+    ...analisarRevisoesLinkBlocos(blocosDaMateria, topicos, hoje, materia.topicos),
+    ...analisarRevisoesLink(materiaSemBloco, topicos, hoje),
+  ];
 }
 
 // ─── Reforço imediato (link curto, pós-estudo) ──────────────────────────────
@@ -389,9 +484,23 @@ export function proximoDomingo(aPartirDe: string): string {
   return dateKeyLocal(d);
 }
 
-// semana ISO (segunda a domingo) que contém `hoje` — fonte única de "qual semana é essa" pro
-// motor inteiro (janela de minutosEstudoNaSemana e cabeçalho da MetaSemana)
-export function semanaAtual(hoje: string = dateKeyLocal()): { inicio: string; fim: string } {
+// semana de 7 dias que contém `hoje` — fonte única de "qual semana é essa" pro motor inteiro
+// (janela de minutosEstudoNaSemana e cabeçalho da MetaSemana). Com `ancora` (dateKey do dia em
+// que o usuário ATIVOU a trilha, TrilhaDinamicaState.iniciadaEm), a semana começa nesse dia da
+// semana, não necessariamente segunda — ex.: ativou numa terça, toda semana vira terça-a-segunda
+// (pedido explícito do usuário: "que a trilha as semanas comece a partir do dia q eu iniciar").
+// Sem âncora, cai no ISO padrão (segunda a domingo) — usado só como fallback defensivo, já que
+// todo caminho real do motor sempre tem uma trilha ativa (e portanto uma iniciadaEm) nesse ponto.
+export function semanaAtual(hoje: string = dateKeyLocal(), ancora?: string): { inicio: string; fim: string } {
+  if (ancora) {
+    const diasDesdeAncora = diffDias(ancora, hoje);
+    const semanas = Math.floor(diasDesdeAncora / 7);
+    const inicio = parseDateKey(ancora);
+    inicio.setDate(inicio.getDate() + semanas * 7);
+    const fim = new Date(inicio);
+    fim.setDate(fim.getDate() + 6);
+    return { inicio: dateKeyLocal(inicio), fim: dateKeyLocal(fim) };
+  }
   const d = parseDateKey(hoje);
   const diaSemana = d.getDay(); // 0=domingo..6=sábado
   const diffSegunda = diaSemana === 0 ? -6 : 1 - diaSemana;
@@ -448,6 +557,14 @@ export interface CapituloResolvido {
   lido: boolean;
 }
 
+// chave estável de um capítulo/subcapítulo dentro de EstudoState.capitulosConcluidos — o
+// paginaInicio já é único dentro de um mesmo PDF (achatarCapitulos não permite dois capítulos
+// começando na mesma página), então `pdfId + paginaInicio` basta, sem precisar de um id próprio
+// por capítulo (que exigiria migrar CapituloPdf toda vez que o usuário reordena/edita o PDF).
+export function chaveCapitulo(pdfId: string, paginaInicio: number): string {
+  return `${pdfId}::${paginaInicio}`;
+}
+
 // achata capítulos + subcapítulos numa lista única, na ordem de leitura: um capítulo COM
 // subcapítulos vira um item por subcapítulo (mais granular — é isso que a Trilha vai sequenciar);
 // um capítulo SEM subcapítulos entra ele mesmo. Cada item guarda o paginaFim DECLARADO (se o
@@ -471,18 +588,21 @@ function achatarCapitulos(capitulos: CapituloPdf[]): { nome: string; paginaInici
 
 // dá o paginaFim de cada capítulo/subcapítulo (o declarado pelo usuário — ver achatarCapitulos —
 // ou, se ausente, a página anterior ao início do próximo item; o último vai até o fim do
-// conteúdo) e se já foi lido — sem estado de "concluído" separado: o bookmark `paginaAtual` (que
-// só avança, nunca recua — ver LeitorPdf) já basta, do mesmo jeito que decide se o PDF inteiro
-// foi lido.
+// conteúdo) e se já foi lido — via o bookmark `paginaAtual` (que só avança, nunca recua — ver
+// LeitorPdf) OU via marcação manual (clique direto na bolinha da Trilha, `chaveCapitulo` em
+// EstudoState.capitulosConcluidos) — vale o que vier primeiro, um não desfaz o outro.
 export function resolverCapitulos(
-  pdf: Pick<PdfEstudo, "capitulos" | "paginaAtual" | "totalPaginas" | "paginaConteudoFim">
+  pdf: Pick<PdfEstudo, "id" | "capitulos" | "paginaAtual" | "totalPaginas" | "paginaConteudoFim">,
+  capitulosConcluidos: string[] = []
 ): CapituloResolvido[] {
   const achatados = achatarCapitulos(pdf.capitulos ?? []);
   if (achatados.length === 0) return [];
   const fimDocumento = pdf.paginaConteudoFim ?? pdf.totalPaginas;
+  const concluidosManual = new Set(capitulosConcluidos);
   return achatados.map((c, i) => {
     const paginaFim = c.paginaFimDeclarado ?? (i === achatados.length - 1 ? fimDocumento : achatados[i + 1].paginaInicio - 1);
-    return { nome: c.nome, paginaInicio: c.paginaInicio, paginaFim, lido: pdf.paginaAtual >= paginaFim };
+    const lido = pdf.paginaAtual >= paginaFim || concluidosManual.has(chaveCapitulo(pdf.id, c.paginaInicio));
+    return { nome: c.nome, paginaInicio: c.paginaInicio, paginaFim, lido };
   });
 }
 
@@ -531,11 +651,12 @@ export interface BlocoCapitulos {
 // matéria tem pouquíssimo tempo reservado. undefined quando o PDF não tem capítulos manuais, ou
 // todos já foram lidos.
 export function proximoBlocoCapitulos(
-  pdf: Pick<PdfEstudo, "capitulos" | "paginaAtual" | "totalPaginas" | "paginaConteudoFim">,
+  pdf: Pick<PdfEstudo, "id" | "capitulos" | "paginaAtual" | "totalPaginas" | "paginaConteudoFim">,
   pagPorHora: number | null,
-  minutosAlvo: number
+  minutosAlvo: number,
+  capitulosConcluidos: string[] = []
 ): BlocoCapitulos | undefined {
-  const resolvidos = resolverCapitulos(pdf);
+  const resolvidos = resolverCapitulos(pdf, capitulosConcluidos);
   if (resolvidos.length === 0) return undefined;
   const primeiroIdx = resolvidos.findIndex((c) => !c.lido);
   if (primeiroIdx === -1) return undefined;
@@ -579,12 +700,13 @@ function resolverPaginaBloco(
   topico: string,
   pdfs: PdfEstudo[],
   pagPorHora: number | null,
-  minutosAlvo: number
+  minutosAlvo: number,
+  capitulosConcluidos: string[] = []
 ): { pdfId: string; paginaInicio: number; paginaFim: number; capituloLabel?: string; capitulos?: CapituloBlocoItem[] } | undefined {
   for (const pdf of pdfs) {
     if (pdf.materia !== materia) continue;
     if (pdf.topicos?.includes(topico) && (pdf.capitulos?.length ?? 0) > 0) {
-      const bloco = proximoBlocoCapitulos(pdf, pagPorHora, minutosAlvo);
+      const bloco = proximoBlocoCapitulos(pdf, pagPorHora, minutosAlvo, capitulosConcluidos);
       if (bloco) {
         return {
           pdfId: pdf.id,
@@ -609,10 +731,14 @@ export function computarMetaSemana(params: {
   topicos: Record<string, TopicoState>;
   calendario: Record<string, AtividadeCalendario[]>;
   pdfs: PdfEstudo[];
+  blocos?: Record<string, Bloco>;
+  capitulosConcluidos?: string[];
 }): MetaSemana {
   const { trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs } = params;
+  const blocosQuestoes = params.blocos ?? {};
+  const capitulosConcluidos = params.capitulosConcluidos ?? [];
   const hoje = params.hoje ?? dateKeyLocal();
-  const { inicio: inicioSemana, fim: fimSemana } = semanaAtual(hoje);
+  const { inicio: inicioSemana, fim: fimSemana } = semanaAtual(hoje, trilha.iniciadaEm);
 
   // ATENÇÃO à unidade: apesar do NOME, `configCiclo.horasPorDia` guarda MINUTOS — o CicloTab
   // grava `horas * 60` (updateHoras) e divide por 60 pra exibir. "Total semanal" é literalmente
@@ -633,7 +759,7 @@ export function computarMetaSemana(params: {
         const feitos = minutosEstudoNaSemana(calendario, inicioSemana, fimSemana, a.materia);
         const minutosAlvo = minutosPorMateria[i];
         const topico = a.topicoAtual as string;
-        const range = resolverPaginaBloco(a.materia, topico, pdfs, pagPorHora, minutosAlvo);
+        const range = resolverPaginaBloco(a.materia, topico, pdfs, pagPorHora, minutosAlvo, capitulosConcluidos);
         return {
           materia: a.materia,
           topico,
@@ -705,7 +831,7 @@ export function computarMetaSemana(params: {
     questoesPendentes: analises.flatMap((a) => a.questoesLiberadas),
     reforcos: ativas.flatMap((m) => analisarReforcos(m, topicos, hoje)),
     reforcosImediatos: ativas.flatMap((m) => analisarReforcosImediatos(m, topicos)),
-    revisoesLink: ativas.flatMap((m) => analisarRevisoesLink(m, topicos, hoje)),
+    revisoesLink: ativas.flatMap((m) => analisarRevisoesLinkMateria(m, topicos, blocosQuestoes, hoje)),
     revisoes30,
     revisarCartas: ehDomingoCartas && !cartasFeitaHoje,
     proximoDomingoCartas: proximoDom,
@@ -744,7 +870,7 @@ export function analisarHistoricoSemanas(params: {
   const minutosMeta = Object.values(configCiclo.horasPorDia).reduce((s, v) => s + v, 0);
 
   const resultado: SemanaHistorico[] = [];
-  const cursor = parseDateKey(semanaAtual(hoje).inicio);
+  const cursor = parseDateKey(semanaAtual(hoje, trilha.iniciadaEm).inicio);
   for (let i = 0; i < maxSemanas; i++) {
     cursor.setDate(cursor.getDate() - 7);
     const inicioSemana = dateKeyLocal(cursor);
@@ -796,8 +922,10 @@ export function estimativaConclusaoTrilha(params: {
   topicos: Record<string, TopicoState>;
   calendario: Record<string, AtividadeCalendario[]>;
   pdfs: PdfEstudo[];
+  blocos?: Record<string, Bloco>;
 }): EstimativaConclusao {
   const { materiasAtivas, configCiclo, topicos, calendario, pdfs } = params;
+  const blocos = params.blocos ?? {};
   const hoje = params.hoje ?? dateKeyLocal();
   const ativas = materiasAtivas.filter((m) => configCiclo.materias[m.nome]?.incluir);
   const nomesAtivos = new Set(ativas.map((m) => m.nome));
@@ -812,23 +940,37 @@ export function estimativaConclusaoTrilha(params: {
   // questões: minutos totais já gastos em sessões tipo "questoes" / total de tarefas concluídas
   // (grupos A-D + checkpoints 7/30d + reforços imediatos, só contando quem tem link cadastrado
   // pros dois últimos — sem link, aquele checkpoint nunca vira tarefa de verdade), aplicado às
-  // tarefas do mesmo tipo que ainda faltam
+  // tarefas do mesmo tipo que ainda faltam. Tópicos cobertos por um Bloco contam o checkpoint
+  // 7d/30d UMA VEZ pro bloco inteiro (não por tópico membro) — mesma regra da Trilha de verdade
+  // (analisarRevisoesLinkMateria).
   let tarefasConcluidas = 0;
   let tarefasPendentes = 0;
   for (const m of ativas) {
+    const blocosDaMateria = Object.values(blocos).filter((b) => b.materia === m.nome);
+    const topicosCobertos = new Set(blocosDaMateria.flatMap((b) => b.topicos));
+    for (const bloco of blocosDaMateria) {
+      for (const cp of CHECKPOINTS_REVISAO_LINK) {
+        const link = linkDoCheckpointBloco(bloco, cp.id);
+        if (!link) continue;
+        if (bloco.revisoesLink?.[cp.id]) tarefasConcluidas++;
+        else tarefasPendentes++;
+      }
+    }
     for (const topico of m.topicos) {
       const estado = topicos[topicoKey(m.nome, topico)];
       for (const grupo of GRUPOS_QUESTOES) {
         if (grupoFeito(estado, grupo)) tarefasConcluidas++;
         else tarefasPendentes++;
       }
-      if (estado?.linkRevisao7d) {
-        if (estado.revisoesLink?.d7) tarefasConcluidas++;
-        else tarefasPendentes++;
-      }
-      if (estado?.linkRevisao30d) {
-        if (estado.revisoesLink?.d30) tarefasConcluidas++;
-        else tarefasPendentes++;
+      if (!topicosCobertos.has(topico)) {
+        if (estado?.linkRevisao7d) {
+          if (estado.revisoesLink?.d7) tarefasConcluidas++;
+          else tarefasPendentes++;
+        }
+        if (estado?.linkRevisao30d) {
+          if (estado.revisoesLink?.d30) tarefasConcluidas++;
+          else tarefasPendentes++;
+        }
       }
       if (estado?.linkReforcoImediato) {
         if (estado.reforcoImediatoFeito) tarefasConcluidas++;

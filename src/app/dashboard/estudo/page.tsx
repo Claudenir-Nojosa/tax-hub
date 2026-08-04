@@ -23,9 +23,10 @@ import {
   type Carta,
   type TrilhaDinamicaState,
   type PdfEstudo,
+  type Bloco,
   MATERIAS,
 } from "@/lib/estudo-data";
-import { computarMetaSemana } from "@/lib/trilha-dinamica";
+import { computarMetaSemana, chaveCapitulo } from "@/lib/trilha-dinamica";
 import type { AberturaPdfSolicitada } from "@/components/estudo/trilha/TrilhaLinhas";
 import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
@@ -80,6 +81,8 @@ function mergeWithDefaults(parsed: Partial<EstudoState>, materiasConcurso?: Mate
     cartas: parsed.cartas ?? [],
     pdfs: parsed.pdfs ?? [],
     topicosExcluidos: parsed.topicosExcluidos ?? [],
+    blocos: parsed.blocos ?? {},
+    capitulosConcluidos: parsed.capitulosConcluidos ?? [],
     topicos: {
       ...DEFAULT_ESTUDO_STATE.topicos,
       ...(parsed.topicos ?? {}),
@@ -201,6 +204,22 @@ export default function EstudoPage() {
 
   const updatePdfs = useCallback((pdfs: PdfEstudo[]) => {
     setState((prev) => ({ ...prev, pdfs }));
+  }, []);
+
+  const updateBlocos = useCallback((blocos: Record<string, Bloco>) => {
+    setState((prev) => ({ ...prev, blocos }));
+  }, []);
+
+  // check manual de um capítulo/subcapítulo na Trilha (bolinha do card "Conteúdo") — reversível,
+  // mesmo padrão de toggleTopicoExcluido
+  const toggleCapituloConcluido = useCallback((pdfId: string, paginaInicio: number) => {
+    const key = chaveCapitulo(pdfId, paginaInicio);
+    setState((prev) => ({
+      ...prev,
+      capitulosConcluidos: prev.capitulosConcluidos.includes(key)
+        ? prev.capitulosConcluidos.filter((k) => k !== key)
+        : [...prev.capitulosConcluidos, key],
+    }));
   }, []);
 
   // excluir/reativar um tópico no Edital — reversível: só some da lista/cálculos, o progresso
@@ -419,6 +438,7 @@ export default function EstudoPage() {
     const meta = computarMetaSemana({
       trilha: t, configCiclo: state.configCiclo, materiasAtivas: materiasFiltradas ?? MATERIAS,
       topicos: state.topicos, calendario: state.calendario, pdfs: state.pdfs,
+      blocos: state.blocos, capitulosConcluidos: state.capitulosConcluidos,
     });
     const rec: Record<string, number> = {};
     for (const b of meta.blocos) rec[b.materia] = Math.max(0, b.minutosAlvoSemana - b.minutosFeitosSemana);
@@ -545,6 +565,8 @@ export default function EstudoPage() {
               configCiclo={state.configCiclo}
               onUpdateConfigCiclo={updateConfigCiclo}
               materiasConcurso={materiasFiltradas}
+              blocos={state.blocos}
+              onUpdateBlocos={updateBlocos}
             />
           )}
 
@@ -585,6 +607,10 @@ export default function EstudoPage() {
               pdfs={state.pdfs}
               materiasConcurso={materiasFiltradas}
               nomeUsuario={primeiroNome}
+              blocos={state.blocos}
+              onUpdateBlocos={updateBlocos}
+              capitulosConcluidos={state.capitulosConcluidos}
+              onToggleCapitulo={toggleCapituloConcluido}
               onUpdateTrilha={updateTrilhaDinamica}
               onUpdateTopicos={updateTopicos}
               onIrParaCiclo={() => setActiveTab("ciclo")}

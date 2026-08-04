@@ -60,6 +60,7 @@ function MensagemDoDia({ state, materiasConcurso, nomeUsuario }: { state: Estudo
           topicos: state.topicos,
           calendario: state.calendario,
           pdfs: state.pdfs,
+          blocos: state.blocos,
         }),
         {
           nomeUsuario,
@@ -119,6 +120,7 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
     topicos: state.topicos,
     calendario: state.calendario,
     pdfs: state.pdfs,
+    blocos: state.blocos,
   });
   const feitos = meta.blocos.filter((b) => b.concluido).length;
   const perc = meta.blocos.length > 0 ? Math.round((feitos / meta.blocos.length) * 100) : 0;

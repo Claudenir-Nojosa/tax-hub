@@ -9,7 +9,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import {
   MATERIAS, calcularStreakDias, dateKeyLocal, diasSemAtividade, topicoKey,
-  type AtividadeCalendario, type EstudoConfigCiclo, type Grupo, type MateriaConcurso,
+  type AtividadeCalendario, type Bloco, type EstudoConfigCiclo, type Grupo, type MateriaConcurso,
   type MateriaDef, type PdfEstudo, type TopicoState, type TrilhaDinamicaState,
 } from "@/lib/estudo-data";
 import {
@@ -45,6 +45,10 @@ interface Props {
   pdfs: PdfEstudo[];
   materiasConcurso?: MateriaConcurso[];
   nomeUsuario?: string;
+  blocos: Record<string, Bloco>;
+  onUpdateBlocos: (blocos: Record<string, Bloco>) => void;
+  capitulosConcluidos: string[];
+  onToggleCapitulo: (pdfId: string, paginaInicio: number) => void;
   onUpdateTrilha: (trilha: TrilhaDinamicaState | undefined) => void;
   onUpdateTopicos: (topicos: Record<string, TopicoState>) => void;
   onIrParaCiclo?: () => void;
@@ -129,6 +133,7 @@ const anelDestaque = "ring-2 ring-emerald-400 dark:ring-emerald-500";
 
 export default function TrilhaTab({
   trilha, topicos, configCiclo, calendario, pdfs, materiasConcurso, nomeUsuario,
+  blocos, onUpdateBlocos, capitulosConcluidos, onToggleCapitulo,
   onUpdateTrilha, onUpdateTopicos, onIrParaCiclo, onIrParaBiblioteca, onIrParaCartas,
 }: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
@@ -140,15 +145,15 @@ export default function TrilhaTab({
 
   const meta: MetaSemana | null = useMemo(() => {
     if (!trilha?.ativa) return null;
-    return computarMetaSemana({ hoje, trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs });
-  }, [trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs, hoje]);
+    return computarMetaSemana({ hoje, trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs, blocos, capitulosConcluidos });
+  }, [trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs, hoje, blocos, capitulosConcluidos]);
 
   // estimativa sobre a trilha INTEIRA (não só a semana) — independente de `meta`, calculada
   // sempre que a trilha está ativa, pra alimentar o card no fim da página
   const estimativa: EstimativaConclusao | null = useMemo(() => {
     if (!trilha?.ativa) return null;
-    return estimativaConclusaoTrilha({ hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs });
-  }, [trilha, hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs]);
+    return estimativaConclusaoTrilha({ hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs, blocos });
+  }, [trilha, hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs, blocos]);
 
   // registra a DATA de conclusão de matérias recém-100% (agenda a revisão de 30 questões pra
   // DIAS_REVISAO_MATERIA dias depois) — sem carry-over de semana: cada MetaSemana é recalculada
@@ -191,8 +196,22 @@ export default function TrilhaTab({
 
   // registro da revisão das questões do link (1ª vez ou correção de reforço) — grava em
   // revisoesLink[checkpoint], não em cadernos (é um resultado do tópico inteiro, não de um grupo
-  // A-D); os checkpoints de 7 e 30 dias são independentes, cada um com seu próprio registro
+  // A-D); os checkpoints de 7 e 30 dias são independentes, cada um com seu próprio registro.
+  // Quando vem de um Bloco (r.blocoId), grava UMA VEZ no Bloco (Bloco.revisoesLink), não em cada
+  // tópico membro — é o mesmo registro pra todos eles.
   const registrarRevisaoLink = (r: RevisaoLinkPendente, acertos: number, erros: number) => {
+    if (r.blocoId) {
+      const bloco = blocos[r.blocoId];
+      if (!bloco) return;
+      onUpdateBlocos({
+        ...blocos,
+        [r.blocoId]: {
+          ...bloco,
+          revisoesLink: { ...bloco.revisoesLink, [r.checkpoint]: { acertos, erros, atualizadoEm: dateKeyLocal() } },
+        },
+      });
+      return;
+    }
     const key = topicoKey(r.materia, r.topico);
     const estado = topicos[key];
     if (!estado) return;
@@ -223,7 +242,7 @@ export default function TrilhaTab({
     const key = topicoKey(materia, topico);
     const estado = topicos[key];
     if (!estado) return;
-    onUpdateTopicos({ ...topicos, [key]: { ...estado, estudado: true } });
+    onUpdateTopicos({ ...topicos, [key]: { ...estado, estudado: true, estudadoEm: hoje } });
   };
 
   const marcarRevisao30 = (materia: string) => {
@@ -367,6 +386,7 @@ export default function TrilhaTab({
                     materiasAtivas={materiasAtivas}
                     onIrParaBiblioteca={onIrParaBiblioteca}
                     onMarcarEstudado={() => marcarTopicoEstudado(b.materia, b.topico)}
+                    onToggleCapitulo={onToggleCapitulo}
                   />
                 ))}
               </div>

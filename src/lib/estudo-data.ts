@@ -74,6 +74,32 @@ export interface TopicoState {
   // nível de importância do tópico pro edital (ausente = não definido) — só indicação visual no
   // Edital, não afeta cálculo de progresso/XP/Ciclo/Trilha
   importancia?: NivelImportancia;
+  // dateKeyLocal de quando `estudado` virou true (gravado por quem faz a marcação — EditalTab e
+  // o "marcar como estudado" da Trilha). Ausente se nunca foi marcado, ou se foi marcado antes
+  // desse campo existir (registros antigos). É a âncora dos checkpoints de revisão de um BLOCO
+  // (ver Bloco abaixo) — diferente da revisão por tópico, que ancora nos cadernos A-D.
+  estudadoEm?: string;
+}
+
+// Agrupa vários tópicos do MESMO edital/matéria que compartilham um único caderno de questões
+// (ex.: os "Blocos de Assuntos" do QuestFlow/TecConcursos, que não seguem 1-pra-1 com os tópicos
+// do edital). Existe pra resolver 3 casos que o link por-tópico (TopicoState.linkRevisao7d/30d)
+// não cobre: (1) tópico sem bloco correspondente = sem link nenhum; (2) N tópicos no mesmo bloco
+// = MESMO link, aplicado uma vez só; (3) a atividade de "questões" na Trilha pra esse bloco só
+// aparece depois que TODOS os tópicos dele estão com `estudado` (não a cada tópico individual).
+// Quando um tópico pertence a um Bloco, seus próprios linkRevisao7d/30d/revisoesLink (por-tópico)
+// deixam de ser usados pela Trilha — o Bloco assume o lugar deles (ver analisarRevisoesLinkMateria
+// em trilha-dinamica.ts). linkReforcoImediato continua por-tópico, sem relação com Bloco.
+export interface Bloco {
+  id: string; // estável, gerado na criação — não reaproveita nome (usuário pode renomear)
+  materia: string; // nome da matéria (mesma chave usada em topicoKey)
+  nome: string; // rótulo livre, ex.: "Bloco I", "Bloco VI — Licitações e Contratos"
+  topicos: string[]; // tópicos do edital (dessa matéria) cobertos por esse bloco
+  linkRevisao7d?: string; // caderno de questões pro checkpoint de 7 dias (ex.: FCC)
+  linkRevisao30d?: string; // caderno de questões pro checkpoint de 30 dias (ex.: FGV)
+  // um resultado por checkpoint, registrado UMA VEZ pro bloco inteiro (não por tópico) —
+  // independentes entre si, mesma semântica de TopicoState.revisoesLink
+  revisoesLink?: Partial<Record<ChecklistRevisaoLink, RevisaoLinkTopico>>;
 }
 
 export interface AtividadeCalendario {
@@ -211,6 +237,15 @@ export interface EstudoState {
   // Trilha e de todos os cálculos (% do edital, tópico atual etc.), mas o progresso já registrado
   // (estudado, cadernos A-D) fica guardado em `topicos` e volta do jeito que estava se reativado
   topicosExcluidos: string[];
+  // Blocos de questões (agrupam tópicos que compartilham um caderno) — chave = Bloco.id.
+  // Cadastrados na aba Questões. Ausente/vazio = ninguém usa Blocos ainda, tudo cai no
+  // comportamento por-tópico de sempre (ver Bloco em estudo-data.ts).
+  blocos: Record<string, Bloco>;
+  // chaves `${pdfId}::${paginaInicio}` de capítulos/subcapítulos marcados como lidos MANUALMENTE
+  // (clique direto na bolinha da Trilha, sem precisar abrir o PDF) — reversível (clicar de novo
+  // desmarca). Complementa `pdf.paginaAtual`: um capítulo conta como lido se QUALQUER um dos dois
+  // disser que sim (ver resolverCapitulos em trilha-dinamica.ts).
+  capitulosConcluidos: string[];
 }
 
 // --- Biblioteca de PDFs ---
@@ -652,6 +687,17 @@ export function calcularStreakDias(calendario: Record<string, AtividadeCalendari
 
 export function topicoKey(materia: string, topico: string): string {
   return `${materia}||${topico}`;
+}
+
+// Bloco (se algum) que cobre esse tópico — undefined = tópico solto, sem bloco (comportamento
+// por-tópico de sempre). Um tópico nunca pertence a mais de um Bloco da mesma matéria (a UI de
+// cadastro, em QuestoesTab, impede a mesma seleção em dois Blocos).
+export function blocoDoTopico(
+  blocos: Record<string, Bloco>,
+  materia: string,
+  topico: string
+): Bloco | undefined {
+  return Object.values(blocos).find((b) => b.materia === materia && b.topicos.includes(topico));
 }
 
 // Remove tópicos ocultos de uma lista de matérias — usado por TODA aba exceto o Edital (que
@@ -1303,4 +1349,6 @@ export const DEFAULT_ESTUDO_STATE: EstudoState = {
   semanasOK: 0,
   pdfs: [],
   topicosExcluidos: [],
+  blocos: {},
+  capitulosConcluidos: [],
 };

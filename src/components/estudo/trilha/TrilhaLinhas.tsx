@@ -33,12 +33,13 @@ export interface AberturaPdfSolicitada {
 // ─── Conteúdo: bloco de leitura de uma matéria ───────────────────────────────
 
 export function CorpoBloco({
-  b, materiasAtivas, onIrParaBiblioteca, onMarcarEstudado,
+  b, materiasAtivas, onIrParaBiblioteca, onMarcarEstudado, onToggleCapitulo,
 }: {
   b: BlocoEstudoSemana;
   materiasAtivas: (MateriaDef | MateriaConcurso)[];
   onIrParaBiblioteca?: (abertura?: AberturaPdfSolicitada) => void;
   onMarcarEstudado: () => void;
+  onToggleCapitulo?: (pdfId: string, paginaInicio: number) => void;
 }) {
   const cor = resolverCorMateria(b.materia, materiasAtivas);
   const perc = Math.min(100, Math.round((b.minutosFeitosSemana / Math.max(1, b.minutosAlvoSemana)) * 100));
@@ -94,25 +95,35 @@ export function CorpoBloco({
       {mostrarSubtarefas && (
         <div className="pl-3.5 ml-0.5 border-l-2 border-muted dark:border-muted space-y-0.5">
           {b.capitulos!.map((cap) => (
-            <button
-              key={cap.indice}
-              type="button"
-              onClick={() => abrirCapitulo(cap)}
-              disabled={!onIrParaBiblioteca || !b.pdfId}
-              className="w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 -ml-1 hover:bg-muted/60 dark:hover:bg-muted/40 disabled:hover:bg-transparent"
-            >
-              {cap.lido ? (
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
-              ) : (
-                <Circle className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0" />
-              )}
-              <span
-                className={`text-[11px] truncate ${cap.lido ? "text-muted-foreground line-through" : "text-foreground dark:text-foreground"}`}
-                title={cap.nome}
+            <div key={cap.indice} className="w-full flex items-center gap-1.5 rounded px-1 py-0.5 -ml-1 hover:bg-muted/60 dark:hover:bg-muted/40">
+              {/* bolinha: check/desmarca manualmente, independente de abrir o leitor */}
+              <button
+                type="button"
+                onClick={() => b.pdfId && onToggleCapitulo?.(b.pdfId, cap.paginaInicio)}
+                disabled={!onToggleCapitulo || !b.pdfId}
+                title={cap.lido ? "Desmarcar capítulo" : "Marcar capítulo como concluído"}
+                className="flex-shrink-0 disabled:cursor-default"
               >
-                Capítulo {cap.indice}: {cap.nome}
-              </span>
-            </button>
+                {cap.lido ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                ) : (
+                  <Circle className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-muted-foreground transition-colors" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => abrirCapitulo(cap)}
+                disabled={!onIrParaBiblioteca || !b.pdfId}
+                className="flex-1 min-w-0 text-left disabled:hover:bg-transparent"
+              >
+                <span
+                  className={`text-[11px] truncate block ${cap.lido ? "text-muted-foreground line-through" : "text-foreground dark:text-foreground"}`}
+                  title={cap.nome}
+                >
+                  Capítulo {cap.indice}: {cap.nome}
+                </span>
+              </button>
+            </div>
           ))}
         </div>
       )}
