@@ -486,6 +486,14 @@ export function resolverCapitulos(
 // capítulo de 2 páginas viraria uma atividade separada na Trilha, ridiculamente pequena
 const MINUTOS_ALVO_ATIVIDADE_CAPITULO = 30;
 
+// ritmo-placeholder usado SÓ quando calcularPagPorHora ainda não tem nenhuma sessão de leitura
+// registrada NESSE concurso (concurso novo, ou trilha gerada antes de qualquer sessão) — sem
+// isso, agrupar capítulos por duração ficava impossível justo no primeiro dia, e cada capítulo
+// (por menor que fosse) virava uma atividade separada. É só uma estimativa média honesta pra
+// material de concurso denso — o ritmo REAL sempre assume a partir da primeira sessão com
+// páginas registrada (calcularPagPorHora nunca deixa de priorizar dado real quando existe).
+const PAG_POR_HORA_PADRAO = 15;
+
 export interface BlocoCapitulos {
   paginaInicio: number;
   paginaFim: number;
@@ -497,9 +505,10 @@ export interface BlocoCapitulos {
 
 // próximo trecho de leitura dentro dos capítulos do PDF: a partir do primeiro ainda não lido,
 // junta capítulos CONSECUTIVOS até estimar ~MINUTOS_ALVO_ATIVIDADE_CAPITULO de leitura no ritmo
-// de páginas/hora do usuário (calcularPagPorHora) — sem ritmo conhecido ainda, agrupa 1 capítulo
-// por vez (nada pra estimar). undefined quando o PDF não tem capítulos manuais, ou todos já foram
-// lidos.
+// de páginas/hora do usuário (calcularPagPorHora) — sem sessão registrada AINDA nesse concurso,
+// usa PAG_POR_HORA_PADRAO em vez de desistir de agrupar (senão cada capítulo, por menor que
+// fosse, virava uma atividade própria já no primeiro dia). undefined quando o PDF não tem
+// capítulos manuais, ou todos já foram lidos.
 export function proximoBlocoCapitulos(
   pdf: Pick<PdfEstudo, "capitulos" | "paginaAtual" | "totalPaginas" | "paginaConteudoFim">,
   pagPorHora: number | null
@@ -509,6 +518,7 @@ export function proximoBlocoCapitulos(
   const primeiroIdx = resolvidos.findIndex((c) => !c.lido);
   if (primeiroIdx === -1) return undefined;
 
+  const ritmo = pagPorHora && pagPorHora > 0 ? pagPorHora : PAG_POR_HORA_PADRAO;
   const nomes: string[] = [];
   let minutosAcumulados = 0;
   let ultimoIdx = primeiroIdx;
@@ -516,9 +526,8 @@ export function proximoBlocoCapitulos(
     const c = resolvidos[i];
     nomes.push(c.nome);
     ultimoIdx = i;
-    if (!pagPorHora || pagPorHora <= 0) break; // sem ritmo conhecido, não dá pra estimar duração
     const paginas = c.paginaFim - c.paginaInicio + 1;
-    minutosAcumulados += (paginas / pagPorHora) * 60;
+    minutosAcumulados += (paginas / ritmo) * 60;
     if (minutosAcumulados >= MINUTOS_ALVO_ATIVIDADE_CAPITULO) break;
   }
   return {

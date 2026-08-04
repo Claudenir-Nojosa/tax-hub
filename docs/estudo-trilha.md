@@ -47,8 +47,13 @@ arquivo se as regras mudarem.
      `resolverPaginaBloco` usa `proximoBlocoCapitulos` em vez do `intervalosPaginas` inteiro: acha
      o primeiro item ainda não lido (`paginaAtual` do PDF, que só avança) e agrupa os PRÓXIMOS itens
      consecutivos até estimar `MINUTOS_ALVO_ATIVIDADE_CAPITULO` (30min) de leitura no ritmo de
-     páginas/hora do usuário — itens curtos (ex.: 2 páginas) somem sozinhos dentro do grupo, sem
-     virar uma atividade ridiculamente pequena na Trilha. O bloco ganha `capituloLabel` ("Capítulo 3
+     páginas/hora do usuário (`calcularPagPorHora` sobre o calendário DESSE concurso) — sem
+     nenhuma sessão de leitura registrada ainda nesse concurso (concurso novo, trilha gerada no
+     primeiro dia), cai em `PAG_POR_HORA_PADRAO` (15 pág/h, estimativa honesta pra material denso
+     de concurso) em vez de desistir de agrupar — sem isso, cada capítulo virava uma atividade
+     própria já de cara, mesmo os de 2 páginas. O ritmo REAL sempre assume assim que existe 1
+     sessão com páginas registrada; itens curtos somem sozinhos dentro do grupo, sem virar uma
+     atividade ridiculamente pequena na Trilha. O bloco ganha `capituloLabel` ("Capítulo 3
      de 6: Crédito Tributário" ou "Capítulos 4-5 de 6") — `CorpoBloco` (`TrilhaLinhas.tsx`) mostra
      isso no lugar do intervalo de página cru. Sem estado de "capítulo concluído" separado: o mesmo
      bookmark `paginaAtual` decide tudo, exatamente como já decidia "PDF lido" antes disso existir.
