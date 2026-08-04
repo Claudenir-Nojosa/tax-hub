@@ -46,14 +46,23 @@ arquivo se as regras mudarem.
      próximo item quando ausente). Quando o PDF resolvido pro tópico atual tem `capitulos`,
      `resolverPaginaBloco` usa `proximoBlocoCapitulos` em vez do `intervalosPaginas` inteiro: acha
      o primeiro item ainda não lido (`paginaAtual` do PDF, que só avança) e agrupa os PRÓXIMOS itens
-     consecutivos até estimar `MINUTOS_ALVO_ATIVIDADE_CAPITULO` (30min) de leitura no ritmo de
-     páginas/hora do usuário (`calcularPagPorHora` sobre o calendário DESSE concurso) — sem
-     nenhuma sessão de leitura registrada ainda nesse concurso (concurso novo, trilha gerada no
-     primeiro dia), cai em `PAG_POR_HORA_PADRAO` (15 pág/h, estimativa honesta pra material denso
-     de concurso) em vez de desistir de agrupar — sem isso, cada capítulo virava uma atividade
-     própria já de cara, mesmo os de 2 páginas. O ritmo REAL sempre assume assim que existe 1
-     sessão com páginas registrada; itens curtos somem sozinhos dentro do grupo, sem virar uma
-     atividade ridiculamente pequena na Trilha. O bloco ganha `capituloLabel` ("Capítulo 3
+     consecutivos até estimar `minutosAlvo` de leitura no ritmo de páginas/hora do usuário
+     (`calcularPagPorHora` sobre o calendário DESSE concurso) — sem nenhuma sessão de leitura
+     registrada ainda nesse concurso (concurso novo, trilha gerada no primeiro dia), cai em
+     `PAG_POR_HORA_PADRAO` (15 pág/h, estimativa honesta pra material denso de concurso) em vez de
+     desistir de agrupar — sem isso, cada capítulo virava uma atividade própria já de cara, mesmo os
+     de 2 páginas. O ritmo REAL sempre assume assim que existe 1 sessão com páginas registrada.
+     **`minutosAlvo` (2026-08-03) é o `minutosAlvoSemana` da MATÉRIA naquela semana** (a fatia
+     proporcional ao peso dela no total de `horasPorDia` do Ciclo — já calculada em
+     `computarMetaSemana` antes de chamar `resolverPaginaBloco`), com piso em
+     `MINUTOS_ALVO_ATIVIDADE_CAPITULO_PISO` (30min, só pra evitar uma atividade ridícula quando a
+     fatia semanal da matéria é minúscula) — **não** um teto fixo de 30min pra toda matéria: se o
+     usuário reservou 3h/semana pra Língua Portuguesa, a atividade de leitura agrupa capítulos até
+     cobrir essas 3h de fato (dezenas de páginas, não 1), exatamente proporcional ao tempo disponível
+     — sem isso, uma matéria com muitas horas reservadas ficava com atividades de leitura ridiculamente
+     curtas (ex.: 1 capítulo de 1 página só) em vez de aproveitar o tempo todo da semana. Itens curtos
+     somem sozinhos dentro do grupo, sem virar uma atividade pequena isolada na Trilha. O bloco ganha
+     `capituloLabel` ("Capítulo 3
      de 6: Crédito Tributário" ou "Capítulos 4-5 de 6") — `CorpoBloco` (`TrilhaLinhas.tsx`) mostra
      isso no lugar do intervalo de página cru. Sem estado de "capítulo concluído" separado: o mesmo
      bookmark `paginaAtual` decide tudo, exatamente como já decidia "PDF lido" antes disso existir.

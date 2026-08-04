@@ -483,8 +483,11 @@ export function resolverCapitulos(
 }
 
 // agrupa capítulos curtos até render uma atividade de leitura de duração razoável — sem isso, um
-// capítulo de 2 páginas viraria uma atividade separada na Trilha, ridiculamente pequena
-const MINUTOS_ALVO_ATIVIDADE_CAPITULO = 30;
+// capítulo de 2 páginas viraria uma atividade separada na Trilha, ridiculamente pequena. É só o
+// PISO: o alvo de verdade é o minutosAlvo da SEMANA daquela matéria (ver computarMetaSemana), pra
+// a atividade de leitura cobrir de fato as horas que o usuário reservou pra ela — não adianta
+// bater 30min de agrupamento se a matéria tem 3h/semana reservadas.
+const MINUTOS_ALVO_ATIVIDADE_CAPITULO_PISO = 30;
 
 // ritmo-placeholder usado SÓ quando calcularPagPorHora ainda não tem nenhuma sessão de leitura
 // registrada NESSE concurso (concurso novo, ou trilha gerada antes de qualquer sessão) — sem
@@ -504,20 +507,25 @@ export interface BlocoCapitulos {
 }
 
 // próximo trecho de leitura dentro dos capítulos do PDF: a partir do primeiro ainda não lido,
-// junta capítulos CONSECUTIVOS até estimar ~MINUTOS_ALVO_ATIVIDADE_CAPITULO de leitura no ritmo
-// de páginas/hora do usuário (calcularPagPorHora) — sem sessão registrada AINDA nesse concurso,
-// usa PAG_POR_HORA_PADRAO em vez de desistir de agrupar (senão cada capítulo, por menor que
-// fosse, virava uma atividade própria já no primeiro dia). undefined quando o PDF não tem
-// capítulos manuais, ou todos já foram lidos.
+// junta capítulos CONSECUTIVOS até estimar `minutosAlvo` de leitura no ritmo de páginas/hora do
+// usuário (calcularPagPorHora) — sem sessão registrada AINDA nesse concurso, usa
+// PAG_POR_HORA_PADRAO em vez de desistir de agrupar (senão cada capítulo, por menor que fosse,
+// virava uma atividade própria já no primeiro dia). `minutosAlvo` é o minutosAlvoSemana da
+// matéria (quantas horas por semana o usuário reservou pra ela no Ciclo) — nunca abaixo do piso
+// MINUTOS_ALVO_ATIVIDADE_CAPITULO_PISO, pra não gerar uma atividade ridiculamente curta quando a
+// matéria tem pouquíssimo tempo reservado. undefined quando o PDF não tem capítulos manuais, ou
+// todos já foram lidos.
 export function proximoBlocoCapitulos(
   pdf: Pick<PdfEstudo, "capitulos" | "paginaAtual" | "totalPaginas" | "paginaConteudoFim">,
-  pagPorHora: number | null
+  pagPorHora: number | null,
+  minutosAlvo: number
 ): BlocoCapitulos | undefined {
   const resolvidos = resolverCapitulos(pdf);
   if (resolvidos.length === 0) return undefined;
   const primeiroIdx = resolvidos.findIndex((c) => !c.lido);
   if (primeiroIdx === -1) return undefined;
 
+  const alvo = Math.max(minutosAlvo, MINUTOS_ALVO_ATIVIDADE_CAPITULO_PISO);
   const ritmo = pagPorHora && pagPorHora > 0 ? pagPorHora : PAG_POR_HORA_PADRAO;
   const nomes: string[] = [];
   let minutosAcumulados = 0;
@@ -528,7 +536,7 @@ export function proximoBlocoCapitulos(
     ultimoIdx = i;
     const paginas = c.paginaFim - c.paginaInicio + 1;
     minutosAcumulados += (paginas / ritmo) * 60;
-    if (minutosAcumulados >= MINUTOS_ALVO_ATIVIDADE_CAPITULO) break;
+    if (minutosAcumulados >= alvo) break;
   }
   return {
     paginaInicio: resolvidos[primeiroIdx].paginaInicio,
@@ -555,12 +563,13 @@ function resolverPaginaBloco(
   materia: string,
   topico: string,
   pdfs: PdfEstudo[],
-  pagPorHora: number | null
+  pagPorHora: number | null,
+  minutosAlvo: number
 ): { pdfId: string; paginaInicio: number; paginaFim: number; capituloLabel?: string } | undefined {
   for (const pdf of pdfs) {
     if (pdf.materia !== materia) continue;
     if (pdf.topicos?.includes(topico) && (pdf.capitulos?.length ?? 0) > 0) {
-      const bloco = proximoBlocoCapitulos(pdf, pagPorHora);
+      const bloco = proximoBlocoCapitulos(pdf, pagPorHora, minutosAlvo);
       if (bloco) {
         return {
           pdfId: pdf.id,
@@ -608,7 +617,7 @@ export function computarMetaSemana(params: {
         const feitos = minutosEstudoNaSemana(calendario, inicioSemana, fimSemana, a.materia);
         const minutosAlvo = minutosPorMateria[i];
         const topico = a.topicoAtual as string;
-        const range = resolverPaginaBloco(a.materia, topico, pdfs, pagPorHora);
+        const range = resolverPaginaBloco(a.materia, topico, pdfs, pagPorHora, minutosAlvo);
         return {
           materia: a.materia,
           topico,
