@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BookOpen, CheckCircle2, Clock, FileUp, Loader2, Pencil, Trash2 } from "lucide-react";
 import type { PdfEstudo } from "@/lib/estudo-data";
 import { alvoLeituraPdf, fmtEta } from "./biblioteca-utils";
@@ -24,6 +24,13 @@ export default function PdfRow({
 }) {
   const [paginaInput, setPaginaInput] = useState(String(pdf.paginaAtual));
   const anexoRef = useRef<HTMLInputElement>(null);
+
+  // pdf.paginaAtual pode mudar por fora (voltar do leitor, editar outro dispositivo) — como
+  // PdfRow é mantido pela mesma key={p.id} entre renders, o useState acima só inicializa uma
+  // vez; sem este effect o input "Parei na pág." ficava com o valor antigo até dar F5.
+  useEffect(() => {
+    setPaginaInput(String(pdf.paginaAtual));
+  }, [pdf.paginaAtual]);
   const alvo = alvoLeituraPdf(pdf);
   const perc = alvo > 0 ? Math.round((Math.min(pdf.paginaAtual, alvo) / alvo) * 100) : 0;
   const concluido = pdf.paginaAtual >= alvo;

@@ -246,8 +246,10 @@ export default function LeitorPdf({
 
   const encerrarSessao = () => {
     const p = pdfRef.current;
-    const minutos = Math.round(segundosRef.current / 60);
-    if (minutos >= 1 && onRegistrarSessao) {
+    // limiar em SEGUNDOS brutos, não em minutos arredondados: Math.round já arredonda pra cima a
+    // partir de 30s, então checar minutos>=1 deixava passar sessão de 30-59s como "1 minuto"
+    if (segundosRef.current >= 60 && onRegistrarSessao) {
+      const minutos = Math.round(segundosRef.current / 60);
       const paginasLidas = p.paginaAtual - paginaAtualNaAberturaRef.current;
       onRegistrarSessao(
         minutos,
@@ -260,8 +262,8 @@ export default function LeitorPdf({
     }
     // timer de questões é separado do de leitura — conta só enquanto o painel de questões está
     // aberto, registrado como atividade própria (tipo "questoes") ao fechar o leitor
-    const minutosQuestoes = Math.round(segundosQuestoesRef.current / 60);
-    if (minutosQuestoes >= 1 && onRegistrarSessao) {
+    if (segundosQuestoesRef.current >= 60 && onRegistrarSessao) {
+      const minutosQuestoes = Math.round(segundosQuestoesRef.current / 60);
       onRegistrarSessao(minutosQuestoes, "questoes", p.materia, p.topicos?.[0], undefined, `Questões: ${p.nome}`);
     }
     onFechar();

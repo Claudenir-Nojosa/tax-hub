@@ -474,6 +474,10 @@ export interface BlocoEstudoSemana {
   // a UI lista cada um como subtarefa clicável ("Ler capítulo N"), abrindo o leitor direto naquele
   // trecho; cada item já sabe se foi lido (via pdf.paginaAtual, o mesmo bookmark de sempre)
   capitulos?: CapituloBlocoItem[];
+  // TODOS os capítulos/subcapítulos resolvidos do PDF (não só o próximo trecho) — pra Trilha
+  // mostrar o histórico completo (já lidos + atual + futuros) em vez de só a janela de leitura de
+  // hoje, que some capítulo por capítulo conforme a leitura avança
+  todosCapitulos?: CapituloBlocoItem[];
 }
 
 export interface Revisao30 {
@@ -607,6 +611,10 @@ export interface CapituloResolvido {
   paginaInicio: number;
   paginaFim: number;
   lido: boolean;
+  // true só quando `lido` veio da marcação manual (chaveCapitulo em capitulosConcluidos) — distinto
+  // de `lido` puro porque a leitura real (bookmark) também pode ter causado `lido=true` sozinha, e
+  // nesse caso desmarcar a marcação manual não desfaz nada (a UI usa isso pra desabilitar o toggle)
+  lidoManual: boolean;
 }
 
 // chave estável de um capítulo/subcapítulo dentro de EstudoState.capitulosConcluidos — o
@@ -653,8 +661,9 @@ export function resolverCapitulos(
   const concluidosManual = new Set(capitulosConcluidos);
   return achatados.map((c, i) => {
     const paginaFim = c.paginaFimDeclarado ?? (i === achatados.length - 1 ? fimDocumento : achatados[i + 1].paginaInicio - 1);
-    const lido = pdf.paginaAtual >= paginaFim || concluidosManual.has(chaveCapitulo(pdf.id, c.paginaInicio));
-    return { nome: c.nome, paginaInicio: c.paginaInicio, paginaFim, lido };
+    const lidoManual = concluidosManual.has(chaveCapitulo(pdf.id, c.paginaInicio));
+    const lido = pdf.paginaAtual >= paginaFim || lidoManual;
+    return { nome: c.nome, paginaInicio: c.paginaInicio, paginaFim, lido, lidoManual };
   });
 }
 
@@ -754,10 +763,13 @@ function resolverPaginaBloco(
   pagPorHora: number | null,
   minutosAlvo: number,
   capitulosConcluidos: string[] = []
-): { pdfId: string; paginaInicio: number; paginaFim: number; capituloLabel?: string; capitulos?: CapituloBlocoItem[] } | undefined {
+): { pdfId: string; paginaInicio: number; paginaFim: number; capituloLabel?: string; capitulos?: CapituloBlocoItem[]; todosCapitulos?: CapituloBlocoItem[] } | undefined {
   for (const pdf of pdfs) {
     if (pdf.materia !== materia) continue;
     if (pdf.topicos?.includes(topico) && (pdf.capitulos?.length ?? 0) > 0) {
+      // lista completa (lidos + atual + futuros) — independente de haver trecho de leitura
+      // pendente, pra Trilha sempre poder mostrar o histórico/undo dos capítulos
+      const todosCapitulos: CapituloBlocoItem[] = resolverCapitulos(pdf, capitulosConcluidos).map((c, i) => ({ ...c, indice: i + 1 }));
       const bloco = proximoBlocoCapitulos(pdf, pagPorHora, minutosAlvo, capitulosConcluidos);
       if (bloco) {
         return {
@@ -766,6 +778,18 @@ function resolverPaginaBloco(
           paginaFim: bloco.paginaFim,
           capituloLabel: rotuloBlocoCapitulos(bloco),
           capitulos: bloco.capitulos,
+          todosCapitulos,
+        };
+      }
+      // todos os capítulos já lidos nesse PDF — ainda expõe o histórico completo (checklist
+      // continua na Trilha), só sem trecho/label de próxima leitura; abre do início ao fim se
+      // clicado (não há mais "próximo trecho" pra apontar)
+      if (todosCapitulos.length > 0) {
+        return {
+          pdfId: pdf.id,
+          paginaInicio: todosCapitulos[0].paginaInicio,
+          paginaFim: todosCapitulos[todosCapitulos.length - 1].paginaFim,
+          todosCapitulos,
         };
       }
     }
@@ -873,6 +897,7 @@ export function computarMetaSemana(params: {
           paginaInicio: range?.paginaInicio,
           paginaFim: range?.paginaFim,
           capitulos: range?.capitulos,
+          todosCapitulos: range?.todosCapitulos,
           capituloLabel: range?.capituloLabel,
         };
       })

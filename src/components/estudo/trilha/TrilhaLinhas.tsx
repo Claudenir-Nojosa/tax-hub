@@ -53,9 +53,10 @@ export function CorpoBloco({
     if (!onIrParaBiblioteca || !b.pdfId) return;
     onIrParaBiblioteca({ pdfId: b.pdfId, paginaInicio: cap.paginaInicio, paginaFim: cap.paginaFim });
   };
-  // subtarefas só fazem sentido quando o bloco agrupa MAIS de um capítulo — com 1 só, o
-  // capituloLabel acima já mostra tudo que precisa
-  const mostrarSubtarefas = (b.capitulos?.length ?? 0) > 1;
+  // lista SEMPRE o histórico completo (lidos + atual + futuros), não só o trecho de leitura de
+  // hoje — sem isso, um capítulo concluído sumia da Trilha assim que a janela de leitura avançava
+  // (pedido explícito do usuário: sempre mostrar o que já foi concluído, com a bolinha marcada)
+  const mostrarSubtarefas = (b.todosCapitulos?.length ?? 0) > 0;
 
   // bloqueado = ainda não é a vez dessa matéria na cadeia da semana (ver computarMetaSemana em
   // trilha-dinamica.ts) — mostra só um preview, sem botão nem subtarefas clicáveis, até a
@@ -134,38 +135,51 @@ export function CorpoBloco({
         )}
       </div>
       {mostrarSubtarefas && (
-        <div className="pl-3.5 ml-0.5 border-l-2 border-muted dark:border-muted space-y-0.5">
-          {b.capitulos!.map((cap) => (
-            <div key={cap.indice} className="w-full flex items-center gap-1.5 rounded px-1 py-0.5 -ml-1 hover:bg-muted/60 dark:hover:bg-muted/40">
-              {/* bolinha: check/desmarca manualmente, independente de abrir o leitor */}
-              <button
-                type="button"
-                onClick={() => b.pdfId && onToggleCapitulo?.(b.pdfId, cap.paginaInicio)}
-                disabled={!onToggleCapitulo || !b.pdfId}
-                title={cap.lido ? "Desmarcar capítulo" : "Marcar capítulo como concluído"}
-                className="flex-shrink-0 disabled:cursor-default"
-              >
-                {cap.lido ? (
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                ) : (
-                  <Circle className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-muted-foreground transition-colors" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => abrirCapitulo(cap)}
-                disabled={!onIrParaBiblioteca || !b.pdfId}
-                className="flex-1 min-w-0 text-left disabled:hover:bg-transparent"
-              >
-                <span
-                  className={`text-[11px] truncate block ${cap.lido ? "text-muted-foreground line-through" : "text-foreground dark:text-foreground"}`}
-                  title={cap.nome}
+        <div className="pl-3.5 ml-0.5 border-l-2 border-muted dark:border-muted space-y-0.5 max-h-64 overflow-y-auto pr-1 -mr-1">
+          {b.todosCapitulos!.map((cap) => {
+            // lido só pelo bookmark (leitura real já passou da página) não pode ser desfeito por
+            // aqui — desmarcar a marcação manual não muda nada, porque a condição do bookmark
+            // continua valendo sozinha (ver resolverCapitulos); só desabilita e explica por quê
+            const travadoPelaLeitura = cap.lido && !cap.lidoManual;
+            const podeTogglar = !!onToggleCapitulo && !!b.pdfId && !travadoPelaLeitura;
+            return (
+              <div key={cap.indice} className="w-full flex items-center gap-1.5 rounded px-1 py-0.5 -ml-1 hover:bg-muted/60 dark:hover:bg-muted/40">
+                {/* bolinha: check/desmarca manualmente, independente de abrir o leitor */}
+                <button
+                  type="button"
+                  onClick={() => podeTogglar && b.pdfId && onToggleCapitulo?.(b.pdfId, cap.paginaInicio)}
+                  disabled={!podeTogglar}
+                  title={
+                    travadoPelaLeitura
+                      ? "Concluído pela leitura real (a página já passou daqui) — não dá pra desmarcar"
+                      : cap.lido
+                      ? "Desmarcar capítulo"
+                      : "Marcar capítulo como concluído"
+                  }
+                  className="flex-shrink-0 disabled:cursor-default"
                 >
-                  Capítulo {cap.indice}: {cap.nome}
-                </span>
-              </button>
-            </div>
-          ))}
+                  {cap.lido ? (
+                    <CheckCircle2 className={`h-3.5 w-3.5 ${travadoPelaLeitura ? "text-emerald-500/60" : "text-emerald-500"}`} />
+                  ) : (
+                    <Circle className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-muted-foreground transition-colors" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => abrirCapitulo(cap)}
+                  disabled={!onIrParaBiblioteca || !b.pdfId}
+                  className="flex-1 min-w-0 text-left disabled:hover:bg-transparent"
+                >
+                  <span
+                    className={`text-[11px] truncate block ${cap.lido ? "text-muted-foreground line-through" : "text-foreground dark:text-foreground"}`}
+                    title={cap.nome}
+                  >
+                    Capítulo {cap.indice}: {cap.nome}
+                  </span>
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
