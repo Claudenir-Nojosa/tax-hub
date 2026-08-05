@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Lock, Trophy } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, ChevronDown, Circle, Clock, ExternalLink, Lock, Trophy } from "lucide-react";
 import {
   GRUPO_LABEL, GRUPO_BADGE, type MateriaConcurso, type MateriaDef,
 } from "@/lib/estudo-data";
@@ -86,8 +86,11 @@ export function CorpoBloco({
             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cor.dot}`} />
             <span className="text-sm font-semibold text-foreground dark:text-foreground truncate">{b.materia}</span>
             {b.concluidaAtividade && !b.concluido && (
-              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 flex-shrink-0">
-                <CheckCircle2 className="h-3 w-3" /> concluída
+              <span
+                className="text-[10px] font-semibold text-sky-600 dark:text-sky-400 flex items-center gap-0.5 flex-shrink-0"
+                title="Tempo desta atividade já batido — libera a próxima matéria da cadeia. Não significa que a leitura terminou."
+              >
+                <Clock className="h-3 w-3" /> tempo batido
               </span>
             )}
           </div>
@@ -115,9 +118,13 @@ export function CorpoBloco({
             <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{fmtHoras(b.minutosFeitosSemana)}/{fmtHoras(b.minutosAlvoSemana)} na semana</span>
           </div>
         </div>
-        {!b.concluido && !b.concluidaAtividade && onIrParaBiblioteca && (
+        {/* continua visível mesmo com concluidaAtividade=true — esse flag só libera a PRÓXIMA
+            matéria da cadeia (ver badge "tempo batido" acima), não significa que a leitura desta
+            acabou; quem manda aqui é só `concluido` (meta da semana), que troca pro botão de
+            "Marcar como estudado" logo abaixo */}
+        {!b.concluido && onIrParaBiblioteca && (
           <button type="button" onClick={abrirLeitor} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-medium flex items-center gap-1">
-            Ler PDF <ArrowRight className="h-3 w-3" />
+            {b.minutosFeitosSemana > 0 ? "Continuar a Leitura" : "Ler PDF"} <ArrowRight className="h-3 w-3" />
           </button>
         )}
         {b.concluido && (
