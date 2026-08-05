@@ -120,6 +120,12 @@ export default function EstudoPage() {
   // Biblioteca consome e limpa (onAberturaConsumida) assim que abre o leitor
   const [aberturaPdf, setAberturaPdf] = useState<AberturaPdfSolicitada | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // chaves de blocos/pdfs vistas no load (ou no save anterior bem-sucedido) — só serve pra
+  // detectar REMOÇÃO deliberada (chave que sumiu do estado local desde então) e mandar isso
+  // explícito pro backend. Nunca infere remoção comparando com o banco: currículo agora é
+  // compartilhado, e outro usuário pode ter adicionado um bloco/pdf que este cliente ainda não
+  // carregou — confundir isso com "eu apaguei" apagaria o que o outro acabou de criar.
+  const chavesConhecidasRef = useRef<{ blocos: Set<string>; pdfs: Set<string> }>({ blocos: new Set(), pdfs: new Set() });
 
   // Migra e carrega concurso (por ID da URL ou principal)
   useEffect(() => {
@@ -138,12 +144,18 @@ export default function EstudoPage() {
             setConcursoAtivo(alvo);
             const materiasAlvo = alvo.materias as MateriaConcurso[] | undefined;
             const progressoRes = await fetch(`/api/concurso/${alvo.id}/progresso`);
+            let carregado: EstudoState;
             if (progressoRes.ok) {
               const dados = await progressoRes.json();
-              setState(mergeWithDefaults((dados ?? {}) as Partial<EstudoState>, materiasAlvo));
+              carregado = mergeWithDefaults((dados ?? {}) as Partial<EstudoState>, materiasAlvo);
             } else {
-              setState(mergeWithDefaults({}, materiasAlvo));
+              carregado = mergeWithDefaults({}, materiasAlvo);
             }
+            setState(carregado);
+            chavesConhecidasRef.current = {
+              blocos: new Set(Object.keys(carregado.blocos)),
+              pdfs: new Set(carregado.pdfs.map((p) => p.id)),
+            };
             setLoaded(true);
             return;
           }
@@ -163,6 +175,10 @@ export default function EstudoPage() {
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
+      const blocosAtuais = new Set(Object.keys(state.blocos));
+      const pdfsAtuais = new Set(state.pdfs.map((p) => p.id));
+      const blocosRemovidos = [...chavesConhecidasRef.current.blocos].filter((k) => !blocosAtuais.has(k));
+      const pdfsRemovidos = [...chavesConhecidasRef.current.pdfs].filter((k) => !pdfsAtuais.has(k));
       try {
         const url = concursoAtivo
           ? `/api/concurso/${concursoAtivo.id}/progresso`
@@ -170,11 +186,13 @@ export default function EstudoPage() {
         const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(state),
+          body: JSON.stringify(concursoAtivo ? { ...state, blocosRemovidos, pdfsRemovidos } : state),
         });
         if (!res.ok) {
           const body = await res.text();
           console.error("[estudo] Falha ao salvar no banco:", res.status, body);
+        } else {
+          chavesConhecidasRef.current = { blocos: blocosAtuais, pdfs: pdfsAtuais };
         }
       } catch (err) {
         console.error("[estudo] Erro de rede ao salvar:", err);
@@ -572,6 +590,7 @@ export default function EstudoPage() {
 
           {activeTab === "biblioteca" && (
             <BibliotecaTab
+              concursoId={concursoAtivo?.id ?? ""}
               pdfs={state.pdfs}
               calendario={state.calendario}
               onChange={updatePdfs}

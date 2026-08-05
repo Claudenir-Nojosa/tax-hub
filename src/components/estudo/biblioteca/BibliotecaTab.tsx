@@ -58,6 +58,9 @@ function agruparPorTopico(
 const ESCOPO_TODAS = "__todas__";
 
 interface Props {
+  // concurso ativo — necessário pro upload no Storage saber em qual pasta compartilhada
+  // (${concursoId}/${pdfId}.pdf) salvar (ver salvarArquivoPdf em pdf-storage.ts)
+  concursoId: string;
   pdfs: PdfEstudo[];
   calendario: Record<string, AtividadeCalendario[]>;
   onChange: (pdfs: PdfEstudo[]) => void;
@@ -84,7 +87,7 @@ interface Props {
 }
 
 export default function BibliotecaTab({
-  pdfs, calendario, onChange, materiasConcurso, topicos, onUpdateTopicos, onRegistrarSessao,
+  concursoId, pdfs, calendario, onChange, materiasConcurso, topicos, onUpdateTopicos, onRegistrarSessao,
   onAdicionarCartas, metaMinutosRestantes, aberturaSolicitada, onAberturaConsumida, capitulosConcluidos,
 }: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
@@ -149,7 +152,7 @@ export default function BibliotecaTab({
     let registro = pdf;
     if (arquivo) {
       try {
-        await salvarArquivoPdf(pdf.id, arquivo);
+        await salvarArquivoPdf(pdf.id, arquivo, concursoId);
         registro = { ...pdf, arquivoEnviado: true };
       } catch (e) {
         alert(`Não consegui enviar o arquivo pro Storage — o PDF foi cadastrado só com os dados. ${e instanceof Error ? e.message : ""}`.trim());
@@ -212,7 +215,7 @@ export default function BibliotecaTab({
   const anexarEm = async (pdf: PdfEstudo, arquivo: File) => {
     setEnviandoIds((prev) => new Set(prev).add(pdf.id));
     try {
-      await salvarArquivoPdf(pdf.id, arquivo);
+      await salvarArquivoPdf(pdf.id, arquivo, concursoId);
       // se o total de páginas detectado divergir do cadastrado, corrige pelo arquivo real
       const paginas = await contarPaginasPdf(arquivo);
       onChange(
@@ -381,6 +384,7 @@ export default function BibliotecaTab({
 
       {formLoteAberto && (
         <FormPdfLote
+          concursoId={concursoId}
           materiasAtivas={materiasAtivas}
           onSalvarLote={salvarPdfsEmLote}
           onFechar={() => setFormLoteAberto(false)}

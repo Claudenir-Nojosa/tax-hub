@@ -29,6 +29,8 @@ model User {
   taxPlans         TaxPlan[]
   estudoProgresso  EstudoProgresso?
   concursos        Concurso[]
+  concursoAcessos     ConcursoAcesso[]
+  concursoProgressos  ConcursoProgressoUsuario[]
 
   username        String?   @unique
 
@@ -155,19 +157,35 @@ model SimulacaoReforma {
 
 model Concurso {
   id          String             @id @default(cuid())
+  // dono único — mantido só durante a migração pra currículo compartilhado (ConcursoAcesso);
+  // depois que a fase de "contract" rodar, este campo e isPrincipal/progresso saem daqui
   userId      String
   user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isPrincipal Boolean            @default(false)
+  progresso   ConcursoProgresso?
+  // dono de verdade a partir da migração pra currículo compartilhado — auditoria apenas (quem
+  // criou), não controla acesso (isso é ConcursoAcesso)
+  criadoPorUserId String?
   nome        String
   orgao       String?
   foto        String?
   dataProva   DateTime?
-  isPrincipal Boolean            @default(false)
-  materias    Json               // MateriaConcurso[]
-  progresso   ConcursoProgresso?
+  materias    Json               // MateriaConcurso[] — currículo, compartilhado
+  // metade curricular (compartilhada) de TopicoState/Bloco — links QuestFlow/TecConcursos,
+  // importância, nome/tópicos do bloco. Chaves: topicosCompartilhados por "materia||topico"
+  // (topicoKey), blocosCompartilhados por Bloco.id. O resultado (acertos/erros, estudado) fica
+  // em ConcursoProgressoUsuario, por usuário.
+  topicosCompartilhados Json     @default("{}")
+  blocosCompartilhados  Json     @default("{}")
+  acessos     ConcursoAcesso[]
+  progressos  ConcursoProgressoUsuario[]
+  pdfs        PdfConcurso[]
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 }
 
+// legado — 1:1 por concurso, será removido depois que ConcursoProgressoUsuario assumir de vez
+// (fase "contract" da migração pra currículo compartilhado)
 model ConcursoProgresso {
   id         String   @id @default(cuid())
   concursoId String   @unique
@@ -175,6 +193,65 @@ model ConcursoProgresso {
   dados      Json
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+// quem pode acessar um Concurso — substitui o dono único (Concurso.userId) pra permitir que o
+// mesmo curso seja compartilhado por várias pessoas, cada uma com seu próprio isPrincipal (antes
+// modelado errado como coluna do Concurso, quando na verdade sempre foi um conceito por usuário)
+model ConcursoAcesso {
+  id          String   @id @default(cuid())
+  concursoId  String
+  concurso    Concurso @relation(fields: [concursoId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isPrincipal Boolean  @default(false)
+  criadoEm    DateTime @default(now())
+
+  @@unique([concursoId, userId])
+  @@index([userId])
+}
+
+// progresso de UM usuário num Concurso (possivelmente compartilhado) — trilha, cartas,
+// calendário, config do ciclo, resultado dos cadernos de questões (acertos/erros por grupo A-D)
+// e tudo mais que é individual, mesmo quando o currículo (Concurso.materias/topicosCompartilhados/
+// blocosCompartilhados) e os PDFs (PdfConcurso) são os mesmos pra todo mundo com acesso
+model ConcursoProgressoUsuario {
+  id         String   @id @default(cuid())
+  concursoId String
+  concurso   Concurso @relation(fields: [concursoId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dados      Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([concursoId, userId])
+  @@index([userId])
+}
+
+// biblioteca de PDFs compartilhada por concurso — metadados/mapeamento de capítulos são
+// currículo (mesmos pra todo mundo); progresso de leitura (página atual, questões respondidas)
+// fica em ConcursoProgressoUsuario.dados.pdfsProgresso, por usuário
+model PdfConcurso {
+  id                String   @id @default(cuid())
+  concursoId        String
+  concurso          Concurso @relation(fields: [concursoId], references: [id], onDelete: Cascade)
+  nome              String
+  materia           String
+  topicos           Json?
+  totalPaginas      Int
+  paginaConteudoFim Int?
+  intervalosPaginas Json?
+  capitulos         Json?
+  // caminho real no Supabase Storage — não depende mais de convenção "${userId}/${id}.pdf"
+  // (que quebrava assim que um segundo usuário tentasse acessar o mesmo arquivo)
+  storagePath       String
+  arquivoEnviado    Boolean  @default(false)
+  criadoPorUserId   String?
+  criadoEm          DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([concursoId])
 }
 
 model DadosXmlReforma {

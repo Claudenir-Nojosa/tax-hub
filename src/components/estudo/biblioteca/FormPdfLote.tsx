@@ -26,8 +26,9 @@ interface ItemLote {
 }
 
 export default function FormPdfLote({
-  materiasAtivas, presetMateria, onSalvarLote, onFechar,
+  concursoId, materiasAtivas, presetMateria, onSalvarLote, onFechar,
 }: {
+  concursoId: string;
   materiasAtivas: (MateriaDef | MateriaConcurso)[];
   presetMateria?: string;
   // recebe TODOS os registros prontos de uma vez (upload já feito) -- nunca chama isso uma vez
@@ -101,7 +102,7 @@ export default function FormPdfLote({
           criadoEm: new Date().toISOString(),
         };
         try {
-          await salvarArquivoPdf(pdf.id, item.arquivo);
+          await salvarArquivoPdf(pdf.id, item.arquivo, concursoId);
           registros.push({ ...pdf, arquivoEnviado: true });
         } catch {
           // segue sem o arquivo -- mesma política do FormPdf single (cadastra os dados, o

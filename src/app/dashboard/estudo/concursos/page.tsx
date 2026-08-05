@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, BookOpen, Trash2, Pencil, Star, Loader2, CalendarDays, RotateCcw } from "lucide-react"
+import { Plus, BookOpen, Trash2, Pencil, Star, Loader2, CalendarDays, RotateCcw, UserPlus, X } from "lucide-react"
 import { toast } from "sonner"
 import dynamic from "next/dynamic"
 import type { ConcursoData } from "@/lib/estudo-data"
@@ -21,6 +21,11 @@ export default function ConcursosPage() {
   const [editando, setEditando] = useState<Concurso | null>(null)
   const [definindoPrincipal, setDefinindoPrincipal] = useState<string | null>(null)
   const [resetando, setResetando] = useState<string | null>(null)
+  // compartilhar: currículo (matérias/tópicos/PDFs) fica igual pra todo mundo com acesso; o
+  // progresso de cada um (trilha, cartas, avanço, relatórios) continua 100% independente
+  const [compartilhandoId, setCompartilhandoId] = useState<string | null>(null)
+  const [emailConvite, setEmailConvite] = useState("")
+  const [enviandoConvite, setEnviandoConvite] = useState(false)
 
   const carregar = async () => {
     try {
@@ -77,10 +82,39 @@ export default function ConcursosPage() {
   }
 
   const handleExcluir = async (id: string) => {
-    if (!confirm("Excluir este concurso e todo o progresso associado?")) return
-    await fetch(`/api/concurso/${id}`, { method: "DELETE" })
+    if (!confirm("Excluir este concurso? Se ele for compartilhado, some pra todo mundo com acesso.")) return
+    const res = await fetch(`/api/concurso/${id}`, { method: "DELETE" })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      toast.error(typeof body.error === "string" ? body.error : "Erro ao excluir concurso")
+      return
+    }
     toast.success("Concurso excluído")
     carregar()
+  }
+
+  const handleConvidar = async () => {
+    if (!compartilhandoId || !emailConvite.trim()) return
+    setEnviandoConvite(true)
+    try {
+      const res = await fetch(`/api/concurso/${compartilhandoId}/acessos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailConvite.trim() }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(typeof body.error === "string" ? body.error : "Erro ao convidar")
+        return
+      }
+      toast.success(`${body.name ?? body.email} agora tem acesso a este concurso`)
+      setEmailConvite("")
+      setCompartilhandoId(null)
+    } catch {
+      toast.error("Erro de rede ao convidar")
+    } finally {
+      setEnviandoConvite(false)
+    }
   }
 
   const handleEstudar = (concurso: Concurso) => {
@@ -143,6 +177,7 @@ export default function ConcursosPage() {
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <button onClick={() => { setEditando(c); setModalAberto(true) }} className="text-muted-foreground hover:text-primary p-1" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => { setCompartilhandoId(c.id); setEmailConvite("") }} className="text-muted-foreground hover:text-primary p-1" title="Compartilhar (currículo em comum, progresso de cada um separado)"><UserPlus className="h-3.5 w-3.5" /></button>
                   <button onClick={() => handleResetarProgresso(c.id, c.nome)} disabled={resetando === c.id} className="text-muted-foreground hover:text-amber-500 p-1" title="Resetar progresso">
                     {resetando === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                   </button>
@@ -182,6 +217,41 @@ export default function ConcursosPage() {
           onSalvar={handleSalvar}
           onFechar={() => { setModalAberto(false); setEditando(null) }}
         />
+      )}
+
+      {compartilhandoId && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4"
+          onClick={() => setCompartilhandoId(null)}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-2xl w-full max-w-sm p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <UserPlus className="h-4 w-4 text-primary" /> Compartilhar concurso
+              </div>
+              <button onClick={() => setCompartilhandoId(null)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              A pessoa vai ver as mesmas matérias, tópicos, capítulos e PDFs — mas a trilha, cartas,
+              avanço e relatórios dela ficam totalmente separados dos seus. Ela precisa já ter uma
+              conta (tela de cadastro) com este e-mail.
+            </p>
+            <input
+              type="email"
+              value={emailConvite}
+              onChange={(e) => setEmailConvite(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleConvidar() }}
+              placeholder="email@exemplo.com"
+              className="w-full text-sm border border-border rounded-md px-3 py-2 bg-background text-foreground focus:outline-none focus:border-primary"
+            />
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" size="sm" onClick={() => setCompartilhandoId(null)}>Cancelar</Button>
+              <Button size="sm" disabled={!emailConvite.trim() || enviandoConvite} onClick={handleConvidar} className="bg-primary hover:bg-primary/90 text-white">
+                {enviandoConvite ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Convidar"}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

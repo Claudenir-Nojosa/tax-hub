@@ -729,6 +729,76 @@ export function defaultTopicoState(): TopicoState {
   };
 }
 
+// --- Currículo compartilhado vs progresso por usuário ---
+// TopicoState/Bloco/PdfEstudo misturam dois tipos de dado: currículo (links de caderno de
+// questões, importância, mapeamento de páginas/capítulos — o MESMO pra qualquer usuário que
+// estude o mesmo concurso) e progresso (estudado, cadernos A-D com acertos/erros, página onde
+// parou — individual, já que cada um responde as questões na própria conta do TecConcursos e lê
+// no próprio ritmo). Split/merge convertem entre o tipo combinado (usado pela UI, sem mudança) e
+// as duas metades que vivem em lugares separados no banco (Concurso.topicosCompartilhados/
+// blocosCompartilhados/PdfConcurso vs ConcursoProgressoUsuario.dados).
+
+export type TopicoCurricular = Pick<TopicoState, "linkRevisao7d" | "linkRevisao30d" | "linkReforcoImediato" | "importancia">;
+export type TopicoProgresso = Pick<TopicoState, "estudado" | "cadernos"> &
+  Partial<Pick<TopicoState, "revisoesLink" | "reforcoImediatoFeito" | "estudadoEm">>;
+
+export function splitTopicoState(t: TopicoState): { curricular: TopicoCurricular; progresso: TopicoProgresso } {
+  const curricular: TopicoCurricular = {};
+  if (t.linkRevisao7d !== undefined) curricular.linkRevisao7d = t.linkRevisao7d;
+  if (t.linkRevisao30d !== undefined) curricular.linkRevisao30d = t.linkRevisao30d;
+  if (t.linkReforcoImediato !== undefined) curricular.linkReforcoImediato = t.linkReforcoImediato;
+  if (t.importancia !== undefined) curricular.importancia = t.importancia;
+  const progresso: TopicoProgresso = { estudado: t.estudado, cadernos: t.cadernos };
+  if (t.revisoesLink !== undefined) progresso.revisoesLink = t.revisoesLink;
+  if (t.reforcoImediatoFeito !== undefined) progresso.reforcoImediatoFeito = t.reforcoImediatoFeito;
+  if (t.estudadoEm !== undefined) progresso.estudadoEm = t.estudadoEm;
+  return { curricular, progresso };
+}
+
+export function mergeTopicoState(curricular: TopicoCurricular | undefined, progresso: TopicoProgresso | undefined): TopicoState {
+  return { ...defaultTopicoState(), ...curricular, ...progresso };
+}
+
+export type BlocoCurricular = Pick<Bloco, "id" | "materia" | "nome" | "topicos" | "linkRevisao7d" | "linkRevisao30d">;
+export type BlocoProgresso = Partial<Pick<Bloco, "revisoesLink">>;
+
+export function splitBlocoEstado(b: Bloco): { curricular: BlocoCurricular; progresso: BlocoProgresso } {
+  const curricular: BlocoCurricular = { id: b.id, materia: b.materia, nome: b.nome, topicos: b.topicos };
+  if (b.linkRevisao7d !== undefined) curricular.linkRevisao7d = b.linkRevisao7d;
+  if (b.linkRevisao30d !== undefined) curricular.linkRevisao30d = b.linkRevisao30d;
+  const progresso: BlocoProgresso = {};
+  if (b.revisoesLink !== undefined) progresso.revisoesLink = b.revisoesLink;
+  return { curricular, progresso };
+}
+
+export function mergeBlocoEstado(curricular: BlocoCurricular, progresso: BlocoProgresso | undefined): Bloco {
+  return { ...curricular, ...progresso };
+}
+
+export type PdfCurricular = Pick<
+  PdfEstudo,
+  "id" | "nome" | "materia" | "totalPaginas" | "criadoEm"
+> &
+  Partial<Pick<PdfEstudo, "topicos" | "paginaConteudoFim" | "intervalosPaginas" | "capitulos" | "arquivoEnviado">>;
+export type PdfProgresso = Pick<PdfEstudo, "paginaAtual"> & Partial<Pick<PdfEstudo, "atualizadoEm" | "questoes">>;
+
+export function splitPdfEstudo(p: PdfEstudo): { curricular: PdfCurricular; progresso: PdfProgresso } {
+  const curricular: PdfCurricular = { id: p.id, nome: p.nome, materia: p.materia, totalPaginas: p.totalPaginas, criadoEm: p.criadoEm };
+  if (p.topicos !== undefined) curricular.topicos = p.topicos;
+  if (p.paginaConteudoFim !== undefined) curricular.paginaConteudoFim = p.paginaConteudoFim;
+  if (p.intervalosPaginas !== undefined) curricular.intervalosPaginas = p.intervalosPaginas;
+  if (p.capitulos !== undefined) curricular.capitulos = p.capitulos;
+  if (p.arquivoEnviado !== undefined) curricular.arquivoEnviado = p.arquivoEnviado;
+  const progresso: PdfProgresso = { paginaAtual: p.paginaAtual };
+  if (p.atualizadoEm !== undefined) progresso.atualizadoEm = p.atualizadoEm;
+  if (p.questoes !== undefined) progresso.questoes = p.questoes;
+  return { curricular, progresso };
+}
+
+export function mergePdfEstudo(curricular: PdfCurricular, progresso: PdfProgresso | undefined): PdfEstudo {
+  return { ...curricular, paginaAtual: progresso?.paginaAtual ?? 0, atualizadoEm: progresso?.atualizadoEm, questoes: progresso?.questoes };
+}
+
 export const MATERIAS: MateriaDef[] = [
   {
     nome: "Administração Pública e Governança Pública",

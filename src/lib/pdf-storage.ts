@@ -53,11 +53,10 @@ function comTimeout<T>(promise: Promise<T>, timeoutMs: number, mensagem: string)
   ])
 }
 
-export async function salvarArquivoPdf(id: string, arquivo: File | Blob): Promise<void> {
-  const { path, token } = (await jsonOuErro(await fetch(`/api/estudo/biblioteca/${id}/arquivo`, { method: "POST" }))) as {
-    path: string
-    token: string
-  }
+export async function salvarArquivoPdf(id: string, arquivo: File | Blob, concursoId: string): Promise<void> {
+  const { path, token } = (await jsonOuErro(
+    await fetch(`/api/estudo/biblioteca/${id}/arquivo?concursoId=${encodeURIComponent(concursoId)}`, { method: "POST" })
+  )) as { path: string; token: string }
   const { error } = await obterClienteBrowser()
     .storage.from("biblioteca-pdfs")
     .uploadToSignedUrl(path, token, arquivo, { contentType: "application/pdf" })
