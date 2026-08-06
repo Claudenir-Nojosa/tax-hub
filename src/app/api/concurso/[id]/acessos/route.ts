@@ -39,14 +39,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     )
   }
 
-  // primeiro concurso do convidado vira principal dele automaticamente (mesma regra de sempre
-  // pra quem cria o próprio primeiro concurso)
-  const jaTemAlgum = await db.concursoAcesso.count({ where: { userId: convidado.id } })
-
-  const acesso = await db.concursoAcesso.upsert({
-    where: { concursoId_userId: { concursoId: id, userId: convidado.id } },
-    update: {},
-    create: { concursoId: id, userId: convidado.id, isPrincipal: jaTemAlgum === 0 },
-  })
-  return NextResponse.json({ userId: acesso.userId, name: convidado.name, email: convidado.email }, { status: 201 })
+  // ser convidado pra um concurso vira SEMPRE o principal do convidado, mesmo que ele já tenha
+  // visitado /dashboard/estudo antes (o que auto-cria um "SEFAZ-CE 2026" pessoal vazio via
+  // estudo/migrar e marca ele como principal) — um convite explícito do dono é um sinal mais forte
+  // de intenção do que esse default automático, e sem isso o convidado continuaria caindo no
+  // concurso errado até clicar manualmente na estrela em "Meus Concursos"
+  await db.$transaction([
+    db.concursoAcesso.updateMany({ where: { userId: convidado.id }, data: { isPrincipal: false } }),
+    db.concursoAcesso.upsert({
+      where: { concursoId_userId: { concursoId: id, userId: convidado.id } },
+      update: { isPrincipal: true },
+      create: { concursoId: id, userId: convidado.id, isPrincipal: true },
+    }),
+  ])
+  return NextResponse.json({ userId: convidado.id, name: convidado.name, email: convidado.email }, { status: 201 })
 }
