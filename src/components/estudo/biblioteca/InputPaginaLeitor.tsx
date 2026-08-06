@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { PdfEstudo } from "@/lib/estudo-data";
 
 // input de página do leitor — separado pra ter estado local sem re-render do iframe a cada tecla
 export default function InputPaginaLeitor({ pdf, onCommit }: { pdf: PdfEstudo; onCommit: (pag: number) => void }) {
   const [valor, setValor] = useState(String(pdf.paginaAtual));
+  // pdf.paginaAtual agora avança sozinho (auto-commit ao rolar) — sem isso o campo ficava preso
+  // no valor do mount, mesma classe de bug já corrigida em PdfRow.tsx (Biblioteca)
+  useEffect(() => {
+    setValor(String(pdf.paginaAtual));
+  }, [pdf.paginaAtual]);
   const commit = () => {
     const n = parseInt(valor);
     if (!Number.isFinite(n)) { setValor(String(pdf.paginaAtual)); return; }
