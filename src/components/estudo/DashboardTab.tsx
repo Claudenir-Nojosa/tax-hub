@@ -77,7 +77,7 @@ function MensagemDoDia({ state, materiasConcurso, nomeUsuario }: { state: Estudo
 
   return (
     <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2">
-      <Image src={`/${humor}.png`} alt="Gandalf" width={56} height={56} className="flex-shrink-0 object-contain" />
+      <Image src={`/${humor}.png`} alt="Gandalf" width={112} height={112} className="flex-shrink-0 object-contain" />
       <div className="flex-1 min-w-0 bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
         <div className="text-sm font-bold text-foreground dark:text-foreground">{titulo}</div>
         <div className="text-sm text-muted-foreground mt-0.5">{corpo}</div>
