@@ -86,13 +86,19 @@ export default function LeitorPdf({
     pdf.paginaAtual >= paginaAbertura && pdf.paginaAtual <= paginaFimAlvo;
   const paginaInicialRef = useRef(dentroDoIntervaloAtual ? pdf.paginaAtual : paginaAbertura ?? pdf.paginaAtual);
   const paginaAtualNaAberturaRef = useRef(pdf.paginaAtual);
+  // maior página já VISTA nesta sessão (não confundir com paginaAtualNaAberturaRef, que é fixa —
+  // essa avança conforme a leitura acontece) — é o que faz o "Parei aqui" avançar sozinho, sem
+  // recuar se o usuário rolar pra trás pra reler algo. Começa em pdf.paginaAtual (o bookmark real,
+  // não paginaInicialRef — numa revisita a um capítulo antigo, abrir mais atrás não deve "resetar"
+  // o quanto já foi lido de verdade).
+  const maiorPaginaVistaRef = useRef(pdf.paginaAtual);
   const visorRef = useRef<VisorPdfHandle>(null);
   const pdfRef = useRef(pdf);
   pdfRef.current = pdf;
 
-  // commitarPagina: mesmo canal usado por "Parei aqui" e pelo campo "Parei na pág." — numa
-  // sessão de deep link (revisita a um tópico anterior), nunca deixa o bookmark de retomada
-  // recuar pra trás do que já tinha sido alcançado antes dessa sessão (regra explícita: o
+  // commitarPagina: mesmo canal usado pelo auto-avanço, por "Parei aqui" e pelo campo "Parei na
+  // pág." — numa sessão de deep link (revisita a um tópico anterior), nunca deixa o bookmark de
+  // retomada recuar pra trás do que já tinha sido alcançado antes dessa sessão (regra explícita: o
   // bookmark é sempre o ponto mais avançado já lido, revisitar conteúdo antigo não desfaz isso)
   const commitarPagina = (pagina: number) => {
     if (paginaAbertura !== undefined && pagina < paginaAtualNaAberturaRef.current) return;
@@ -258,6 +264,13 @@ export default function LeitorPdf({
   // não impede o PRÓXIMO limite de avisar quando for cruzado também
   const handlePaginaVisivel = (pagina: number) => {
     setPaginaVisivel(pagina);
+    // "Parei aqui" automático — só avança quando a página visível é MAIOR que a maior já vista
+    // nesta sessão (rolar pra trás pra reler não move o bookmark pra trás; o botão manual "Parei
+    // aqui" continua existindo pra forçar um commit exato quando quiser).
+    if (pagina > maiorPaginaVistaRef.current) {
+      maiorPaginaVistaRef.current = pagina;
+      commitarPagina(pagina);
+    }
     const proximoLimite = limitesCapitulos.find((lim) => lim > ultimoLimiteAvisadoRef.current);
     if (proximoLimite !== undefined && pagina > proximoLimite) {
       ultimoLimiteAvisadoRef.current = proximoLimite;
@@ -395,7 +408,7 @@ export default function LeitorPdf({
         <button
           type="button"
           onClick={() => commitarPagina(paginaVisivel)}
-          title={`Marcar que você parou na página visível (${paginaVisivel})`}
+          title={`O "parei aqui" já atualiza sozinho conforme você lê — este botão só força marcar a página visível (${paginaVisivel}) agora`}
           className="hidden sm:flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-muted text-muted-foreground hover:bg-accent transition-colors flex-shrink-0"
         >
           pág. {paginaVisivel} · Parei aqui
