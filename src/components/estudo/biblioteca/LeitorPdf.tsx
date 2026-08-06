@@ -8,7 +8,7 @@ import {
   Highlighter, Layers, ListChecks, NotebookText, Pause, Play,
 } from "lucide-react";
 import {
-  gerarQuestoesGrupos, topicoKey,
+  dateKeyLocal, gerarQuestoesGrupos, topicoKey,
   type Alternativa, type AnotacaoPdf, type AtividadeTipo, type Carta, type CapituloPdf, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
 } from "@/lib/estudo-data";
 import { resolverCapitulos } from "@/lib/trilha-dinamica";
@@ -264,7 +264,9 @@ export default function LeitorPdf({
     if (!chaveTopico) return;
     const estado = topicos[chaveTopico];
     if (!estado) return;
-    onUpdateTopicos({ ...topicos, [chaveTopico]: { ...estado, estudado: true } });
+    // sem estudadoEm, a revisão do link (7/30 dias) trata "sem data" como "já pode revisar" e
+    // aparece na Trilha na hora, em vez de esperar o prazo — precisa gravar a data de conclusão
+    onUpdateTopicos({ ...topicos, [chaveTopico]: { ...estado, estudado: true, estudadoEm: estado.estudadoEm ?? dateKeyLocal() } });
   };
 
   useEffect(() => {

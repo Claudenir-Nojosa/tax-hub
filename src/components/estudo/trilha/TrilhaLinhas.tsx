@@ -341,7 +341,7 @@ export function CorpoRevisoesLink({
   return (
     <div>
       <div className="text-sm font-semibold text-foreground dark:text-foreground">
-        {revisoes.length} revisão{revisoes.length !== 1 ? "ões" : ""} de questões do link
+        {revisoes.length} {revisoes.length !== 1 ? "revisões" : "revisão"} de questões do link
       </div>
       <div className="text-[11px] text-muted-foreground mb-2">
         7 e 30 dias após concluir os 4 grupos A-D do tópico — refaça as questões do link cadastrado na aba Questões.
