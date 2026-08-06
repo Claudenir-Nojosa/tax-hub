@@ -58,7 +58,18 @@ export default function LeitorPdf({
   // bookmark de retomada DE VERDADE no momento da abertura, sempre igual a pdf.paginaAtual (não
   // ao ponto de abertura do deep link) — usado como baseline de "páginas lidas" na sessão (ver
   // encerrarSessao), pra uma revisita a um tópico anterior não inflar esse número artificialmente
-  const paginaInicialRef = useRef(paginaAbertura ?? pdf.paginaAtual);
+  //
+  // Quando o bookmark real (pdf.paginaAtual) já está DENTRO do intervalo pedido
+  // (paginaAbertura..paginaFimAlvo), o usuário só está CONTINUANDO a leitura de onde parou — o
+  // trecho da Trilha pode começar antes de onde ele já chegou (ex.: "Continuar a Leitura" abre no
+  // 1º capítulo ainda não concluído, mas ele já leu página 7 de um capítulo que vai até a 67) —
+  // nesse caso abre no bookmark, não no início do trecho. Só abre EXATAMENTE em paginaAbertura
+  // quando é uma revisita de verdade a um trecho antigo (bookmark já passou do paginaFimAlvo desse
+  // trecho específico — ex.: clicar num capítulo já concluído há tempo pra reler).
+  const dentroDoIntervaloAtual =
+    paginaAbertura !== undefined && paginaFimAlvo !== undefined &&
+    pdf.paginaAtual >= paginaAbertura && pdf.paginaAtual <= paginaFimAlvo;
+  const paginaInicialRef = useRef(dentroDoIntervaloAtual ? pdf.paginaAtual : paginaAbertura ?? pdf.paginaAtual);
   const paginaAtualNaAberturaRef = useRef(pdf.paginaAtual);
   const visorRef = useRef<VisorPdfHandle>(null);
   const pdfRef = useRef(pdf);
