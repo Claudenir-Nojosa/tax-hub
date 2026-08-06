@@ -111,7 +111,14 @@ export default function LeitorPdf({
   }, [pdf.capitulos, pdf.id, pdf.paginaConteudoFim, pdf.totalPaginas, pdf.paginaAtual, capitulosConcluidos]);
   const limitesCapitulos = useMemo(() => {
     if (resolvidosCapitulos.length > 0) {
-      return resolvidosCapitulos.map((c) => c.paginaFim).sort((a, b) => a - b);
+      const todos = resolvidosCapitulos.map((c) => c.paginaFim).sort((a, b) => a - b);
+      // a atividade da Trilha pode agrupar VÁRIOS capítulos numa tarefa só (ex.: "Capítulos 1-4
+      // de X", quando são curtos e juntos batem a duração alvo — ver proximoBlocoCapitulos em
+      // trilha-dinamica.ts) — os fins de capítulo DENTRO desse trecho não são um "limite" de
+      // verdade, só o fim do trecho pedido (paginaFimAlvo, que é exatamente o paginaFim do
+      // último capítulo do grupo) e o que vier depois. Sem isso, ler os 4 capítulos de uma
+      // atividade só disparava 4 avisos seguidos em vez de 1 só ao terminar tudo que foi pedido.
+      return paginaFimAlvo !== undefined ? todos.filter((lim) => lim >= paginaFimAlvo) : todos;
     }
     return paginaFimAlvo !== undefined ? [paginaFimAlvo] : [];
   }, [resolvidosCapitulos, paginaFimAlvo]);
