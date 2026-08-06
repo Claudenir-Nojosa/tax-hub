@@ -170,37 +170,69 @@ export default function EstudoPage() {
     })();
   }, [searchParams]);
 
+  // refs sempre com o valor mais recente — permitem ao flush de saída (beforeunload) ler o
+  // estado atual sem precisar recriar o listener a cada mudança de state/concursoAtivo
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const concursoAtivoRef = useRef(concursoAtivo);
+  concursoAtivoRef.current = concursoAtivo;
+
+  // POST de verdade pro banco — usado tanto pelo debounce normal quanto pelo flush de saída
+  // (beforeunload). `keepalive` deixa o browser completar a requisição mesmo com a página
+  // descarregando (só até ~64KB de body — não é garantia pra estados muito grandes, por isso o
+  // beforeunload abaixo também avisa o usuário em vez de confiar só nisso).
+  const salvarAgora = useCallback((keepalive: boolean) => {
+    const state = stateRef.current;
+    const concursoAtivo = concursoAtivoRef.current;
+    const blocosAtuais = new Set(Object.keys(state.blocos));
+    const pdfsAtuais = new Set(state.pdfs.map((p) => p.id));
+    const blocosRemovidos = [...chavesConhecidasRef.current.blocos].filter((k) => !blocosAtuais.has(k));
+    const pdfsRemovidos = [...chavesConhecidasRef.current.pdfs].filter((k) => !pdfsAtuais.has(k));
+    const url = concursoAtivo ? `/api/concurso/${concursoAtivo.id}/progresso` : "/api/estudo";
+    return fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(concursoAtivo ? { ...state, blocosRemovidos, pdfsRemovidos } : state),
+      keepalive,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const body = await res.text();
+        console.error("[estudo] Falha ao salvar no banco:", res.status, body);
+        return;
+      }
+      chavesConhecidasRef.current = { blocos: blocosAtuais, pdfs: pdfsAtuais };
+    });
+  }, []);
+
   // Persiste: localStorage imediato + banco com debounce de 2s
   useEffect(() => {
     if (!loaded) return;
     localStorage.setItem(storageKey(concursoAtivo?.id ?? null), JSON.stringify(state));
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(async () => {
-      const blocosAtuais = new Set(Object.keys(state.blocos));
-      const pdfsAtuais = new Set(state.pdfs.map((p) => p.id));
-      const blocosRemovidos = [...chavesConhecidasRef.current.blocos].filter((k) => !blocosAtuais.has(k));
-      const pdfsRemovidos = [...chavesConhecidasRef.current.pdfs].filter((k) => !pdfsAtuais.has(k));
-      try {
-        const url = concursoAtivo
-          ? `/api/concurso/${concursoAtivo.id}/progresso`
-          : "/api/estudo";
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(concursoAtivo ? { ...state, blocosRemovidos, pdfsRemovidos } : state),
-        });
-        if (!res.ok) {
-          const body = await res.text();
-          console.error("[estudo] Falha ao salvar no banco:", res.status, body);
-        } else {
-          chavesConhecidasRef.current = { blocos: blocosAtuais, pdfs: pdfsAtuais };
-        }
-      } catch (err) {
-        console.error("[estudo] Erro de rede ao salvar:", err);
-      }
+    saveTimeoutRef.current = setTimeout(() => {
+      saveTimeoutRef.current = null;
+      salvarAgora(false).catch((err) => console.error("[estudo] Erro de rede ao salvar:", err));
     }, 2000);
-  }, [state, loaded, concursoAtivo]);
+  }, [state, loaded, concursoAtivo, salvarAgora]);
+
+  // Sair/atualizar a página com um salvamento AINDA PENDENTE (debounce dos 2s não terminou) —
+  // sem isso, editar algo (ex.: horas no Calendário) e atualizar a página logo em seguida perdia
+  // a edição silenciosamente, porque o timer nunca chegava a disparar. Tenta um flush best-effort
+  // (keepalive) E avisa o usuário com a confirmação nativa do navegador, dando a chance de
+  // cancelar e esperar os 2s — mesmo padrão de "não sair sem confirmar" já usado no leitor de PDF.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!saveTimeoutRef.current) return;
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+      salvarAgora(true).catch(() => {});
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [salvarAgora]);
 
   const updateTopicos = useCallback((topicos: Record<string, TopicoState>) => {
     setState((prev) => ({ ...prev, topicos }));
