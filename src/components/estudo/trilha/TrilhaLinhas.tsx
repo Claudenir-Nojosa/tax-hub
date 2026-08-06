@@ -57,6 +57,12 @@ export function CorpoBloco({
   // hoje — sem isso, um capítulo concluído sumia da Trilha assim que a janela de leitura avançava
   // (pedido explícito do usuário: sempre mostrar o que já foi concluído, com a bolinha marcada)
   const mostrarSubtarefas = (b.todosCapitulos?.length ?? 0) > 0;
+  // `concluido` (meta da SEMANA) é só TEMPO gasto — não sabe se o conteúdo foi lido de verdade.
+  // Quando o PDF tem capítulos mapeados, só oferece "Marcar como estudado" depois que todos
+  // estiverem lidos; sem isso o usuário podia bater a meta de horas e marcar o tópico como
+  // estudado com capítulo faltando (achado pelo usuário: bateu 2h21 de Direito Administrativo
+  // mas o Capítulo 2 de 2 ainda não tinha sido lido).
+  const capitulosPendentes = (b.todosCapitulos?.length ?? 0) > 0 && b.todosCapitulos!.some((c) => !c.lido);
 
   // bloqueado = ainda não é a vez dessa matéria na cadeia da semana (ver computarMetaSemana em
   // trilha-dinamica.ts) — mostra só um preview, sem botão nem subtarefas clicáveis, até a
@@ -128,10 +134,18 @@ export function CorpoBloco({
             {b.minutosFeitosSemana > 0 ? "Continuar a Leitura" : "Ler PDF"} <ArrowRight className="h-3 w-3" />
           </button>
         )}
-        {b.concluido && (
+        {b.concluido && !capitulosPendentes && (
           <button type="button" onClick={onMarcarEstudado} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium flex items-center gap-1">
             <Check className="h-3 w-3" /> Marcar como estudado
           </button>
+        )}
+        {b.concluido && capitulosPendentes && (
+          <span
+            className="flex-shrink-0 text-[10px] text-muted-foreground text-right max-w-[110px]"
+            title="Tempo semanal batido, mas ainda tem capítulo não lido — termine a leitura pra poder marcar como estudado"
+          >
+            faltam capítulos pra marcar como estudado
+          </span>
         )}
       </div>
       {mostrarSubtarefas && (
