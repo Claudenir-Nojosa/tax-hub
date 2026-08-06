@@ -53,6 +53,12 @@ export interface ProximaAtividade {
   ehNova: boolean; // true = "sua atividade de hoje é" (ainda nem começou); false = "vi que você ainda não fez" (ficou parado no checklist)
   titulo: string;
   subtitulo: string;
+  // só preenchido pro tipo "estudo" — quanto já foi feito nesta atividade e, quando o PDF tem
+  // capítulos mapeados, em qual capítulo está — pra Gustavo falar em números/progresso reais em
+  // vez de tratar como "vamos começar" algo que já está quase pronto (ex.: 2h21 de 3h, capítulo
+  // 12 de 12 já lido até a penúltima página)
+  progressoMin?: { feitos: number; alvo: number };
+  capituloLabel?: string;
 }
 
 // Escolhe UM item pra virar a mensagem "estilo Duolingo" do Dashboard — a mesma prioridade que já
@@ -62,7 +68,14 @@ export interface ProximaAtividade {
 export function proximaAtividade(meta: MetaSemana): ProximaAtividade | null {
   const bloco = meta.blocos.find((b) => !b.concluido);
   if (bloco) {
-    return { tipo: "estudo", ehNova: true, titulo: bloco.materia, subtitulo: `tópico atual: ${bloco.topico}` };
+    return {
+      tipo: "estudo",
+      ehNova: bloco.minutosFeitosSemana === 0,
+      titulo: bloco.materia,
+      subtitulo: `tópico atual: ${bloco.topico}`,
+      progressoMin: { feitos: bloco.minutosFeitosSemana, alvo: bloco.minutosAlvoSemana },
+      capituloLabel: bloco.capituloLabel,
+    };
   }
   if (meta.reforcos.length > 0) {
     const r = meta.reforcos[0];
@@ -179,6 +192,18 @@ export function gerarMensagemGustavo(
       humor: "normal",
     };
   }
+  // estudo já em andamento (não é "vamos começar" — já tem minutos/capítulos feitos nesta
+  // atividade) — fala em progresso real (feitos/alvo + em qual capítulo está) em vez da mesma
+  // frase de "atividade nova" usada pra quem ainda não tocou em nada
+  if (proxima.tipo === "estudo" && proxima.progressoMin) {
+    const { feitos, alvo } = proxima.progressoMin;
+    const onde = proxima.capituloLabel ?? proxima.subtitulo;
+    return {
+      titulo: `${saudacao}Continue em ${proxima.titulo}`,
+      corpo: `Já fez ${fmtHoras(feitos)} de ${fmtHoras(alvo)} nesta atividade — ${onde}${notaComparativa}`,
+      humor: "normal",
+    };
+  }
   return {
     titulo: `${saudacao}Vi que você ainda não fez:`,
     corpo: `${proxima.titulo} · ${proxima.subtitulo}${notaComparativa}`,
@@ -186,27 +211,98 @@ export function gerarMensagemGustavo(
   };
 }
 
-// cache em memória (nível de módulo) — evita rechamar a IA pra reescrever o MESMO texto
-// determinístico quando o usuário troca de aba (Dashboard <-> Trilha, mesmo texto-base nos dois)
-// ou o componente remonta; limpa sozinho ao recarregar a página, é só uma economia de chamadas.
-// Só guarda titulo/corpo — o `humor` NUNCA passa pela IA, vem sempre direto do `base` atual (ver
-// useMensagemGustavoIA), então não faz sentido cacheá-lo junto.
+// resumo ESTRUTURADO e 100% factual da semana — é isso que vai pra IA analisar de verdade (não
+// mais só reescrever uma frase pronta). Cada matéria carrega progresso real (minutos feitos/alvo,
+// tópico e capítulo atuais, se já concluiu a semana ou ainda está bloqueada na fila), mais os
+// agregados que já regem a prioridade das mensagens determinísticas (atraso, tendência, pendências
+// de questão/reforço/revisão/cartas). A IA pode escolher livremente O QUE destacar, mas todo
+// número/nome que ela citar tem que vir exatamente daqui — ver prompt em /api/ai/gustavo-mensagem.
+export interface ResumoSemanaIA {
+  nomeUsuario?: string;
+  streakDias: number;
+  diasSemAtividade: number;
+  percCumpridoSemanaTotal: number;
+  atrasado: boolean;
+  ritmoNecessarioMinDia: number | null;
+  semanaPassadaPerc?: number;
+  materias: {
+    nome: string;
+    topicoAtual: string;
+    capituloAtual?: string;
+    minutosFeitos: number;
+    minutosAlvoSemana: number;
+    percConcluidoSemana: number;
+    concluido: boolean;
+    bloqueado: boolean;
+  }[];
+  reforcosPendentes: number;
+  questoesPendentes: number;
+  reforcosImediatosPendentes: number;
+  revisoesLinkPendentes: number;
+  revisoes30Pendentes: number;
+  revisarCartasHoje: boolean;
+}
+
+export function montarResumoSemanaIA(
+  meta: MetaSemana,
+  opts: { nomeUsuario?: string; streakDias: number; diasSemAtividade?: number; historico?: SemanaHistorico[] }
+): ResumoSemanaIA {
+  return {
+    nomeUsuario: opts.nomeUsuario,
+    streakDias: opts.streakDias,
+    diasSemAtividade: opts.diasSemAtividade ?? 0,
+    percCumpridoSemanaTotal: meta.percCumpridoSemana,
+    atrasado: meta.atrasado,
+    ritmoNecessarioMinDia: meta.ritmoNecessarioMinDia,
+    semanaPassadaPerc: opts.historico?.[0]?.percCumprido,
+    materias: meta.blocos.map((b) => ({
+      nome: b.materia,
+      topicoAtual: b.topico,
+      capituloAtual: b.capituloLabel,
+      minutosFeitos: b.minutosFeitosSemana,
+      minutosAlvoSemana: b.minutosAlvoSemana,
+      percConcluidoSemana: b.minutosAlvoSemana > 0 ? Math.round((b.minutosFeitosSemana / b.minutosAlvoSemana) * 100) : 0,
+      concluido: b.concluido,
+      bloqueado: b.bloqueado,
+    })),
+    reforcosPendentes: meta.reforcos.length,
+    questoesPendentes: meta.questoesPendentes.length,
+    reforcosImediatosPendentes: meta.reforcosImediatos.length,
+    revisoesLinkPendentes: meta.revisoesLink.length,
+    revisoes30Pendentes: meta.revisoes30.length,
+    revisarCartasHoje: meta.revisarCartas,
+  };
+}
+
+// cache em memória (nível de módulo) — evita rechamar a IA pra re-analisar a MESMA semana quando
+// o usuário troca de aba (Dashboard <-> Trilha, mesmo resumo nos dois) ou o componente remonta;
+// limpa sozinho ao recarregar a página, é só uma economia de chamadas. Só guarda titulo/corpo — o
+// `humor` NUNCA passa pela IA, vem sempre direto do `base` atual (ver useMensagemGustavoIA).
 const cacheMensagemGustavoIA = new Map<string, { titulo: string; corpo: string }>();
 
 // pega a mensagem DETERMINÍSTICA de gerarMensagemGustavo (sempre pronta na hora, sem depender de
-// rede) e pede pra /api/ai/gustavo-mensagem reescrever titulo+corpo com um tom mais motivador e
-// variado — PRESERVANDO todo fato (números, nomes de matéria/tópico, ver o prompt da rota). Nunca
-// deixa a tela vazia enquanto espera: mostra a versão determinística até a reescrita chegar, e
-// continua nela pra sempre se a chamada falhar (sem tela quebrada por causa da IA). `humor` (qual
-// PNG do Gustavo mostrar) não é texto — não passa pela IA, é sempre o de `base`, fresco a cada
-// render, pra nunca dessincronizar da cara do Gustavo com o que ele está de fato dizendo agora.
-export function useMensagemGustavoIA(base: MensagemGustavo, nomeUsuario?: string): MensagemGustavo {
-  const chave = `${base.titulo}|||${base.corpo}`;
+// rede — mostrada até a análise da IA chegar, e continua valendo pra sempre se a chamada falhar,
+// sem tela quebrada) e manda um resumo ESTRUTURADO da semana pra /api/ai/gustavo-mensagem analisar
+// de verdade e escrever titulo+corpo do zero, grounded nesses fatos (nunca inventa número/nome que
+// não esteja no resumo — ver prompt da rota). `humor` (qual PNG mostrar) não passa pela IA, é
+// sempre o de `base`, fresco a cada render, pra nunca dessincronizar da cara do personagem com o
+// que ele está de fato dizendo agora.
+export function useMensagemGustavoIA(
+  base: MensagemGustavo,
+  meta: MetaSemana | null,
+  opts: { nomeUsuario?: string; streakDias: number; diasSemAtividade?: number; historico?: SemanaHistorico[] }
+): MensagemGustavo {
+  const resumo = meta ? montarResumoSemanaIA(meta, opts) : null;
+  const chave = resumo ? JSON.stringify(resumo) : `${base.titulo}|||${base.corpo}`;
   const [texto, setTexto] = useState<{ titulo: string; corpo: string }>(
     () => cacheMensagemGustavoIA.get(chave) ?? { titulo: base.titulo, corpo: base.corpo }
   );
 
   useEffect(() => {
+    if (!resumo) {
+      setTexto({ titulo: base.titulo, corpo: base.corpo });
+      return;
+    }
     const cacheada = cacheMensagemGustavoIA.get(chave);
     if (cacheada) {
       setTexto(cacheada);
@@ -217,7 +313,7 @@ export function useMensagemGustavoIA(base: MensagemGustavo, nomeUsuario?: string
     fetch("/api/ai/gustavo-mensagem", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ titulo: base.titulo, corpo: base.corpo, nomeUsuario }),
+      body: JSON.stringify({ resumo }),
     })
       .then((r) => (r.ok ? (r.json() as Promise<{ titulo?: string; corpo?: string }>) : null))
       .then((data) => {
@@ -230,10 +326,10 @@ export function useMensagemGustavoIA(base: MensagemGustavo, nomeUsuario?: string
     return () => {
       cancelado = true;
     };
-    // `chave` já resume todo o conteúdo textual de `base` (novo objeto a cada render) — usar
-    // `base` direto nas deps faria o efeito rodar de novo a cada render, mesmo com o MESMO texto.
+    // `chave` já resume todo o conteúdo de `resumo`/`base` (objetos novos a cada render) — usar
+    // eles direto nas deps faria o efeito rodar de novo a cada render, mesmo com o MESMO conteúdo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chave, nomeUsuario]);
+  }, [chave]);
 
   return { titulo: texto.titulo, corpo: texto.corpo, humor: base.humor };
 }

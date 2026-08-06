@@ -47,38 +47,37 @@ function MensagemDoDia({ state, materiasConcurso, nomeUsuario }: { state: Estudo
   const trilha = state.trilhaDinamica;
   const ativa = !!trilha?.ativa;
 
-  // mensagem-base sempre calculada (com fallback vazio quando a trilha não está ativa) — o hook
-  // de reescrita por IA precisa ser chamado incondicionalmente em TODO render, senão o `return
-  // null` abaixo (que só acontece às vezes) quebraria as Rules of Hooks
+  // meta/opts sempre calculados (com fallback quando a trilha não está ativa) — o hook de
+  // análise por IA precisa ser chamado incondicionalmente em TODO render, senão o `return null`
+  // abaixo (que só acontece às vezes) quebraria as Rules of Hooks
   const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
-  const mensagemBase = ativa && trilha
-    ? gerarMensagemGustavo(
-        computarMetaSemana({
-          trilha,
-          configCiclo: state.configCiclo,
-          materiasAtivas,
-          topicos: state.topicos,
-          calendario: state.calendario,
-          pdfs: state.pdfs,
-          blocos: state.blocos,
-        }),
-        {
-          nomeUsuario,
-          streakDias: calcularStreakDias(state.calendario),
-          // capado nos dias desde a ativação — sem isso, uma trilha recém-ativada sem nenhum
-          // histórico de calendário mostraria "90 dias sem atividade" (teto do diasSemAtividade),
-          // o que soa como se o usuário tivesse abandonado algo que nem começou
-          diasSemAtividade: Math.min(diasSemAtividade(state.calendario), Math.max(0, diffDias(trilha.iniciadaEm, dateKeyLocal()))),
-          historico: analisarHistoricoSemanas({ trilha, configCiclo: state.configCiclo, calendario: state.calendario }),
-        }
-      )
-    : { titulo: "", corpo: "", humor: "normal" as const };
-  const { titulo, corpo, humor } = useMensagemGustavoIA(mensagemBase, nomeUsuario);
+  const meta = ativa && trilha
+    ? computarMetaSemana({
+        trilha,
+        configCiclo: state.configCiclo,
+        materiasAtivas,
+        topicos: state.topicos,
+        calendario: state.calendario,
+        pdfs: state.pdfs,
+        blocos: state.blocos,
+      })
+    : null;
+  const opts = {
+    nomeUsuario,
+    streakDias: calcularStreakDias(state.calendario),
+    // capado nos dias desde a ativação — sem isso, uma trilha recém-ativada sem nenhum
+    // histórico de calendário mostraria "90 dias sem atividade" (teto do diasSemAtividade),
+    // o que soa como se o usuário tivesse abandonado algo que nem começou
+    diasSemAtividade: trilha ? Math.min(diasSemAtividade(state.calendario), Math.max(0, diffDias(trilha.iniciadaEm, dateKeyLocal()))) : 0,
+    historico: trilha ? analisarHistoricoSemanas({ trilha, configCiclo: state.configCiclo, calendario: state.calendario }) : [],
+  };
+  const mensagemBase = meta ? gerarMensagemGustavo(meta, opts) : { titulo: "", corpo: "", humor: "normal" as const };
+  const { titulo, corpo, humor } = useMensagemGustavoIA(mensagemBase, meta, opts);
   if (!ativa) return null;
 
   return (
     <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2">
-      <Image src={`/${humor}.png`} alt="Gustavo" width={56} height={56} className="flex-shrink-0 object-contain" />
+      <Image src={`/${humor}.png`} alt="Gandalf" width={56} height={56} className="flex-shrink-0 object-contain" />
       <div className="flex-1 min-w-0 bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
         <div className="text-sm font-bold text-foreground dark:text-foreground">{titulo}</div>
         <div className="text-sm text-muted-foreground mt-0.5">{corpo}</div>
