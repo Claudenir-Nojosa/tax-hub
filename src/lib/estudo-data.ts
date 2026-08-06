@@ -323,6 +323,17 @@ export interface CapituloPdf {
   subcapitulos?: SubcapituloPdf[];
 }
 
+// anotação criada selecionando um trecho do texto no leitor ("marca texto") — trecho é o texto
+// selecionado ao vivo (window.getSelection), nota é um comentário opcional do usuário sobre ele.
+// Progresso puro (por usuário): cada um vê só as próprias anotações, mesmo num PDF compartilhado.
+export interface AnotacaoPdf {
+  id: string;
+  pagina: number;
+  trecho: string;
+  nota?: string;
+  criadoEm: string;
+}
+
 export interface PdfEstudo {
   id: string;
   nome: string; // ex.: "Aula 05 — ICMS: fato gerador"
@@ -347,6 +358,8 @@ export interface PdfEstudo {
   // true = o arquivo está salvo no Supabase Storage (pdf-storage.ts), disponível em qualquer
   // dispositivo logado — verdade sincronizada via EstudoState, não precisa checar por-dispositivo
   arquivoEnviado?: boolean;
+  // trechos marcados no leitor ("marca texto") — ver AnotacaoPdf
+  anotacoes?: AnotacaoPdf[];
 }
 
 // média histórica de páginas/hora das sessões do calendário que registraram páginas (campo
@@ -780,7 +793,7 @@ export type PdfCurricular = Pick<
   "id" | "nome" | "materia" | "totalPaginas" | "criadoEm"
 > &
   Partial<Pick<PdfEstudo, "topicos" | "paginaConteudoFim" | "intervalosPaginas" | "capitulos" | "arquivoEnviado">>;
-export type PdfProgresso = Pick<PdfEstudo, "paginaAtual"> & Partial<Pick<PdfEstudo, "atualizadoEm" | "questoes">>;
+export type PdfProgresso = Pick<PdfEstudo, "paginaAtual"> & Partial<Pick<PdfEstudo, "atualizadoEm" | "questoes" | "anotacoes">>;
 
 export function splitPdfEstudo(p: PdfEstudo): { curricular: PdfCurricular; progresso: PdfProgresso } {
   const curricular: PdfCurricular = { id: p.id, nome: p.nome, materia: p.materia, totalPaginas: p.totalPaginas, criadoEm: p.criadoEm };
@@ -792,11 +805,18 @@ export function splitPdfEstudo(p: PdfEstudo): { curricular: PdfCurricular; progr
   const progresso: PdfProgresso = { paginaAtual: p.paginaAtual };
   if (p.atualizadoEm !== undefined) progresso.atualizadoEm = p.atualizadoEm;
   if (p.questoes !== undefined) progresso.questoes = p.questoes;
+  if (p.anotacoes !== undefined) progresso.anotacoes = p.anotacoes;
   return { curricular, progresso };
 }
 
 export function mergePdfEstudo(curricular: PdfCurricular, progresso: PdfProgresso | undefined): PdfEstudo {
-  return { ...curricular, paginaAtual: progresso?.paginaAtual ?? 0, atualizadoEm: progresso?.atualizadoEm, questoes: progresso?.questoes };
+  return {
+    ...curricular,
+    paginaAtual: progresso?.paginaAtual ?? 0,
+    atualizadoEm: progresso?.atualizadoEm,
+    questoes: progresso?.questoes,
+    anotacoes: progresso?.anotacoes,
+  };
 }
 
 export const MATERIAS: MateriaDef[] = [

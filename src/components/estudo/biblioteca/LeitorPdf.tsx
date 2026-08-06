@@ -3,14 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
-import { AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, Clock, ClipboardList, Flag, Layers, ListChecks, Pause, Play } from "lucide-react";
+import {
+  AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, Clock, ClipboardList, Eye, EyeOff, Flag,
+  Highlighter, Layers, ListChecks, NotebookText, Pause, Play,
+} from "lucide-react";
 import {
   gerarQuestoesGrupos, topicoKey,
-  type Alternativa, type AtividadeTipo, type Carta, type CapituloPdf, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
+  type Alternativa, type AnotacaoPdf, type AtividadeTipo, type Carta, type CapituloPdf, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
 } from "@/lib/estudo-data";
 import { resolverCapitulos } from "@/lib/trilha-dinamica";
 import { fmtHoras } from "../trilha/trilha-ui";
 import { fmtCrono, novaCartaManual, sincronizarCadernoComQuestoes } from "./biblioteca-utils";
+import PainelAnotacoes from "./PainelAnotacoes";
 
 // progresso de horas da matéria do PDF — "atividade" é o trecho do tamanho de hoje (não reseta
 // ao virar o dia, só quando a semana vira), "semana" é o alvo cheio da matéria; mesma dupla que
@@ -158,6 +162,32 @@ export default function LeitorPdf({
   const chaveTopico = topicoAtual ? topicoKey(pdf.materia, topicoAtual) : null;
   const jaEstudado = chaveTopico ? topicos[chaveTopico]?.estudado === true : false;
 
+  // painel de questões escalonadas (grupos A-D) do tópico do PDF — geração, marcação e "refazer"
+  const [painelQuestoesAberto, setPainelQuestoesAberto] = useState(false);
+  // painel de capítulos (PainelCapitulos.tsx) e de anotações — todos dockam no mesmo lugar (ao
+  // lado do PDF em telas grandes), então são mutuamente exclusivos: abrir um fecha os outros
+  const [capitulosAberto, setCapitulosAberto] = useState(false);
+  const [anotacoesAberto, setAnotacoesAberto] = useState(false);
+  const segundosQuestoesRef = useRef(0);
+  const [segundosQuestoes, setSegundosQuestoes] = useState(0);
+
+  // qual dos dois cronômetros está contando agora — alternado pelo botão na barra (só um conta
+  // por vez; "pausado" pausa o que estiver ativo no momento)
+  const [modoTimer, setModoTimer] = useState<"leitura" | "questoes">("leitura");
+  // modo foco: borra as informações do cabeçalho (título/matéria/tópico + barras de progresso),
+  // deixando só o PDF nítido — passar o mouse por cima revela de novo temporariamente
+  const [modoFoco, setModoFoco] = useState(false);
+  // pomodoro: troca só a EXIBIÇÃO do cronômetro ativo pra uma contagem regressiva de 25min,
+  // vermelha, com tomate — o acumulado real de estudo (segundos/segundosQuestoes, usado pro
+  // registro da sessão) continua contando por baixo sem nenhuma mudança, é só o mostrador que
+  // vira "quanto falta pro ciclo" em vez de "quanto já passou"
+  const [modoPomodoro, setModoPomodoro] = useState(false);
+  // marca-texto: enquanto ativo, selecionar um trecho do PDF abre o formulário de salvar como
+  // anotação — fica ligado até o usuário desativar (não é "um clique, uma marcação")
+  const [marcandoTexto, setMarcandoTexto] = useState(false);
+  const [formAnotacao, setFormAnotacao] = useState<{ trecho: string; pagina: number } | null>(null);
+  const [notaAnotacao, setNotaAnotacao] = useState("");
+
   // barras de progresso de horas (atividade do dia + semana) — soma o cronômetro AO VIVO
   // (segundos, já tickando a cada 1s) em cima do baseline vindo da abertura do leitor, igual ao
   // toast de "meta batida" logo abaixo faz com metaRestanteRef
@@ -169,6 +199,65 @@ export default function LeitorPdf({
     semanaAlvo: metaEstudo.semanaAlvo,
   };
 
+  // pomodoro: DERIVADO do acumulado real (segundos/segundosQuestoes, qual estiver ativo agora),
+  // nunca um contador à parte — vira uma contagem regressiva de ciclos de 25min sem duplicar
+  // nenhum estado nem arriscar dessincronizar do tempo de verdade que vai pro registro da sessão
+  const POMODORO_DURACAO_SEG = 25 * 60;
+  const segundosAtivos = modoTimer === "leitura" ? segundos : segundosQuestoes;
+  const cicloPomodoroAtual = Math.floor(segundosAtivos / POMODORO_DURACAO_SEG);
+  const segundosRestantesPomodoro = POMODORO_DURACAO_SEG - (segundosAtivos % POMODORO_DURACAO_SEG);
+  // começa já sincronizado no ciclo ATUAL (não em 0) — ligar o modo pomodoro depois de já ter
+  // estudado um tempo não deve disparar um toast de "concluído" retroativo na hora
+  const ultimoCicloPomodoroRef = useRef(cicloPomodoroAtual);
+  useEffect(() => {
+    if (!modoPomodoro) {
+      ultimoCicloPomodoroRef.current = cicloPomodoroAtual;
+      return;
+    }
+    if (cicloPomodoroAtual > ultimoCicloPomodoroRef.current) {
+      ultimoCicloPomodoroRef.current = cicloPomodoroAtual;
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      setToast("🍅 Pomodoro concluído! Hora de uma pausa.");
+      toastTimerRef.current = setTimeout(() => setToast(null), 6000);
+    }
+  }, [cicloPomodoroAtual, modoPomodoro]);
+
+  // marca-texto: enquanto ativo, captura a seleção de texto do PDF (window.getSelection — a
+  // TextLayer do VisorPdf já deixa o texto selecionável de verdade) e abre o formulário de salvar
+  // como anotação. Fica ligado até o usuário clicar de novo pra desativar.
+  useEffect(() => {
+    if (!marcandoTexto) return;
+    const onMouseUp = () => {
+      const texto = window.getSelection()?.toString().trim();
+      if (!texto) return;
+      setFormAnotacao({ trecho: texto.slice(0, 2000), pagina: paginaVisivel });
+    };
+    document.addEventListener("mouseup", onMouseUp);
+    return () => document.removeEventListener("mouseup", onMouseUp);
+  }, [marcandoTexto, paginaVisivel]);
+
+  const salvarAnotacao = () => {
+    if (!formAnotacao) return;
+    const nova: AnotacaoPdf = {
+      id: `anot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      pagina: formAnotacao.pagina,
+      trecho: formAnotacao.trecho,
+      nota: notaAnotacao.trim() || undefined,
+      criadoEm: new Date().toISOString(),
+    };
+    onAtualizarPdf({ anotacoes: [...(pdf.anotacoes ?? []), nova] });
+    window.getSelection()?.removeAllRanges();
+    setFormAnotacao(null);
+    setNotaAnotacao("");
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast("✓ Anotação salva");
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000);
+  };
+
+  const excluirAnotacao = (id: string) => {
+    onAtualizarPdf({ anotacoes: (pdf.anotacoes ?? []).filter((a) => a.id !== id) });
+  };
+
   const definirFimConteudo = () => onAtualizarPdf({ paginaConteudoFim: paginaVisivel });
 
   const concluirLeitura = () => {
@@ -177,18 +266,6 @@ export default function LeitorPdf({
     if (!estado) return;
     onUpdateTopicos({ ...topicos, [chaveTopico]: { ...estado, estudado: true } });
   };
-
-  // painel de questões escalonadas (grupos A-D) do tópico do PDF — geração, marcação e "refazer"
-  const [painelQuestoesAberto, setPainelQuestoesAberto] = useState(false);
-  // painel de capítulos (PainelCapitulos.tsx) — os dois painéis dockam no mesmo lugar (ao lado do
-  // PDF em telas grandes), então são mutuamente exclusivos: abrir um fecha o outro
-  const [capitulosAberto, setCapitulosAberto] = useState(false);
-  const segundosQuestoesRef = useRef(0);
-  const [segundosQuestoes, setSegundosQuestoes] = useState(0);
-
-  // qual dos dois cronômetros está contando agora — alternado pelo botão na barra (só um conta
-  // por vez; "pausado" pausa o que estiver ativo no momento)
-  const [modoTimer, setModoTimer] = useState<"leitura" | "questoes">("leitura");
 
   useEffect(() => {
     if (pausado || modoTimer !== "questoes") return;
@@ -400,18 +477,27 @@ export default function LeitorPdf({
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <div className="min-w-0 flex-1">
+        {/* título/matéria/tópico — "informação" que o modo foco borra; passar o mouse revela de
+            novo temporariamente. O "parei na pág." já mostra a página atual do lado direito da
+            barra, então não duplica esse número aqui. */}
+        <div
+          className={`min-w-0 flex-1 transition-[filter,opacity] duration-200 ${modoFoco ? "blur-sm opacity-50 hover:blur-none hover:opacity-100" : ""}`}
+        >
           <div className="text-sm font-medium truncate">{pdf.nome}</div>
           <div className="text-[10px] text-muted-foreground truncate">{pdf.materia}{pdf.topicos?.[0] ? ` · ${pdf.topicos[0]}` : ""}</div>
         </div>
 
+        {/* modo foco — borra as informações do cabeçalho (título/matéria/progresso), só o PDF
+            fica sempre nítido; passar o mouse por cima do que foi borrado revela de novo */}
         <button
           type="button"
-          onClick={() => commitarPagina(paginaVisivel)}
-          title={`O "parei aqui" já atualiza sozinho conforme você lê — este botão só força marcar a página visível (${paginaVisivel}) agora`}
-          className="hidden sm:flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-muted text-muted-foreground hover:bg-accent transition-colors flex-shrink-0"
+          onClick={() => setModoFoco((v) => !v)}
+          title={modoFoco ? "Desativar modo foco" : "Modo foco — borra as informações do cabeçalho, só o PDF fica nítido"}
+          className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors flex-shrink-0 ${
+            modoFoco ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-accent"
+          }`}
         >
-          pág. {paginaVisivel} · Parei aqui
+          {modoFoco ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
 
         {/* fim do conteúdo — a partir daqui o PDF só tem questão, não teoria; é essa página (não
@@ -441,10 +527,11 @@ export default function LeitorPdf({
         )}
 
         {/* capítulos (opcional, com subcapítulos) — a Trilha sequencia a leitura por eles quando
-            definidos; dockado no mesmo lugar do painel de Questões, então fecha um ao abrir o outro */}
+            definidos; dockado no mesmo lugar dos painéis de Questões/Anotações, então fecha os
+            outros ao abrir */}
         <button
           type="button"
-          onClick={() => { setCapitulosAberto((v) => !v); setPainelQuestoesAberto(false); }}
+          onClick={() => { setCapitulosAberto((v) => !v); setPainelQuestoesAberto(false); setAnotacoesAberto(false); }}
           title="Capítulos do PDF — divida a leitura pra Trilha sequenciar, clique de novo pra fechar"
           className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors flex-shrink-0 ${
             (pdf.capitulos?.length ?? 0) > 0 ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -456,13 +543,38 @@ export default function LeitorPdf({
         {/* questões escalonadas do tópico (grupos A-D) — botões de criar cartão continuam ao lado */}
         <button
           type="button"
-          onClick={() => { setPainelQuestoesAberto((v) => !v); setCapitulosAberto(false); }}
+          onClick={() => { setPainelQuestoesAberto((v) => !v); setCapitulosAberto(false); setAnotacoesAberto(false); }}
           title="Questões do tópico (grupos A-D) — clique de novo pra fechar"
           className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors flex-shrink-0 ${
             pdf.questoes ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-accent"
           }`}
         >
           <ListChecks className="h-4 w-4" />
+        </button>
+
+        {/* marca-texto: fica ligado até clicar de novo — enquanto ativo, qualquer seleção de
+            texto no PDF (a TextLayer já é selecionável) abre o formulário de salvar como anotação */}
+        <button
+          type="button"
+          onClick={() => setMarcandoTexto((v) => !v)}
+          title={marcandoTexto ? "Marca texto ativo — selecione um trecho do PDF (clique de novo pra desativar)" : "Marca texto — selecione um trecho do PDF pra salvar como anotação"}
+          className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors flex-shrink-0 ${
+            marcandoTexto ? "text-amber-600 bg-amber-500/10" : "text-muted-foreground hover:text-foreground hover:bg-accent"
+          }`}
+        >
+          <Highlighter className="h-4 w-4" />
+        </button>
+
+        {/* caixa de anotações — todos os trechos marcados neste PDF */}
+        <button
+          type="button"
+          onClick={() => { setAnotacoesAberto((v) => !v); setCapitulosAberto(false); setPainelQuestoesAberto(false); }}
+          title="Anotações deste PDF — clique de novo pra fechar"
+          className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors flex-shrink-0 ${
+            (pdf.anotacoes?.length ?? 0) > 0 ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-accent"
+          }`}
+        >
+          <NotebookText className="h-4 w-4" />
         </button>
 
         {/* botões de criar cartão — direto na barra, sem precisar selecionar texto nem sair da
@@ -515,15 +627,35 @@ export default function LeitorPdf({
             >
               <ClipboardList className="h-3 w-3" />
             </button>
+            {/* pomodoro: só troca a EXIBIÇÃO (regressiva, vermelha, tomate) — o acumulado real
+                continua contando por baixo sem mudar nada no registro da sessão */}
+            <button
+              type="button"
+              onClick={() => setModoPomodoro((v) => !v)}
+              title={modoPomodoro ? "Voltar pro cronômetro normal (contagem crescente)" : "Modo pomodoro — contagem regressiva de 25min"}
+              className={`h-6 w-6 rounded-md flex items-center justify-center transition-colors text-sm leading-none ${
+                modoPomodoro ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground grayscale opacity-60 hover:opacity-100"
+              }`}
+            >
+              🍅
+            </button>
           </div>
           <div
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-sm ${
-              pausado ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              pausado
+                ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                : modoPomodoro
+                ? "bg-red-500/15 text-red-700 dark:text-red-400"
+                : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
             }`}
-            title={`Cronômetro de ${modoTimer === "leitura" ? "leitura" : "questões"} — salvo automaticamente nesta matéria/tópico ao fechar`}
+            title={
+              modoPomodoro
+                ? `Pomodoro (25min) — falta ${fmtCrono(segundosRestantesPomodoro)} pro fim do ciclo. O tempo total de estudo continua sendo salvo normalmente.`
+                : `Cronômetro de ${modoTimer === "leitura" ? "leitura" : "questões"} — salvo automaticamente nesta matéria/tópico ao fechar`
+            }
           >
-            <Clock className="h-3.5 w-3.5" />
-            {fmtCrono(modoTimer === "leitura" ? segundos : segundosQuestoes)}
+            {modoPomodoro ? <span className="text-sm leading-none">🍅</span> : <Clock className="h-3.5 w-3.5" />}
+            {fmtCrono(modoPomodoro ? segundosRestantesPomodoro : segundosAtivos)}
           </div>
           <button
             type="button"
@@ -540,7 +672,9 @@ export default function LeitorPdf({
           semana vira) e semana inteira da matéria, ao vivo (soma o cronômetro em cima do
           baseline). Ausente quando a trilha não está ativa ou a matéria não está na cadeia. */}
       {metaAoVivo && (
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-6 px-2 sm:px-4 py-1.5 flex-shrink-0 bg-card/60 border-b border-border">
+        <div
+          className={`flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-6 px-2 sm:px-4 py-1.5 flex-shrink-0 bg-card/60 border-b border-border transition-[filter,opacity] duration-200 ${modoFoco ? "blur-sm opacity-50 hover:blur-none hover:opacity-100" : ""}`}
+        >
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <span className="text-[10px] text-muted-foreground flex-shrink-0 w-11">Hoje</span>
             <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
@@ -607,6 +741,15 @@ export default function LeitorPdf({
             onFechar={() => setCapitulosAberto(false)}
           />
         )}
+
+        {anotacoesAberto && (
+          <PainelAnotacoes
+            anotacoes={pdf.anotacoes ?? []}
+            onIrParaPagina={(pagina) => visorRef.current?.scrollParaPagina(pagina)}
+            onExcluir={excluirAnotacao}
+            onFechar={() => setAnotacoesAberto(false)}
+          />
+        )}
       </div>
 
       {/* formulário manual do cartão — já travado na matéria/tópico do PDF, aberto pelos botões
@@ -619,6 +762,48 @@ export default function LeitorPdf({
           onSalvar={salvarCartaManual}
           onCancelar={() => setCartaForm(null)}
         />
+      )}
+
+      {/* formulário de salvar anotação — abre sozinho ao selecionar texto com o marca-texto
+          ativo; nota é opcional, o trecho selecionado já vem pré-preenchido (só leitura) */}
+      {formAnotacao && (
+        <div
+          className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4"
+          onClick={() => { setFormAnotacao(null); setNotaAnotacao(""); }}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-2xl w-full max-w-sm p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Highlighter className="h-4 w-4 text-amber-500" /> Salvar anotação — pág. {formAnotacao.pagina}
+            </div>
+            <blockquote className="text-xs text-foreground border-l-2 border-amber-400 pl-2 italic max-h-32 overflow-y-auto">
+              &quot;{formAnotacao.trecho}&quot;
+            </blockquote>
+            <textarea
+              value={notaAnotacao}
+              onChange={(e) => setNotaAnotacao(e.target.value)}
+              placeholder="Nota (opcional)"
+              rows={2}
+              autoFocus
+              className="w-full text-sm border border-border rounded-md px-3 py-2 bg-background text-foreground resize-none focus:outline-none focus:border-primary"
+            />
+            <div className="flex items-center gap-2 justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => { setFormAnotacao(null); setNotaAnotacao(""); }}
+                className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-foreground hover:bg-accent transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={salvarAnotacao}
+                className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors"
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* aviso de fim de conteúdo indicado (atividade da Trilha com página final mapeada) —
