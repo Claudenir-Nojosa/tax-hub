@@ -77,9 +77,15 @@ export async function obterArquivoPdf(id: string): Promise<Blob | null> {
 }
 
 export async function excluirArquivoPdf(id: string): Promise<void> {
-  await fetch(`/api/estudo/biblioteca/${id}/arquivo`, { method: "DELETE" }).catch(() => {
-    /* best-effort — se falhar, fica um objeto órfão no Storage, inofensivo */
-  })
+  // best-effort mesmo (quem chama já removeu o registro da UI na hora, otimista) — mas loga a
+  // falha em vez de engolir silenciosamente: um objeto órfão que ninguém sabe que existe é o
+  // motivo mais provável de "apaguei mas o Storage não abaixou de tamanho".
+  try {
+    const res = await fetch(`/api/estudo/biblioteca/${id}/arquivo`, { method: "DELETE" })
+    if (!res.ok) console.error(`[pdf-storage] Falha ao excluir arquivo ${id} do Storage (${res.status}) — pode ter ficado órfão`)
+  } catch (e) {
+    console.error(`[pdf-storage] Erro de rede ao excluir arquivo ${id} do Storage — pode ter ficado órfão`, e)
+  }
 }
 
 // tenta contar as páginas do PDF no próprio navegador (pra preencher "Total de págs." sozinho ao
