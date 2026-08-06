@@ -127,9 +127,10 @@ export function CorpoBloco({
         </div>
         {/* continua visível mesmo com concluidaAtividade=true — esse flag só libera a PRÓXIMA
             matéria da cadeia (ver badge "tempo batido" acima), não significa que a leitura desta
-            acabou; quem manda aqui é só `concluido` (meta da semana), que troca pro botão de
-            "Marcar como estudado" logo abaixo */}
-        {!b.concluido && onIrParaBiblioteca && (
+            acabou; quem manda aqui é `concluido` (meta da semana) E capitulosPendentes (ainda tem
+            capítulo não lido) juntos — bater a meta de horas com capítulo faltando continua
+            oferecendo "Continuar a Leitura", não "Marcar como estudado" */}
+        {(!b.concluido || capitulosPendentes) && onIrParaBiblioteca && (
           <button type="button" onClick={abrirLeitor} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-medium flex items-center gap-1">
             {b.minutosFeitosSemana > 0 ? "Continuar a Leitura" : "Ler PDF"} <ArrowRight className="h-3 w-3" />
           </button>
@@ -138,14 +139,6 @@ export function CorpoBloco({
           <button type="button" onClick={onMarcarEstudado} className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium flex items-center gap-1">
             <Check className="h-3 w-3" /> Marcar como estudado
           </button>
-        )}
-        {b.concluido && capitulosPendentes && (
-          <span
-            className="flex-shrink-0 text-[10px] text-muted-foreground text-right max-w-[110px]"
-            title="Tempo semanal batido, mas ainda tem capítulo não lido — termine a leitura pra poder marcar como estudado"
-          >
-            faltam capítulos pra marcar como estudado
-          </span>
         )}
       </div>
       {mostrarSubtarefas && (
