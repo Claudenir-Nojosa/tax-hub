@@ -103,10 +103,12 @@ export function proximaAtividade(meta: MetaSemana): ProximaAtividade | null {
   return null;
 }
 
-// qual PNG do Gustavo (coruja mascote, /public/{humor}.png) ilustra a bolha — decidido junto com
-// o texto em gerarMensagemGustavo, pela mesma prioridade de cenário (nunca escolhido à parte,
-// senão a cara do Gustavo poderia dessincronizar do que ele está dizendo)
-export type HumorGustavo = "feliz" | "nervoso" | "triste" | "normal";
+// qual PNG do Gandalf (/public/{humor}.png) ilustra a bolha — decidido junto com o texto em
+// gerarMensagemGustavo, pela mesma prioridade de cenário (nunca escolhido à parte, senão a cara
+// do Gandalf poderia dessincronizar do que ele está dizendo). Mapeamento: dormindo = inatividade
+// (2+ dias parado), raiva = atrasado na meta desta semana, triste = tendência fraca em várias
+// semanas seguidas, feliz = tudo em dia, lendo = fluxo normal de estudo (o caso mais comum).
+export type HumorGustavo = "feliz" | "dormindo" | "triste" | "raiva" | "lendo";
 
 export interface MensagemGustavo {
   titulo: string;
@@ -144,7 +146,7 @@ export function gerarMensagemGustavo(
     return {
       titulo: `${saudacao}Cadê você? 👀`,
       corpo: `Já fazem ${diasSemAtividade} dias sem nenhuma atividade registrada. Bora retomar hoje?`,
-      humor: "triste",
+      humor: "dormindo",
     };
   }
 
@@ -152,7 +154,7 @@ export function gerarMensagemGustavo(
     return {
       titulo: `${saudacao}Você está atrasado na meta desta semana`,
       corpo: `Só ${meta.percCumpridoSemana}% feito até agora — nos dias que restam, dá uns ${fmtHoras(meta.ritmoNecessarioMinDia)}/dia pra recuperar.`,
-      humor: "nervoso",
+      humor: "raiva",
     };
   }
 
@@ -163,7 +165,7 @@ export function gerarMensagemGustavo(
     return {
       titulo: `${saudacao}Vamos ajustar o ritmo?`,
       corpo: `Nas últimas ${ultimasSemanas.length} semanas você fechou em média ${media}% da meta — talvez valha reduzir as horas semanais no Ciclo pra ficar mais sustentável.`,
-      humor: "nervoso",
+      humor: "triste",
     };
   }
 
@@ -189,7 +191,7 @@ export function gerarMensagemGustavo(
     return {
       titulo: `${saudacao}Sua atividade desta semana é:`,
       corpo: `${proxima.titulo} — ${proxima.subtitulo}${notaComparativa}`,
-      humor: "normal",
+      humor: "lendo",
     };
   }
   // estudo já em andamento (não é "vamos começar" — já tem minutos/capítulos feitos nesta
@@ -201,13 +203,13 @@ export function gerarMensagemGustavo(
     return {
       titulo: `${saudacao}Continue em ${proxima.titulo}`,
       corpo: `Já fez ${fmtHoras(feitos)} de ${fmtHoras(alvo)} nesta atividade — ${onde}${notaComparativa}`,
-      humor: "normal",
+      humor: "lendo",
     };
   }
   return {
     titulo: `${saudacao}Vi que você ainda não fez:`,
     corpo: `${proxima.titulo} · ${proxima.subtitulo}${notaComparativa}`,
-    humor: "normal",
+    humor: "lendo",
   };
 }
 
