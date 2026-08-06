@@ -31,6 +31,8 @@ model User {
   concursos        Concurso[]
   concursoAcessos     ConcursoAcesso[]
   concursoProgressos  ConcursoProgressoUsuario[]
+  mensagensEnviadas    Mensagem[] @relation("MensagensEnviadas")
+  mensagensRecebidas   Mensagem[] @relation("MensagensRecebidas")
 
   username        String?   @unique
 
@@ -252,6 +254,22 @@ model PdfConcurso {
   updatedAt         DateTime @updatedAt
 
   @@index([concursoId])
+}
+
+// "Mandar Incentivo" — mensagem direta de um usuário pra outro (aba Pré-Aprovados do Estudo).
+// Restrita no backend a quem compartilha pelo menos um ConcursoAcesso (não é uma DM genérica do
+// app inteiro, só entre quem estuda junto pro mesmo concurso).
+model Mensagem {
+  id             String   @id @default(cuid())
+  remetenteId    String
+  remetente      User     @relation("MensagensEnviadas", fields: [remetenteId], references: [id], onDelete: Cascade)
+  destinatarioId String
+  destinatario   User     @relation("MensagensRecebidas", fields: [destinatarioId], references: [id], onDelete: Cascade)
+  texto          String
+  lida           Boolean  @default(false)
+  criadoEm       DateTime @default(now())
+
+  @@index([destinatarioId, lida])
 }
 
 model DadosXmlReforma {

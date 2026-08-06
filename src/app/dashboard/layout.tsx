@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Sidebar from "@/components/shared/Sidebar";
 import { ThemeToggle } from "@/components/shared/themeToggle";
+import NotificationBell from "@/components/shared/NotificationBell";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AuthGuard from "@/components/shared/AuthGuard";
@@ -43,10 +44,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <h1 className="text-lg font-semibold text-foreground">
               TAX Hub
             </h1>
-            <ThemeToggle />
+            <div className="flex items-center gap-1">
+              <NotificationBell />
+              <ThemeToggle />
+            </div>
           </header>
 
-          <div className="hidden lg:block fixed top-4 right-6 z-30">
+          <div className="hidden lg:flex items-center gap-1 fixed top-4 right-6 z-30">
+            <NotificationBell />
             <ThemeToggle />
           </div>
 

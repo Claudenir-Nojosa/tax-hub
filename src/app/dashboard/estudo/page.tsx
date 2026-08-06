@@ -64,7 +64,7 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "calendario", label: "Calendário", icon: CalendarDays },
   { id: "relatorios", label: "Relatórios", icon: BarChart2 },
   { id: "cartas", label: "Cartas", icon: Layers },
-  { id: "concurseiros", label: "Concurseiros", icon: Users },
+  { id: "concurseiros", label: "Pré-Aprovados", icon: Users },
 ];
 
 // materiasConcurso: matérias REAIS do concurso ativo — sem isso o configCiclo (peso/prioridade/
