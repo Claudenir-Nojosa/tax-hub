@@ -18,7 +18,7 @@ import FormPdf from "./FormPdf";
 import FormPdfLote from "./FormPdfLote";
 import SugestaoLoteModal from "./SugestaoLoteModal";
 import PdfRow from "./PdfRow";
-import LeitorPdf from "./LeitorPdf";
+import LeitorPdf, { type MetaEstudoMateria } from "./LeitorPdf";
 
 // Biblioteca de PDFs (ex.: aulas do Estratégia): anexe o ARQUIVO e leia dentro do próprio site
 // num leitor FULLSCREEN limpo (só o PDF + barra fina com "parei na pág." e cronômetro), com
@@ -76,6 +76,8 @@ interface Props {
   // trilha dinâmica: minutos que faltam HOJE pra fechar o bloco de estudo de cada matéria — o
   // leitor avisa em tempo real quando a sessão atual cruza esse restante ("meta do dia feita!")
   metaMinutosRestantes?: Record<string, number>;
+  // progresso de horas por matéria (atividade do dia + semana) — o leitor mostra 2 barras ao vivo
+  metasEstudo?: Record<string, MetaEstudoMateria>;
   // pedido de abertura vindo de fora (botão "Ler PDF" da Trilha, com página mapeada pro tópico) —
   // consumido uma vez (abre o leitor + onAberturaConsumida) e não de novo até um pedido novo
   aberturaSolicitada?: AberturaPdfSolicitada | null;
@@ -88,7 +90,7 @@ interface Props {
 
 export default function BibliotecaTab({
   concursoId, pdfs, calendario, onChange, materiasConcurso, topicos, onUpdateTopicos, onRegistrarSessao,
-  onAdicionarCartas, metaMinutosRestantes, aberturaSolicitada, onAberturaConsumida, capitulosConcluidos,
+  onAdicionarCartas, metaMinutosRestantes, metasEstudo, aberturaSolicitada, onAberturaConsumida, capitulosConcluidos,
 }: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
     materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
@@ -524,6 +526,7 @@ export default function BibliotecaTab({
           onRegistrarSessao={onRegistrarSessao}
           onAdicionarCartas={onAdicionarCartas}
           minutosMetaRestantes={metaMinutosRestantes?.[lendo.materia]}
+          metaEstudo={metasEstudo?.[lendo.materia]}
           paginaAbertura={aberturaAtual?.paginaInicio}
           paginaFimAlvo={aberturaAtual?.paginaFim}
           onFechar={fecharLeitor}

@@ -449,20 +449,30 @@ export default function EstudoPage() {
     return filtrarTopicosExcluidos(materias, state.topicosExcluidos);
   }, [concursoAtivo?.materias, state.topicosExcluidos]);
 
-  // minutos que faltam pra fechar o bloco de estudo da SEMANA de cada matéria (trilha dinâmica) —
-  // o leitor de PDF usa isso pra avisar "meta da semana concluída" no meio da sessão (dispara bem
-  // mais raro que o antigo "meta do dia", já que o alvo agora é semanal)
-  const metaMinutosRestantes = (() => {
+  // progresso de horas por matéria (trilha dinâmica), nos dois alvos que a Trilha já mostra —
+  // "nesta atividade" (trecho do tamanho de hoje, não reseta ao virar o dia) e "na semana" (alvo
+  // cheio da matéria) — usado tanto pro toast de "meta batida" no leitor (metaMinutosRestantes,
+  // derivado do alvo da semana) quanto pras 2 barras de progresso dentro do leitor (metasEstudo)
+  const { metaMinutosRestantes, metasEstudo } = (() => {
     const t = state.trilhaDinamica;
-    if (!t?.ativa) return undefined;
+    if (!t?.ativa) return { metaMinutosRestantes: undefined, metasEstudo: undefined };
     const meta = computarMetaSemana({
       trilha: t, configCiclo: state.configCiclo, materiasAtivas: materiasFiltradas ?? MATERIAS,
       topicos: state.topicos, calendario: state.calendario, pdfs: state.pdfs,
       blocos: state.blocos, capitulosConcluidos: state.capitulosConcluidos,
     });
-    const rec: Record<string, number> = {};
-    for (const b of meta.blocos) rec[b.materia] = Math.max(0, b.minutosAlvoSemana - b.minutosFeitosSemana);
-    return rec;
+    const restantes: Record<string, number> = {};
+    const metas: Record<string, { atividadeFeitos: number; atividadeAlvo: number; semanaFeitos: number; semanaAlvo: number }> = {};
+    for (const b of meta.blocos) {
+      restantes[b.materia] = Math.max(0, b.minutosAlvoSemana - b.minutosFeitosSemana);
+      metas[b.materia] = {
+        atividadeFeitos: b.minutosFeitosSemana,
+        atividadeAlvo: b.minutosAlvoAtividade,
+        semanaFeitos: b.minutosFeitosSemana,
+        semanaAlvo: b.minutosAlvoSemana,
+      };
+    }
+    return { metaMinutosRestantes: restantes, metasEstudo: metas };
   })();
 
   if (!loaded) {
@@ -606,6 +616,7 @@ export default function EstudoPage() {
               }
               onAdicionarCartas={adicionarCartas}
               metaMinutosRestantes={metaMinutosRestantes}
+              metasEstudo={metasEstudo}
               aberturaSolicitada={aberturaPdf}
               onAberturaConsumida={() => setAberturaPdf(null)}
               capitulosConcluidos={state.capitulosConcluidos}

@@ -9,7 +9,19 @@ import {
   type Alternativa, type AtividadeTipo, type Carta, type CapituloPdf, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
 } from "@/lib/estudo-data";
 import { resolverCapitulos } from "@/lib/trilha-dinamica";
+import { fmtHoras } from "../trilha/trilha-ui";
 import { fmtCrono, novaCartaManual, sincronizarCadernoComQuestoes } from "./biblioteca-utils";
+
+// progresso de horas da matéria do PDF — "atividade" é o trecho do tamanho de hoje (não reseta
+// ao virar o dia, só quando a semana vira), "semana" é o alvo cheio da matéria; mesma dupla que
+// já aparece na Trilha (CorpoBloco: "Nesta atividade" + "na semana"), agora também dentro do
+// leitor, ao vivo (soma o cronômetro da sessão em cima do baseline vindo da abertura)
+export interface MetaEstudoMateria {
+  atividadeFeitos: number;
+  atividadeAlvo: number;
+  semanaFeitos: number;
+  semanaAlvo: number;
+}
 import InputPaginaLeitor from "./InputPaginaLeitor";
 import NovoCartaoForm, { TIPO_CARTAO_CONFIG } from "./NovoCartaoForm";
 import PainelCapitulos from "./PainelCapitulos";
@@ -23,7 +35,7 @@ const VisorPdf = dynamic(() => import("./VisorPdf"), { ssr: false });
 
 export default function LeitorPdf({
   pdf, blob, topicos, onAtualizarPagina, onAtualizarPdf, onUpdateTopicos, onRegistrarSessao,
-  onAdicionarCartas, minutosMetaRestantes, paginaAbertura, paginaFimAlvo, onFechar, capitulosConcluidos,
+  onAdicionarCartas, minutosMetaRestantes, metaEstudo, paginaAbertura, paginaFimAlvo, onFechar, capitulosConcluidos,
 }: {
   pdf: PdfEstudo;
   blob: Blob;
@@ -37,6 +49,9 @@ export default function LeitorPdf({
   // trilha dinâmica: minutos que faltavam (na abertura do leitor) pro bloco de hoje desta
   // matéria — quando o cronômetro da sessão cruza esse valor, avisa que a meta do dia foi batida
   minutosMetaRestantes?: number;
+  // progresso de horas (atividade + semana) da matéria do PDF — barra ao vivo dentro do leitor;
+  // ausente = trilha não ativa ou matéria fora da cadeia da semana (sem meta pra mostrar)
+  metaEstudo?: MetaEstudoMateria;
   // deep link vindo da Trilha (bloco com PDF+intervalo mapeado pro tópico): abre já nessa página
   // em vez de pdf.paginaAtual, e avisa quando o usuário passa de paginaFimAlvo. Ausente = abertura
   // genérica (comportamento de sempre).
@@ -129,6 +144,17 @@ export default function LeitorPdf({
   const alvoLeitura = pdf.paginaConteudoFim ?? pdf.totalPaginas;
   const chaveTopico = topicoAtual ? topicoKey(pdf.materia, topicoAtual) : null;
   const jaEstudado = chaveTopico ? topicos[chaveTopico]?.estudado === true : false;
+
+  // barras de progresso de horas (atividade do dia + semana) — soma o cronômetro AO VIVO
+  // (segundos, já tickando a cada 1s) em cima do baseline vindo da abertura do leitor, igual ao
+  // toast de "meta batida" logo abaixo faz com metaRestanteRef
+  const minutosSessaoLeitura = Math.floor(segundos / 60);
+  const metaAoVivo = metaEstudo && {
+    atividadeFeitos: Math.min(metaEstudo.atividadeAlvo, metaEstudo.atividadeFeitos + minutosSessaoLeitura),
+    atividadeAlvo: metaEstudo.atividadeAlvo,
+    semanaFeitos: Math.min(metaEstudo.semanaAlvo, metaEstudo.semanaFeitos + minutosSessaoLeitura),
+    semanaAlvo: metaEstudo.semanaAlvo,
+  };
 
   const definirFimConteudo = () => onAtualizarPdf({ paginaConteudoFim: paginaVisivel });
 
@@ -277,13 +303,20 @@ export default function LeitorPdf({
       const minutosQuestoes = Math.round(segundosQuestoesRef.current / 60);
       onRegistrarSessao(minutosQuestoes, "questoes", p.materia, p.topicos?.[0], undefined, `Questões: ${p.nome}`);
     }
+    // consome a entrada extra empurrada no histórico ao abrir (ver useEffect do popstate) — sem
+    // isso sobraria um "voltar" fantasma que não faz nada da próxima vez que o usuário navegar
+    fechandoDeliberadamenteRef.current = true;
+    window.history.back();
     onFechar();
   };
-  // Esc é fácil de apertar sem querer (hábito de fechar outra coisa) — em vez de fechar direto,
-  // só ABRE a confirmação; fechar de fato exige clique em "Sair" (2º Esc cancela a confirmação em
-  // vez de confirmar a saída, mesma convenção do resto do app pra diálogos bloqueantes). O botão
-  // de voltar no header continua fechando direto (clique já é uma ação deliberada).
+  // NENHUMA forma de sair do leitor fecha direto — Esc, seta de voltar do header, botão/gesto de
+  // voltar do navegador: todas só abrem esta confirmação. Fechar de fato exige clique em "Sair"
+  // (2º Esc cancela a confirmação em vez de confirmar a saída, mesma convenção do resto do app
+  // pra diálogos bloqueantes). É só depois de confirmado que o tempo estudado é registrado.
   const [confirmSair, setConfirmSair] = useState(false);
+  // fechamento DELIBERADO (usuário confirmou "Sair") — o popstate dessa saída não deve reabrir a
+  // confirmação de novo (ver useEffect do histórico abaixo)
+  const fechandoDeliberadamenteRef = useRef(false);
 
   // trava o scroll do body enquanto o leitor está aberto + Esc abre/fecha a confirmação de saída
   useEffect(() => {
@@ -300,6 +333,35 @@ export default function LeitorPdf({
     };
   }, []);
 
+  // botão/gesto de VOLTAR do navegador: empurra uma entrada extra no histórico ao abrir, pra
+  // interceptar o "voltar" (que dispara popstate consumindo essa entrada) e reabrir a
+  // confirmação em vez de deixar a navegação acontecer de verdade — sem isso, o navegador sairia
+  // da página inteira do Estudo e o tempo da sessão se perdia sem nunca chamar encerrarSessao.
+  // Fechamento deliberado (confirmado no popup) também passa por history.back() pra consumir essa
+  // entrada extra, senão sobraria um "voltar" fantasma que não faz nada da próxima vez.
+  useEffect(() => {
+    window.history.pushState({ estudoLeitorAberto: true }, "");
+    const onPopState = () => {
+      if (fechandoDeliberadamenteRef.current) return;
+      window.history.pushState({ estudoLeitorAberto: true }, "");
+      setConfirmSair(true);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  // fechar a aba, atualizar ou digitar outra URL: o navegador mostra o próprio aviso nativo (não
+  // dá pra customizar o texto por restrição de segurança de todo browser moderno) — sem isso,
+  // essas saídas não passavam por NENHUMA confirmação nem registravam o tempo estudado
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
+
   // portado direto pro <body> — algum ancestral do shell do dashboard (sidebar/scroll container)
   // quebrava o containing-block do position:fixed do leitor, deixando uma tira do topo da página
   // por baixo (o hero verde da Biblioteca) visível acima da barra do leitor; portar pro body
@@ -312,8 +374,8 @@ export default function LeitorPdf({
       <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-4 h-12 flex-shrink-0 bg-card text-foreground border-b border-border">
         <button
           type="button"
-          onClick={encerrarSessao}
-          title="Fechar o leitor (a sessão do cronômetro é salva na matéria/tópico)"
+          onClick={() => setConfirmSair(true)}
+          title="Sair do leitor (pede confirmação antes de registrar o tempo estudado)"
           className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors flex-shrink-0"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -454,6 +516,38 @@ export default function LeitorPdf({
         </div>
       </div>
 
+      {/* horas estudadas x meta — atividade de hoje (não reseta ao virar o dia, só quando a
+          semana vira) e semana inteira da matéria, ao vivo (soma o cronômetro em cima do
+          baseline). Ausente quando a trilha não está ativa ou a matéria não está na cadeia. */}
+      {metaAoVivo && (
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-6 px-2 sm:px-4 py-1.5 flex-shrink-0 bg-card/60 border-b border-border">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <span className="text-[10px] text-muted-foreground flex-shrink-0 w-11">Hoje</span>
+            <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${metaAoVivo.atividadeFeitos >= metaAoVivo.atividadeAlvo ? "bg-emerald-500" : "bg-primary/60"}`}
+                style={{ width: `${metaAoVivo.atividadeAlvo > 0 ? Math.min(100, Math.round((metaAoVivo.atividadeFeitos / metaAoVivo.atividadeAlvo) * 100)) : 0}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-muted-foreground tabular-nums flex-shrink-0 whitespace-nowrap">
+              {fmtHoras(metaAoVivo.atividadeFeitos)}/{fmtHoras(metaAoVivo.atividadeAlvo)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <span className="text-[10px] text-muted-foreground flex-shrink-0 w-11">Semana</span>
+            <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${metaAoVivo.semanaFeitos >= metaAoVivo.semanaAlvo ? "bg-emerald-500" : "bg-primary/60"}`}
+                style={{ width: `${metaAoVivo.semanaAlvo > 0 ? Math.min(100, Math.round((metaAoVivo.semanaFeitos / metaAoVivo.semanaAlvo) * 100)) : 0}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-muted-foreground tabular-nums flex-shrink-0 whitespace-nowrap">
+              {fmtHoras(metaAoVivo.semanaFeitos)}/{fmtHoras(metaAoVivo.semanaAlvo)}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* o PDF em si (pdf.js com camada de texto) — ocupa TODO o resto da tela, com o painel de
           questões dockado ao lado em telas grandes (lg+) quando aberto (ver PainelQuestoes.tsx —
           em telas menores ele continua como overlay por cima, sem espaço pros dois lado a lado).
@@ -545,9 +639,10 @@ export default function LeitorPdf({
         </div>
       )}
 
-      {/* confirmação de saída (Esc) — mesmo padrão bloqueante do aviso de fim de página; clicar
-          fora ou "Cancelar" só fecha o card, sem sair. O botão de voltar do header não passa por
-          aqui (clique já é deliberado) — só o Esc, fácil de apertar sem querer. */}
+      {/* confirmação de saída — único jeito de sair de verdade do leitor (Esc, seta de voltar do
+          header, botão/gesto de voltar do navegador todos abrem isto em vez de fechar direto).
+          Mesmo padrão bloqueante do aviso de fim de página; clicar fora ou "Cancelar" só fecha o
+          card, sem sair — o tempo estudado só é registrado depois de confirmado aqui. */}
       {confirmSair && (
         <div
           className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4"
