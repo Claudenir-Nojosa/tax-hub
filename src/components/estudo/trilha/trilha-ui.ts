@@ -282,13 +282,20 @@ export function montarResumoSemanaIA(
 // `humor` NUNCA passa pela IA, vem sempre direto do `base` atual (ver useMensagemGustavoIA).
 const cacheMensagemGustavoIA = new Map<string, { titulo: string; corpo: string }>();
 
-// pega a mensagem DETERMINÍSTICA de gerarMensagemGustavo (sempre pronta na hora, sem depender de
-// rede — mostrada até a análise da IA chegar, e continua valendo pra sempre se a chamada falhar,
-// sem tela quebrada) e manda um resumo ESTRUTURADO da semana pra /api/ai/gustavo-mensagem analisar
-// de verdade e escrever titulo+corpo do zero, grounded nesses fatos (nunca inventa número/nome que
-// não esteja no resumo — ver prompt da rota). `humor` (qual PNG mostrar) não passa pela IA, é
-// sempre o de `base`, fresco a cada render, pra nunca dessincronizar da cara do personagem com o
-// que ele está de fato dizendo agora.
+// placeholder mostrado enquanto a análise da IA ainda não chegou — NÃO é a mensagem determinística
+// (pedido explícito do usuário: a versão de gerarMensagemGustavo estava aparecendo por uns
+// segundos e depois trocando pela da IA, um "flash" perceptível; agora só aparece texto quando é
+// a versão final, de um jeito ou de outro)
+const CARREGANDO: { titulo: string; corpo: string } = { titulo: "·····", corpo: "·····" };
+
+// pega a mensagem DETERMINÍSTICA de gerarMensagemGustavo (calculada na hora, sem depender de
+// rede) só como FALLBACK — mostrada se a chamada da IA falhar, nunca enquanto ela ainda está em
+// andamento (nesse meio tempo mostra CARREGANDO, sem "flash" de um texto sendo trocado pelo
+// outro). Manda um resumo ESTRUTURADO da semana pra /api/ai/gustavo-mensagem analisar de verdade
+// e escrever titulo+corpo do zero, grounded nesses fatos (nunca inventa número/nome que não
+// esteja no resumo — ver prompt da rota). `humor` (qual PNG mostrar) não passa pela IA, é sempre
+// o de `base`, fresco a cada render, pra nunca dessincronizar da cara do personagem com o que ele
+// está de fato dizendo agora.
 export function useMensagemGustavoIA(
   base: MensagemGustavo,
   meta: MetaSemana | null,
@@ -297,7 +304,7 @@ export function useMensagemGustavoIA(
   const resumo = meta ? montarResumoSemanaIA(meta, opts) : null;
   const chave = resumo ? JSON.stringify(resumo) : `${base.titulo}|||${base.corpo}`;
   const [texto, setTexto] = useState<{ titulo: string; corpo: string }>(
-    () => cacheMensagemGustavoIA.get(chave) ?? { titulo: base.titulo, corpo: base.corpo }
+    () => cacheMensagemGustavoIA.get(chave) ?? CARREGANDO
   );
 
   useEffect(() => {
@@ -310,7 +317,7 @@ export function useMensagemGustavoIA(
       setTexto(cacheada);
       return;
     }
-    setTexto({ titulo: base.titulo, corpo: base.corpo });
+    setTexto(CARREGANDO);
     let cancelado = false;
     fetch("/api/ai/gustavo-mensagem", {
       method: "POST",
@@ -319,12 +326,19 @@ export function useMensagemGustavoIA(
     })
       .then((r) => (r.ok ? (r.json() as Promise<{ titulo?: string; corpo?: string }>) : null))
       .then((data) => {
-        if (cancelado || !data?.titulo || !data?.corpo) return;
+        if (cancelado) return;
+        if (!data?.titulo || !data?.corpo) {
+          // IA falhou (ou respondeu vazio) — só agora cai pra determinística, nunca antes disso
+          setTexto({ titulo: base.titulo, corpo: base.corpo });
+          return;
+        }
         const reescrita = { titulo: data.titulo, corpo: data.corpo };
         cacheMensagemGustavoIA.set(chave, reescrita);
         setTexto(reescrita);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelado) setTexto({ titulo: base.titulo, corpo: base.corpo });
+      });
     return () => {
       cancelado = true;
     };
