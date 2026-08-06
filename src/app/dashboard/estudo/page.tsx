@@ -28,7 +28,7 @@ import {
 } from "@/lib/estudo-data";
 import { computarMetaSemana, chaveCapitulo } from "@/lib/trilha-dinamica";
 import type { AberturaPdfSolicitada } from "@/components/estudo/trilha/TrilhaLinhas";
-import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks } from "lucide-react";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks, Users } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -47,11 +47,12 @@ const TrilhaTab = dynamic(() => import("@/components/estudo/TrilhaTab"), { ssr: 
 const BibliotecaTab = dynamic(() => import("@/components/estudo/biblioteca/BibliotecaTab"), { ssr: false });
 const TimerEstudo = dynamic(() => import("@/components/estudo/timer/TimerEstudo"), { ssr: false });
 const CompararEditaisTab = dynamic(() => import("@/components/estudo/CompararEditaisTab"), { ssr: false });
+const ConcurseirosTab = dynamic(() => import("@/components/estudo/ConcurseirosTab"), { ssr: false });
 
 const storageKey = (concursoId: string | null) =>
   concursoId ? `taxhub_estudo_c_${concursoId}` : "taxhub_estudo_v1";
 
-type Tab = "dashboard" | "edital" | "questoes" | "biblioteca" | "ciclo" | "trilha" | "calendario" | "relatorios" | "cartas" | "resumos" | "comparar";
+type Tab = "dashboard" | "edital" | "questoes" | "biblioteca" | "ciclo" | "trilha" | "calendario" | "relatorios" | "cartas" | "resumos" | "comparar" | "concurseiros";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -63,6 +64,7 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "calendario", label: "Calendário", icon: CalendarDays },
   { id: "relatorios", label: "Relatórios", icon: BarChart2 },
   { id: "cartas", label: "Cartas", icon: Layers },
+  { id: "concurseiros", label: "Concurseiros", icon: Users },
 ];
 
 // materiasConcurso: matérias REAIS do concurso ativo — sem isso o configCiclo (peso/prioridade/
@@ -663,6 +665,10 @@ export default function EstudoPage() {
           )}
 
           {activeTab === "comparar" && <CompararEditaisTab />}
+
+          {activeTab === "concurseiros" && (
+            <ConcurseirosTab concursoId={concursoAtivo?.id ?? ""} />
+          )}
         </div>
       </div>
     </div>
