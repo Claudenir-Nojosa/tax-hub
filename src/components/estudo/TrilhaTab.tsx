@@ -389,6 +389,7 @@ export default function TrilhaTab({
                     onIrParaBiblioteca={onIrParaBiblioteca}
                     onMarcarEstudado={() => marcarTopicoEstudado(b.materia, b.topico)}
                     onToggleCapitulo={onToggleCapitulo}
+                    pdf={b.pdfId ? pdfs.find((p) => p.id === b.pdfId) : undefined}
                   />
                 ))}
               </div>

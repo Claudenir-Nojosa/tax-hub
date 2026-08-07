@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { ArrowRight, Check, CheckCircle2, ChevronDown, Circle, Clock, ExternalLink, Lock, Trophy } from "lucide-react";
 import {
-  GRUPO_LABEL, GRUPO_BADGE, type MateriaConcurso, type MateriaDef,
+  GRUPO_LABEL, GRUPO_BADGE, type MateriaConcurso, type MateriaDef, type PdfEstudo,
 } from "@/lib/estudo-data";
 import {
   type AnaliseMateria, type BlocoEstudoSemana, type QuestaoLiberada,
   type ReforcoGrupo, type ReforcoImediatoPendente, type Revisao30, type RevisaoLinkPendente,
 } from "@/lib/trilha-dinamica";
 import { resolverCorMateria, fmtHoras } from "./trilha-ui";
+import { alvoLeituraPdf } from "../biblioteca/biblioteca-utils";
 import ProgressRing from "../ui/ProgressRing";
 
 // Linhas/corpos usados dentro das seções da Trilha (TrilhaTab.tsx) — extraído pra cá pra manter
@@ -33,16 +34,22 @@ export interface AberturaPdfSolicitada {
 // ─── Conteúdo: bloco de leitura de uma matéria ───────────────────────────────
 
 export function CorpoBloco({
-  b, materiasAtivas, onIrParaBiblioteca, onMarcarEstudado, onToggleCapitulo,
+  b, materiasAtivas, onIrParaBiblioteca, onMarcarEstudado, onToggleCapitulo, pdf,
 }: {
   b: BlocoEstudoSemana;
   materiasAtivas: (MateriaDef | MateriaConcurso)[];
   onIrParaBiblioteca?: (abertura?: AberturaPdfSolicitada) => void;
   onMarcarEstudado: () => void;
   onToggleCapitulo?: (pdfId: string, paginaInicio: number) => void;
+  // PDF por trás de b.pdfId (TrilhaTab já tem a lista inteira de PdfEstudo, passa o achado aqui) —
+  // pro "parei na pág. X · Y% lido", que é sobre o PDF inteiro, diferente de `perc` abaixo (tempo
+  // da meta da SEMANA, não páginas)
+  pdf?: Pick<PdfEstudo, "paginaAtual" | "totalPaginas" | "paginaConteudoFim">;
 }) {
   const cor = resolverCorMateria(b.materia, materiasAtivas);
   const perc = Math.min(100, Math.round((b.minutosFeitosSemana / Math.max(1, b.minutosAlvoSemana)) * 100));
+  const alvoPaginas = pdf ? alvoLeituraPdf(pdf) : 0;
+  const percLido = pdf && alvoPaginas > 0 ? Math.round((Math.min(pdf.paginaAtual, alvoPaginas) / alvoPaginas) * 100) : null;
   const abrirLeitor = () => {
     if (!onIrParaBiblioteca) return;
     onIrParaBiblioteca(
@@ -109,6 +116,13 @@ export function CorpoBloco({
             <div className="text-[11px] text-primary truncate mt-0.5" title={b.capituloLabel}>
               {b.capituloLabel}
               {b.paginaInicio && b.paginaFim && ` (págs. ${b.paginaInicio}–${b.paginaFim})`}
+            </div>
+          )}
+          {/* % do PDF INTEIRO já lido + página onde parou — diferente do trecho/capítulo do bloco
+              acima, que é só o pedaço que essa atividade cobre */}
+          {percLido !== null && (
+            <div className="text-[11px] text-muted-foreground mt-0.5 tabular-nums">
+              Parei na pág. {pdf!.paginaAtual} · {percLido}% lido do PDF
             </div>
           )}
           {/* alvo desta ATIVIDADE (trecho do tamanho de um dia), não o da semana inteira — sem
