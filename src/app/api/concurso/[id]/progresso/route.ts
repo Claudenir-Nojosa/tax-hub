@@ -159,10 +159,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     capitulosConcluidos: body.capitulosConcluidos ?? [],
   }
 
+  // só reescreve o currículo compartilhado (Concurso.topicosCompartilhados/blocosCompartilhados)
+  // se algo curricular REALMENTE mudou — a esmagadora maioria dos saves (Calendário, marcar
+  // capítulo, cadernos A-D, cartas...) é progresso puro e nunca toca nisso. Sem essa checagem,
+  // TODO save reescrevia um JSONB de ~180 Blocos + centenas de tópicos inteiro no Concurso,
+  // pesado o bastante pra estourar o statement_timeout do Postgres (visto em produção), além de
+  // arriscar sobrescrever currículo fresco com uma cópia desatualizada que uma aba antiga ainda
+  // tinha em memória (o mesmo bug que já causou os links do TecConcursos voltarem sozinhos)
+  const curriculoMudou =
+    JSON.stringify(topicosCompartilhados) !== JSON.stringify(concurso.topicosCompartilhados ?? {}) ||
+    JSON.stringify(blocosCompartilhados) !== JSON.stringify(concurso.blocosCompartilhados ?? {})
+
   await db.$transaction([
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Json genérico (não modela o
-    // shape de TopicoCurricular/BlocoCurricular no schema.prisma)
-    db.concurso.update({ where: { id }, data: { topicosCompartilhados, blocosCompartilhados } as any }),
+    ...(curriculoMudou
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Json genérico (não modela o
+      // shape de TopicoCurricular/BlocoCurricular no schema.prisma)
+      ? [db.concurso.update({ where: { id }, data: { topicosCompartilhados, blocosCompartilhados } as any })]
+      : []),
     ...(body.pdfsRemovidos?.length
       ? [db.pdfConcurso.deleteMany({ where: { concursoId: id, id: { in: body.pdfsRemovidos } } })]
       : []),
