@@ -38,10 +38,17 @@ export interface FilaAtividade {
   desempenhoPerc?: number;
   concluida: boolean;
   elegivelDesde: string; // dateKey
-  // só em "teoria" quando o PDF do tópico tem capítulos manuais mapeados — a UI (TabelaAtividades)
-  // expande a linha numa checklist clicável de capítulo/subcapítulo, mesmo padrão que já existia
-  // em CorpoBloco antes desta reforma (marcar/desmarcar direto da Trilha, sem abrir o leitor)
+  // só em "teoria" quando o tópico tem PDF/página mapeada — id do PDF + o intervalo de página
+  // DESTE pedaço específico (ver gerarChunksTeoria) pra: (a) "concluída" ser julgada pela posição
+  // real de leitura (pdf.paginaAtual >= paginaFim), não pelo tópico inteiro; (b) a UI
+  // (TabelaAtividades) expandir a linha numa checklist clicável de capítulo/subcapítulo quando o
+  // PDF tem capítulos manuais mapeados, mesmo padrão que já existia em CorpoBloco antes desta
+  // reforma (marcar/desmarcar direto da Trilha, sem abrir o leitor). Ausente = tópico sem PDF/
+  // página mapeada nenhuma, ou já lido por completo mas ainda sem "Marcar como estudado" — cai no
+  // fallback de sempre (1 atividade só, concluída = TopicoState.estudado).
   pdfId?: string;
+  paginaInicio?: number;
+  paginaFim?: number;
   todosCapitulos?: CapituloBlocoItem[];
 }
 
@@ -56,33 +63,86 @@ function resolverPdfDoTopico(materia: string, topico: string, pdfs: PdfEstudo[])
   return pdfs.find((p) => p.materia === materia && (p.topicos?.includes(topico) ?? false));
 }
 
-// páginas restantes de UM tópico (não o "próximo trecho" do motor antigo, que é limitado por um
-// alvo de minutos — aqui é o tópico INTEIRO, já que a fila enumera atividades discretas e quem
-// decide quanto cabe numa Meta é o orçamento, não o tamanho do trecho oferecido). Recebe o PDF já
-// resolvido (não busca de novo) pra poder ser reaproveitado junto com todosCapitulos sem repetir
-// o find() em pdfs.
-function paginasRestantesTopico(
-  pdf: PdfEstudo | undefined, topico: string, capitulosConcluidos: string[]
-): number | null {
-  if (!pdf) return null;
-  if ((pdf.capitulos?.length ?? 0) > 0) {
-    const resolvidos = resolverCapitulos(pdf, capitulosConcluidos);
-    const restantes = resolvidos.filter((c) => !c.lido);
-    if (restantes.length === 0) return 0;
-    return restantes.reduce((s, c) => s + (c.paginaFim - c.paginaInicio + 1), 0);
-  }
-  const intervalo = pdf.intervalosPaginas?.find((t) => t.topico === topico);
-  if (!intervalo) return null;
-  return Math.max(0, intervalo.paginaFim - Math.max(intervalo.paginaInicio - 1, pdf.paginaAtual));
+// tamanho-alvo de UMA atividade de leitura — tópicos maiores que isso são fatiados em VÁRIAS
+// atividades sequenciais (um pedaço de páginas/capítulos cada), pra a Meta poder intercalar com
+// atividades de OUTRAS matérias em vez de exigir ler um tópico inteiro (às vezes 100+min) de uma
+// vez só antes de tocar em qualquer outra coisa — mesmo espírito do "trecho do tamanho do dia" que
+// o motor semanal antigo já fazia (resolverPaginaBloco/proximoBlocoCapitulos em
+// trilha-dinamica.ts), só que aqui cada pedaço vira uma atividade PERSISTÍVEL própria (com id
+// estável pelo intervalo de página), não um trecho recalculado do zero a cada render.
+const MAX_MINUTOS_ATIVIDADE_TEORIA = 60;
+
+interface ChunkTeoria {
+  paginaInicio: number;
+  paginaFim: number;
+  titulo: string;
+  minutosEstimados: number;
+  todosCapitulos?: CapituloBlocoItem[]; // só os capítulos DESTE pedaço, pra checklist expansível
 }
 
-function estimarMinutosTeoria(
-  pdf: PdfEstudo | undefined, topico: string, pagPorHora: number | null, capitulosConcluidos: string[]
-): number {
-  const paginas = paginasRestantesTopico(pdf, topico, capitulosConcluidos);
-  if (paginas === null || paginas <= 0) return MINUTOS_ESTIMADO_TEORIA_PADRAO;
+// fatia o que falta ler de UM tópico em pedaços de ~MAX_MINUTOS_ATIVIDADE_TEORIA cada, na ordem de
+// leitura, começando de onde a página atual do PDF já parou (nunca reoferece o que já foi lido).
+// Com capítulos manuais mapeados, agrupa capítulos/subcapítulos CONSECUTIVOS ainda não lidos (masmo
+// critério de proximoBlocoCapitulos) — cada pedaço carrega os capítulos que o compõem, pra
+// TabelaAtividades expandir a checklist. Sem capítulos, cai no intervalo de página mapeado pro
+// tópico (intervalosPaginas) e fatia por PÁGINA pura. [] = nada mapeado, ou já lido por completo
+// (o tópico continua na fila via o fallback de 1 atividade só, ver construirFilaGlobal).
+function gerarChunksTeoria(
+  pdf: PdfEstudo, topico: string, pagPorHora: number | null, capitulosConcluidos: string[]
+): ChunkTeoria[] {
   const ritmo = pagPorHora && pagPorHora > 0 ? pagPorHora : PAG_POR_HORA_PADRAO;
-  return Math.max(1, Math.round((paginas / ritmo) * 60));
+
+  if ((pdf.capitulos?.length ?? 0) > 0) {
+    const resolvidos = resolverCapitulos(pdf, capitulosConcluidos);
+    const chunks: ChunkTeoria[] = [];
+    let i = 0;
+    while (i < resolvidos.length) {
+      if (resolvidos[i].lido) { i++; continue; }
+      const grupo: CapituloBlocoItem[] = [];
+      let minutosAcumulados = 0;
+      while (i < resolvidos.length && !resolvidos[i].lido) {
+        const c = resolvidos[i];
+        grupo.push({ ...c, indice: i + 1 });
+        minutosAcumulados += ((c.paginaFim - c.paginaInicio + 1) / ritmo) * 60;
+        i++;
+        if (minutosAcumulados >= MAX_MINUTOS_ATIVIDADE_TEORIA) break;
+      }
+      const primeiro = grupo[0];
+      const ultimo = grupo[grupo.length - 1];
+      chunks.push({
+        paginaInicio: primeiro.paginaInicio,
+        paginaFim: ultimo.paginaFim,
+        titulo: grupo.length > 1
+          ? `${topico} — Capítulos ${primeiro.indice}-${ultimo.indice} de ${resolvidos.length}`
+          : `${topico} — Capítulo ${primeiro.indice} de ${resolvidos.length}: ${primeiro.nome}`,
+        minutosEstimados: Math.max(1, Math.round(minutosAcumulados)),
+        todosCapitulos: grupo,
+      });
+    }
+    return chunks;
+  }
+
+  const intervalo = pdf.intervalosPaginas?.find((t) => t.topico === topico);
+  if (!intervalo) return [];
+  const inicioReal = Math.max(intervalo.paginaInicio, pdf.paginaAtual + 1);
+  if (inicioReal > intervalo.paginaFim) return [];
+  const paginasPorChunk = Math.max(1, Math.round((MAX_MINUTOS_ATIVIDADE_TEORIA / 60) * ritmo));
+  const totalPartes = Math.ceil((intervalo.paginaFim - inicioReal + 1) / paginasPorChunk);
+  const chunks: ChunkTeoria[] = [];
+  let inicio = inicioReal;
+  let parte = 1;
+  while (inicio <= intervalo.paginaFim) {
+    const fim = Math.min(intervalo.paginaFim, inicio + paginasPorChunk - 1);
+    chunks.push({
+      paginaInicio: inicio,
+      paginaFim: fim,
+      titulo: totalPartes > 1 ? `${topico} — parte ${parte} de ${totalPartes}` : topico,
+      minutosEstimados: Math.max(1, Math.round(((fim - inicio + 1) / ritmo) * 60)),
+    });
+    inicio = fim + 1;
+    parte++;
+  }
+  return chunks;
 }
 
 // Enumeração EXAUSTIVA do edital inteiro em unidades discretas — mesmo espírito do loop já
@@ -127,17 +187,38 @@ export function construirFilaGlobal(params: {
     const blocosDaMateria = Object.values(blocos).filter((b) => b.materia === m.nome);
     const topicosCobertosPorBloco = new Set(blocosDaMateria.flatMap((b) => b.topicos));
 
-    // teoria — um item por tópico ainda não estudado. Quando o PDF do tópico tem capítulos
-    // manuais mapeados, anexa todosCapitulos (histórico completo, lidos + pendentes — mesma lista
-    // que CorpoBloco já mostrava antes desta reforma) pra TabelaAtividades expandir a linha numa
-    // checklist clicável, sem precisar abrir o leitor pra marcar um capítulo já lido.
+    // teoria — tópicos grandes viram VÁRIOS itens (um por pedaço de ~60min de leitura, ver
+    // gerarChunksTeoria), pra a Meta poder intercalar com outras matérias em vez de exigir ler um
+    // tópico inteiro de uma vez. Cada pedaço carrega pdfId+paginaInicio/paginaFim (concluída =
+    // posição real de leitura) e, quando o PDF tem capítulos manuais mapeados, os capítulos DESSE
+    // pedaço (TabelaAtividades expande a linha numa checklist clicável). Sem PDF/página mapeada, ou
+    // já lido por completo mas ainda sem "Marcar como estudado", cai no fallback de sempre: 1
+    // atividade só, concluída = TopicoState.estudado.
     for (const topico of m.topicos) {
       const estado = topicos[topicoKey(m.nome, topico)];
       if (estado?.estudado) continue;
       const pdf = resolverPdfDoTopico(m.nome, topico, pdfs);
-      const todosCapitulos = pdf && (pdf.capitulos?.length ?? 0) > 0
-        ? resolverCapitulos(pdf, capitulosConcluidos).map((c, i) => ({ ...c, indice: i + 1 }))
-        : undefined;
+      const chunks = pdf ? gerarChunksTeoria(pdf, topico, pagPorHora, capitulosConcluidos) : [];
+      if (chunks.length > 0) {
+        for (const chunk of chunks) {
+          fila.push({
+            id: `t:${m.nome}:${topico}:${chunk.paginaInicio}-${chunk.paginaFim}`,
+            tipo: "teoria",
+            materia: m.nome,
+            topico,
+            titulo: chunk.titulo,
+            relevancia: estado?.importancia,
+            minutosEstimados: chunk.minutosEstimados,
+            concluida: false,
+            elegivelDesde: trilha.iniciadaEm,
+            pdfId: pdf!.id,
+            paginaInicio: chunk.paginaInicio,
+            paginaFim: chunk.paginaFim,
+            todosCapitulos: chunk.todosCapitulos,
+          });
+        }
+        continue;
+      }
       fila.push({
         id: `t:${m.nome}:${topico}`,
         tipo: "teoria",
@@ -145,11 +226,10 @@ export function construirFilaGlobal(params: {
         topico,
         titulo: topico,
         relevancia: estado?.importancia,
-        minutosEstimados: estimarMinutosTeoria(pdf, topico, pagPorHora, capitulosConcluidos),
+        minutosEstimados: MINUTOS_ESTIMADO_TEORIA_PADRAO,
         concluida: false,
         elegivelDesde: trilha.iniciadaEm,
         pdfId: pdf?.id,
-        todosCapitulos,
       });
     }
 
@@ -283,6 +363,7 @@ function paraRef(a: FilaAtividade, origemCarryOver: boolean): MetaAtividadeRef {
   return {
     id: a.id, tipo: a.tipo, materia: a.materia, topico: a.topico, titulo: a.titulo,
     relevancia: a.relevancia, minutosEstimados: a.minutosEstimados, link: a.link, origemCarryOver,
+    pdfId: a.pdfId, paginaInicio: a.paginaInicio, paginaFim: a.paginaFim,
   };
 }
 
@@ -294,12 +375,21 @@ function estaAtividadeConcluida(
   ref: MetaAtividadeRef,
   topicos: Record<string, TopicoState>,
   trilha: TrilhaDinamicaState,
-  blocos: Record<string, Bloco>
+  blocos: Record<string, Bloco>,
+  pdfs: PdfEstudo[]
 ): { concluida: boolean; desempenhoPerc?: number } {
   const estado = ref.topico ? topicos[topicoKey(ref.materia, ref.topico)] : undefined;
   switch (ref.tipo as FilaAtividadeTipo) {
-    case "teoria":
+    case "teoria": {
+      // atividade fatiada (pdfId+paginaFim) — concluída pela posição REAL de leitura desse pedaço,
+      // não pelo tópico inteiro (ver gerarChunksTeoria). Sem essas duas, cai no fallback de sempre:
+      // atividades antigas persistidas antes desta mudança, ou tópico sem PDF/página mapeada.
+      if (ref.pdfId && ref.paginaFim !== undefined) {
+        const pdf = pdfs.find((p) => p.id === ref.pdfId);
+        if (pdf) return { concluida: pdf.paginaAtual >= ref.paginaFim };
+      }
       return { concluida: !!estado?.estudado };
+    }
     case "questoes": {
       const grupo = ref.id.split(":").pop() as Grupo;
       const c = estado?.cadernos[grupo];
@@ -367,6 +457,8 @@ interface ParamsBaseFila {
   topicos: Record<string, TopicoState>;
   calendario: Record<string, AtividadeCalendario[]>;
   blocos: Record<string, Bloco>;
+  pdfs: PdfEstudo[];
+  capitulosConcluidos?: string[];
 }
 
 // Hidrata a Meta atualmente aberta (se existir) com o estado ao vivo de cada atividade atribuída,
@@ -377,17 +469,28 @@ export function computarMetaAtual(
   params: ParamsBaseFila
 ): { metaAtual: MetaAtual; proximaMeta: ProximaMetaPreview } | undefined {
   const hoje = params.hoje ?? dateKeyLocal();
-  const { trilha, topicos, calendario, blocos } = params;
+  const { trilha, topicos, calendario, blocos, pdfs } = params;
+  const capitulosConcluidos = params.capitulosConcluidos ?? [];
   if (!trilha.filaMetas) return undefined;
   const metaPersistida = trilha.filaMetas.metas[trilha.filaMetas.metaAtual];
   if (!metaPersistida) return undefined;
 
   const atividades: FilaAtividade[] = metaPersistida.atividades.map((ref) => {
-    const { concluida, desempenhoPerc } = estaAtividadeConcluida(ref, topicos, trilha, blocos);
+    const { concluida, desempenhoPerc } = estaAtividadeConcluida(ref, topicos, trilha, blocos, pdfs);
+    // recalcula a checklist de capítulos AO VIVO (nunca persistida) — só os capítulos dentro do
+    // intervalo de página deste pedaço específico, filtrando o PDF inteiro pelos mesmos limites
+    // gravados no ref (ver gerarChunksTeoria/paraRef)
+    const pdf = ref.pdfId ? pdfs.find((p) => p.id === ref.pdfId) : undefined;
+    const todosCapitulos = pdf && ref.paginaInicio !== undefined && ref.paginaFim !== undefined && (pdf.capitulos?.length ?? 0) > 0
+      ? resolverCapitulos(pdf, capitulosConcluidos)
+          .map((c, i) => ({ ...c, indice: i + 1 }))
+          .filter((c) => c.paginaInicio >= ref.paginaInicio! && c.paginaFim <= ref.paginaFim!)
+      : undefined;
     return {
       id: ref.id, tipo: ref.tipo as FilaAtividadeTipo, materia: ref.materia, topico: ref.topico,
       titulo: ref.titulo, relevancia: ref.relevancia, minutosEstimados: ref.minutosEstimados,
       link: ref.link, desempenhoPerc, concluida, elegivelDesde: metaPersistida.iniciadaEm,
+      pdfId: ref.pdfId, paginaInicio: ref.paginaInicio, paginaFim: ref.paginaFim, todosCapitulos,
     };
   });
 
@@ -449,6 +552,37 @@ interface ParamsAbrirMeta {
   capitulosConcluidos?: string[];
 }
 
+// Intercala os candidatos por MATÉRIA (round-robin, preservando a ordem de prioridade DENTRO de
+// cada matéria — teoria antes de questões/reforço etc., já garantida pela ordem em que
+// construirFilaGlobal monta a fila) em vez de consumi-los na ordem crua (que esgotaria uma matéria
+// inteira antes de tocar em qualquer outra — foi exatamente o bug reportado: Meta 1 virou só
+// "Língua Portuguesa" porque a fila tinha TODOS os tópicos pendentes dela em sequência). Resultado:
+// atividade 1 da matéria A, 1 da B, 1 da C, ..., volta pra 2ª da A, 2ª da B, etc. — cada Meta cobre
+// várias matérias, e um tópico grande (agora fatiado em pedaços, ver gerarChunksTeoria) tem suas
+// partes espalhadas ao longo da Meta em vez de empilhadas no início.
+function intercalarPorMateria(candidatos: FilaAtividade[]): FilaAtividade[] {
+  const porMateria = new Map<string, FilaAtividade[]>();
+  const ordem: string[] = [];
+  for (const a of candidatos) {
+    if (!porMateria.has(a.materia)) { porMateria.set(a.materia, []); ordem.push(a.materia); }
+    porMateria.get(a.materia)!.push(a);
+  }
+  const resultado: FilaAtividade[] = [];
+  let restante = true;
+  while (restante) {
+    restante = false;
+    for (const materia of ordem) {
+      const lista = porMateria.get(materia)!;
+      const proxima = lista.shift();
+      if (proxima) {
+        resultado.push(proxima);
+        restante = true;
+      }
+    }
+  }
+  return resultado;
+}
+
 // Algoritmo de abertura da Meta N+1, compartilhado entre avancarFilaMetasSeNecessario (fechamento
 // por conclusão) e finalizarMetaManualmente (fechamento manual) — só muda o que entra em
 // `carryOver`. Sempre inclui pelo menos 1 atividade quando há trabalho pendente (nunca abre uma
@@ -461,7 +595,7 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
   const idsJaAtribuidos = new Set(
     Object.values(trilha.filaMetas?.metas ?? {}).flatMap((m) => m.atividades.map((a) => a.id))
   );
-  const candidatosNovos = fila.filter((a) => !idsJaAtribuidos.has(a.id));
+  const candidatosNovos = intercalarPorMateria(fila.filter((a) => !idsJaAtribuidos.has(a.id)));
 
   const orcamentoMinutos = Object.values(configCiclo.horasPorDia).reduce((s, v) => s + v, 0);
   const numero = (trilha.filaMetas?.metaAtual ?? 0) + 1;
@@ -495,7 +629,9 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
   const metaAberta = trilha.filaMetas.metas[trilha.filaMetas.metaAtual];
   if (!metaAberta || metaAberta.fechadaEm) return undefined;
 
-  const resultado = computarMetaAtual({ hoje, trilha, configCiclo, topicos, calendario, blocos });
+  const resultado = computarMetaAtual({
+    hoje, trilha, configCiclo, topicos, calendario, blocos, pdfs, capitulosConcluidos: params.capitulosConcluidos,
+  });
   if (!resultado || !resultado.metaAtual.fechavel) return undefined;
 
   const trilhaComMetaFechada: TrilhaDinamicaState = {
@@ -515,14 +651,16 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
 // deletadas, só deixam de bloquear o avanço.
 export function finalizarMetaManualmente(params: ParamsAbrirMeta): TrilhaDinamicaState {
   const hoje = params.hoje ?? dateKeyLocal();
-  const { trilha, configCiclo, topicos, calendario, blocos } = params;
+  const { trilha, configCiclo, topicos, calendario, blocos, pdfs } = params;
 
   if (!trilha.filaMetas) {
     return abrirProximaMeta({ ...params, hoje, carryOver: [] });
   }
 
   const metaAberta = trilha.filaMetas.metas[trilha.filaMetas.metaAtual];
-  const resultado = computarMetaAtual({ hoje, trilha, configCiclo, topicos, calendario, blocos });
+  const resultado = computarMetaAtual({
+    hoje, trilha, configCiclo, topicos, calendario, blocos, pdfs, capitulosConcluidos: params.capitulosConcluidos,
+  });
   const carryOver: MetaAtividadeRef[] = (resultado?.metaAtual.atividades ?? [])
     .filter((a) => !a.concluida)
     .map((a) => paraRef(a, true));

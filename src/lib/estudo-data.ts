@@ -249,6 +249,15 @@ export interface MetaAtividadeRef {
   minutosEstimados: number;
   link?: string;
   origemCarryOver: boolean; // só informativo/depuração — não afeta comportamento
+  // só em atividades de teoria FATIADAS (tópico grande dividido em pedaços de leitura, ver
+  // gerarChunksTeoria em trilha-fila.ts) — pdfId + o intervalo de página DESTE pedaço específico,
+  // pra "concluída" poder ser julgada pela posição real de leitura (pdf.paginaAtual >= paginaFim)
+  // em vez do tópico inteiro. Ausente = atividade de teoria não-fatiada (tópico sem PDF/página
+  // mapeada, ou já totalmente lido mas ainda sem o "Marcar como estudado") — cai no comportamento
+  // de sempre, concluída = TopicoState.estudado.
+  pdfId?: string;
+  paginaInicio?: number;
+  paginaFim?: number;
 }
 
 export interface MetaPersistida {

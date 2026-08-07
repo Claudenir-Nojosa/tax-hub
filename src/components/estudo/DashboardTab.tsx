@@ -70,6 +70,7 @@ function MensagemDoDia({ state, materiasConcurso, nomeUsuario }: { state: Estudo
     ? computarMetaAtual({
         hoje: dateKeyLocal(), trilha, configCiclo: state.configCiclo,
         topicos: state.topicos, calendario: state.calendario, blocos: state.blocos,
+        pdfs: state.pdfs, capitulosConcluidos: state.capitulosConcluidos,
       })?.metaAtual ?? null
     : null;
   const opts = {
@@ -127,6 +128,7 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
   const resultado = computarMetaAtual({
     hoje: dateKeyLocal(), trilha, configCiclo: state.configCiclo,
     topicos: state.topicos, calendario: state.calendario, blocos: state.blocos,
+    pdfs: state.pdfs, capitulosConcluidos: state.capitulosConcluidos,
   });
 
   // ainda sem `filaMetas` bootstrapada (o useEffect em page.tsx roda no próximo render) — janela

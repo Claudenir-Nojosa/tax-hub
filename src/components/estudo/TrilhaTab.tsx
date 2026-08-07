@@ -164,8 +164,8 @@ export default function TrilhaTab({
   // mesmo sem o usuário nunca ter aberto esta aba. Aqui só CALCULA (puro) pra exibir.
   const metaAtualResult = useMemo(() => {
     if (!trilha?.ativa) return undefined;
-    return computarMetaAtual({ hoje, trilha, configCiclo, topicos, calendario, blocos });
-  }, [trilha, hoje, configCiclo, topicos, calendario, blocos]);
+    return computarMetaAtual({ hoje, trilha, configCiclo, topicos, calendario, blocos, pdfs, capitulosConcluidos });
+  }, [trilha, hoje, configCiclo, topicos, calendario, blocos, pdfs, capitulosConcluidos]);
 
   const [finalizandoMeta, setFinalizandoMeta] = useState(false);
 
@@ -206,6 +206,12 @@ export default function TrilhaTab({
       return;
     }
     if (a.tipo === "teoria" && a.topico) {
+      // atividade fatiada (a.pdfId/paginaInicio/paginaFim, ver gerarChunksTeoria em trilha-fila.ts)
+      // abre já no trecho DESTE pedaço, não no início do tópico inteiro
+      if (a.pdfId) {
+        onIrParaBiblioteca?.({ pdfId: a.pdfId, paginaInicio: a.paginaInicio, paginaFim: a.paginaFim });
+        return;
+      }
       const pdf = pdfs.find((p) => p.materia === a.materia && p.topicos?.includes(a.topico!));
       onIrParaBiblioteca?.(pdf ? { pdfId: pdf.id } : undefined);
       return;
