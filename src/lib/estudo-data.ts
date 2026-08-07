@@ -76,8 +76,9 @@ export interface TopicoState {
   importancia?: NivelImportancia;
   // dateKeyLocal de quando `estudado` virou true (gravado por quem faz a marcação — EditalTab e
   // o "marcar como estudado" da Trilha). Ausente se nunca foi marcado, ou se foi marcado antes
-  // desse campo existir (registros antigos). É a âncora dos checkpoints de revisão de um BLOCO
-  // (ver Bloco abaixo) — diferente da revisão por tópico, que ancora nos cadernos A-D.
+  // desse campo existir (registros antigos). NÃO ancora a revisão do link (nem por tópico, nem
+  // por Bloco — as duas usam os `atualizadoEm` dos cadernos A-D, ver statusRevisaoLink/
+  // statusRevisaoLinkBloco em trilha-dinamica.ts); usado hoje só pra exibição/histórico.
   estudadoEm?: string;
 }
 

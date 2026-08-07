@@ -277,9 +277,12 @@ export function statusRevisaoLink(
   return montarStatusRevisaoLink(link, todosFeitos, dataConclusao, estado?.revisoesLink?.[checkpoint], hoje, checkpoint);
 }
 
-// status de UM checkpoint de um BLOCO — pré-requisito é TODOS os tópicos do bloco com `estudado`
-// (não os 4 grupos A-D, que são por-tópico e independentes do Bloco), e a data de conclusão é a
-// mais recente entre os `estudadoEm` desses tópicos.
+// status de UM checkpoint de um BLOCO — pré-requisito é TODOS os tópicos do bloco com os 4 grupos
+// A-D feitos (mesmo pré-requisito do caminho por-tópico, ver statusRevisaoLink acima — só
+// `estudado` não bastava: o texto da própria Trilha diz "7/30 dias após concluir os 4 grupos A-D",
+// e usar só a teoria concluída fazia a revisão liberar na hora que o tópico era marcado como
+// estudado, antes de responder qualquer questão). Data de conclusão = a mais recente entre os
+// `atualizadoEm` dos 4 grupos de cada tópico do bloco.
 export function statusRevisaoLinkBloco(
   bloco: Bloco,
   topicos: Record<string, TopicoState>,
@@ -288,10 +291,14 @@ export function statusRevisaoLinkBloco(
 ): StatusRevisaoLink {
   const link = linkDoCheckpointBloco(bloco, checkpoint);
   const estados = bloco.topicos.map((t) => topicos[topicoKey(bloco.materia, t)]);
-  const todosEstudados = bloco.topicos.length > 0 && estados.every((e) => e?.estudado);
-  const datas = estados.map((e) => e?.estudadoEm).filter((d): d is string => !!d);
-  const dataConclusao = datas.length === bloco.topicos.length ? datas.sort()[datas.length - 1] : undefined;
-  return montarStatusRevisaoLink(link, todosEstudados, dataConclusao, bloco.revisoesLink?.[checkpoint], hoje, checkpoint);
+  const todosGruposFeitos = bloco.topicos.length > 0 && estados.every(
+    (e) => GRUPOS_QUESTOES.every((g) => grupoFeito(e, g))
+  );
+  const datas = estados.flatMap((e) =>
+    e ? GRUPOS_QUESTOES.map((g) => e.cadernos[g]?.atualizadoEm).filter((d): d is string => !!d) : []
+  );
+  const dataConclusao = datas.length === bloco.topicos.length * GRUPOS_QUESTOES.length ? datas.sort()[datas.length - 1] : undefined;
+  return montarStatusRevisaoLink(link, todosGruposFeitos, dataConclusao, bloco.revisoesLink?.[checkpoint], hoje, checkpoint);
 }
 
 export interface RevisaoLinkPendente {
