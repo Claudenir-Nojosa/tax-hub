@@ -55,7 +55,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!session?.user?.id) return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
   const { id } = await params
 
-  const existing = await db.concurso.findFirst({ where: { id, criadoPorUserId: session.user.id } })
+  const existing = await db.concurso.findFirst({ where: { id, criadoPorUserId: session.user.id }, select: { id: true } })
   if (!existing) {
     const acesso = await db.concursoAcesso.count({ where: { concursoId: id, userId: session.user.id } })
     if (acesso === 0) return NextResponse.json({ error: "Não encontrado" }, { status: 404 })

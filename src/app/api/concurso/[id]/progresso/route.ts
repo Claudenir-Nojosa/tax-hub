@@ -100,7 +100,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!acesso) return NextResponse.json({ error: "Não encontrado" }, { status: 404 })
 
   const body = (await req.json()) as EstudoState & { blocosRemovidos?: string[]; pdfsRemovidos?: string[] }
-  const concurso = await db.concurso.findUnique({ where: { id } })
+  const concurso = await db.concurso.findUnique({
+    where: { id },
+    select: { topicosCompartilhados: true, blocosCompartilhados: true },
+  })
   if (!concurso) return NextResponse.json({ error: "Não encontrado" }, { status: 404 })
 
   // --- tópicos: split por chave, merge (só adiciona/atualiza) na metade curricular ---
@@ -124,9 +127,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (Object.keys(progresso).length > 0) blocosProgresso[blocoId] = progresso
   }
 
-  // --- pdfs: metade curricular vira upsert em PdfConcurso; progresso vai no blob ---
+  // --- pdfs: metade curricular vira upsert em PdfConcurso (só quando REALMENTE muda — ver
+  // abaixo); progresso vai no blob ---
+  const pdfsExistentes = await db.pdfConcurso.findMany({
+    where: { id: { in: (body.pdfs ?? []).map((p) => p.id) } },
+    select: {
+      id: true, nome: true, materia: true, totalPaginas: true, topicos: true,
+      paginaConteudoFim: true, intervalosPaginas: true, capitulos: true, arquivoEnviado: true,
+    },
+  })
+  const pdfsExistentesPorId = new Map(pdfsExistentes.map((p) => [p.id, p]))
+
   const pdfsProgresso: Record<string, unknown> = {}
-  const pdfUpserts = (body.pdfs ?? []).map((p) => {
+  const pdfUpserts: ReturnType<typeof db.pdfConcurso.upsert>[] = []
+  for (const p of body.pdfs ?? []) {
     const { curricular, progresso } = splitPdfEstudo(p)
     pdfsProgresso[p.id] = progresso
     const dadosCurric = {
@@ -135,14 +149,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       intervalosPaginas: curricular.intervalosPaginas ?? null, capitulos: curricular.capitulos ?? null,
       arquivoEnviado: curricular.arquivoEnviado ?? false,
     }
-    return db.pdfConcurso.upsert({
+    // com 281 PDFs nesse concurso, reescrever todos a cada save (mesmo um que não tem nada a ver
+    // com PDF, tipo editar o Calendário) foi o maior peso por trás dos timeouts do Postgres — só
+    // faz o upsert se o registro é novo ou se algo curricular dele de fato mudou
+    const existente = pdfsExistentesPorId.get(p.id)
+    if (existente && JSON.stringify({ ...existente, id: undefined }) === JSON.stringify({ ...dadosCurric, id: undefined })) {
+      continue
+    }
+    pdfUpserts.push(db.pdfConcurso.upsert({
       where: { id: p.id },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Json? aceita null, mas o
       // tipo gerado do Prisma exige o sentinel Prisma.JsonNull em vez do literal null
       update: dadosCurric as any,
       create: { id: p.id, concursoId: id, criadoPorUserId: userId, storagePath: `${id}/${p.id}.pdf`, criadoEm: new Date(curricular.criadoEm), ...dadosCurric } as any,
-    })
-  })
+    }))
+  }
 
   const progressoDados = {
     topicos: topicosProgresso,

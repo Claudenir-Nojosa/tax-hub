@@ -17,6 +17,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     db.concursoAcesso.updateMany({ where: { userId }, data: { isPrincipal: false } }),
     db.concursoAcesso.update({ where: { concursoId_userId: { concursoId: id, userId } }, data: { isPrincipal: true } }),
   ])
-  const concurso = await db.concurso.findUnique({ where: { id } })
-  return NextResponse.json({ ...concurso, isPrincipal: true })
+  // o caller descarta o corpo da resposta (só usa o status) — buscar e devolver o Concurso inteiro
+  // aqui só mandava os ~180 Blocos pela rede à toa
+  return NextResponse.json({ ok: true, isPrincipal: true })
 }

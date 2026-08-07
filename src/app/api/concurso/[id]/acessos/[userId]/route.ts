@@ -11,7 +11,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const chamadorId = session.user.id
 
   if (alvoUserId !== chamadorId) {
-    const concurso = await db.concurso.findFirst({ where: { id, criadoPorUserId: chamadorId } })
+    const concurso = await db.concurso.findFirst({ where: { id, criadoPorUserId: chamadorId }, select: { id: true } })
     if (!concurso) return NextResponse.json({ error: "Só quem criou o concurso pode remover o acesso de outra pessoa" }, { status: 403 })
   } else {
     const meuAcesso = await db.concursoAcesso.count({ where: { concursoId: id, userId: chamadorId } })

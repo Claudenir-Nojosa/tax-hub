@@ -49,6 +49,7 @@ async function garantirBucket(admin: SupabaseClient) {
 async function resolverPathExistente(id: string, userId: string): Promise<string | null> {
   const pdf = await db.pdfConcurso.findFirst({
     where: { id, concurso: { acessos: { some: { userId } } } },
+    select: { storagePath: true },
   })
   return pdf?.storagePath ?? null
 }
