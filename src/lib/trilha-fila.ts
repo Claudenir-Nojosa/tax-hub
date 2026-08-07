@@ -552,22 +552,17 @@ interface ParamsAbrirMeta {
   capitulosConcluidos?: string[];
 }
 
-// Intercala os candidatos por MATÉRIA (round-robin, preservando a ordem de prioridade DENTRO de
-// cada matéria — teoria antes de questões/reforço etc., já garantida pela ordem em que
-// construirFilaGlobal monta a fila) em vez de consumi-los na ordem crua (que esgotaria uma matéria
-// inteira antes de tocar em qualquer outra — foi exatamente o bug reportado: Meta 1 virou só
-// "Língua Portuguesa" porque a fila tinha TODOS os tópicos pendentes dela em sequência). Resultado:
-// atividade 1 da matéria A, 1 da B, 1 da C, ..., volta pra 2ª da A, 2ª da B, etc. — cada Meta cobre
-// várias matérias, e um tópico grande (agora fatiado em pedaços, ver gerarChunksTeoria) tem suas
-// partes espalhadas ao longo da Meta em vez de empilhadas no início.
-function intercalarPorMateria(candidatos: FilaAtividade[]): FilaAtividade[] {
-  const porMateria = new Map<string, FilaAtividade[]>();
-  const ordem: string[] = [];
-  for (const a of candidatos) {
-    if (!porMateria.has(a.materia)) { porMateria.set(a.materia, []); ordem.push(a.materia); }
-    porMateria.get(a.materia)!.push(a);
-  }
-  const resultado: FilaAtividade[] = [];
+// Intercala refs por MATÉRIA (round-robin) — recebe já misturado carry-over + candidatos novos
+// (ver abrirProximaMeta), com carry-over sempre na FRENTE da fila da PRÓPRIA matéria (prioridade
+// preservada dentro dela), mas SEM travar a Meta inteira: outras matérias entram no rodízio desde
+// a 1ª rodada. Sem isso, um carry-over grande (10+ pedaços de uma matéria só que nunca foi
+// concluída) viraria de novo um bloco monolítico no início da Meta antes de qualquer outra matéria
+// aparecer — foi exatamente o bug reportado: mesmo já fatiado, a Meta ficava "Língua Portuguesa,
+// Língua Portuguesa, ..., só no final Matéria B" porque o carry-over era um prefixo fixo separado
+// do rodízio. Resultado agora: atividade 1 da matéria A, 1 da B, 1 da C, ..., volta pra 2ª da A,
+// 2ª da B — cobrindo várias matérias desde o início da Meta, carry-over ou não.
+function intercalarPorMateria(porMateria: Map<string, MetaAtividadeRef[]>, ordem: string[]): MetaAtividadeRef[] {
+  const resultado: MetaAtividadeRef[] = [];
   let restante = true;
   while (restante) {
     restante = false;
@@ -583,6 +578,45 @@ function intercalarPorMateria(candidatos: FilaAtividade[]): FilaAtividade[] {
   return resultado;
 }
 
+// Carry-over normalmente só REEMPACOTA a atividade como ela já estava (ver paraRef) — correto pra
+// questões/reforço/revisão (ids estáveis, sem "fatiar" possível), mas ERRADO pra teoria: uma
+// atividade de teoria "antiga" (persistida antes do fatiamento existir — sem pdfId/paginaFim, ver
+// gerarChunksTeoria) ficaria carregando o MESMO bloco monolítico de Meta em Meta pra sempre, já que
+// carry-over nunca reprocessa pela fila (bug real reportado pelo usuário: 10 atividades de Língua
+// Portuguesa de 60-200min cada, arrastando IDÊNTICAS da Meta 1 até a Meta 3, porque cada
+// "Finalize ou ignore" só reempacotava o que já estava lá). Aqui, todo carry-over de teoria SEM
+// pdfId é refatiado NA HORA, como se fosse candidato novo — se o tópico tiver PDF/página mapeada
+// resolvível agora, vira os chunks atuais (`origemCarryOver: true` preservado); senão (sem PDF
+// nenhum, ou já 100% lido mas sem "Marcar como estudado") mantém como estava, sem mudança.
+function refatiarCarryOverAntigo(
+  carryOver: MetaAtividadeRef[], pdfs: PdfEstudo[], pagPorHora: number | null, capitulosConcluidos: string[]
+): { atividades: MetaAtividadeRef[]; topicosRefatiados: Set<string> } {
+  const atividades: MetaAtividadeRef[] = [];
+  const topicosRefatiados = new Set<string>();
+  for (const ref of carryOver) {
+    if (ref.tipo !== "teoria" || ref.pdfId !== undefined || !ref.topico) {
+      atividades.push(ref);
+      continue;
+    }
+    const pdf = resolverPdfDoTopico(ref.materia, ref.topico, pdfs);
+    const chunks = pdf ? gerarChunksTeoria(pdf, ref.topico, pagPorHora, capitulosConcluidos) : [];
+    if (chunks.length === 0) {
+      atividades.push(ref); // sem PDF resolvível ainda — mantém como estava
+      continue;
+    }
+    topicosRefatiados.add(`${ref.materia}::${ref.topico}`);
+    for (const chunk of chunks) {
+      atividades.push({
+        id: `t:${ref.materia}:${ref.topico}:${chunk.paginaInicio}-${chunk.paginaFim}`,
+        tipo: "teoria", materia: ref.materia, topico: ref.topico, titulo: chunk.titulo,
+        relevancia: ref.relevancia, minutosEstimados: chunk.minutosEstimados, origemCarryOver: true,
+        pdfId: pdf!.id, paginaInicio: chunk.paginaInicio, paginaFim: chunk.paginaFim,
+      });
+    }
+  }
+  return { atividades, topicosRefatiados };
+}
+
 // Algoritmo de abertura da Meta N+1, compartilhado entre avancarFilaMetasSeNecessario (fechamento
 // por conclusão) e finalizarMetaManualmente (fechamento manual) — só muda o que entra em
 // `carryOver`. Sempre inclui pelo menos 1 atividade quando há trabalho pendente (nunca abre uma
@@ -595,17 +629,37 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
   const idsJaAtribuidos = new Set(
     Object.values(trilha.filaMetas?.metas ?? {}).flatMap((m) => m.atividades.map((a) => a.id))
   );
-  const candidatosNovos = intercalarPorMateria(fila.filter((a) => !idsJaAtribuidos.has(a.id)));
+  const pagPorHora = calcularPagPorHora(calendario);
+  const { atividades: carryOverProcessado, topicosRefatiados } = refatiarCarryOverAntigo(carryOver, pdfs, pagPorHora, capitulosConcluidos ?? []);
+  // exclui da fila "nova" os tópicos que acabaram de ser refatiados a partir do carry-over — senão
+  // os mesmos chunks apareceriam DUAS vezes (uma via carry-over refatiado, outra via candidato novo)
+  const candidatosNovos = fila.filter(
+    (a) => !idsJaAtribuidos.has(a.id) && !(a.topico && topicosRefatiados.has(`${a.materia}::${a.topico}`))
+  );
+
+  // pool por matéria pro rodízio: carry-over primeiro (prioridade dentro da própria matéria), só
+  // depois os candidatos novos — mas TODAS as matérias entram no rodízio junto (ver
+  // intercalarPorMateria), carry-over não bloqueia mais o resto da Meta
+  const porMateria = new Map<string, MetaAtividadeRef[]>();
+  const ordem: string[] = [];
+  const addNaMateria = (materia: string, ref: MetaAtividadeRef) => {
+    if (!porMateria.has(materia)) { porMateria.set(materia, []); ordem.push(materia); }
+    porMateria.get(materia)!.push(ref);
+  };
+  for (const ref of carryOverProcessado) addNaMateria(ref.materia, ref);
+  for (const a of candidatosNovos) addNaMateria(a.materia, paraRef(a, false));
+
+  const candidatos = intercalarPorMateria(porMateria, ordem);
 
   const orcamentoMinutos = Object.values(configCiclo.horasPorDia).reduce((s, v) => s + v, 0);
   const numero = (trilha.filaMetas?.metaAtual ?? 0) + 1;
 
-  const atividades: MetaAtividadeRef[] = [...carryOver];
-  let somaMinutos = carryOver.reduce((s, ref) => s + ref.minutosEstimados, 0);
-  for (const a of candidatosNovos) {
+  const atividades: MetaAtividadeRef[] = [];
+  let somaMinutos = 0;
+  for (const ref of candidatos) {
     if (atividades.length > 0 && somaMinutos >= orcamentoMinutos) break;
-    atividades.push(paraRef(a, false));
-    somaMinutos += a.minutosEstimados;
+    atividades.push(ref);
+    somaMinutos += ref.minutosEstimados;
   }
 
   const novaMeta: MetaPersistida = { numero, iniciadaEm: hoje, orcamentoMinutos, atividades };

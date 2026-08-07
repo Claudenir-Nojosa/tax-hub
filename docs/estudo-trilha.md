@@ -533,3 +533,32 @@ Meta cobrindo as 3 matérias distintas (intercalado, não "A, A, A, ..."), e o c
 `concluida: true` quando `pdf.paginaAtual` alcança seu `paginaFim` — 9/9 passando. Smoke test ao
 vivo confirmou que a Meta 1 já existente (criada antes desta mudança, refs sem `pdfId`) continua
 renderizando sem regressão, com o fallback de sempre.
+
+**Adendo (mesmo dia, poucas horas depois)**: usuário reportou que MESMO com o fatiamento no ar, a
+Meta continuava só "Língua Portuguesa" — diagnóstico direto no banco (script `.mjs` read-only,
+`.env` local, apagado depois) confirmou que a Meta em produção era a Nº 3, com as 10 atividades
+IDÊNTICAS (mesmos minutos: 171/111/137/169/68/219/131/139/160min) desde a Meta 1 original — ou seja,
+o usuário clicou "Finalize ou ignore" mais de uma vez, e o carry-over (que só REEMPACOTA a
+atividade como já estava, ver `paraRef`) vinha arrastando os refs antigos (sem `pdfId`/`paginaFim`,
+persistidos antes desta correção) sem nunca passar pelo fatiamento. Dois ajustes:
+
+1. `refatiarCarryOverAntigo` (nova) — todo carry-over de teoria SEM `pdfId` é refatiado na hora de
+   abrir a próxima Meta, como se fosse candidato novo (mesmo `gerarChunksTeoria`, com
+   `origemCarryOver: true` preservado). Sem PDF resolvível, mantém como estava.
+2. **Intercalação passou a incluir o carry-over**, não só os candidatos novos — antes, mesmo com o
+   carry-over já fatiado em pedaços de 60min, ele entrava como um PREFIXO fixo antes do rodízio
+   (`[...carryOver, ...intercalarPorMateria(candidatosNovos)]`), então uma matéria com muito
+   carry-over pendente ainda dominava o início da Meta inteira. Agora `intercalarPorMateria` recebe
+   um pool ÚNICO por matéria (carry-over primeiro dentro da PRÓPRIA matéria, candidatos novos
+   depois) e intercala TUDO junto — outras matérias entram no rodízio desde a 1ª rodada,
+   carry-over ou não.
+
+Teste sintético reproduzindo o cenário exato (Meta 1 com 2 refs antigos monolíticos de 200min,
+"Finalize ou ignore" pra Meta 2, com uma 2ª matéria pendente): confirmou refatiamento em pedaços de
+~60min, Matéria B aparecendo já na 2ª posição (intercalado, não só no fim), e um 2º teste confirmou
+que o bootstrap fresco (sem carry-over nenhum, caminho de "desativar e ativar a trilha") continua
+intercalando as 3 matérias desde a 1ª atividade — 6/6 passando nos dois testes.
+
+**Ação necessária do usuário**: não é retroativo pra Metas JÁ ABERTAS (mesma ressalva de sempre) —
+clicar em "Finalize ou ignore as atividades da meta atual" mais uma vez agora refatia e intercala
+de vez o carry-over que ficou preso desde antes desta correção.
