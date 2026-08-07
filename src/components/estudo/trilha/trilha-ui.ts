@@ -4,6 +4,7 @@ import {
   type MateriaBase, type MateriaConcurso, type MateriaDef,
 } from "@/lib/estudo-data";
 import type { MetaSemana, SemanaHistorico } from "@/lib/trilha-dinamica";
+import type { FilaAtividadeTipo, MetaAtual } from "@/lib/trilha-fila";
 
 // Helpers de apresentação compartilhados entre as abas do Estudo (Trilha, Biblioteca etc.).
 // STATUS_CONFIG/TIPO_CONFIG/fmtData da trilha antiga foram removidos junto com ela.
@@ -103,6 +104,35 @@ export function proximaAtividade(meta: MetaSemana): ProximaAtividade | null {
   return null;
 }
 
+// mesma ideia de proximaAtividade acima, mas lendo da Meta atual (trilha-fila.ts) em vez da
+// MetaSemana — usada quando `metaAtual` está disponível (ver gerarMensagemGustavo/
+// montarResumoSemanaIA) pra Gustavo falar da MESMA "próxima atividade" que a tabela da aba Trilha
+// mostra no topo, eliminando a narrativa dupla (Dashboard citava pendências recalculadas da
+// semana; a Trilha já falava em "Meta N"). Atividade da fila é sempre concluída/não-concluída (sem
+// noção de "em andamento" com minutos parciais), por isso sempre `ehNova: true` — não existe o
+// caso "vi que você ainda não fez" nem progresso parcial nesse modelo.
+const TIPO_FILA_PARA_PASSO: Record<FilaAtividadeTipo, TipoPasso> = {
+  teoria: "estudo",
+  questoes: "questoes",
+  reforco: "reforco",
+  reforco_imediato: "reforcoImediato",
+  revisao_link: "linkQuestoes",
+  revisao_link_faltando: "linkQuestoes",
+  revisao_materia: "revisao",
+  cartas: "cartas",
+};
+
+export function proximaAtividadeFila(metaAtual: MetaAtual): ProximaAtividade | null {
+  const a = metaAtual.atividades.find((x) => !x.concluida);
+  if (!a) return null;
+  return {
+    tipo: TIPO_FILA_PARA_PASSO[a.tipo],
+    ehNova: true,
+    titulo: a.materia,
+    subtitulo: a.tipo === "teoria" ? `tópico atual: ${a.titulo}` : a.titulo,
+  };
+}
+
 // qual PNG do Gandalf (/public/{humor}.png) ilustra a bolha — decidido junto com o texto em
 // gerarMensagemGustavo, pela mesma prioridade de cenário (nunca escolhido à parte, senão a cara
 // do Gandalf poderia dessincronizar do que ele está dizendo). Mapeamento: dormindo = inatividade
@@ -134,9 +164,15 @@ const LIMIAR_TENDENCIA_FRACA_PERC = 50;
 // 3. Tendência fraca em várias semanas seguidas — sugestão de recalibrar as horas no Ciclo (é só
 //    sugestão: o usuário aprova, nada muda sozinho).
 // 4. Fluxo normal (próxima atividade pendente), com uma nota comparativa opcional quando a semana
-//    passada teve um resultado bem diferente do que está dando essa semana.
+//    passada teve um resultado bem diferente do que está dando essa semana. Quando `metaAtual` é
+//    passada (Meta da fila, trilha-fila.ts), a "próxima atividade" vem dela em vez da MetaSemana —
+//    é a mesma que aparece no topo da tabela da aba Trilha, eliminando a narrativa dupla. Os sinais
+//    de atraso/tendência acima continuam sempre vindo da MetaSemana (são sobre RITMO
+//    semanal/calendário, não sobre qual atividade fazer agora — não fazem parte dessa
+//    inconsistência). `metaAtual` null é o fallback (ex.: bootstrap da Meta 1 ainda não rodou).
 export function gerarMensagemGustavo(
   meta: MetaSemana,
+  metaAtual: MetaAtual | null,
   opts: { nomeUsuario?: string; streakDias: number; diasSemAtividade?: number; historico?: SemanaHistorico[] }
 ): MensagemGustavo {
   const { nomeUsuario, streakDias, diasSemAtividade = 0, historico = [] } = opts;
@@ -177,7 +213,7 @@ export function gerarMensagemGustavo(
     return ` (semana passada: ${anterior}%)`;
   })();
 
-  const proxima = proximaAtividade(meta);
+  const proxima = metaAtual ? proximaAtividadeFila(metaAtual) : proximaAtividade(meta);
   if (!proxima) {
     return {
       titulo: `${saudacao}Tudo em dia por aqui! 🎉`,
@@ -245,10 +281,45 @@ export interface ResumoSemanaIA {
   revisarCartasHoje: boolean;
 }
 
+// quando `metaAtual` está disponível, materias[]/pendências vêm dela (mesmos números que a tabela
+// da aba Trilha mostra) — só atrasado/ritmoNecessarioMinDia/percCumpridoSemanaTotal continuam da
+// MetaSemana (sinais de ritmo, ver comentário em gerarMensagemGustavo). `metaAtual` null usa o
+// fallback antigo (bootstrap ainda não rodou).
 export function montarResumoSemanaIA(
   meta: MetaSemana,
+  metaAtual: MetaAtual | null,
   opts: { nomeUsuario?: string; streakDias: number; diasSemAtividade?: number; historico?: SemanaHistorico[] }
 ): ResumoSemanaIA {
+  const pendentesPorTipo = (tipo: FilaAtividadeTipo) =>
+    metaAtual ? metaAtual.atividades.filter((a) => a.tipo === tipo && !a.concluida).length : 0;
+
+  const materias = metaAtual
+    ? Array.from(new Set(metaAtual.atividades.map((a) => a.materia))).map((nome) => {
+        const doMateria = metaAtual.atividades.filter((a) => a.materia === nome);
+        const feitas = doMateria.filter((a) => a.concluida).length;
+        const proximaTeoria = doMateria.find((a) => a.tipo === "teoria" && !a.concluida);
+        return {
+          nome,
+          topicoAtual: proximaTeoria?.topico ?? doMateria[0]?.topico ?? doMateria[0]?.titulo ?? "",
+          capituloAtual: undefined,
+          minutosFeitos: doMateria.filter((a) => a.concluida).reduce((s, a) => s + a.minutosEstimados, 0),
+          minutosAlvoSemana: doMateria.reduce((s, a) => s + a.minutosEstimados, 0),
+          percConcluidoSemana: doMateria.length > 0 ? Math.round((feitas / doMateria.length) * 100) : 0,
+          concluido: feitas === doMateria.length,
+          bloqueado: false,
+        };
+      })
+    : meta.blocos.map((b) => ({
+        nome: b.materia,
+        topicoAtual: b.topico,
+        capituloAtual: b.capituloLabel,
+        minutosFeitos: b.minutosFeitosSemana,
+        minutosAlvoSemana: b.minutosAlvoSemana,
+        percConcluidoSemana: b.minutosAlvoSemana > 0 ? Math.round((b.minutosFeitosSemana / b.minutosAlvoSemana) * 100) : 0,
+        concluido: b.concluido,
+        bloqueado: b.bloqueado,
+      }));
+
   return {
     nomeUsuario: opts.nomeUsuario,
     streakDias: opts.streakDias,
@@ -257,22 +328,15 @@ export function montarResumoSemanaIA(
     atrasado: meta.atrasado,
     ritmoNecessarioMinDia: meta.ritmoNecessarioMinDia,
     semanaPassadaPerc: opts.historico?.[0]?.percCumprido,
-    materias: meta.blocos.map((b) => ({
-      nome: b.materia,
-      topicoAtual: b.topico,
-      capituloAtual: b.capituloLabel,
-      minutosFeitos: b.minutosFeitosSemana,
-      minutosAlvoSemana: b.minutosAlvoSemana,
-      percConcluidoSemana: b.minutosAlvoSemana > 0 ? Math.round((b.minutosFeitosSemana / b.minutosAlvoSemana) * 100) : 0,
-      concluido: b.concluido,
-      bloqueado: b.bloqueado,
-    })),
-    reforcosPendentes: meta.reforcos.length,
-    questoesPendentes: meta.questoesPendentes.length,
-    reforcosImediatosPendentes: meta.reforcosImediatos.length,
-    revisoesLinkPendentes: meta.revisoesLink.length,
-    revisoes30Pendentes: meta.revisoes30.length,
-    revisarCartasHoje: meta.revisarCartas,
+    materias,
+    reforcosPendentes: metaAtual ? pendentesPorTipo("reforco") : meta.reforcos.length,
+    questoesPendentes: metaAtual ? pendentesPorTipo("questoes") : meta.questoesPendentes.length,
+    reforcosImediatosPendentes: metaAtual ? pendentesPorTipo("reforco_imediato") : meta.reforcosImediatos.length,
+    revisoesLinkPendentes: metaAtual
+      ? pendentesPorTipo("revisao_link") + pendentesPorTipo("revisao_link_faltando")
+      : meta.revisoesLink.length,
+    revisoes30Pendentes: metaAtual ? pendentesPorTipo("revisao_materia") : meta.revisoes30.length,
+    revisarCartasHoje: metaAtual ? pendentesPorTipo("cartas") > 0 : meta.revisarCartas,
   };
 }
 
@@ -299,9 +363,10 @@ const CARREGANDO: { titulo: string; corpo: string } = { titulo: "·····", co
 export function useMensagemGustavoIA(
   base: MensagemGustavo,
   meta: MetaSemana | null,
+  metaAtual: MetaAtual | null,
   opts: { nomeUsuario?: string; streakDias: number; diasSemAtividade?: number; historico?: SemanaHistorico[] }
 ): MensagemGustavo {
-  const resumo = meta ? montarResumoSemanaIA(meta, opts) : null;
+  const resumo = meta ? montarResumoSemanaIA(meta, metaAtual, opts) : null;
   const chave = resumo ? JSON.stringify(resumo) : `${base.titulo}|||${base.corpo}`;
   const [texto, setTexto] = useState<{ titulo: string; corpo: string }>(
     () => cacheMensagemGustavoIA.get(chave) ?? CARREGANDO

@@ -27,6 +27,7 @@ import {
   MATERIAS,
 } from "@/lib/estudo-data";
 import { computarMetaSemana, chaveCapitulo } from "@/lib/trilha-dinamica";
+import { avancarFilaMetasSeNecessario } from "@/lib/trilha-fila";
 import type { AberturaPdfSolicitada } from "@/components/estudo/trilha/TrilhaLinhas";
 import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks, Users } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
@@ -498,6 +499,30 @@ export default function EstudoPage() {
     if (!materias) return undefined;
     return filtrarTopicosExcluidos(materias, state.topicosExcluidos);
   }, [concursoAtivo?.materias, state.topicosExcluidos]);
+
+  // Fila de Metas (trilha-fila.ts) — bootstrap em nível compartilhado (não só dentro da aba
+  // Trilha), pra Dashboard também enxergar `computarMetaAtual` mesmo se o usuário nunca abrir a
+  // aba Trilha (senão MensagemDoDia/CardTrilha ficariam "preparando" indefinidamente). Mesmo
+  // padrão de bookkeeping via useEffect que já rege o resto do módulo de trilha.
+  useEffect(() => {
+    const trilha = state.trilhaDinamica;
+    if (!trilha?.ativa) return;
+    const resultado = avancarFilaMetasSeNecessario({
+      hoje: dateKeyLocal(),
+      trilha,
+      configCiclo: state.configCiclo,
+      materiasAtivas: materiasFiltradas ?? MATERIAS,
+      topicos: state.topicos,
+      calendario: state.calendario,
+      pdfs: state.pdfs,
+      blocos: state.blocos,
+      capitulosConcluidos: state.capitulosConcluidos,
+    });
+    if (resultado) updateTrilhaDinamica(resultado);
+  }, [
+    state.trilhaDinamica, state.configCiclo, materiasFiltradas, state.topicos,
+    state.calendario, state.pdfs, state.blocos, state.capitulosConcluidos, updateTrilhaDinamica,
+  ]);
 
   // progresso de horas por matéria (trilha dinâmica), nos dois alvos que a Trilha já mostra —
   // "nesta atividade" (trecho do tamanho de hoje, não reseta ao virar o dia) e "na semana" (alvo

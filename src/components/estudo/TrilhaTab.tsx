@@ -1,28 +1,31 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
-  BookOpen, CalendarClock, Check, Clock, ExternalLink, Flame, Layers, ListChecks,
+  CalendarClock, Clock, ExternalLink, Layers, ListChecks,
   Route, Settings2, Sparkles, Target, Trash2, Trophy, Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  MATERIAS, calcularStreakDias, dateKeyLocal, diasSemAtividade, topicoKey,
-  type AtividadeCalendario, type Bloco, type EstudoConfigCiclo, type Grupo, type MateriaConcurso,
+  MATERIAS, calcularStreakDias, dateKeyLocal, diasSemAtividade,
+  type AtividadeCalendario, type Bloco, type EstudoConfigCiclo, type MateriaConcurso,
   type MateriaDef, type PdfEstudo, type TopicoState, type TrilhaDinamicaState,
 } from "@/lib/estudo-data";
 import {
   analisarHistoricoSemanas, computarMetaSemana, criarTrilhaDinamica, diffDias,
-  estimativaConclusaoTrilha, type EstimativaConclusao, type MetaSemana, type QuestaoLiberada,
-  type ReforcoGrupo, type ReforcoImediatoPendente, type RevisaoLinkPendente, type SemanaHistorico,
+  estimativaConclusaoTrilha, type EstimativaConclusao, type MetaSemana, type SemanaHistorico,
 } from "@/lib/trilha-dinamica";
+import {
+  computarMetaAtual, finalizarMetaManualmente, type FilaAtividade, type MetaAtual,
+} from "@/lib/trilha-fila";
 import { fmtHoras, gerarMensagemGustavo, useMensagemGustavoIA } from "./trilha/trilha-ui";
 import {
-  CardMateria, CorpoBloco, CorpoCartas, CorpoQuestoes, CorpoReforcos, CorpoReforcosImediatos,
-  CorpoRevisao30, CorpoRevisoesLink, type AberturaPdfSolicitada,
+  CardMateria, type AberturaPdfSolicitada,
 } from "./trilha/TrilhaLinhas";
-import ProgressRing from "./ui/ProgressRing";
+import MetaAtualCard from "./trilha/MetaAtualCard";
+import TabelaAtividades from "./trilha/TabelaAtividades";
+import ProximaMetaCard from "./trilha/ProximaMetaCard";
 import EstudoHero from "./ui/EstudoHero";
 import SectionCard from "./ui/SectionCard";
 
@@ -54,11 +57,6 @@ interface Props {
   onIrParaCiclo?: () => void;
   onIrParaBiblioteca?: (abertura?: AberturaPdfSolicitada) => void;
   onIrParaCartas?: () => void;
-}
-
-function fmtDataCurta(dateKey: string): string {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
 }
 
 function fmtDataLonga(dateKey: string): string {
@@ -99,17 +97,18 @@ function CardEstimativa({ estimativa }: { estimativa: EstimativaConclusao }) {
 // bolha de fala do Gustavo — mesmo padrão visual da que já existe no Dashboard, aqui ancorada no
 // topo da própria Trilha; texto vem de gerarMensagemGustavo (fonte única, mesma fala nos 2 lugares)
 function GustavoBubble({
-  meta, nomeUsuario, streakDias, diasInativo, historico,
+  meta, metaAtual, nomeUsuario, streakDias, diasInativo, historico,
 }: {
   meta: MetaSemana;
+  metaAtual: MetaAtual | null;
   nomeUsuario?: string;
   streakDias: number;
   diasInativo: number;
   historico: SemanaHistorico[];
 }) {
   const opts = { nomeUsuario, streakDias, diasSemAtividade: diasInativo, historico };
-  const mensagemBase = gerarMensagemGustavo(meta, opts);
-  const { titulo, corpo, humor } = useMensagemGustavoIA(mensagemBase, meta, opts);
+  const mensagemBase = gerarMensagemGustavo(meta, metaAtual, opts);
+  const { titulo, corpo, humor } = useMensagemGustavoIA(mensagemBase, meta, metaAtual, opts);
   return (
     <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2">
       <Image src={`/${humor}.png`} alt="Gandalf" width={112} height={112} className="flex-shrink-0 object-contain" />
@@ -120,17 +119,6 @@ function GustavoBubble({
     </div>
   );
 }
-
-// pill "Comece aqui" — marca a primeira seção (na ordem de prioridade) que tem algo pendente
-function BadgeComeceAqui() {
-  return (
-    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex-shrink-0">
-      Comece aqui
-    </span>
-  );
-}
-
-const anelDestaque = "ring-2 ring-emerald-400 dark:ring-emerald-500";
 
 export default function TrilhaTab({
   trilha, topicos, configCiclo, calendario, pdfs, materiasConcurso, nomeUsuario,
@@ -169,6 +157,18 @@ export default function TrilhaTab({
     onUpdateTrilha({ ...trilha, conclusaoMaterias });
   }, [trilha, meta, hoje, onUpdateTrilha]);
 
+  // Fila de Metas (trilha-fila.ts) — camada nova em cima do motor semanal acima, que continua
+  // intacto (Gustavo, estimativa e o card "Progresso rumo aos 100%" seguem lendo `meta`/
+  // `estimativa` sem mudança). Bootstrap/promoção automática de Meta agora rodam em nível
+  // compartilhado (page.tsx), não só aqui — assim o Dashboard também enxerga `computarMetaAtual`
+  // mesmo sem o usuário nunca ter aberto esta aba. Aqui só CALCULA (puro) pra exibir.
+  const metaAtualResult = useMemo(() => {
+    if (!trilha?.ativa) return undefined;
+    return computarMetaAtual({ hoje, trilha, configCiclo, topicos, calendario, blocos });
+  }, [trilha, hoje, configCiclo, topicos, calendario, blocos]);
+
+  const [finalizandoMeta, setFinalizandoMeta] = useState(false);
+
   if (!trilha?.ativa || !meta) {
     return (
       <Intro
@@ -179,90 +179,40 @@ export default function TrilhaTab({
     );
   }
 
-  // caminho único de escrita de caderno (questão liberada OU reforço) — carimba atualizadoEm,
-  // que é o que alimenta o cooldown de reforço (ver analisarReforcos em trilha-dinamica.ts)
-  const registrarCaderno = (materia: string, topico: string, grupo: Grupo, acertos: number, erros: number) => {
-    const key = topicoKey(materia, topico);
-    const estado = topicos[key];
-    if (!estado) return;
-    onUpdateTopicos({
-      ...topicos,
-      [key]: { ...estado, cadernos: { ...estado.cadernos, [grupo]: { acertos, erros, atualizadoEm: dateKeyLocal() } } },
-    });
-  };
-  const registrarQuestoes = (q: QuestaoLiberada, acertos: number, erros: number) =>
-    registrarCaderno(q.materia, q.topico, q.grupo, acertos, erros);
-  const registrarReforco = (r: ReforcoGrupo, acertos: number, erros: number) =>
-    registrarCaderno(r.materia, r.topico, r.grupo, acertos, erros);
-
-  // registro da revisão das questões do link (1ª vez ou correção de reforço) — grava em
-  // revisoesLink[checkpoint], não em cadernos (é um resultado do tópico inteiro, não de um grupo
-  // A-D); os checkpoints de 7 e 30 dias são independentes, cada um com seu próprio registro.
-  // Quando vem de um Bloco (r.blocoId), grava UMA VEZ no Bloco (Bloco.revisoesLink), não em cada
-  // tópico membro — é o mesmo registro pra todos eles.
-  const registrarRevisaoLink = (r: RevisaoLinkPendente, acertos: number, erros: number) => {
-    if (r.blocoId) {
-      const bloco = blocos[r.blocoId];
-      if (!bloco) return;
-      onUpdateBlocos({
-        ...blocos,
-        [r.blocoId]: {
-          ...bloco,
-          revisoesLink: { ...bloco.revisoesLink, [r.checkpoint]: { acertos, erros, atualizadoEm: dateKeyLocal() } },
-        },
-      });
-      return;
-    }
-    const key = topicoKey(r.materia, r.topico);
-    const estado = topicos[key];
-    if (!estado) return;
-    onUpdateTopicos({
-      ...topicos,
-      [key]: {
-        ...estado,
-        revisoesLink: { ...estado.revisoesLink, [r.checkpoint]: { acertos, erros, atualizadoEm: dateKeyLocal() } },
-      },
-    });
-  };
-
-  // registro do reforço rápido (link curto pós-estudo) — grava reforcoImediatoFeito, o que faz o
-  // tópico sumir de analisarReforcosImediatos (é "faça uma vez", sem cooldown/reaparecimento)
-  const registrarReforcoImediato = (r: ReforcoImediatoPendente, acertos: number, erros: number) => {
-    const key = topicoKey(r.materia, r.topico);
-    const estado = topicos[key];
-    if (!estado) return;
-    onUpdateTopicos({
-      ...topicos,
-      [key]: { ...estado, reforcoImediatoFeito: { acertos, erros, atualizadoEm: dateKeyLocal() } },
-    });
-  };
-
-  // marca o tópico atual de um bloco como estudado direto da Trilha, sem precisar trocar pra
-  // aba Edital — só avança (não desmarca); corrigir um engano continua sendo ação do Edital
-  const marcarTopicoEstudado = (materia: string, topico: string) => {
-    const key = topicoKey(materia, topico);
-    const estado = topicos[key];
-    if (!estado) return;
-    onUpdateTopicos({ ...topicos, [key]: { ...estado, estudado: true, estudadoEm: hoje } });
-  };
-
-  const marcarRevisao30 = (materia: string) => {
-    onUpdateTrilha({
-      ...trilha,
-      revisoes30Feitas: {
-        ...trilha.revisoes30Feitas,
-        [materia]: [...(trilha.revisoes30Feitas[materia] ?? []), hoje],
-      },
-    });
-  };
-
-  const marcarCartasFeitas = () => {
-    onUpdateTrilha({ ...trilha, cartasFeitasEm: [...trilha.cartasFeitasEm, hoje] });
-  };
-
   const desativar = () => {
     if (!confirm("Desativar a trilha dinâmica? O progresso do edital e dos cadernos não é perdido — só o acompanhamento diário some.")) return;
     onUpdateTrilha(undefined);
+  };
+
+  // botão "Finalize ou ignore as atividades da meta atual" — fecha a Meta aberta mesmo com
+  // pendências (elas viram carry-over automático na próxima, nunca são deletadas)
+  const finalizarMeta = () => {
+    setFinalizandoMeta(true);
+    try {
+      const novaTrilha = finalizarMetaManualmente({
+        hoje, trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs, blocos, capitulosConcluidos,
+      });
+      onUpdateTrilha(novaTrilha);
+    } finally {
+      setFinalizandoMeta(false);
+    }
+  };
+
+  // clique numa linha da tabela de atividades — cada tipo tem um destino diferente: link externo
+  // (questões/revisão), o PDF certo (teoria) ou a aba Cartas
+  const abrirAtividade = (a: FilaAtividade) => {
+    if (a.link) {
+      window.open(a.link, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (a.tipo === "teoria" && a.topico) {
+      const pdf = pdfs.find((p) => p.materia === a.materia && p.topicos?.includes(a.topico!));
+      onIrParaBiblioteca?.(pdf ? { pdfId: pdf.id } : undefined);
+      return;
+    }
+    if (a.tipo === "cartas") {
+      onIrParaCartas?.();
+    }
   };
 
   const historico = analisarHistoricoSemanas({ hoje, trilha, configCiclo, calendario });
@@ -271,184 +221,61 @@ export default function TrilhaTab({
   // tivesse abandonado algo que nem começou
   const diasInativo = Math.min(diasSemAtividade(calendario), Math.max(0, diffDias(trilha.iniciadaEm, hoje)));
 
-  // progresso da CADEIA (atividades concluídas na cadeia da semana) — diferente do anel do hero,
-  // que reflete a meta da semana inteira (meta.percCumpridoSemana)
-  const atividadesFeitas = meta.blocos.filter((b) => b.concluidaAtividade).length;
   const materiasEmRevisao = meta.analises.filter(
     (a) => a.materiaConcluida && (trilha.revisoes30Feitas[a.materia] ?? []).length > 0
   );
-  const pendencias = meta.questoesPendentes.length + meta.reforcos.length + meta.reforcosImediatos.length
-    + meta.revisoesLink.length + meta.revisoes30.length + (meta.revisarCartas ? 1 : 0);
-
-  const temSecaoConteudo = meta.blocos.length > 0;
-  const temSecaoQuestoes = meta.reforcos.length > 0 || meta.questoesPendentes.length > 0;
-  const temSecaoReforcoImediato = meta.reforcosImediatos.length > 0;
-  const temSecaoRevisao = meta.revisoesLink.length > 0 || meta.revisoes30.length > 0 || meta.revisarCartas;
-  const semNadaPendente = !temSecaoConteudo && !temSecaoQuestoes && !temSecaoReforcoImediato && !temSecaoRevisao;
-
-  // primeira seção com algo pendente, na mesma ordem de prioridade da fala do Gustavo
-  // (estudo > reforço/questões > reforço rápido > revisão) — só ela ganha o destaque visual
-  const primeiraSecao: "conteudo" | "questoes" | "reforcoImediato" | "revisao" | null = (() => {
-    if (meta.blocos.some((b) => !b.concluidaAtividade && !b.bloqueado)) return "conteudo";
-    if (meta.reforcos.length > 0 || meta.questoesPendentes.length > 0) return "questoes";
-    if (meta.reforcosImediatos.length > 0) return "reforcoImediato";
-    if (meta.revisoesLink.length > 0 || meta.revisoes30.length > 0 || meta.revisarCartas) return "revisao";
-    return null;
-  })();
 
   return (
     <div className="space-y-4">
       {/* bolha do Gustavo */}
-      <GustavoBubble meta={meta} nomeUsuario={nomeUsuario} streakDias={streakDias} diasInativo={diasInativo} historico={historico} />
+      <GustavoBubble
+        meta={meta}
+        metaAtual={metaAtualResult?.metaAtual ?? null}
+        nomeUsuario={nomeUsuario}
+        streakDias={streakDias}
+        diasInativo={diasInativo}
+        historico={historico}
+      />
 
-      {/* hero da semana */}
-      <EstudoHero
-        acaoCanto={
-          <button
-            type="button"
-            onClick={desativar}
-            title="Desativar trilha"
-            className="p-1.5 rounded-lg text-emerald-100 hover:text-white hover:bg-white/15 transition-colors"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        }
-      >
-        <div className="flex items-center gap-4 sm:gap-5">
-          <ProgressRing perc={meta.percCumpridoSemana} size={80} espessura={7}>
-            <div className="text-center leading-none">
-              <div className="text-lg font-bold">{meta.percCumpridoSemana}%</div>
-              <div className="text-[9px] text-emerald-100 uppercase tracking-wide mt-0.5">semana</div>
-            </div>
-          </ProgressRing>
-          <div className="flex-1 min-w-0">
-            <div className="text-[11px] uppercase tracking-wider text-emerald-100 font-semibold mb-0.5">
-              Semana de {fmtDataCurta(meta.inicioSemana)} a {fmtDataCurta(meta.fimSemana)} · Grupo atual: {meta.grupoAtual}
-            </div>
-            <div className="text-lg sm:text-xl font-bold leading-snug">
-              {meta.blocosConcluidos
-                ? "Meta da semana entregue! 🎉"
-                : meta.blocos.length > 0
-                  ? `${atividadesFeitas}/${meta.blocos.length} atividades da cadeia`
-                  : "Sem leitura pendente"}
-            </div>
-            <div className="text-xs text-emerald-100 mt-1">
-              {meta.minutosSemana > 0 ? `${fmtHoras(meta.minutosSemana)} de estudo essa semana` : "Sem horas configuradas pra essa semana"}
-              {pendencias > 0 && ` · ${pendencias} pendência${pendencias !== 1 ? "s" : ""} no checklist`}
-            </div>
-          </div>
-          {streakDias > 0 && (
-            <div className="hidden sm:flex flex-col items-center flex-shrink-0 pl-4 border-l border-white/20">
-              <div className="flex items-center gap-1 text-2xl font-bold">
-                <Flame className="h-6 w-6 text-orange-300" />
-                {streakDias}
-              </div>
-              <div className="text-[10px] text-emerald-100 uppercase tracking-wide">
-                dia{streakDias !== 1 ? "s" : ""} seguidos
-              </div>
-            </div>
-          )}
-        </div>
-        {!meta.revisarCartas && (
-          <div className="mt-3 text-[11px] text-emerald-100/90 flex items-center gap-1.5">
-            <CalendarClock className="h-3 w-3 flex-shrink-0" />
-            Próxima revisão das cartas: domingo {fmtDataCurta(meta.proximoDomingoCartas)}
-          </div>
-        )}
-      </EstudoHero>
-
-      {/* seções por tipo de atividade */}
-      {semNadaPendente ? (
-        <div className="bg-card rounded-2xl border border-border p-4 sm:p-5">
-          <div className="py-8 text-center">
-            <div className="h-14 w-14 rounded-full bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center mx-auto mb-3">
-              <Check className="h-7 w-7 text-emerald-500" />
-            </div>
-            <div className="text-sm font-semibold text-foreground">Tudo em dia por aqui! 🎉</div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              Nada pendente no checklist agora — volte mais tarde ou aproveite pra descansar.
-            </div>
-          </div>
+      {/* Meta atual + próxima meta (fila de atividades, trilha-fila.ts) — substitui o hero semanal
+          antigo e as 4 seções por tipo. `meta`/`estimativa` (motor semanal de sempre) continuam
+          alimentando o Gustavo e o card "Progresso rumo aos 100%" logo abaixo, sem mudança. */}
+      {!metaAtualResult ? (
+        <div className="bg-card rounded-2xl border border-border p-8 text-center text-sm text-muted-foreground">
+          Preparando sua trilha…
         </div>
       ) : (
-        <>
-          {temSecaoConteudo && (
-            <SectionCard
-              titulo="Conteúdo"
-              icone={BookOpen}
-              corIcone="bg-primary"
-              className={primeiraSecao === "conteudo" ? anelDestaque : undefined}
-              acao={primeiraSecao === "conteudo" ? <BadgeComeceAqui /> : undefined}
-            >
-              <div className="space-y-3">
-                {meta.blocos.map((b) => (
-                  <CorpoBloco
-                    key={b.materia}
-                    b={b}
-                    materiasAtivas={materiasAtivas}
-                    onIrParaBiblioteca={onIrParaBiblioteca}
-                    onMarcarEstudado={() => marcarTopicoEstudado(b.materia, b.topico)}
-                    onToggleCapitulo={onToggleCapitulo}
-                    pdf={b.pdfId ? pdfs.find((p) => p.id === b.pdfId) : undefined}
-                  />
-                ))}
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 items-start">
+          <div className="space-y-4 min-w-0">
+            <MetaAtualCard
+              meta={metaAtualResult.metaAtual}
+              acaoCanto={
+                <button
+                  type="button"
+                  onClick={desativar}
+                  title="Desativar trilha"
+                  className="p-1.5 rounded-lg text-emerald-100 hover:text-white hover:bg-white/15 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              }
+            />
+            <SectionCard titulo="Atividades da meta" icone={ListChecks} corIcone="bg-primary">
+              <TabelaAtividades
+                atividades={metaAtualResult.metaAtual.atividades}
+                materiasAtivas={materiasAtivas}
+                onAbrirLink={abrirAtividade}
+                onAbrirCapitulo={(pdfId, paginaInicio, paginaFim) => onIrParaBiblioteca?.({ pdfId, paginaInicio, paginaFim })}
+                onToggleCapitulo={onToggleCapitulo}
+              />
             </SectionCard>
-          )}
-
-          {temSecaoQuestoes && (
-            <SectionCard
-              titulo="Questões"
-              icone={ListChecks}
-              corIcone="bg-teal-500"
-              className={primeiraSecao === "questoes" ? anelDestaque : undefined}
-              acao={primeiraSecao === "questoes" ? <BadgeComeceAqui /> : undefined}
-            >
-              <div className="space-y-4">
-                {meta.reforcos.length > 0 && (
-                  <CorpoReforcos reforcos={meta.reforcos} materiasAtivas={materiasAtivas} onRegistrar={registrarReforco} />
-                )}
-                {meta.questoesPendentes.length > 0 && (
-                  <CorpoQuestoes questoes={meta.questoesPendentes} materiasAtivas={materiasAtivas} onRegistrar={registrarQuestoes} />
-                )}
-              </div>
-            </SectionCard>
-          )}
-
-          {temSecaoReforcoImediato && (
-            <SectionCard
-              titulo="Reforço rápido"
-              icone={Zap}
-              corIcone="bg-orange-500"
-              className={primeiraSecao === "reforcoImediato" ? anelDestaque : undefined}
-              acao={primeiraSecao === "reforcoImediato" ? <BadgeComeceAqui /> : undefined}
-            >
-              <CorpoReforcosImediatos reforcos={meta.reforcosImediatos} materiasAtivas={materiasAtivas} onRegistrar={registrarReforcoImediato} />
-            </SectionCard>
-          )}
-
-          {temSecaoRevisao && (
-            <SectionCard
-              titulo="Revisão"
-              icone={Trophy}
-              corIcone="bg-amber-500"
-              className={primeiraSecao === "revisao" ? anelDestaque : undefined}
-              acao={primeiraSecao === "revisao" ? <BadgeComeceAqui /> : undefined}
-            >
-              <div className="space-y-4">
-                {meta.revisoesLink.length > 0 && (
-                  <CorpoRevisoesLink revisoes={meta.revisoesLink} materiasAtivas={materiasAtivas} onRegistrar={registrarRevisaoLink} />
-                )}
-                {meta.revisoes30.map((r) => (
-                  <CorpoRevisao30 key={r.materia} r={r} onMarcar={() => marcarRevisao30(r.materia)} />
-                ))}
-                {meta.revisarCartas && (
-                  <CorpoCartas onIrParaCartas={onIrParaCartas} onMarcar={marcarCartasFeitas} />
-                )}
-              </div>
-            </SectionCard>
-          )}
-        </>
+          </div>
+          <ProximaMetaCard
+            proximaMeta={metaAtualResult.proximaMeta}
+            onFinalizarOuIgnorar={finalizarMeta}
+            finalizando={finalizandoMeta}
+          />
+        </div>
       )}
 
       {/* progresso por matéria */}

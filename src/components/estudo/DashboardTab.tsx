@@ -19,6 +19,7 @@ import {
   topicoKey,
 } from "@/lib/estudo-data";
 import { analisarHistoricoSemanas, computarMetaSemana, diffDias } from "@/lib/trilha-dinamica";
+import { computarMetaAtual } from "@/lib/trilha-fila";
 import { gerarMensagemGustavo, resolverCorMateria, useMensagemGustavoIA } from "./trilha/trilha-ui";
 import { alvoLeituraPdf } from "./biblioteca/biblioteca-utils";
 import EstudoHero from "./ui/EstudoHero";
@@ -62,6 +63,15 @@ function MensagemDoDia({ state, materiasConcurso, nomeUsuario }: { state: Estudo
         blocos: state.blocos,
       })
     : null;
+  // "próxima atividade" vem da Meta da fila (mesma que a tabela da aba Trilha mostra) — os sinais
+  // de atraso/tendência acima continuam vindo de `meta` (MetaSemana), ver comentário em
+  // gerarMensagemGustavo
+  const metaAtual = ativa && trilha
+    ? computarMetaAtual({
+        hoje: dateKeyLocal(), trilha, configCiclo: state.configCiclo,
+        topicos: state.topicos, calendario: state.calendario, blocos: state.blocos,
+      })?.metaAtual ?? null
+    : null;
   const opts = {
     nomeUsuario,
     streakDias: calcularStreakDias(state.calendario),
@@ -71,8 +81,8 @@ function MensagemDoDia({ state, materiasConcurso, nomeUsuario }: { state: Estudo
     diasSemAtividade: trilha ? Math.min(diasSemAtividade(state.calendario), Math.max(0, diffDias(trilha.iniciadaEm, dateKeyLocal()))) : 0,
     historico: trilha ? analisarHistoricoSemanas({ trilha, configCiclo: state.configCiclo, calendario: state.calendario }) : [],
   };
-  const mensagemBase = meta ? gerarMensagemGustavo(meta, opts) : { titulo: "", corpo: "", humor: "lendo" as const };
-  const { titulo, corpo, humor } = useMensagemGustavoIA(mensagemBase, meta, opts);
+  const mensagemBase = meta ? gerarMensagemGustavo(meta, metaAtual, opts) : { titulo: "", corpo: "", humor: "lendo" as const };
+  const { titulo, corpo, humor } = useMensagemGustavoIA(mensagemBase, meta, metaAtual, opts);
   if (!ativa) return null;
 
   return (
@@ -86,10 +96,11 @@ function MensagemDoDia({ state, materiasConcurso, nomeUsuario }: { state: Estudo
   );
 }
 
-// Card da meta atual da trilha dinâmica — resumo da cadeia de atividades da semana (todas as
-// matérias com teoria pendente, ordenadas por grupo) e pendências; sem trilha ativa vira CTA pra
-// ativar. Visual: eyebrow + badge do grupo, barra grossa com marcador, contagem de
-// matérias/atividades, chips coloridos por matéria (cor real do Edital).
+// Card da Meta atual da trilha dinâmica (fila de atividades, trilha-fila.ts) — mesma "Meta N" que
+// a aba Trilha mostra no topo, pra nunca dessincronizar os números entre os dois lugares
+// ("narrativa dupla"). Sem trilha ativa vira CTA pra ativar. Visual: eyebrow + badge da Meta, barra
+// grossa com marcador, contagem de matérias/atividades, chips coloridos por matéria (cor real do
+// Edital) proporcionais ao nº de atividades de cada uma.
 function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: EstudoState; materiasConcurso?: MateriaBase[]; onIrParaTrilha?: () => void }) {
   const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
   const trilha = state.trilhaDinamica;
@@ -113,20 +124,31 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
     );
   }
 
-  const meta = computarMetaSemana({
-    trilha,
-    configCiclo: state.configCiclo,
-    materiasAtivas,
-    topicos: state.topicos,
-    calendario: state.calendario,
-    pdfs: state.pdfs,
-    blocos: state.blocos,
+  const resultado = computarMetaAtual({
+    hoje: dateKeyLocal(), trilha, configCiclo: state.configCiclo,
+    topicos: state.topicos, calendario: state.calendario, blocos: state.blocos,
   });
-  const feitos = meta.blocos.filter((b) => b.concluidaAtividade).length;
-  const perc = meta.blocos.length > 0 ? Math.round((feitos / meta.blocos.length) * 100) : 0;
-  const pendencias = meta.questoesPendentes.length + meta.reforcos.length + meta.revisoes30.length + (meta.revisarCartas ? 1 : 0);
-  const totalAtividades = meta.blocos.length + pendencias;
-  const concluidas = meta.analises.filter((a) => a.materiaConcluida).length;
+
+  // ainda sem `filaMetas` bootstrapada (o useEffect em page.tsx roda no próximo render) — janela
+  // curtíssima, praticamente só no 1º render depois de ativar a trilha
+  if (!resultado) {
+    return (
+      <div className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-sm text-muted-foreground">
+        Preparando sua trilha…
+      </div>
+    );
+  }
+
+  const { metaAtual } = resultado;
+  const perc = metaAtual.total > 0 ? Math.round((metaAtual.concluidas / metaAtual.total) * 100) : 0;
+
+  // segmentos por matéria — cada uma do tamanho proporcional ao nº de atividades dela na Meta,
+  // preenchido quando TODAS as atividades daquela matéria já estão concluídas
+  const segmentos = Array.from(new Set(metaAtual.atividades.map((a) => a.materia))).map((nome) => {
+    const doMateria = metaAtual.atividades.filter((a) => a.materia === nome);
+    return { materia: nome, qtd: doMateria.length, completo: doMateria.every((a) => a.concluida) };
+  });
+  const materiasConcluidas100 = Object.keys(trilha.conclusaoMaterias).length;
 
   return (
     <button
@@ -142,17 +164,17 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
-              {fmtDataCurtaBR(meta.inicioSemana)}–{fmtDataCurtaBR(meta.fimSemana)}
+              Meta {metaAtual.numero}
             </span>
             <span className="hidden sm:flex items-center gap-1 text-[11px] text-muted-foreground">
-              <CalendarDays className="h-3 w-3" /> Iniciada: {fmtDataCurtaBR(trilha.iniciadaEm)}
+              <CalendarDays className="h-3 w-3" /> Iniciada: {fmtDataCurtaBR(metaAtual.iniciadaEm)}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2 mb-1.5">
-          <span className={`text-sm font-bold tabular-nums ${feitos > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
-            ✓ {feitos}
+          <span className={`text-sm font-bold tabular-nums ${metaAtual.concluidas > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+            ✓ {metaAtual.concluidas}
           </span>
           <div className="flex-1 relative">
             <div className="bg-muted dark:bg-muted rounded-full h-3">
@@ -161,41 +183,42 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
                 style={{ width: `${perc}%` }}
               />
             </div>
-            {meta.blocos.length > 0 && (
+            {metaAtual.total > 0 && (
               <div
                 className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-4 w-4 rounded-full bg-card border-2 border-emerald-500 shadow transition-all duration-700 ease-out"
                 style={{ left: `${perc}%` }}
               />
             )}
           </div>
-          <span className="text-sm font-bold text-muted-foreground tabular-nums">{meta.blocos.length}</span>
+          <span className="text-sm font-bold text-muted-foreground tabular-nums">{metaAtual.total}</span>
         </div>
 
         <div className="flex items-center gap-3 text-xs text-muted-foreground mt-2.5">
-          <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {meta.analises.length} matéria{meta.analises.length !== 1 ? "s" : ""}</span>
-          <span className="flex items-center gap-1"><ListChecks className="h-3 w-3" /> {totalAtividades} atividade{totalAtividades !== 1 ? "s" : ""}</span>
-          {meta.blocosConcluidos && (
-            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold ml-auto"><CheckCircle2 className="h-3 w-3" /> semana entregue</span>
+          <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {segmentos.length} matéria{segmentos.length !== 1 ? "s" : ""}</span>
+          <span className="flex items-center gap-1"><ListChecks className="h-3 w-3" /> {metaAtual.total} atividade{metaAtual.total !== 1 ? "s" : ""}</span>
+          {metaAtual.fechavel && (
+            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold ml-auto"><CheckCircle2 className="h-3 w-3" /> meta entregue</span>
           )}
         </div>
 
-        {concluidas > 0 && (
+        {materiasConcluidas100 > 0 && (
           <div className="mt-2.5 pt-2.5 border-t border-border dark:border-border flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
             <Trophy className="h-3 w-3" />
-            {concluidas === 1 ? "1 matéria 100% (em revisão)" : `${concluidas} matérias 100% (em revisão)`}
+            {materiasConcluidas100 === 1 ? "1 matéria 100% (em revisão)" : `${materiasConcluidas100} matérias 100% (em revisão)`}
           </div>
         )}
       </div>
 
-      {meta.blocos.length > 0 && (
+      {segmentos.length > 0 && (
         <div className="flex">
-          {meta.blocos.map((b) => {
-            const cor = resolverCorMateria(b.materia, materiasAtivas);
+          {segmentos.map((s) => {
+            const cor = resolverCorMateria(s.materia, materiasAtivas);
             return (
               <div
-                key={b.materia}
-                title={b.materia}
-                className={`h-1.5 flex-1 ${b.concluidaAtividade ? cor.dot : "bg-muted dark:bg-muted"}`}
+                key={s.materia}
+                title={s.materia}
+                className={`h-1.5 ${s.completo ? cor.dot : "bg-muted dark:bg-muted"}`}
+                style={{ flex: s.qtd }}
               />
             );
           })}
