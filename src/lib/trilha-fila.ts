@@ -6,6 +6,7 @@ import {
 } from "./estudo-data";
 import {
   GRUPOS_QUESTOES, DIAS_REVISAO_MATERIA, LIMIAR_REFORCO_PERC, PAG_POR_HORA_PADRAO,
+  MINUTOS_ESTIMADO_QUESTAO_PADRAO,
   analisarMateria, analisarReforcos, analisarReforcosImediatos, analisarRevisoesLinkMateria,
   grupoFeito, resolverCapitulos, diffDias, parseDateKey, calcularMediaMinutosPorTarefaQuestoes,
   type CapituloBlocoItem, type MateriaLike,
@@ -53,8 +54,9 @@ export interface FilaAtividade {
 }
 
 // heurísticas de duração quando não há histórico real ainda pra tirar a média (documentadas como
-// tal — não são calibradas por dado nenhum, diferente de PAG_POR_HORA_PADRAO/calcularPagPorHora)
-export const MINUTOS_ESTIMADO_QUESTAO_PADRAO = 20;
+// tal — não são calibradas por dado nenhum, diferente de PAG_POR_HORA_PADRAO/calcularPagPorHora).
+// MINUTOS_ESTIMADO_QUESTAO_PADRAO mudou pra trilha-dinamica.ts (importado acima) — reaproveitado
+// também por estimativaConclusaoTrilha lá.
 export const MINUTOS_ESTIMADO_REVISAO30 = 60;
 export const MINUTOS_ESTIMADO_CARTAS = 20;
 export const MINUTOS_ESTIMADO_TEORIA_PADRAO = 60; // tópico sem PDF/página mapeada nenhuma

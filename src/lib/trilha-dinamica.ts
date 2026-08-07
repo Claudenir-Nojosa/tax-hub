@@ -691,6 +691,14 @@ const MINUTOS_ALVO_ATIVIDADE_CAPITULO_PISO = 30;
 // teoria na fila de Metas).
 export const PAG_POR_HORA_PADRAO = 30;
 
+// mesmo espírito de PAG_POR_HORA_PADRAO acima, mas pro eixo de questões — usado SÓ quando ainda não
+// existe nenhuma tarefa de questões concluída pra tirar a média real (calcularMediaMinutosPorTarefaQuestoes
+// nunca deixa de priorizar dado real quando existe). ~2min por questão × ~10 questões por grupo A-D
+// (estimativa honesta, não calibrada por dado nenhum). Exportado pra trilha-fila.ts (dimensionamento
+// de atividade de questões/reforço na fila de Metas) e estimativaConclusaoTrilha reaproveitarem o
+// mesmo fallback.
+export const MINUTOS_ESTIMADO_QUESTAO_PADRAO = 20;
+
 // um item da lista de subtarefas de um bloco agrupado — o CapituloResolvido de sempre, mais o
 // índice GLOBAL (1-based, entre TODOS os capítulos do PDF) pra UI numerar certo mesmo quando o
 // bloco não começa no capítulo 1 (ex.: "Capítulo 4: Regras Gerais de Acentuação")
@@ -1057,11 +1065,15 @@ export function calcularMediaMinutosPorTarefaQuestoes(
 
 export interface EstimativaConclusao {
   paginasRestantes: number;
-  horasLeituraRestante: number | null; // null = ainda sem páginas/hora suficiente pra estimar
+  horasLeituraRestante: number; // sempre calculável — usa PAG_POR_HORA_PADRAO até ter ritmo real
+  leituraUsaPadrao: boolean; // true = ainda sem nenhuma sessão de leitura com páginas registrada
   tarefasQuestoesRestantes: number;
-  horasQuestoesRestante: number | null; // null = ainda sem tarefa de questões concluída pra tirar a média
-  semanasRestantes: number | null; // null = falta dado em algum dos dois eixos, ou sem horas/semana configuradas
+  horasQuestoesRestante: number; // sempre calculável — usa MINUTOS_ESTIMADO_QUESTAO_PADRAO até ter média real
+  questoesUsaPadrao: boolean; // true = ainda sem nenhuma tarefa de questões concluída
+  semanasRestantes: number | null; // null SÓ quando o Ciclo não tem nenhuma hora configurada
   dataPrevista: string | null; // dateKey
+  metasRestantes: number | null; // ≈ semanasRestantes arredondado pra cima (1 Meta = 1 orçamento semanal)
+  minutosPorMeta: number | null; // orçamento de uma Meta = soma de horasPorDia do Ciclo
 }
 
 // Estimativa de quando a trilha INTEIRA termina (não só a semana corrente) — soma páginas de
@@ -1069,9 +1081,13 @@ export interface EstimativaConclusao {
 // leitura, calcularPagPorHora) com o tempo estimado das tarefas de questões que ainda faltam
 // (grupos A-D, checkpoints 7/30d do link e reforços imediatos — só os que têm link cadastrado;
 // revisão de 30 questões de matéria concluída fica de fora de propósito, é rara e só acontece uma
-// vez por matéria), tudo dividido pelo ritmo semanal configurado no Ciclo. Sem dado suficiente em
-// algum dos dois eixos = "ainda calculando" em vez de inventar um número (mesmo espírito do
-// fmtEta em biblioteca-utils.ts).
+// vez por matéria), tudo dividido pelo ritmo semanal configurado no Ciclo. SEMPRE calcula um
+// número — sem nenhum dado real ainda em algum dos dois eixos, usa os mesmos padrões honestos que
+// o resto do motor já usa (PAG_POR_HORA_PADRAO/MINUTOS_ESTIMADO_QUESTAO_PADRAO — ver
+// `leituraUsaPadrao`/`questoesUsaPadrao` pra UI poder avisar disso), e vai trocando por dado real
+// sozinho assim que existir (calcularPagPorHora/calcularMediaMinutosPorTarefaQuestoes nunca deixam
+// de priorizar dado real quando existe). Só fica `null` quando o Ciclo não tem NENHUMA hora
+// configurada (não dá pra estimar ritmo semanal nenhum, aí sim é config faltando, não dado de uso).
 export function estimativaConclusaoTrilha(params: {
   hoje?: string;
   materiasAtivas: MateriaLike[];
@@ -1092,7 +1108,9 @@ export function estimativaConclusaoTrilha(params: {
     .filter((p) => nomesAtivos.has(p.materia))
     .reduce((s, p) => s + Math.max(0, alvoLeituraPdf(p) - p.paginaAtual), 0);
   const pagPorHora = calcularPagPorHora(calendario);
-  const horasLeituraRestante = pagPorHora !== null && pagPorHora > 0 ? paginasRestantes / pagPorHora : null;
+  const leituraUsaPadrao = pagPorHora === null || pagPorHora <= 0;
+  const ritmoLeitura = leituraUsaPadrao ? PAG_POR_HORA_PADRAO : pagPorHora!;
+  const horasLeituraRestante = paginasRestantes / ritmoLeitura;
 
   // questões: minutos totais já gastos em sessões tipo "questoes" / total de tarefas concluídas
   // (grupos A-D + checkpoints 7/30d + reforços imediatos, só contando quem tem link cadastrado
@@ -1136,14 +1154,13 @@ export function estimativaConclusaoTrilha(params: {
     }
   }
 
-  const mediaMinutosPorTarefa = calcularMediaMinutosPorTarefaQuestoes(calendario, tarefasConcluidas);
-  const horasQuestoesRestante = mediaMinutosPorTarefa !== null ? (mediaMinutosPorTarefa * tarefasPendentes) / 60 : null;
+  const mediaMinutosPorTarefaReal = calcularMediaMinutosPorTarefaQuestoes(calendario, tarefasConcluidas);
+  const questoesUsaPadrao = mediaMinutosPorTarefaReal === null;
+  const mediaMinutosPorTarefa = questoesUsaPadrao ? MINUTOS_ESTIMADO_QUESTAO_PADRAO : mediaMinutosPorTarefaReal!;
+  const horasQuestoesRestante = (mediaMinutosPorTarefa * tarefasPendentes) / 60;
 
   const minutosSemana = Object.values(configCiclo.horasPorDia).reduce((s, v) => s + v, 0);
-  const semanasRestantes =
-    horasLeituraRestante !== null && horasQuestoesRestante !== null && minutosSemana > 0
-      ? (horasLeituraRestante + horasQuestoesRestante) / (minutosSemana / 60)
-      : null;
+  const semanasRestantes = minutosSemana > 0 ? (horasLeituraRestante + horasQuestoesRestante) / (minutosSemana / 60) : null;
 
   let dataPrevista: string | null = null;
   if (semanasRestantes !== null) {
@@ -1155,10 +1172,14 @@ export function estimativaConclusaoTrilha(params: {
   return {
     paginasRestantes,
     horasLeituraRestante,
+    leituraUsaPadrao,
     tarefasQuestoesRestantes: tarefasPendentes,
     horasQuestoesRestante,
+    questoesUsaPadrao,
     semanasRestantes,
     dataPrevista,
+    metasRestantes: semanasRestantes !== null ? Math.ceil(semanasRestantes) : null,
+    minutosPorMeta: minutosSemana > 0 ? minutosSemana : null,
   };
 }
 

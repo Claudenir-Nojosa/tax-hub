@@ -64,30 +64,48 @@ function fmtDataLonga(dateKey: string): string {
   return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 }
 
-// card de estimativa de conclusão de TODA a trilha (não só a semana) — sem dado suficiente em
-// algum dos dois eixos (leitura, questões), mostra "ainda calculando" em vez de um número inventado
-function CardEstimativa({ estimativa }: { estimativa: EstimativaConclusao }) {
-  const aindaCalculando = estimativa.semanasRestantes === null || estimativa.dataPrevista === null;
+// card de estimativa de conclusão de TODA a trilha (não só a semana) — SEMPRE calcula um número,
+// mesmo no dia 1 sem nenhum dado real: usa os padrões honestos do motor (30 pág/hora de leitura,
+// 20min por tarefa de questões — ver PAG_POR_HORA_PADRAO/MINUTOS_ESTIMADO_QUESTAO_PADRAO em
+// trilha-dinamica.ts) até o usuário ter sessões/tarefas reais suficientes, e troca sozinho pro
+// ritmo real assim que existir (sem re-render manual — o próprio `estimativa` já vem recalculado).
+// Só fica sem previsão nenhuma se o Ciclo não tiver NENHUMA hora configurada (não é falta de uso,
+// é falta de config — mensagem e CTA diferentes da versão antiga "ainda calculando").
+function CardEstimativa({ estimativa, onIrParaCiclo }: { estimativa: EstimativaConclusao; onIrParaCiclo?: () => void }) {
+  const semCicloConfigurado = estimativa.semanasRestantes === null || estimativa.dataPrevista === null;
+  const usaAlgumPadrao = estimativa.leituraUsaPadrao || estimativa.questoesUsaPadrao;
   return (
     <div className="bg-card rounded-2xl border border-border p-4 sm:p-5">
       <div className="flex items-center gap-2 mb-2">
         <CalendarClock className="h-4 w-4 text-indigo-500 flex-shrink-0" />
         <span className="text-sm font-bold text-foreground dark:text-foreground">Estimativa de conclusão da trilha</span>
       </div>
-      {aindaCalculando ? (
-        <p className="text-xs text-muted-foreground">
-          Ainda calculando — registre mais páginas lidas (Timer/leitor de PDF) e tarefas de questões concluídas pra essa previsão aparecer.
-        </p>
+      {semCicloConfigurado ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="flex-1">Configure horas por dia no Ciclo de Estudos pra essa previsão aparecer.</span>
+          {onIrParaCiclo && (
+            <button type="button" onClick={onIrParaCiclo} className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary font-medium whitespace-nowrap">Ir pro Ciclo</button>
+          )}
+        </div>
       ) : (
         <>
           <p className="text-sm text-foreground">
             No ritmo atual, previsão de concluir toda a trilha em{" "}
-            <strong>{fmtDataLonga(estimativa.dataPrevista!)}</strong> (~{Math.max(1, Math.ceil(estimativa.semanasRestantes!))} semana{Math.max(1, Math.ceil(estimativa.semanasRestantes!)) !== 1 ? "s" : ""}).
+            <strong>{fmtDataLonga(estimativa.dataPrevista!)}</strong> — ~{estimativa.metasRestantes} meta{estimativa.metasRestantes !== 1 ? "s" : ""} restante{estimativa.metasRestantes !== 1 ? "s" : ""}, cada uma com orçamento de ~{fmtHoras(estimativa.minutosPorMeta!)}.
           </p>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-            <span>{estimativa.paginasRestantes} pág{estimativa.paginasRestantes !== 1 ? "s" : ""}. de teoria restantes · {fmtHoras(Math.round(estimativa.horasLeituraRestante! * 60))} de leitura</span>
-            <span>{estimativa.tarefasQuestoesRestantes} tarefa{estimativa.tarefasQuestoesRestantes !== 1 ? "s" : ""} de questões restantes · {fmtHoras(Math.round(estimativa.horasQuestoesRestante! * 60))}</span>
+            <span>{estimativa.paginasRestantes} pág{estimativa.paginasRestantes !== 1 ? "s" : ""}. de teoria restantes · {fmtHoras(Math.round(estimativa.horasLeituraRestante * 60))} de leitura</span>
+            <span>{estimativa.tarefasQuestoesRestantes} tarefa{estimativa.tarefasQuestoesRestantes !== 1 ? "s" : ""} de questões restantes · {fmtHoras(Math.round(estimativa.horasQuestoesRestante * 60))}</span>
           </div>
+          {usaAlgumPadrao && (
+            <p className="mt-2 text-[11px] text-muted-foreground italic">
+              {estimativa.leituraUsaPadrao && estimativa.questoesUsaPadrao
+                ? "Baseado em médias padrão (30 pág/hora de leitura, 20min por tarefa de questões) — passa a usar seu ritmo real assim que você registrar páginas lidas e concluir tarefas de questões."
+                : estimativa.leituraUsaPadrao
+                  ? "Leitura baseada numa média padrão (30 pág/hora) — passa a usar seu ritmo real assim que você registrar páginas lidas (Timer/leitor de PDF)."
+                  : "Questões baseadas numa média padrão (20min por tarefa) — passa a usar sua média real assim que você concluir alguma tarefa de questões."}
+            </p>
+          )}
         </>
       )}
     </div>
@@ -297,7 +315,7 @@ export default function TrilhaTab({
         </div>
       </div>
 
-      {estimativa && <CardEstimativa estimativa={estimativa} />}
+      {estimativa && <CardEstimativa estimativa={estimativa} onIrParaCiclo={onIrParaCiclo} />}
     </div>
   );
 }
