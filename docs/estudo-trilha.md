@@ -10,6 +10,16 @@ estudos que fala com o usuário pelo nome, no Dashboard e no topo da Trilha. Con
 derivada do progresso real, recalculada a cada render** — nenhum plano pré-gerado. Atualize este
 arquivo se as regras mudarem.
 
+**Camada nova em 2026-08-07 (fila de atividades + Metas com carry-over, ver seção 7)**: a UI da
+Trilha (hero + 4 seções por tipo) foi substituída por um card "Meta N" + tabela de atividades +
+card de próxima Meta bloqueada (`src/lib/trilha-fila.ts` + `src/components/estudo/trilha/
+MetaAtualCard.tsx`/`TabelaAtividades.tsx`/`ProximaMetaCard.tsx`). O motor semanal descrito abaixo
+(`computarMetaSemana`) **continua existindo, sem alteração**, e ainda alimenta o Gustavo, o card
+"Progresso rumo aos 100%" e a estimativa de conclusão — só a apresentação central da aba Trilha
+passou a vir da fila nova. Ver seção 7 pra detalhes; o resto deste documento descreve o motor
+semanal, que é a base de tudo (a fila nova reaproveita as mesmas funções de análise, sem duplicar
+regra nenhuma).
+
 ## 1. As regras (método do usuário, na ordem em que ele descreveu)
 
 1. **A semana cobre TODAS as matérias ativas de uma vez** (não mais um grupo A/B/C por dia). O
@@ -95,7 +105,10 @@ arquivo se as regras mudarem.
 7. **Sem dívida acumulada entre semanas**: cada `MetaSemana` é recalculada do zero a partir do
    peso configurado — se uma matéria não bate a meta de horas numa semana, a semana seguinte só
    reparte de novo, sem "carregar" o que faltou (decisão explícita do usuário: mais simples, sem
-   estado novo pra guardar).
+   estado novo pra guardar). **Continua valendo pro motor semanal (`MetaSemana`) em si** — a
+   camada de Metas da seção 7 abaixo é quem reverte isso, especificamente pro conceito de "Meta
+   N" que a UI mostra hoje (decisão nova, também explícita do usuário, pra um propósito
+   diferente: carry-over de ATIVIDADES discretas, não de minutos da semana).
 8. **Reforço de tópicos fracos A-D**: um grupo "feito" com **menos de 70% de acerto**
    (`LIMIAR_REFORCO_PERC`) volta a aparecer na trilha depois de **3 dias** sem atualização
    (`REFORCO_COOLDOWN_DIAS`). Qualquer novo registro de acertos/erros nesse grupo reinicia a
@@ -268,11 +281,15 @@ pendências); `MensagemDoDia` foi rebatizada como a bolha do Gustavo, chamando
 
 ```
 src/lib/trilha-dinamica.ts                  motor puro (análise por matéria + meta da SEMANA + estimativa)
-src/lib/estudo-data.ts                       TrilhaDinamicaState, TopicoPaginas, PdfEstudo.intervalosPaginas
-src/components/estudo/TrilhaTab.tsx          orquestrador: Gustavo + hero semanal + seções + estimativa
-src/components/estudo/trilha/TrilhaLinhas.tsx  linhas/corpos de cada seção (extraído do TrilhaTab)
+src/lib/trilha-fila.ts                       fila de atividades + Metas com carry-over (ver seção 7)
+src/lib/estudo-data.ts                       TrilhaDinamicaState, TopicoPaginas, PdfEstudo.intervalosPaginas, FilaMetasState/MetaPersistida
+src/components/estudo/TrilhaTab.tsx          orquestrador: Gustavo + Meta atual/próxima Meta + estimativa
+src/components/estudo/trilha/MetaAtualCard.tsx    "Meta N" + barra de progresso com foguete + 4 stats
+src/components/estudo/trilha/TabelaAtividades.tsx  tabela de atividades da Meta atual
+src/components/estudo/trilha/ProximaMetaCard.tsx   card bloqueado + botão "finalizar/ignorar"
+src/components/estudo/trilha/TrilhaLinhas.tsx  CardMateria (grade "Progresso rumo aos 100%") — os Corpo* de seção por tipo foram removidos (substituídos pela TabelaAtividades)
 src/components/estudo/trilha/trilha-ui.ts    fmtHoras/resolverCorMateria/gerarMensagemGustavo (compartilhados)
-src/components/estudo/QuestoesTab.tsx        cadastro dos links (7d/30d + reforço rápido por tópico + revisão de matéria)
+src/components/estudo/QuestoesTab.tsx        cadastro dos links (7d/30d + reforço rápido por tópico + revisão de matéria + toggle "sem link, não vou cadastrar")
 src/components/estudo/DashboardTab.tsx       CardTrilha (resumo da semana) + bolha do Gustavo
 src/components/estudo/biblioteca/FormPdf.tsx  intervalo de páginas por tópico (manual + "Sugerir com IA")
 src/components/estudo/biblioteca/BibliotecaTab.tsx  aberturaSolicitada → deep link pro LeitorPdf
@@ -304,3 +321,161 @@ src/app/api/ai/pdf-topicos-paginas/route.ts  sugestão de intervalo de páginas 
   ao vivo — não dá pra simular "3 semanas atrás" numa conta de teste sem estado histórico de
   verdade; validados por `tsc` limpo + leitura de código (a lógica de prioridade em
   `gerarMensagemGustavo` é determinística e coberta por raciocínio manual dos 3 cenários).
+
+## 7. Fila de atividades + Metas com carry-over (2026-08-07)
+
+Camada nova em `src/lib/trilha-fila.ts`, em cima do motor semanal (que continua intacto — ver
+seções 1-6). Motivação do usuário: quer uma UI parecida com a de um concorrente ("Guruja") — card
+"Meta N" com barra de progresso, 4 stats, tabela de atividades, e um card "Próxima meta" bloqueado
+— dimensionada por ATIVIDADES DISCRETAS (não minutos brutos) e com **carry-over de verdade**: uma
+atividade que libera mas não coube na Meta atual tem que aparecer na Meta seguinte, não pode sumir
+(reverte a regra 7 **só** pro conceito de Meta — o motor semanal em si continua "sem dívida
+acumulada").
+
+### 7.1 Dois conceitos novos
+
+1. **Fila global de atividades** (`construirFilaGlobal`) — enumeração EXAUSTIVA do edital inteiro
+   (teoria por tópico, os 4 grupos A-D, reforço, reforço rápido, revisão de link, revisão de
+   matéria, cartas), sempre derivada ao vivo (mesmo espírito "deriva > persiste" das seções
+   1-6) — reaproveita `analisarMateria`/`analisarReforcos`/`analisarReforcosImediatos`/
+   `analisarRevisoesLinkMateria` **sem alterá-las**, só normaliza a saída pro shape
+   `FilaAtividade`. Só devolve o que está elegível-e-pendente agora (mesma liberação escalonada
+   de sempre — nada de novo sendo inventado).
+2. **Fronteira de Meta persistida** (`TrilhaDinamicaState.filaMetas`, tipos `FilaMetasState`/
+   `MetaPersistida`/`MetaAtividadeRef` em `estudo-data.ts`) — só os IDS das atividades atribuídas
+   a cada Meta N (mais um snapshot dos campos DESCRITIVOS: título, tipo, tempo estimado — que não
+   mudam depois de criados). "Concluída" e "desempenho %" NUNCA vêm desse snapshot — são sempre
+   recalculados ao vivo (`estaAtividadeConcluida`), pra a tabela sempre refletir o registro mais
+   recente do caderno. Campo 100% aditivo no blob `Json` já existente — zero migração de banco,
+   zero coluna nova (a rota `api/concurso/[id]/progresso` já faz passthrough puro de
+   `trilhaDinamica`); trilha ativada antes desta reforma carrega `filaMetas: undefined` e recebe
+   bootstrap preguiçoso na próxima leitura.
+
+### 7.2 Cobertura garantida (os 56 tópicos sem link de revisão)
+
+Medido no banco real do concurso "Curso Regular para Área Fiscal": 394 tópicos, 171 Blocos de
+questões, **56 tópicos sem NENHUMA cobertura de revisão de link** (nem Bloco, nem
+`linkRevisao7d`/`30d` próprio) — hoje isso era invisível, `analisarRevisoesLink` simplesmente não
+gerava nada pra eles. Teoria e questões A-D já cobrem 100% dos tópicos (nenhuma mudança precisou
+disso); a lacuna real era só a revisão do link. Resolvido com um tipo de atividade novo:
+
+- Tópico com os 4 grupos A-D completos, sem Bloco e sem link próprio → item
+  `revisao_link_faltando` na fila (`titulo: "Cadastre o link de revisão — falta cobertura"`, ponto
+  âmbar na tabela, sem link de verdade).
+- Some sozinho assim que um link é cadastrado (vira `revisao_link` de verdade automaticamente).
+- Ou o usuário marca `TopicoState.revisaoLinkDispensada = true` (toggle em `QuestoesTab.tsx`, só
+  aparece pra tópico sem Bloco e sem link) — "sem link, não vou cadastrar", pra não ficar pendente
+  pra sempre num tópico que genuinamente nunca vai ter caderno próprio. Campo curricular
+  (compartilhado entre os acessores do concurso, mesma categoria de `linkRevisao7d`/`importancia`
+  no split de `estudo-data.ts`).
+
+### 7.3 Dimensionamento por atividade
+
+- **Teoria**: páginas restantes do tópico (via `PdfEstudo.intervalosPaginas` ou `capitulos`,
+  descontando o que já foi lido) ÷ `calcularPagPorHora` (ritmo real do usuário, prioridade sempre)
+  — sem nenhuma sessão registrada ainda, cai em `PAG_POR_HORA_PADRAO` (trocado de 15 → 30 nesta
+  reforma, decisão do usuário — só vale no dia 1, o ritmo real assume assim que existe 1 sessão).
+- **Questões (A-D, reforço, revisão de link, reforço imediato)**: `calcularMediaMinutosPorTarefaQuestoes`
+  (extraída de dentro de `estimativaConclusaoTrilha`, mesma conta, sem mudar comportamento dela) —
+  fallback `MINUTOS_ESTIMADO_QUESTAO_PADRAO` (20min) sem nenhuma tarefa concluída ainda.
+- **Revisão de matéria / cartas**: sem duração real capturada hoje (o botão "Concluí"/"Marquei" só
+  grava a data) — constantes fixas `MINUTOS_ESTIMADO_REVISAO30` (60min) e `MINUTOS_ESTIMADO_CARTAS`
+  (20min), heurística grosseira documentada como tal.
+- **Orçamento da Meta**: soma de `configCiclo.horasPorDia` (mesma soma que `computarMetaSemana` já
+  usa pra `minutosSemana`) — só heurística de TAMANHO DE LOTE, não é mais um relógio de calendário
+  (ver 7.4).
+
+### 7.4 Carry-over mecânico
+
+"Meta N" é desacoplada de "semana-calendário": um lote de trabalho dimensionado pelo orçamento
+semanal, que fecha por CONCLUSÃO TOTAL ou por AÇÃO MANUAL — nunca por o calendário virar semana.
+Algoritmo de abertura da Meta N+1 (`abrirProximaMeta`, interno, compartilhado pelas duas funções
+exportadas abaixo): `[...pendências da Meta que fechou (carry-over, sempre primeiro), ...fila
+global filtrando ids já atribuídos em qualquer Meta anterior]`, acumulado em ordem de prioridade
+(teoria > questões/reforço > reforço rápido > revisão link > revisão matéria > cartas) até bater o
+orçamento — sempre inclui pelo menos 1 atividade (nunca abre Meta vazia com trabalho pendente).
+
+- `avancarFilaMetasSeNecessario` — chamada de um `useEffect` em `page.tsx` (nível compartilhado,
+  não só dentro da aba Trilha — ver 7.7), mesmo padrão do bookkeeping de `conclusaoMaterias`:
+  bootstrap da Meta 1 quando `filaMetas` é `undefined`, promoção automática pra Meta N+1 quando a
+  atual está `fechavel` (`concluidas === total`). NÃO promove sozinho com pendência — pra isso é o
+  botão manual.
+- `finalizarMetaManualmente` — botão "Finalize ou ignore as atividades da meta atual" no
+  `ProximaMetaCard`: fecha a Meta aberta MESMO com pendências (`fechamentoManual: true`), que
+  viram carry-over automático na próxima (nunca deletadas).
+- `computarMetaAtual` — hidrata a Meta aberta com estado ao vivo (concluída/desempenho recalculados
+  por `estaAtividadeConcluida`, que faz parse do sufixo do id estável pra achar grupo/checkpoint,
+  sem re-varrer a fila inteira) e calcula os 4 stats + a projeção de "Liberada em: DD/MM" da
+  próxima Meta (throughput real desde que a Meta atual abriu — mesmo espírito honesto de
+  `estimativaConclusaoTrilha.dataPrevista`; sem nenhuma atividade concluída ainda, "sem estimativa
+  ainda" em vez de data inventada).
+
+### 7.5 UI
+
+`MetaAtualCard` (barra horizontal com ícone `Rocket` posicionado em `left: {perc}%`, pedido
+explícito do usuário — diferente do `ProgressRing` circular usado no resto do módulo) +
+`TabelaAtividades` (status dot verde/cinza/âmbar, Disciplina, Tipo — "Teoria"/"Questões" + tag de
+subtipo, Título, Relevância em estrelas via `TopicoState.importancia`, Tempo estimado, Desempenho
+% — **sem coluna "Código"**, decisão explícita do usuário, específica do Guruja) + `ProximaMetaCard`
+(cadeado, projeção, botão de finalizar/ignorar). `TrilhaTab.tsx` trocou o miolo (hero semanal + 4
+`SectionCard` por tipo) por esses 3 componentes; a grade "Progresso rumo aos 100%" e
+`CardEstimativa` continuam exatamente como estavam, lendo `computarMetaSemana`/
+`estimativaConclusaoTrilha` sem mudança (`GustavoBubble` passou a ler `metaAtual` também — ver
+7.7). A checklist de subcapítulos clicáveis voltou: `FilaAtividade.pdfId`/`todosCapitulos`
+(preenchido por `construirFilaGlobal` via `resolverCapitulos`, mesma função de sempre) fazem
+`TabelaAtividades` expandir a linha de teoria numa lista clicável de capítulo/subcapítulo — mesmo
+padrão visual que `CorpoBloco` tinha antes desta reforma (bolinha verde/cinza, capítulo já lido
+pela leitura real trava o toggle manual), só que agora dentro da tabela nova em vez de um card por
+tipo.
+
+### 7.6 Verificação
+
+- `npx tsc --noEmit` limpo em cada arquivo novo/alterado.
+- Teste sintético (`tsx`, script temporário rodado de dentro de `src/lib/` pra resolver os imports
+  relativos, apagado depois) cobrindo: fila global inclui teoria de todo tópico ativo (garantia de
+  cobertura), bootstrap cria a Meta 1, hidratação reflete `estudado`/cadernos ao vivo, fechamento
+  manual com pendência gera carry-over correto na Meta seguinte, item `revisao_link_faltando`
+  aparece e some ao cadastrar link ou marcar `revisaoLinkDispensada` — 12/12 verificações passando.
+- Smoke test ao vivo no navegador (preview local, sessão com dado real — writes falham com 401 por
+  causa do problema de auth local já documentado, mas a leitura/render é real): cliquei "Ativar
+  trilha dinâmica" numa trilha nunca ativada antes e confirmei o bootstrap end-to-end — "Meta 1"
+  com as 24 atividades de teoria certas (só teoria nesse primeiro momento, nenhum grupo A-D
+  liberado ainda — sequenciamento correto), os 4 stats zerados corretamente, "Próxima Meta 2 — Sem
+  estimativa ainda", tabela com Disciplina/Tipo/Título/Relevância/Tempo corretos, sem nenhum erro
+  de React/console além dos 401 já esperados.
+
+### 7.7 Dashboard/Gandalf migrados pra Meta atual (eliminando a narrativa dupla)
+
+A "fase futura opcional" citada no plano original foi feita: `DashboardTab.tsx` (bolha do Gustavo
++ `CardTrilha`) e a bolha da própria Trilha passaram a ler `computarMetaAtual` em vez de só
+`computarMetaSemana` pra tudo que é sobre "o que fazer agora"/pendências — antes o Dashboard citava
+contagens recalculadas da semana (`meta.questoesPendentes.length` etc.) enquanto a Trilha já falava
+em "Meta N: X de Y", dois números plausíveis mas potencialmente dessincronizados. Agora os dois
+lugares mostram exatamente os mesmos números (verificado ao vivo: "Meta 1", "0✓ de 24" e a mesma
+frase do Gustavo nos dois).
+
+**O que migrou, o que não migrou:**
+- `gerarMensagemGustavo`/`montarResumoSemanaIA`/`useMensagemGustavoIA` (`trilha-ui.ts`) ganharam um
+  novo parâmetro `metaAtual: MetaAtual | null`. A "próxima atividade" (função nova
+  `proximaAtividadeFila`) e as contagens de pendência (`materias[]`, `reforcosPendentes` etc. do
+  `ResumoSemanaIA`) vêm dele quando disponível. Os sinais de **atraso/tendência fraca** (`meta.
+  atrasado`, `ritmoNecessarioMinDia`, a janela de 3 semanas) continuam vindo da `MetaSemana` — são
+  sobre RITMO semanal/calendário, um conceito genuinamente diferente de "qual atividade fazer
+  agora", então não fazem parte da inconsistência que motivou a migração.
+- `DashboardTab.tsx`'s `CardTrilha` foi redesenhado pra mostrar "Meta N"/barra com marcador/chips
+  por matéria a partir de `metaAtual.atividades` (agrupadas por matéria, segmento proporcional ao nº
+  de atividades, preenchido quando todas as da matéria estão concluídas) em vez de `meta.blocos`
+  semanal. "X matérias 100% (em revisão)" agora vem direto de `Object.keys(trilha.
+  conclusaoMaterias).length`, sem precisar de `computarMetaSemana` pra esse dado.
+- `avancarFilaMetasSeNecessario` (bootstrap/promoção de Meta) saiu do `useEffect` só dentro de
+  `TrilhaTab.tsx` e foi pra `page.tsx` (nível compartilhado, junto dos outros `update*` de
+  `EstudoState`) — sem isso, o Dashboard mostraria "Preparando sua trilha…" pra sempre em quem
+  nunca abriu a aba Trilha, já que só ela criava a Meta 1.
+- **NÃO migrado, deliberadamente**: `metaMinutosRestantes`/`metasEstudo` (`page.tsx` → toast +
+  barras de progresso dentro do `LeitorPdf`) continuam lendo `computarMetaSemana`. Esses dois
+  medem ritmo contínuo em MINUTOS (quanto já leu hoje/nesta semana pro alvo da matéria) — um sinal
+  vivo, atualizado a cada página virada. O modelo de Meta/fila é proposital e estruturalmente
+  binário (atividade concluída ou não, sem "em andamento"): forçar esse encaixe faria o leitor
+  perder a granularidade que o torna útil, sem ganhar nada em troca (esse par nunca fez parte da
+  reclamação de "narrativa dupla" — não é uma duplicata de "próxima atividade"/pendências, é uma
+  métrica diferente). `computarMetaSemana` segue plenamente em uso — não foi "aposentada".
