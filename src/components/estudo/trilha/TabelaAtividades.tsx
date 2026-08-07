@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { CheckCircle2, ChevronDown, ChevronRight, Circle, ExternalLink, Star } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, Circle, ExternalLink, Lock, Star } from "lucide-react";
 import type { MateriaConcurso, MateriaDef } from "@/lib/estudo-data";
 import type { FilaAtividade, FilaAtividadeTipo } from "@/lib/trilha-fila";
 import { resolverCorMateria } from "./trilha-ui";
@@ -9,6 +9,13 @@ import { resolverCorMateria } from "./trilha-ui";
 // Tabela de atividades da Meta atual — puramente informativa (registrar resultado continua na aba
 // Questões, mesmo fluxo de sempre; aqui é só o panorama). Sem coluna "Código" (decisão do
 // usuário — específica do Guruja, não faz parte desta reforma).
+//
+// Cadeia bloqueada (pedido do usuário, mesmo espírito do motor semanal antigo): só a primeira
+// atividade NÃO concluída fica desbloqueada — as de depois mostram cadeado até a anterior ser
+// concluída. `concluida` continua sempre ao vivo (ver trilha-fila.ts): se algo depois da posição
+// atual já estiver concluído por outro caminho (ex.: leu direto no PDF sem passar pela Trilha),
+// aparece com o check verde normalmente, nunca cadeado — o cadeado é só pra "ainda não chegou a
+// vez", nunca esconde um progresso real já feito.
 
 const SUBTIPO_LABEL: Partial<Record<FilaAtividadeTipo, string>> = {
   reforco: "reforço",
@@ -60,6 +67,10 @@ export default function TabelaAtividades({
     });
   };
 
+  // índice da 1ª atividade ainda não concluída — ela e tudo antes ficam desbloqueados; tudo depois
+  // fica com cadeado até virar a "primeira pendente" (-1 = tudo concluído, nada bloqueado)
+  const primeiroPendenteIdx = atividades.findIndex((a) => !a.concluida);
+
   return (
     <div className="overflow-x-auto -mx-1">
       <table className="w-full text-xs min-w-[560px]">
@@ -75,7 +86,8 @@ export default function TabelaAtividades({
           </tr>
         </thead>
         <tbody>
-          {atividades.map((a) => {
+          {atividades.map((a, i) => {
+            const bloqueada = !a.concluida && primeiroPendenteIdx !== -1 && i > primeiroPendenteIdx;
             const cor = resolverCorMateria(a.materia, materiasAtivas);
             const dotClasse = a.concluida
               ? "bg-emerald-500"
@@ -84,18 +96,23 @@ export default function TabelaAtividades({
                 : "bg-muted-foreground/30";
             const subtipo = SUBTIPO_LABEL[a.tipo];
             // além dos tipos com link externo, teoria (abre o PDF) e cartas (vai pra aba Cartas)
-            // também são clicáveis — onAbrirLink decide o destino certo por tipo
-            const clicavel = !!a.link || a.tipo === "teoria" || a.tipo === "cartas";
-            const temCapitulos = (a.todosCapitulos?.length ?? 0) > 0;
+            // também são clicáveis — onAbrirLink decide o destino certo por tipo. Bloqueada nunca é
+            // clicável, mesmo que o tipo permita.
+            const clicavel = !bloqueada && (!!a.link || a.tipo === "teoria" || a.tipo === "cartas");
+            const temCapitulos = !bloqueada && (a.todosCapitulos?.length ?? 0) > 0;
             const expandido = expandidos.has(a.id);
             return (
               <Fragment key={a.id}>
                 <tr
                   onClick={clicavel ? () => onAbrirLink(a) : undefined}
-                  className={`border-b border-border/50 ${clicavel ? "cursor-pointer hover:bg-accent/40" : ""} ${a.concluida ? "opacity-60" : ""}`}
+                  className={`border-b border-border/50 ${clicavel ? "cursor-pointer hover:bg-accent/40" : ""} ${a.concluida ? "opacity-60" : ""} ${bloqueada ? "opacity-40" : ""}`}
                 >
                   <td className="py-2 px-1">
-                    <span className={`block w-2 h-2 rounded-full ${dotClasse}`} title={a.concluida ? "Concluída" : "Pendente"} />
+                    {bloqueada ? (
+                      <Lock className="h-3 w-3 text-muted-foreground/50" />
+                    ) : (
+                      <span className={`block w-2 h-2 rounded-full ${dotClasse}`} title={a.concluida ? "Concluída" : "Pendente"} />
+                    )}
                   </td>
                   <td className="py-2 px-2">
                     <span className="flex items-center gap-1.5 min-w-0">
@@ -114,7 +131,7 @@ export default function TabelaAtividades({
                     </div>
                   </td>
                   <td className="py-2 px-2 max-w-[220px]">
-                    <span className="flex items-center gap-1 truncate" title={a.titulo}>
+                    <span className="flex items-center gap-1 truncate" title={bloqueada ? "Conclua a atividade anterior primeiro" : a.titulo}>
                       {temCapitulos && (
                         <button
                           type="button"
