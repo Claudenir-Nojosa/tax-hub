@@ -517,7 +517,7 @@ export interface MetaSemana {
   atrasado: boolean; // ritmo até hoje significativamente abaixo do proporcional esperado (ver computarMetaSemana)
 }
 
-function parseDateKey(key: string): Date {
+export function parseDateKey(key: string): Date {
   const [y, m, d] = key.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
@@ -687,7 +687,9 @@ const MINUTOS_ALVO_ATIVIDADE_CAPITULO_PISO = 30;
 // (por menor que fosse) virava uma atividade separada. É só uma estimativa média honesta pra
 // material de concurso denso — o ritmo REAL sempre assume a partir da primeira sessão com
 // páginas registrada (calcularPagPorHora nunca deixa de priorizar dado real quando existe).
-const PAG_POR_HORA_PADRAO = 15;
+// Exportado pra trilha-fila.ts reaproveitar o mesmo fallback (dimensionamento de atividade de
+// teoria na fila de Metas).
+export const PAG_POR_HORA_PADRAO = 30;
 
 // um item da lista de subtarefas de um bloco agrupado — o CapituloResolvido de sempre, mais o
 // índice GLOBAL (1-based, entre TODOS os capítulos do PDF) pra UI numerar certo mesmo quando o
@@ -1036,6 +1038,23 @@ function alvoLeituraPdf(pdf: Pick<PdfEstudo, "totalPaginas" | "paginaConteudoFim
   return pdf.paginaConteudoFim ?? pdf.totalPaginas;
 }
 
+// Média histórica GLOBAL de minutos por tarefa de questões (não separa por matéria, grupo A-D vs
+// checkpoint 7/30d, etc. — todas as tarefas de questões são tratadas como intercambiáveis) — soma
+// os minutos de todas as atividades tipo "questoes" do calendário e divide pelo total de tarefas
+// já concluídas. Extraída de estimativaConclusaoTrilha (que a usa sem mudança de comportamento)
+// pra ser reaproveitada também pela fila de atividades (trilha-fila.ts) no dimensionamento por
+// atividade. null = ainda nenhuma tarefa concluída, sem base pra tirar a média.
+export function calcularMediaMinutosPorTarefaQuestoes(
+  calendario: Record<string, AtividadeCalendario[]>,
+  tarefasConcluidas: number
+): number | null {
+  const minutosQuestoesTotal = Object.values(calendario)
+    .flat()
+    .filter((a) => a.tipo === "questoes")
+    .reduce((s, a) => s + a.duracao, 0);
+  return tarefasConcluidas > 0 ? minutosQuestoesTotal / tarefasConcluidas : null;
+}
+
 export interface EstimativaConclusao {
   paginasRestantes: number;
   horasLeituraRestante: number | null; // null = ainda sem páginas/hora suficiente pra estimar
@@ -1117,11 +1136,7 @@ export function estimativaConclusaoTrilha(params: {
     }
   }
 
-  const minutosQuestoesTotal = Object.values(calendario)
-    .flat()
-    .filter((a) => a.tipo === "questoes")
-    .reduce((s, a) => s + a.duracao, 0);
-  const mediaMinutosPorTarefa = tarefasConcluidas > 0 ? minutosQuestoesTotal / tarefasConcluidas : null;
+  const mediaMinutosPorTarefa = calcularMediaMinutosPorTarefaQuestoes(calendario, tarefasConcluidas);
   const horasQuestoesRestante = mediaMinutosPorTarefa !== null ? (mediaMinutosPorTarefa * tarefasPendentes) / 60 : null;
 
   const minutosSemana = Object.values(configCiclo.horasPorDia).reduce((s, v) => s + v, 0);

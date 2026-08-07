@@ -118,6 +118,15 @@ export default function QuestoesTab({ topicos, onUpdate, configCiclo, onUpdateCo
     onUpdate({ ...topicos, [key]: { ...estado, [campo]: link.trim() || undefined } });
   };
 
+  // "sem link, não vou cadastrar" — só faz sentido pra tópico SEM Bloco e SEM link próprio; evita
+  // que o item "revisao_link_faltando" da fila de atividades (trilha-fila.ts) fique pendente pra
+  // sempre num tópico que genuinamente nunca vai ter caderno de questões próprio
+  const updateRevisaoLinkDispensada = (materia: string, topico: string, dispensada: boolean) => {
+    const key = topicoKey(materia, topico);
+    const estado = topicos[key] ?? defaultTopicoState();
+    onUpdate({ ...topicos, [key]: { ...estado, revisaoLinkDispensada: dispensada || undefined } });
+  };
+
   const updateLinkReforcoImediato = (materia: string, topico: string, link: string) => {
     const key = topicoKey(materia, topico);
     const estado = topicos[key] ?? defaultTopicoState();
@@ -391,6 +400,17 @@ export default function QuestoesTab({ topicos, onUpdate, configCiclo, onUpdateCo
                                   placeholder="Link da revisão de 30 dias"
                                 />
                               </div>
+                              {!estado?.linkRevisao7d && !estado?.linkRevisao30d && (
+                                <label className="flex items-center gap-1.5 pl-7 text-[10px] text-muted-foreground cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!estado?.revisaoLinkDispensada}
+                                    onChange={(e) => updateRevisaoLinkDispensada(m.nome, t, e.target.checked)}
+                                    className="h-3 w-3 rounded border-border"
+                                  />
+                                  Sem link — não vou cadastrar (não cobrar revisão desse tópico)
+                                </label>
+                              )}
                             </>
                           )}
                           <div className="flex items-center gap-1">

@@ -80,6 +80,11 @@ export interface TopicoState {
   // por Bloco — as duas usam os `atualizadoEm` dos cadernos A-D, ver statusRevisaoLink/
   // statusRevisaoLinkBloco em trilha-dinamica.ts); usado hoje só pra exibição/histórico.
   estudadoEm?: string;
+  // true = usuário marcou explicitamente "sem link, não vou cadastrar" pra esse tópico (toggle em
+  // QuestoesTab, ao lado dos campos de link) — impede que o item "revisao_link_faltando" da fila
+  // de atividades (trilha-fila.ts) fique pendente pra sempre num tópico que genuinamente nunca vai
+  // ter caderno de questões próprio. Só se aplica a tópicos sem Bloco e sem link próprio.
+  revisaoLinkDispensada?: boolean;
 }
 
 // Agrupa vários tópicos do MESMO edital/matéria que compartilham um único caderno de questões
@@ -221,6 +226,43 @@ export interface TrilhaDinamicaState {
   // revisão das cartas a cada 2 domingos, ancorada no 1º domingo após a ativação
   ancoraCartas: string; // dateKey (um domingo)
   cartasFeitasEm: string[]; // dateKeys dos domingos em que a revisão foi feita
+  // NOVO (fila de atividades com Metas + carry-over, ver trilha-fila.ts) — ausente = trilha ainda
+  // não passou pelo motor de fila (ativada antes desta reforma, ou nunca chegou a abrir a Meta 1);
+  // bootstrap preguiçoso na 1ª leitura via avancarFilaMetasSeNecessario, nunca inicializado "na
+  // marra" fora desse caminho.
+  filaMetas?: FilaMetasState;
+}
+
+// Uma atividade atribuída a uma Meta. Guarda um snapshot dos campos DESCRITIVOS (que não mudam
+// depois que a atividade é criada — título, tipo, tempo estimado) pra não precisar re-varrer a
+// fila inteira só pra saber o que uma atividade era; "concluída" e "desempenho %" NUNCA vêm daqui
+// — são sempre recalculados ao vivo (ver estaAtividadeConcluida em trilha-fila.ts), pra "Desempenho
+// %" na tabela sempre refletir o registro mais recente do caderno, mesmo se o usuário refizer a
+// questão depois de a atividade já estar na Meta.
+export interface MetaAtividadeRef {
+  id: string;
+  tipo: string; // FilaAtividadeTipo (string solto aqui pra não importar trilha-fila.ts em estudo-data.ts)
+  materia: string;
+  topico?: string;
+  titulo: string;
+  relevancia?: NivelImportancia;
+  minutosEstimados: number;
+  link?: string;
+  origemCarryOver: boolean; // só informativo/depuração — não afeta comportamento
+}
+
+export interface MetaPersistida {
+  numero: number; // 1-based, sequencial
+  iniciadaEm: string; // dateKey
+  orcamentoMinutos: number; // snapshot de horasPorDia somado, no momento em que a Meta abriu
+  atividades: MetaAtividadeRef[]; // ordem de exibição — carry-over sempre primeiro
+  fechadaEm?: string; // presente = Meta fechada (todas concluídas OU fechamento manual)
+  fechamentoManual?: boolean;
+}
+
+export interface FilaMetasState {
+  metaAtual: number;
+  metas: Record<number, MetaPersistida>; // histórico completo, chave = numero
 }
 
 export interface EstudoState {
@@ -752,7 +794,7 @@ export function defaultTopicoState(): TopicoState {
 // as duas metades que vivem em lugares separados no banco (Concurso.topicosCompartilhados/
 // blocosCompartilhados/PdfConcurso vs ConcursoProgressoUsuario.dados).
 
-export type TopicoCurricular = Pick<TopicoState, "linkRevisao7d" | "linkRevisao30d" | "linkReforcoImediato" | "importancia">;
+export type TopicoCurricular = Pick<TopicoState, "linkRevisao7d" | "linkRevisao30d" | "linkReforcoImediato" | "importancia" | "revisaoLinkDispensada">;
 export type TopicoProgresso = Pick<TopicoState, "estudado" | "cadernos"> &
   Partial<Pick<TopicoState, "revisoesLink" | "reforcoImediatoFeito" | "estudadoEm">>;
 
@@ -762,6 +804,7 @@ export function splitTopicoState(t: TopicoState): { curricular: TopicoCurricular
   if (t.linkRevisao30d !== undefined) curricular.linkRevisao30d = t.linkRevisao30d;
   if (t.linkReforcoImediato !== undefined) curricular.linkReforcoImediato = t.linkReforcoImediato;
   if (t.importancia !== undefined) curricular.importancia = t.importancia;
+  if (t.revisaoLinkDispensada !== undefined) curricular.revisaoLinkDispensada = t.revisaoLinkDispensada;
   const progresso: TopicoProgresso = { estudado: t.estudado, cadernos: t.cadernos };
   if (t.revisoesLink !== undefined) progresso.revisoesLink = t.revisoesLink;
   if (t.reforcoImediatoFeito !== undefined) progresso.reforcoImediatoFeito = t.reforcoImediatoFeito;
