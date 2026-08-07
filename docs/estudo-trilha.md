@@ -479,3 +479,57 @@ frase do Gustavo nos dois).
   perder a granularidade que o torna útil, sem ganhar nada em troca (esse par nunca fez parte da
   reclamação de "narrativa dupla" — não é uma duplicata de "próxima atividade"/pendências, é uma
   métrica diferente). `computarMetaSemana` segue plenamente em uso — não foi "aposentada".
+
+### 7.8 Fatiamento de teoria + intercalação por matéria (2026-08-07, mesmo dia)
+
+Bug reportado pelo usuário: a Meta 1 real dele virou 10 atividades seguidas de "Língua Portuguesa"
+(68-219min CADA), nenhuma outra matéria aparecendo. Causa: `construirFilaGlobal` montava a fila
+MATÉRIA POR MATÉRIA (todos os tópicos pendentes de A, depois todos os de B, ...) e
+`abrirProximaMeta` só consumia essa fila em ordem crua até bater o orçamento — com uma matéria tendo
+muita teoria pendente, ela sozinha já esgotava o orçamento da Meta antes de a fila chegar em
+qualquer outra. Pedido do usuário, com exemplo próprio ("ajuste" o exemplo, não uma especificação
+literal): várias matérias na mesma Meta, um tópico grande podendo aparecer em MAIS DE UMA atividade
+dentro da mesma Meta (ex.: "PDF X capítulos 1-3" cedo, "PDF X capítulos 4-6" mais tarde).
+
+**Fatiamento** (`gerarChunksTeoria`, nova, em `trilha-fila.ts`): tópicos cuja leitura restante
+passa de `MAX_MINUTOS_ATIVIDADE_TEORIA` (60min) viram VÁRIAS atividades de teoria em vez de uma só
+— com capítulos manuais mapeados, agrupa capítulos/subcapítulos consecutivos ainda não lidos até
+~60min (mesmo critério de `proximoBlocoCapitulos`, só que gera TODOS os pedaços de uma vez, não só
+o próximo); sem capítulos, fatia o intervalo de página mapeado (`intervalosPaginas`) em pedaços de
+~60min de páginas. Cada pedaço vira um `FilaAtividade` com id estável pelo intervalo de página
+(`t:${materia}:${topico}:${inicio}-${fim}`) e carrega `pdfId`/`paginaInicio`/`paginaFim` — isso é o
+que permite **"concluída" ser julgada pela posição REAL de leitura** (`pdf.paginaAtual >=
+paginaFim`) em vez do tópico inteiro, e a checklist de capítulos (`todosCapitulos`) mostrar só os
+capítulos DESSE pedaço. Tópico sem PDF/página mapeada, ou já lido por completo mas ainda sem
+"Marcar como estudado", cai no fallback de sempre (1 atividade, `MINUTOS_ESTIMADO_TEORIA_PADRAO`,
+concluída = `TopicoState.estudado`) — preserva o comportamento anterior pra esse caso.
+
+`MetaAtividadeRef` (`estudo-data.ts`) ganhou os mesmos 3 campos (`pdfId`/`paginaInicio`/
+`paginaFim`) pra persistir o intervalo de cada pedaço atribuído a uma Meta. `estaAtividadeConcluida`
+e a hidratação em `computarMetaAtual` passaram a receber `pdfs`/`capitulosConcluidos` (novos campos
+em `ParamsBaseFila`) — sem essas duas listas não dá pra olhar `pdf.paginaAtual` nem re-derivar a
+checklist de capítulos ao vivo. **Atividades de teoria já persistidas ANTES desta mudança** (sem
+`pdfId`/`paginaFim`) continuam funcionando exatamente como antes — o `if (ref.pdfId && ref.paginaFim
+!== undefined)` cai no fallback por `estudado` automaticamente, nenhuma migração de dado necessária.
+
+**Intercalação** (`intercalarPorMateria`, nova, em `abrirProximaMeta`): antes de acumular
+atividades até bater o orçamento, agrupa os candidatos por matéria e intercala ROUND-ROBIN (1ª da
+matéria A, 1ª da B, 1ª da C, ..., volta pra 2ª da A, 2ª da B, ...) preservando a ordem de
+prioridade DENTRO de cada matéria (teoria antes de questões/reforço etc., já garantida pela ordem
+em que `construirFilaGlobal` monta a fila). Combinado com o fatiamento acima, uma Meta agora cobre
+várias matérias com atividades de tamanho parecido, e um tópico grande tem seus pedaços espalhados
+ao longo da Meta em vez de empilhados no início.
+
+**Importante — não é retroativo**: uma Meta JÁ ABERTA antes desta mudança mantém seus refs
+originais (sem fatiamento/intercalação) até fechar — carry-over só reaproveita o que já estava
+atribuído, nunca reprocessa pela fila nova. Só a PRÓXIMA Meta (aberta depois deste deploy, seja por
+conclusão total ou pelo botão "Finalize ou ignore") nasce já fatiada e intercalada.
+
+Verificação: `tsc --noEmit` limpo. Teste sintético (`tsx`, mesmo padrão de sempre — script temporário
+em `src/lib/`, apagado depois) com 3 matérias fictícias (uma com 200 páginas mapeadas @ 30pág/h,
+uma com 30 páginas, uma sem PDF nenhum): confirmou 7 chunks de ~60min pro tópico de 200 páginas,
+1 chunk só pro de 30, fallback de 1 atividade sem `pdfId` pro sem-PDF, as 3 primeiras atividades da
+Meta cobrindo as 3 matérias distintas (intercalado, não "A, A, A, ..."), e o chunk marcando
+`concluida: true` quando `pdf.paginaAtual` alcança seu `paginaFim` — 9/9 passando. Smoke test ao
+vivo confirmou que a Meta 1 já existente (criada antes desta mudança, refs sem `pdfId`) continua
+renderizando sem regressão, com o fallback de sempre.
