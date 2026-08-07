@@ -177,34 +177,40 @@ export default function EstudoPage() {
   const concursoAtivoRef = useRef(concursoAtivo);
   concursoAtivoRef.current = concursoAtivo;
 
-  // POST de verdade pro banco — usado tanto pelo debounce normal quanto pelo flush de saída
-  // (beforeunload). `keepalive` deixa o browser completar a requisição mesmo com a página
-  // descarregando (só até ~64KB de body — não é garantia pra estados muito grandes, por isso o
-  // beforeunload abaixo também avisa o usuário em vez de confiar só nisso).
-  const salvarAgora = useCallback((keepalive: boolean) => {
-    const state = stateRef.current;
+  // POST de verdade pro banco, a partir de um valor de state EXPLÍCITO (não lido de ref/closure) —
+  // evita mandar dado desatualizado quando chamado logo em seguida de um setState, antes do React
+  // re-renderizar. `keepalive` deixa o browser completar a requisição mesmo com a página
+  // descarregando (só até ~64KB de body — não é garantia pra estados muito grandes).
+  const salvarComEstado = useCallback((estadoParaSalvar: EstudoState, keepalive: boolean) => {
     const concursoAtivo = concursoAtivoRef.current;
-    const blocosAtuais = new Set(Object.keys(state.blocos));
-    const pdfsAtuais = new Set(state.pdfs.map((p) => p.id));
+    const blocosAtuais = new Set(Object.keys(estadoParaSalvar.blocos));
+    const pdfsAtuais = new Set(estadoParaSalvar.pdfs.map((p) => p.id));
     const blocosRemovidos = [...chavesConhecidasRef.current.blocos].filter((k) => !blocosAtuais.has(k));
     const pdfsRemovidos = [...chavesConhecidasRef.current.pdfs].filter((k) => !pdfsAtuais.has(k));
     const url = concursoAtivo ? `/api/concurso/${concursoAtivo.id}/progresso` : "/api/estudo";
     return fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(concursoAtivo ? { ...state, blocosRemovidos, pdfsRemovidos } : state),
+      body: JSON.stringify(concursoAtivo ? { ...estadoParaSalvar, blocosRemovidos, pdfsRemovidos } : estadoParaSalvar),
       keepalive,
     }).then(async (res) => {
       if (!res.ok) {
         const body = await res.text();
         console.error("[estudo] Falha ao salvar no banco:", res.status, body);
-        return;
+        throw new Error(`Falha ao salvar (${res.status})`);
       }
       chavesConhecidasRef.current = { blocos: blocosAtuais, pdfs: pdfsAtuais };
     });
   }, []);
 
-  // Persiste: localStorage imediato + banco com debounce de 2s
+  // usado pelo debounce normal e pelo flush de saída (beforeunload) — lê o state mais recente do
+  // ref, já que nesses dois casos não há risco de closure desatualizada (rodam depois do render)
+  const salvarAgora = useCallback((keepalive: boolean) => salvarComEstado(stateRef.current, keepalive), [salvarComEstado]);
+
+  // Persiste: localStorage imediato + banco com debounce curto. Era 2000ms, mas o progresso já
+  // passa de 60KB (perto do limite de ~64KB do flush de emergência via keepalive no beforeunload
+  // abaixo) — 600ms encolhe bastante a janela em que um F5/fechar aba rápido demais perde uma
+  // edição, sem gerar POST a cada tecla digitada.
   useEffect(() => {
     if (!loaded) return;
     localStorage.setItem(storageKey(concursoAtivo?.id ?? null), JSON.stringify(state));
@@ -213,7 +219,7 @@ export default function EstudoPage() {
     saveTimeoutRef.current = setTimeout(() => {
       saveTimeoutRef.current = null;
       salvarAgora(false).catch((err) => console.error("[estudo] Erro de rede ao salvar:", err));
-    }, 2000);
+    }, 600);
   }, [state, loaded, concursoAtivo, salvarAgora]);
 
   // Sair/atualizar a página com um salvamento AINDA PENDENTE (debounce dos 2s não terminou) —
@@ -238,9 +244,21 @@ export default function EstudoPage() {
     setState((prev) => ({ ...prev, topicos }));
   }, []);
 
-  const updateCalendario = useCallback((calendario: Record<string, AtividadeCalendario[]>) => {
-    setState((prev) => ({ ...prev, calendario }));
-  }, []);
+  // versão SÍNCRONA (aguardável) do update de calendário — usada pelo Calendário inteiro
+  // Calendário, que é uma ação explícita e pontual (diferente de digitar num campo): em vez de
+  // confiar no debounce em segundo plano, atualiza a UI e já dispara o POST na hora, devolvendo
+  // uma Promise que só resolve quando o banco confirmar. Isso elimina de vez a janela de risco de
+  // "editei e atualizei a página rápido demais" pra essa ação específica — não depende de debounce
+  // nem do flush best-effort de keepalive no beforeunload.
+  const commitCalendarioAgora = useCallback((calendario: Record<string, AtividadeCalendario[]>) => {
+    const next = { ...stateRef.current, calendario };
+    setState(next);
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    return salvarComEstado(next, false);
+  }, [salvarComEstado]);
 
   const updateCartas = useCallback((cartas: Carta[]) => {
     setState((prev) => ({ ...prev, cartas }));
@@ -687,7 +705,7 @@ export default function EstudoPage() {
           {activeTab === "calendario" && (
             <CalendarioTab
               calendario={state.calendario}
-              onUpdate={updateCalendario}
+              onUpdate={commitCalendarioAgora}
               onSemanasOKChange={handleSemanasOKChange}
               streak={state.streak}
               semanasOK={state.semanasOK}

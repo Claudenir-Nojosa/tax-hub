@@ -27,7 +27,9 @@ const CAL_COR: Record<AtividadeTipo, string> = {
 
 interface Props {
   calendario: Record<string, AtividadeCalendario[]>;
-  onUpdate: (calendario: Record<string, AtividadeCalendario[]>) => void;
+  // devolve uma Promise que só resolve quando o banco confirmar — Adicionar/Salvar/Excluir esperam
+  // essa confirmação antes de fechar o modal, em vez de confiar num autosave em segundo plano
+  onUpdate: (calendario: Record<string, AtividadeCalendario[]>) => Promise<void>;
   onSemanasOKChange: (delta: number) => void;
   streak: number;
   semanasOK: number;
@@ -75,6 +77,9 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
   const [formDuracaoStr, setFormDuracaoStr] = useState("50");
   const [formPaginasStr, setFormPaginasStr] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [excluindoId, setExcluindoId] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
 
   const { year, month } = viewDate;
   const firstDay = new Date(year, month, 1).getDay();
@@ -124,7 +129,10 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
     setEditingId(null);
   };
 
-  const addAtividade = () => {
+  // aguarda a confirmação do banco antes de fechar o modal — se falhar (rede caiu, servidor
+  // fora), mantém o modal aberto com o formulário preenchido e mostra o erro, em vez de fechar
+  // como se tivesse dado certo e deixar a edição se perder
+  const addAtividade = async () => {
     if (!selectedDay) return;
     if (formTipo === "materia_concluida" && !formMateria) return;
     const duracao = Math.max(1, parseInt(formDuracaoStr) || 1);
@@ -142,27 +150,38 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
     };
 
     const prev = calendario[selectedDay] ?? [];
-    if (editingId) {
-      onUpdate({
-        ...calendario,
-        [selectedDay]: prev.map((a) => a.id === editingId ? { ...a, ...campos } : a),
-      });
-    } else {
-      const nova: AtividadeCalendario = { id: Date.now().toString(), ...campos };
-      onUpdate({ ...calendario, [selectedDay]: [...prev, nova] });
+    const proximo = editingId
+      ? { ...calendario, [selectedDay]: prev.map((a) => a.id === editingId ? { ...a, ...campos } : a) }
+      : { ...calendario, [selectedDay]: [...prev, { id: Date.now().toString(), ...campos } as AtividadeCalendario] };
+
+    setSalvando(true);
+    setErro(null);
+    try {
+      await onUpdate(proximo);
+      resetForm();
+      setModalOpen(false);
+    } catch {
+      setErro("Não deu pra salvar agora (conexão?). Seus dados continuam aqui — tente de novo.");
+    } finally {
+      setSalvando(false);
     }
-    resetForm();
-    setModalOpen(false);
   };
 
-  const removeAtividade = (dayKey: string, id: string) => {
+  const removeAtividade = async (dayKey: string, id: string) => {
     const prev = calendario[dayKey] ?? [];
     const updated = prev.filter((a) => a.id !== id);
-    if (updated.length === 0) {
-      const { [dayKey]: _, ...rest } = calendario;
-      onUpdate(rest);
-    } else {
-      onUpdate({ ...calendario, [dayKey]: updated });
+    const proximo = updated.length === 0
+      ? (() => { const { [dayKey]: _, ...rest } = calendario; return rest; })()
+      : { ...calendario, [dayKey]: updated };
+
+    setExcluindoId(id);
+    setErro(null);
+    try {
+      await onUpdate(proximo);
+    } catch {
+      setErro("Não deu pra excluir agora (conexão?). Tente de novo.");
+    } finally {
+      setExcluindoId(null);
     }
   };
 
@@ -311,8 +330,17 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
                       <button type="button" onClick={() => startEdit(a)} className="p-0.5 hover:opacity-70 flex-shrink-0" title="Editar">
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
-                      <button type="button" onClick={() => { removeAtividade(selectedDay, a.id); if (editingId === a.id) resetForm(); }} className="p-0.5 hover:opacity-70 flex-shrink-0" title="Excluir">
-                        <Trash2 className="h-3.5 w-3.5" />
+                      <button
+                        type="button"
+                        disabled={excluindoId === a.id}
+                        onClick={async () => {
+                          await removeAtividade(selectedDay, a.id);
+                          if (editingId === a.id) resetForm();
+                        }}
+                        className="p-0.5 hover:opacity-70 flex-shrink-0 disabled:opacity-40"
+                        title="Excluir"
+                      >
+                        <Trash2 className={`h-3.5 w-3.5 ${excluindoId === a.id ? "animate-pulse" : ""}`} />
                       </button>
                     </div>
                   );
@@ -452,12 +480,15 @@ export default function CalendarioTab({ calendario, onUpdate, onSemanasOKChange,
               <button
                 type="button"
                 onClick={addAtividade}
-                disabled={!canAdd}
+                disabled={!canAdd || salvando}
                 className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {editingId ? <><Pencil className="h-3.5 w-3.5" /> Salvar</> : <><Plus className="h-3.5 w-3.5" /> Adicionar</>}
+                {salvando
+                  ? "Salvando…"
+                  : editingId ? <><Pencil className="h-3.5 w-3.5" /> Salvar</> : <><Plus className="h-3.5 w-3.5" /> Adicionar</>}
               </button>
             </div>
+            {erro && <p className="text-[11px] text-red-500 dark:text-red-400 text-center">{erro}</p>}
             {parseInt(formPaginasStr) > 0 && parseInt(formDuracaoStr) > 0 && (
               <p className="text-[11px] text-primary text-right font-medium">
                 📖 {(parseInt(formPaginasStr) / (parseInt(formDuracaoStr) / 60)).toFixed(1)} pág/h
