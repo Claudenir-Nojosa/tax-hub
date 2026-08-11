@@ -144,11 +144,14 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
   const { metaAtual } = resultado;
   const perc = metaAtual.total > 0 ? Math.round((metaAtual.concluidas / metaAtual.total) * 100) : 0;
 
-  // segmentos por matéria — cada uma do tamanho proporcional ao nº de atividades dela na Meta,
-  // preenchido quando TODAS as atividades daquela matéria já estão concluídas
+  // segmentos por matéria — cada um do tamanho proporcional ao nº de atividades dela na Meta, com
+  // preenchimento PROPORCIONAL às atividades concluídas dentro do próprio segmento (não binário —
+  // antes só ganhava cor quando 100% das atividades daquela matéria estavam concluídas, então
+  // progresso real em qualquer matéria com mais de 1 atividade ficava invisível, cinza)
   const segmentos = Array.from(new Set(metaAtual.atividades.map((a) => a.materia))).map((nome) => {
     const doMateria = metaAtual.atividades.filter((a) => a.materia === nome);
-    return { materia: nome, qtd: doMateria.length, completo: doMateria.every((a) => a.concluida) };
+    const feitas = doMateria.filter((a) => a.concluida).length;
+    return { materia: nome, qtd: doMateria.length, feitas, percFeitas: Math.round((feitas / doMateria.length) * 100) };
   });
   const materiasConcluidas100 = Object.keys(trilha.conclusaoMaterias).length;
 
@@ -218,10 +221,12 @@ function CardTrilha({ state, materiasConcurso, onIrParaTrilha }: { state: Estudo
             return (
               <div
                 key={s.materia}
-                title={s.materia}
-                className={`h-1.5 ${s.completo ? cor.dot : "bg-muted dark:bg-muted"}`}
+                title={`${s.materia}: ${s.feitas}/${s.qtd}`}
+                className="h-1.5 bg-muted dark:bg-muted overflow-hidden"
                 style={{ flex: s.qtd }}
-              />
+              >
+                <div className={`h-full ${cor.dot} transition-all duration-500`} style={{ width: `${s.percFeitas}%` }} />
+              </div>
             );
           })}
         </div>
@@ -485,7 +490,7 @@ export default function DashboardTab({ state, materiasConcurso, nomeUsuario, onI
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Conquistas */}
         <SectionCard titulo="Conquistas" icone={Medal} corIcone="bg-amber-500">
-          <ScrollArea className="max-h-[340px] pr-1">
+          <ScrollArea className="h-[340px] pr-1">
             <div className="grid grid-cols-2 gap-2">
               {CONQUISTAS.map((c) => {
                 const unlocked = conquistas[c.id as keyof typeof conquistas];
@@ -515,7 +520,7 @@ export default function DashboardTab({ state, materiasConcurso, nomeUsuario, onI
 
         {/* Progresso por matéria */}
         <SectionCard titulo="Progresso por Matéria" icone={BarChart3} corIcone="bg-primary">
-          <ScrollArea className="max-h-[340px] pr-1">
+          <ScrollArea className="h-[340px] pr-1">
             <div className="space-y-2.5">
               {MATERIAS_ATIVAS.map((m) => {
                 const prog = getProgressoMateria(m.nome, state.topicos, MATERIAS_ATIVAS);

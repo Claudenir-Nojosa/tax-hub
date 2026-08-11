@@ -14,6 +14,10 @@ const ScrollArea = React.forwardRef<
     className={cn("relative overflow-hidden", className)}
     {...props}
   >
+    {/* height:100% aqui só resolve de verdade quando o chamador passa uma altura EXPLÍCITA no
+        className do Root (h-[340px], não max-h-[340px] — max-height não conta como "definite
+        height" pra fins de resolução de porcentagem do filho, então o viewport cresceria pro
+        tamanho do conteúdo e o overflow nunca ativaria; ver os usos em DashboardTab.tsx) */}
     <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
       {children}
     </ScrollAreaPrimitive.Viewport>
