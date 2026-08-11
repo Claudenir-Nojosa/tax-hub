@@ -684,17 +684,30 @@ interface ParamsAbrirMeta {
 // Língua Portuguesa, ..., só no final Matéria B" porque o carry-over era um prefixo fixo separado
 // do rodízio. Resultado agora: atividade 1 da matéria A, 1 da B, 1 da C, ..., volta pra 2ª da A,
 // 2ª da B — cobrindo várias matérias desde o início da Meta, carry-over ou não.
-function intercalarPorMateria(porMateria: Map<string, MetaAtividadeRef[]>, ordem: string[]): MetaAtividadeRef[] {
+// Rodízio em DOIS NÍVEIS — pedido explícito do usuário ("dia 1 = matérias do ciclo A, dia 2 =
+// ciclo B, dia 3 = ciclo C, volta pro A"): primeiro agrupa as matérias pelo `divisao` (A/B/C) já
+// configurado no Ciclo, e só dentro de cada ciclo intercala por matéria (round-robin de sempre).
+// Um "dia" sai naturalmente da cadeia bloqueada da UI (TabelaAtividades só libera uma atividade
+// de cada vez, em ordem) — completar TODAS as matérias de um ciclo (1 atividade cada) equivale a
+// "fechar o dia", antes de a cadeia liberar a primeira atividade do próximo ciclo. Sem estourar
+// pra 3 blocos GIGANTES (todo o ciclo A inteiro, depois todo o B): cada ciclo cede só 1 atividade
+// por matéria por volta, então a sequência sai A1,A2,A3, B1,B2, C1, A1',A2',A3', B1',B2', C1', ...
+function intercalarPorCiclo(
+  porMateria: Map<string, MetaAtividadeRef[]>, materiasPorCiclo: Record<"A" | "B" | "C", string[]>
+): MetaAtividadeRef[] {
   const resultado: MetaAtividadeRef[] = [];
+  const ciclos: ("A" | "B" | "C")[] = ["A", "B", "C"];
   let restante = true;
   while (restante) {
     restante = false;
-    for (const materia of ordem) {
-      const lista = porMateria.get(materia)!;
-      const proxima = lista.shift();
-      if (proxima) {
-        resultado.push(proxima);
-        restante = true;
+    for (const ciclo of ciclos) {
+      for (const materia of materiasPorCiclo[ciclo]) {
+        const lista = porMateria.get(materia);
+        const proxima = lista?.shift();
+        if (proxima) {
+          resultado.push(proxima);
+          restante = true;
+        }
       }
     }
   }
@@ -762,7 +775,7 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
 
   // pool por matéria pro rodízio: carry-over primeiro (prioridade dentro da própria matéria), só
   // depois os candidatos novos — mas TODAS as matérias entram no rodízio junto (ver
-  // intercalarPorMateria), carry-over não bloqueia mais o resto da Meta
+  // intercalarPorCiclo), carry-over não bloqueia mais o resto da Meta
   const porMateria = new Map<string, MetaAtividadeRef[]>();
   const ordem: string[] = [];
   const addNaMateria = (materia: string, ref: MetaAtividadeRef) => {
@@ -772,7 +785,14 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
   for (const ref of carryOverProcessado) addNaMateria(ref.materia, ref);
   for (const a of candidatosNovos) addNaMateria(a.materia, paraRef(a, false));
 
-  const candidatos = intercalarPorMateria(porMateria, ordem);
+  // agrupa as matérias que entraram no rodízio pelo ciclo configurado (A/B/C) — matéria sem
+  // divisao configurada (ou não encontrada em configCiclo.materias) cai no ciclo A por padrão
+  const materiasPorCiclo: Record<"A" | "B" | "C", string[]> = { A: [], B: [], C: [] };
+  for (const materia of ordem) {
+    const divisao = configCiclo.materias[materia]?.divisao ?? "A";
+    materiasPorCiclo[divisao].push(materia);
+  }
+  const candidatos = intercalarPorCiclo(porMateria, materiasPorCiclo);
 
   const orcamentoMinutos = Object.values(configCiclo.horasPorDia).reduce((s, v) => s + v, 0);
   const numero = (trilha.filaMetas?.metaAtual ?? 0) + 1;
@@ -791,16 +811,27 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
   return { ...trilha, filaMetas: { metaAtual: numero, metas: { ...metasAnteriores, [numero]: novaMeta } } };
 }
 
+// tipos que podem ser injetados NO MEIO de uma Meta já aberta (ver caso 3 abaixo) — só o que é
+// "responder questões" (escalonamento A-D, reforço, revisões por caderno de link/matéria). Pedido
+// explícito do usuário: concluir uma atividade não deve fazer aparecer OUTRA na mesma Meta, a não
+// ser que seja questões — ex.: terminar a teoria do tópico 2 libera o Grupo A do escalonamento do
+// tópico 1 (que já tinha a teoria pronta) — isso aparece JÁ na Meta corrente. "teoria" fica de fora
+// de propósito: a composição de leitura da Meta é decidida uma vez, na abertura (ver
+// intercalarPorCiclo), e fica ESTÁVEL até a Meta fechar — não cresce sozinha no meio do caminho.
+// "cartas" também fica de fora (não é uma atividade que "outra atividade libera").
+const TIPOS_INJETAVEIS_MEIO_META = new Set<FilaAtividadeTipo>([
+  "questoes", "reforco", "reforco_imediato", "revisao_link", "revisao_link_faltando",
+  "revisao_materia", "reforco_materia",
+]);
+
 // Efeito colateral explícito (chamar de um useEffect, mesmo padrão do bookkeeping de
 // conclusaoMaterias que já existe em TrilhaTab.tsx) — três casos, nessa ordem:
 // 1) bootstrap da Meta 1 quando a trilha nunca passou pelo motor de fila;
 // 2) promoção pra Meta N+1 quando a atual está `fechavel` (todas as atividades concluídas) — NÃO
 //    promove sozinho enquanto sobrar pendência, pra isso é o botão manual (finalizarMetaManualmente);
-// 3) injeção de atividades recém-elegíveis na Meta ABERTA (pedido do usuário: completar uma
-//    atividade que libera outra — ex.: terminar a teoria de um tópico libera o Grupo A do
-//    escalonamento A-D de um tópico anterior — deve aparecer JÁ na Meta corrente, não esperar a
-//    próxima). Só injeta o que a fila já considera elegível-e-pendente e ainda não foi atribuído a
-//    NENHUMA Meta — não reabre nem fecha Meta nenhuma, só CRESCE a atual.
+// 3) injeção de atividades de QUESTÕES recém-elegíveis na Meta ABERTA (ver TIPOS_INJETAVEIS_MEIO_META
+//    — teoria nunca entra por aqui). Só injeta o que a fila já considera elegível-e-pendente e ainda
+//    não foi atribuído a NENHUMA Meta — não reabre nem fecha Meta nenhuma, só CRESCE a atual.
 // Todos os três casos compartilham esta ÚNICA função (e um ÚNICO useEffect em page.tsx) de propósito
 // — dois efeitos concorrentes escrevendo em `trilhaDinamica` no mesmo ciclo de render correm o
 // risco de um sobrescrever o outro (cada um parte do mesmo `trilha` "velho" do fechamento de
@@ -833,6 +864,13 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
     const pendentes = metaAberta.atividades.filter((ref) => !concluidaPorId.get(ref.id));
     const vagas = Math.max(0, META_ATIVIDADES_MAX - concluidas.length);
     const atividadesAparadas = [...concluidas, ...pendentes.slice(0, vagas)];
+    // se já concluiu SOZINHO mais do que o teto (ex.: 20 concluídas dentro da Meta de 281), não dá
+    // pra aparar mais nada — todo pendente já foi removido e só sobram as concluídas, que nunca
+    // são cortadas. Sem essa guarda, isso devolvia um objeto NOVO (mesmo conteúdo, referência
+    // diferente) toda vez que o efeito rodava — setState -> re-render -> efeito de novo -> objeto
+    // novo de novo -> loop infinito (bug real em produção: React error #185, "too many re-renders").
+    // Só atualiza quando a aparação de fato reduz a quantidade.
+    if (atividadesAparadas.length >= metaAberta.atividades.length) return undefined;
     return {
       ...trilha,
       filaMetas: {
@@ -863,7 +901,7 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
   const idsJaAtribuidos = new Set(
     Object.values(trilha.filaMetas.metas).flatMap((m) => m.atividades.map((a) => a.id))
   );
-  const novos = fila.filter((a) => !idsJaAtribuidos.has(a.id));
+  const novos = fila.filter((a) => !idsJaAtribuidos.has(a.id) && TIPOS_INJETAVEIS_MEIO_META.has(a.tipo));
   if (novos.length === 0) return undefined;
 
   const metaComInjecao: MetaPersistida = {
