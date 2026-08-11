@@ -278,9 +278,10 @@ export default function LeitorPdf({
     return () => clearInterval(interval);
   }, [pausado, modoTimer]);
 
-  const gerarQuestoes = (total: number) => {
+  const gerarQuestoes = (blocos: number[]) => {
     if (!topicoAtual) return;
-    const questoes: PdfQuestoes = { total, resultados: gerarQuestoesGrupos(total), criadoEm: new Date().toISOString() };
+    const total = blocos.reduce((s, n) => s + n, 0);
+    const questoes: PdfQuestoes = { total, resultados: gerarQuestoesGrupos(blocos), criadoEm: new Date().toISOString() };
     onAtualizarPdf({ questoes });
     onUpdateTopicos(sincronizarCadernoComQuestoes(topicos, pdf.materia, topicoAtual, questoes));
   };
@@ -373,7 +374,7 @@ export default function LeitorPdf({
       if (!metaAvisadaRef.current && restante !== undefined && restante > 0 && segundosRef.current >= restante * 60) {
         metaAvisadaRef.current = true;
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-        setToast(`🎯 Meta de hoje de ${pdfRef.current.materia} concluída!`);
+        setToast(`🎯 Tempo estimado desta atividade de ${pdfRef.current.materia} concluído!`);
         toastTimerRef.current = setTimeout(() => setToast(null), 6000);
       }
     }, 1000);
@@ -670,15 +671,16 @@ export default function LeitorPdf({
         </div>
       </div>
 
-      {/* horas estudadas x meta — atividade de hoje (não reseta ao virar o dia, só quando a
-          semana vira) e semana inteira da matéria, ao vivo (soma o cronômetro em cima do
-          baseline). Ausente quando a trilha não está ativa ou a matéria não está na cadeia. */}
+      {/* horas lidas x meta — a atividade de teoria (chunk) desta Meta que bate com o PDF/trecho
+          aberto, e a fatia dessa matéria dentro da Meta atual inteira, ao vivo (soma o cronômetro
+          em cima do baseline). Ausente quando a trilha não está ativa ou o PDF não corresponde a
+          nenhuma atividade de teoria da Meta atual (ver BibliotecaTab.tsx). */}
       {metaAoVivo && (
         <div
           className={`flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-6 px-2 sm:px-4 py-1.5 flex-shrink-0 bg-card/60 border-b border-border transition-[filter,opacity] duration-200 ${modoFoco ? "blur-sm opacity-50 hover:blur-none hover:opacity-100" : ""}`}
         >
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <span className="text-[10px] text-muted-foreground flex-shrink-0 w-11">Hoje</span>
+            <span className="text-[10px] text-muted-foreground flex-shrink-0 w-20">Esta atividade</span>
             <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${metaAoVivo.atividadeFeitos >= metaAoVivo.atividadeAlvo ? "bg-emerald-500" : "bg-primary/60"}`}
@@ -690,7 +692,7 @@ export default function LeitorPdf({
             </span>
           </div>
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <span className="text-[10px] text-muted-foreground flex-shrink-0 w-11">Semana</span>
+            <span className="text-[10px] text-muted-foreground flex-shrink-0 w-20">Nesta Meta</span>
             <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${metaAoVivo.semanaFeitos >= metaAoVivo.semanaAlvo ? "bg-emerald-500" : "bg-primary/60"}`}
@@ -818,10 +820,11 @@ export default function LeitorPdf({
         >
           <div onClick={(e) => e.stopPropagation()} className="bg-card border border-border rounded-2xl w-full max-w-sm p-4 space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" /> Você passou do conteúdo indicado
+              <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" /> Fim desta atividade da Trilha
             </div>
             <p className="text-xs text-muted-foreground">
-              A atividade da Trilha pedia leitura até a página {limiteAvisado} — você já está na página {paginaVisivel}.
+              Esta atividade da Trilha cobre até a página {limiteAvisado} — você já está na página {paginaVisivel}. Sem
+              problema continuar: as páginas seguintes contam pra próxima atividade deste tópico.
             </p>
             <div className="flex items-center gap-2 justify-end pt-1">
               <button
@@ -839,7 +842,7 @@ export default function LeitorPdf({
                 onClick={() => setAvisoFimPagina(false)}
                 className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors"
               >
-                Continuar mesmo assim
+                Continuar lendo
               </button>
             </div>
           </div>

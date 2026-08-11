@@ -12,6 +12,7 @@ import {
 } from "@/lib/pdf-storage";
 import { resolverCorMateria } from "../trilha/trilha-ui";
 import type { AberturaPdfSolicitada } from "../trilha/TrilhaLinhas";
+import type { MetaAtual } from "@/lib/trilha-fila";
 import EstudoHero from "../ui/EstudoHero";
 import { alvoLeituraPdf, fmtEta } from "./biblioteca-utils";
 import FormPdf from "./FormPdf";
@@ -73,11 +74,11 @@ interface Props {
   // criar cartão: botões na barra do leitor (ao lado de "Parei aqui") abrem o formulário do tipo
   // escolhido; o usuário preenche manualmente (sem IA), já travado na matéria/tópico do PDF
   onAdicionarCartas?: (cartas: Carta[]) => void;
-  // trilha dinâmica: minutos que faltam HOJE pra fechar o bloco de estudo de cada matéria — o
-  // leitor avisa em tempo real quando a sessão atual cruza esse restante ("meta do dia feita!")
-  metaMinutosRestantes?: Record<string, number>;
-  // progresso de horas por matéria (atividade do dia + semana) — o leitor mostra 2 barras ao vivo
-  metasEstudo?: Record<string, MetaEstudoMateria>;
+  // Meta atual da fila de atividades (trilha-fila.ts) — o leitor deriva dela as 2 barras ("esta
+  // atividade" / "nesta Meta") e o aviso de "meta batida", achando a atividade de teoria que bate
+  // com o PDF (e, quando aberto via deep link da Trilha, com o pedaço/paginaFim exato) aberto no
+  // momento. undefined = trilha inativa ou Meta ainda não bootstrapada.
+  metaAtual?: MetaAtual;
   // pedido de abertura vindo de fora (botão "Ler PDF" da Trilha, com página mapeada pro tópico) —
   // consumido uma vez (abre o leitor + onAberturaConsumida) e não de novo até um pedido novo
   aberturaSolicitada?: AberturaPdfSolicitada | null;
@@ -90,7 +91,7 @@ interface Props {
 
 export default function BibliotecaTab({
   concursoId, pdfs, calendario, onChange, materiasConcurso, topicos, onUpdateTopicos, onRegistrarSessao,
-  onAdicionarCartas, metaMinutosRestantes, metasEstudo, aberturaSolicitada, onAberturaConsumida, capitulosConcluidos,
+  onAdicionarCartas, metaAtual, aberturaSolicitada, onAberturaConsumida, capitulosConcluidos,
 }: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
     materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
@@ -306,6 +307,38 @@ export default function BibliotecaTab({
     onChange(pdfs.filter((x) => x.id !== p.id));
     if (p.arquivoEnviado) excluirArquivoPdf(p.id).catch(() => { /* best-effort — fica um objeto órfão, inofensivo */ });
   };
+
+  // deriva as 2 barras do leitor ("esta atividade" / "nesta Meta") a partir da Meta atual da fila
+  // — acha a atividade de teoria cujo pdfId bate com o PDF aberto, preferindo a que também bate o
+  // paginaFim exato (quando aberto via deep link de um pedaço específico da Trilha); sem Meta ou
+  // sem nenhuma atividade de teoria pra esse PDF, as barras somem (undefined), mesmo comportamento
+  // de antes pra PDFs fora da cadeia da Trilha.
+  const { minutosMetaRestantes, metaEstudoAtual } = (() => {
+    if (!metaAtual || !lendo) return { minutosMetaRestantes: undefined, metaEstudoAtual: undefined };
+    const doPdf = metaAtual.atividades.filter((a) => a.tipo === "teoria" && a.pdfId === lendo.id);
+    if (doPdf.length === 0) return { minutosMetaRestantes: undefined, metaEstudoAtual: undefined };
+    const atual =
+      (aberturaAtual?.paginaFim !== undefined && doPdf.find((a) => a.paginaFim === aberturaAtual.paginaFim)) ||
+      doPdf.find((a) => !a.concluida) ||
+      doPdf[0];
+    const atividadeAlvo = atual.minutosEstimados;
+    const atividadeFeitos = Math.min(atividadeAlvo, atual.minutosFeitos ?? (atual.concluida ? atividadeAlvo : 0));
+
+    // "nesta Meta" — soma de TODAS as atividades dessa matéria na Meta atual (não só teoria), pra
+    // dar a mesma ideia de "fatia da matéria dentro da Meta" que a barra "Semana" antiga dava
+    // (fatia da matéria dentro da semana) — só que escopada pela Meta, não mais pelo calendário
+    const doMateriaNaMeta = metaAtual.atividades.filter((a) => a.materia === lendo.materia);
+    const semanaAlvo = doMateriaNaMeta.reduce((s, a) => s + a.minutosEstimados, 0);
+    const semanaFeitos = doMateriaNaMeta.reduce(
+      (s, a) => s + (a.concluida ? a.minutosEstimados : a.tipo === "teoria" ? (a.minutosFeitos ?? 0) : 0),
+      0
+    );
+
+    return {
+      minutosMetaRestantes: Math.max(0, atividadeAlvo - atividadeFeitos),
+      metaEstudoAtual: { atividadeFeitos, atividadeAlvo, semanaFeitos, semanaAlvo } as MetaEstudoMateria,
+    };
+  })();
 
   return (
     <div className="space-y-4">
@@ -525,8 +558,8 @@ export default function BibliotecaTab({
           onUpdateTopicos={onUpdateTopicos}
           onRegistrarSessao={onRegistrarSessao}
           onAdicionarCartas={onAdicionarCartas}
-          minutosMetaRestantes={metaMinutosRestantes?.[lendo.materia]}
-          metaEstudo={metasEstudo?.[lendo.materia]}
+          minutosMetaRestantes={minutosMetaRestantes}
+          metaEstudo={metaEstudoAtual}
           paginaAbertura={aberturaAtual?.paginaInicio}
           paginaFimAlvo={aberturaAtual?.paginaFim}
           onFechar={fecharLeitor}
