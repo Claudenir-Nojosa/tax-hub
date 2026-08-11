@@ -75,6 +75,17 @@ export const QUESTOES_REFORCO_MATERIA = 20;
 // o reforço com uma amostra pequena demais pra significar algo
 const MINIMO_QUESTOES_REFORCO_MATERIA = 20;
 
+// teto/piso de QUANTIDADE de atividades por Meta — cada Meta representa ~1 semana de trabalho
+// (calendário-fixo: Meta 1 = semana 1, Meta 2 = semana 2, mas só ABRE quando a anterior fecha, ver
+// avancarFilaMetasSeNecessario). orcamentoMinutos sozinho não é teto suficiente: no dia 1 (nada
+// lido ainda), praticamente TODO tópico de TODA matéria tem sua 1ª atividade elegível ao mesmo
+// tempo, e pedaços de teoria já lidos-quase-todo (carry-over refatiado) podem ter só alguns minutos
+// cada — sem um teto de contagem, a Meta engolia a fila inteira (caso real: 281 atividades numa
+// Meta só) antes de bater o orçamento de minutos. META_ATIVIDADES_MIN garante ATÉ 15 mesmo que o
+// orçamento configurado seja folgado; META_ATIVIDADES_MAX é o teto duro, nunca ultrapassado.
+const META_ATIVIDADES_MIN = 10;
+const META_ATIVIDADES_MAX = 15;
+
 // exportado pra page.tsx (bookkeeping de "Marcar como estudado" automático — ver
 // avancarEstudoAutomaticoSeNecessario) reaproveitar sem duplicar a lógica de resolução de PDF
 export function resolverPdfDoTopico(materia: string, topico: string, pdfs: PdfEstudo[]): PdfEstudo | undefined {
@@ -435,6 +446,19 @@ function paraRef(a: FilaAtividade, origemCarryOver: boolean): MetaAtividadeRef {
 // vivo (nunca lidos de um snapshot congelado) — usa os mesmos ids estáveis que os analisadores do
 // motor antigo já geram (q:/r:/ri:/rl: — ver trilha-dinamica.ts) pra extrair grupo/checkpoint do
 // sufixo do id sem precisar re-varrer a fila inteira.
+// `ref.paginaFim` é um snapshot CONGELADO no momento em que o pedaço de teoria foi montado (ver
+// gerarChunksTeoria) — se o usuário editou paginaConteudoFim/capítulos DEPOIS (cadastro de
+// currículo é contínuo, normal editar um PDF que já está em uma Meta), o boundary congelado pode
+// sobrar além do conteúdo real (ex.: sem paginaConteudoFim definido ainda na hora da montagem, o
+// fallback foi pdf.totalPaginas — que inclui as páginas de QUESTÕES do PDF, não só a teoria). Sem
+// isso, a atividade fica presa pra sempre mesmo com o usuário tendo lido 100% da teoria de fato
+// (caso real: precisava chegar na pág. 164 — fim do PDF inteiro — quando o conteúdo de teoria
+// termina na 63). Nunca exige ler além do que EXISTE HOJE como conteúdo daquele tópico.
+function paginaFimEfetiva(ref: { paginaFim?: number }, pdf: Pick<PdfEstudo, "paginaConteudoFim" | "totalPaginas">): number | undefined {
+  if (ref.paginaFim === undefined) return undefined;
+  return Math.min(ref.paginaFim, pdf.paginaConteudoFim ?? pdf.totalPaginas);
+}
+
 function estaAtividadeConcluida(
   ref: MetaAtividadeRef,
   topicos: Record<string, TopicoState>,
@@ -450,7 +474,8 @@ function estaAtividadeConcluida(
       // atividades antigas persistidas antes desta mudança, ou tópico sem PDF/página mapeada.
       if (ref.pdfId && ref.paginaFim !== undefined) {
         const pdf = pdfs.find((p) => p.id === ref.pdfId);
-        if (pdf) return { concluida: pdf.paginaAtual >= ref.paginaFim };
+        const limite = pdf ? paginaFimEfetiva(ref, pdf) : undefined;
+        if (pdf && limite !== undefined) return { concluida: pdf.paginaAtual >= limite };
       }
       return { concluida: !!estado?.estudado };
     }
@@ -552,17 +577,20 @@ export function computarMetaAtual(
     // intervalo de página deste pedaço específico, filtrando o PDF inteiro pelos mesmos limites
     // gravados no ref (ver gerarChunksTeoria/paraRef)
     const pdf = ref.pdfId ? pdfs.find((p) => p.id === ref.pdfId) : undefined;
-    const todosCapitulos = pdf && ref.paginaInicio !== undefined && ref.paginaFim !== undefined && (pdf.capitulos?.length ?? 0) > 0
+    // limite EFETIVO (nunca além do conteúdo real hoje — ver paginaFimEfetiva) — o ref.paginaFim
+    // congelado pode ter sobrado de antes de paginaConteudoFim/capítulos serem editados
+    const limite = pdf ? paginaFimEfetiva(ref, pdf) : undefined;
+    const todosCapitulos = pdf && ref.paginaInicio !== undefined && limite !== undefined && (pdf.capitulos?.length ?? 0) > 0
       ? resolverCapitulos(pdf, capitulosConcluidos)
           .map((c, i) => ({ ...c, indice: i + 1 }))
-          .filter((c) => c.paginaInicio >= ref.paginaInicio! && c.paginaFim <= ref.paginaFim!)
+          .filter((c) => c.paginaInicio >= ref.paginaInicio! && c.paginaFim <= limite)
       : undefined;
     // minutos já lidos DESTE pedaço, no ritmo AO VIVO (não o congelado em minutosEstimados na
     // criação) — pode passar de minutosEstimados se o usuário estiver lendo mais devagar do que a
     // estimativa original previu, e é exatamente esse sinal que a UI usa pra liberar a próxima
     // atividade da cadeia mesmo sem esta estar concluída (ver TabelaAtividades)
-    const minutosFeitos = pdf && ref.paginaInicio !== undefined && ref.paginaFim !== undefined
-      ? Math.round((Math.max(0, Math.min(pdf.paginaAtual, ref.paginaFim) - (ref.paginaInicio - 1)) / ritmoAoVivo) * 60)
+    const minutosFeitos = pdf && ref.paginaInicio !== undefined && limite !== undefined
+      ? Math.round((Math.max(0, Math.min(pdf.paginaAtual, limite) - (ref.paginaInicio - 1)) / ritmoAoVivo) * 60)
       : undefined;
     return {
       id: ref.id, tipo: ref.tipo as FilaAtividadeTipo, materia: ref.materia, topico: ref.topico,
@@ -752,7 +780,8 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
   const atividades: MetaAtividadeRef[] = [];
   let somaMinutos = 0;
   for (const ref of candidatos) {
-    if (atividades.length > 0 && somaMinutos >= orcamentoMinutos) break;
+    if (atividades.length >= META_ATIVIDADES_MAX) break;
+    if (atividades.length >= META_ATIVIDADES_MIN && somaMinutos >= orcamentoMinutos) break;
     atividades.push(ref);
     somaMinutos += ref.minutosEstimados;
   }
@@ -792,6 +821,26 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
     hoje, trilha, configCiclo, topicos, calendario, blocos, pdfs, capitulosConcluidos: params.capitulosConcluidos,
   });
   if (!resultado) return undefined;
+
+  // caso 0: auto-cura de Metas que ficaram gigantes ANTES do teto de META_ATIVIDADES_MAX existir
+  // (caso real: Meta com 281 atividades). Mantém TODAS as já concluídas (nunca perde progresso
+  // real) + completa o resto até o teto respeitando a ordem original (prioridade/carry-over já
+  // embutida); o excedente pendente simplesmente deixa de estar atribuído a esta Meta e volta a
+  // ser candidato normal pra próxima Meta (mesmo caminho de "novos" abaixo, só que futuramente).
+  if (metaAberta.atividades.length > META_ATIVIDADES_MAX) {
+    const concluidaPorId = new Map(resultado.metaAtual.atividades.map((a) => [a.id, a.concluida]));
+    const concluidas = metaAberta.atividades.filter((ref) => concluidaPorId.get(ref.id));
+    const pendentes = metaAberta.atividades.filter((ref) => !concluidaPorId.get(ref.id));
+    const vagas = Math.max(0, META_ATIVIDADES_MAX - concluidas.length);
+    const atividadesAparadas = [...concluidas, ...pendentes.slice(0, vagas)];
+    return {
+      ...trilha,
+      filaMetas: {
+        ...trilha.filaMetas,
+        metas: { ...trilha.filaMetas.metas, [metaAberta.numero]: { ...metaAberta, atividades: atividadesAparadas } },
+      },
+    };
+  }
 
   if (resultado.metaAtual.fechavel) {
     const trilhaComMetaFechada: TrilhaDinamicaState = {
