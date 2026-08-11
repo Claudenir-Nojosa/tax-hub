@@ -75,9 +75,14 @@ export default function TabelaAtividades({
   const passouOuConcluiu = (a: FilaAtividade) =>
     a.concluida || (a.minutosFeitos !== undefined && a.minutosFeitos >= a.minutosEstimados);
 
-  // índice da 1ª atividade que ainda não "passou" — ela e tudo antes ficam desbloqueados; tudo
-  // depois fica com cadeado até virar a "primeira pendente" (-1 = tudo passou, nada bloqueado)
-  const primeiroPendenteIdx = atividades.findIndex((a) => !passouOuConcluiu(a));
+  // a cadeia bloqueada só vale pra TEORIA (a leitura ciclo A/B/C, sequencial por natureza) —
+  // questões (grupos A-D, reforço, revisões) nunca ficam com cadeado, pedido explícito do usuário:
+  // elas ficam sempre disponíveis assim que aparecem na Meta, independente de onde a leitura foi
+  // parar. Por isso o índice "primeira pendente" é calculado só dentro da SUBSEQUÊNCIA de teoria —
+  // uma questão no meio da lista não empurra o cadeado pras teorias que vêm depois dela.
+  const atividadesTeoria = atividades.filter((a) => a.tipo === "teoria");
+  const primeiroPendenteTeoriaIdx = atividadesTeoria.findIndex((a) => !passouOuConcluiu(a));
+  const idxTeoriaPorId = new Map(atividadesTeoria.map((a, i) => [a.id, i]));
 
   return (
     <div className="overflow-x-auto -mx-1">
@@ -95,7 +100,10 @@ export default function TabelaAtividades({
         </thead>
         <tbody>
           {atividades.map((a, i) => {
-            const bloqueada = !passouOuConcluiu(a) && primeiroPendenteIdx !== -1 && i > primeiroPendenteIdx;
+            const idxTeoria = idxTeoriaPorId.get(a.id);
+            const bloqueada =
+              a.tipo === "teoria" && !passouOuConcluiu(a) &&
+              primeiroPendenteTeoriaIdx !== -1 && idxTeoria! > primeiroPendenteTeoriaIdx;
             const cor = resolverCorMateria(a.materia, materiasAtivas);
             const subtipo = SUBTIPO_LABEL[a.tipo];
             // além dos tipos com link externo, teoria (abre o PDF) e cartas (vai pra aba Cartas)

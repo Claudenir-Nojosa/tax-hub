@@ -601,27 +601,36 @@ export function computarMetaAtual(
     };
   });
 
+  // concluidas/total ficam escopados só na Meta ATUAL (é o que a barra "X✓ de Y" e `fechavel`
+  // precisam) — os 4 stats abaixo (Desempenho/Horas/Questões/Média), por pedido do usuário, somam
+  // TODAS as Metas já abertas até agora, não só a corrente (senão zeravam toda vez que uma Meta
+  // nova abria, mesmo com dezenas de atividades concluídas nas Metas anteriores).
   const concluidas = atividades.filter((a) => a.concluida).length;
   const total = atividades.length;
 
-  const desempenhos = atividades.filter((a) => a.concluida && a.desempenhoPerc !== undefined).map((a) => a.desempenhoPerc!);
+  const concluidasTodasMetas = Object.values(trilha.filaMetas.metas)
+    .flatMap((m) => m.atividades)
+    .map((ref) => ({ ref, ...estaAtividadeConcluida(ref, topicos, trilha, blocos, pdfs) }))
+    .filter((a) => a.concluida);
+
+  const desempenhos = concluidasTodasMetas.filter((a) => a.desempenhoPerc !== undefined).map((a) => a.desempenhoPerc!);
   const desempenhoPerc = desempenhos.length > 0 ? Math.round(desempenhos.reduce((s, v) => s + v, 0) / desempenhos.length) : null;
 
   const horasEstudadas = Object.entries(calendario)
-    .filter(([data]) => data >= metaPersistida.iniciadaEm && data <= hoje)
+    .filter(([data]) => data >= trilha.iniciadaEm && data <= hoje)
     .flatMap(([, ativs]) => ativs)
     .reduce((s, a) => s + a.duracao, 0) / 60;
 
-  const questoesResolvidas = atividades
-    .filter((a) => a.concluida && (a.tipo === "questoes" || a.tipo === "reforco"))
+  const questoesResolvidas = concluidasTodasMetas
+    .filter((a) => a.ref.tipo === "questoes" || a.ref.tipo === "reforco")
     .reduce((s, a) => {
-      const grupo = a.id.split(":").pop() as Grupo;
-      const estado = a.topico ? topicos[topicoKey(a.materia, a.topico)] : undefined;
+      const grupo = a.ref.id.split(":").pop() as Grupo;
+      const estado = a.ref.topico ? topicos[topicoKey(a.ref.materia, a.ref.topico)] : undefined;
       const c = estado?.cadernos[grupo];
       return s + (c ? c.acertos + c.erros : 0);
     }, 0);
 
-  const diasDecorridos = Math.max(1, diffDias(metaPersistida.iniciadaEm, hoje) + 1);
+  const diasDecorridos = Math.max(1, diffDias(trilha.iniciadaEm, hoje) + 1);
   const mediaHorasDiaria = horasEstudadas / diasDecorridos;
 
   const metaAtual: MetaAtual = {
@@ -692,6 +701,20 @@ interface ParamsAbrirMeta {
 // "fechar o dia", antes de a cadeia liberar a primeira atividade do próximo ciclo. Sem estourar
 // pra 3 blocos GIGANTES (todo o ciclo A inteiro, depois todo o B): cada ciclo cede só 1 atividade
 // por matéria por volta, então a sequência sai A1,A2,A3, B1,B2, C1, A1',A2',A3', B1',B2', C1', ...
+// Reordenação ESTÁVEL (nunca muda a ordem relativa DENTRO de cada grupo) pra deixar todas as
+// atividades de "questões" (tudo que não é teoria — grupos A-D, reforço, reforço rápido, revisão
+// de link/matéria) sempre na FRENTE da fila da Meta, com a teoria (a leitura ciclo A/B/C) depois.
+// Pedido explícito do usuário: questões nunca ficam presas atrás da cadeia de teoria — nem as que
+// acabaram de ser injetadas no meio da Meta (ver TIPOS_INJETAVEIS_MEIO_META), nem as que já
+// nasceram junto com a Meta. Aplicada em TODO write de `atividades` (abertura, injeção, auto-cura)
+// pra manter o invariante sempre válido, e também usada como auto-cura pra Metas persistidas antes
+// dessa regra existir (ver "caso 0.5" em avancarFilaMetasSeNecessario).
+function questoesPrimeiro(atividades: MetaAtividadeRef[]): MetaAtividadeRef[] {
+  const questoes = atividades.filter((a) => a.tipo !== "teoria");
+  const teoria = atividades.filter((a) => a.tipo === "teoria");
+  return [...questoes, ...teoria];
+}
+
 function intercalarPorCiclo(
   porMateria: Map<string, MetaAtividadeRef[]>, materiasPorCiclo: Record<"A" | "B" | "C", string[]>
 ): MetaAtividadeRef[] {
@@ -797,14 +820,17 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
   const orcamentoMinutos = Object.values(configCiclo.horasPorDia).reduce((s, v) => s + v, 0);
   const numero = (trilha.filaMetas?.metaAtual ?? 0) + 1;
 
-  const atividades: MetaAtividadeRef[] = [];
+  const atividadesSelecionadas: MetaAtividadeRef[] = [];
   let somaMinutos = 0;
   for (const ref of candidatos) {
-    if (atividades.length >= META_ATIVIDADES_MAX) break;
-    if (atividades.length >= META_ATIVIDADES_MIN && somaMinutos >= orcamentoMinutos) break;
-    atividades.push(ref);
+    if (atividadesSelecionadas.length >= META_ATIVIDADES_MAX) break;
+    if (atividadesSelecionadas.length >= META_ATIVIDADES_MIN && somaMinutos >= orcamentoMinutos) break;
+    atividadesSelecionadas.push(ref);
     somaMinutos += ref.minutosEstimados;
   }
+  // seleção (quais entram, respeitando ciclo+orçamento) fica como está — só a EXIBIÇÃO é reordenada
+  // pra questões virem primeiro (ver questoesPrimeiro)
+  const atividades = questoesPrimeiro(atividadesSelecionadas);
 
   const novaMeta: MetaPersistida = { numero, iniciadaEm: hoje, orcamentoMinutos, atividades };
   const metasAnteriores = trilha.filaMetas?.metas ?? {};
@@ -863,7 +889,7 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
     const concluidas = metaAberta.atividades.filter((ref) => concluidaPorId.get(ref.id));
     const pendentes = metaAberta.atividades.filter((ref) => !concluidaPorId.get(ref.id));
     const vagas = Math.max(0, META_ATIVIDADES_MAX - concluidas.length);
-    const atividadesAparadas = [...concluidas, ...pendentes.slice(0, vagas)];
+    const atividadesAparadas = questoesPrimeiro([...concluidas, ...pendentes.slice(0, vagas)]);
     // se já concluiu SOZINHO mais do que o teto (ex.: 20 concluídas dentro da Meta de 281), não dá
     // pra aparar mais nada — todo pendente já foi removido e só sobram as concluídas, que nunca
     // são cortadas. Sem essa guarda, isso devolvia um objeto NOVO (mesmo conteúdo, referência
@@ -876,6 +902,23 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
       filaMetas: {
         ...trilha.filaMetas,
         metas: { ...trilha.filaMetas.metas, [metaAberta.numero]: { ...metaAberta, atividades: atividadesAparadas } },
+      },
+    };
+  }
+
+  // caso 0.5: auto-cura de ORDEM — Metas persistidas antes de "questões sempre na frente" existir
+  // podem ter questões no meio/fim da lista, atrás de teoria ainda pendente na cadeia bloqueada.
+  // questoesPrimeiro é IDEMPOTENTE (aplicar de novo no resultado já correto devolve o mesmo array,
+  // item por item) — por isso dá pra comparar id a id e só gravar quando a ordem MUDA de verdade,
+  // convergindo em no máximo 1 chamada e nunca reentrando em loop (mesma cautela do caso 0 acima).
+  const ordemCorrigida = questoesPrimeiro(metaAberta.atividades);
+  const ordemMudou = ordemCorrigida.some((a, i) => a.id !== metaAberta.atividades[i].id);
+  if (ordemMudou) {
+    return {
+      ...trilha,
+      filaMetas: {
+        ...trilha.filaMetas,
+        metas: { ...trilha.filaMetas.metas, [metaAberta.numero]: { ...metaAberta, atividades: ordemCorrigida } },
       },
     };
   }
@@ -904,9 +947,11 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
   const novos = fila.filter((a) => !idsJaAtribuidos.has(a.id) && TIPOS_INJETAVEIS_MEIO_META.has(a.tipo));
   if (novos.length === 0) return undefined;
 
+  // novos são sempre tipo questões (TIPOS_INJETAVEIS_MEIO_META exclui teoria) — questoesPrimeiro
+  // garante que entram na FRENTE, junto das outras questões já na Meta, nunca atrás da teoria
   const metaComInjecao: MetaPersistida = {
     ...metaAberta,
-    atividades: [...metaAberta.atividades, ...novos.map((a) => paraRef(a, false))],
+    atividades: questoesPrimeiro([...metaAberta.atividades, ...novos.map((a) => paraRef(a, false))]),
   };
   return {
     ...trilha,
