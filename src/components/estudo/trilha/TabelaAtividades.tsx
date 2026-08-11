@@ -214,10 +214,10 @@ export default function TabelaAtividades({
                         className={passouDoTempo ? "text-amber-500 font-medium" : undefined}
                         title={passouDoTempo ? "Já passou do tempo estimado — a próxima atividade já foi liberada" : undefined}
                       >
-                        {a.minutosFeitos}/{a.minutosEstimados}min
+                        {Math.round(a.minutosFeitos)}/{Math.round(a.minutosEstimados)}min
                       </span>
                     ) : (
-                      `${a.minutosEstimados}min`
+                      `${Math.round(a.minutosEstimados)}min`
                     )}
                   </td>
                   <td className="py-2 px-2 text-right tabular-nums">

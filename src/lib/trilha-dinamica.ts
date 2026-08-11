@@ -1060,7 +1060,11 @@ export function calcularMediaMinutosPorTarefaQuestoes(
     .flat()
     .filter((a) => a.tipo === "questoes")
     .reduce((s, a) => s + a.duracao, 0);
-  return tarefasConcluidas > 0 ? minutosQuestoesTotal / tarefasConcluidas : null;
+  // arredonda aqui, na fonte — o resultado vira minutosEstimados de atividade de questões direto
+  // (ver trilha-fila.ts), exibido cru (`${minutosEstimados}min`, sem passar por fmtHoras) — sem
+  // isso, uma divisão que não fecha exata (ex.: 43/7) aparecia tal e qual na tela, tipo
+  // "6.142857142857143min".
+  return tarefasConcluidas > 0 ? Math.round(minutosQuestoesTotal / tarefasConcluidas) : null;
 }
 
 export interface EstimativaConclusao {
