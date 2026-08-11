@@ -106,10 +106,14 @@ export default function TabelaAtividades({
               primeiroPendenteTeoriaIdx !== -1 && idxTeoria! > primeiroPendenteTeoriaIdx;
             const cor = resolverCorMateria(a.materia, materiasAtivas);
             const subtipo = SUBTIPO_LABEL[a.tipo];
-            // além dos tipos com link externo, teoria (abre o PDF) e cartas (vai pra aba Cartas)
+            // além dos tipos com link externo, teoria (abre o PDF), cartas (vai pra aba Cartas) e
+            // questões/reforço (abre o PDF do próprio tópico, de onde se responde as questões)
             // também são clicáveis — onAbrirLink decide o destino certo por tipo. Bloqueada nunca é
             // clicável, mesmo que o tipo permita.
-            const clicavel = !bloqueada && (!!a.link || a.tipo === "teoria" || a.tipo === "cartas");
+            const clicavel =
+              !bloqueada &&
+              (!!a.link || a.tipo === "teoria" || a.tipo === "cartas" ||
+                ((a.tipo === "questoes" || a.tipo === "reforco" || a.tipo === "reforco_imediato") && !!a.topico));
             const temCapitulos = !bloqueada && (a.todosCapitulos?.length ?? 0) > 0;
             const expandido = expandidos.has(a.id);
             const passouDoTempo = !a.concluida && a.minutosFeitos !== undefined && a.minutosFeitos >= a.minutosEstimados;

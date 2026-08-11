@@ -1,11 +1,43 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronDown, ChevronUp, ListChecks, Plus, RotateCcw, X } from "lucide-react";
-import { GRUPO_BADGE, GRUPO_LABEL, type Alternativa, type Grupo, type PdfQuestoes } from "@/lib/estudo-data";
+import { Check, ChevronDown, ChevronUp, LayoutGrid, List, ListChecks, Plus, RotateCcw, X } from "lucide-react";
+import { GRUPO_BADGE, GRUPO_LABEL, type Alternativa, type Grupo, type PdfQuestoes, type QuestaoResultado } from "@/lib/estudo-data";
 
 const GRUPOS: Grupo[] = ["A", "B", "C", "D"];
 const ALTERNATIVAS: Alternativa[] = ["A", "B", "C", "D", "E"];
+
+// linha do Gabarito (número + chips A-E) — reaproveitada pelas duas visões (lista numerada e por
+// grupo), só muda o agrupamento em volta dela
+function LinhaGabarito({
+  r, onMarcarAlternativa,
+}: {
+  r: QuestaoResultado;
+  onMarcarAlternativa: (numero: number, alternativa: Alternativa | null) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1.5">
+      <span className="text-[11px] font-mono text-muted-foreground w-6 flex-shrink-0 text-right">{r.numero}.</span>
+      <div className="flex gap-1">
+        {ALTERNATIVAS.map((alt) => (
+          <button
+            key={alt}
+            type="button"
+            title={`Marcar alternativa ${alt} na questão ${r.numero}`}
+            onClick={() => onMarcarAlternativa(r.numero, r.alternativa === alt ? null : alt)}
+            className={`h-6 w-6 rounded-md text-[10px] font-semibold flex items-center justify-center transition-colors ${
+              r.alternativa === alt
+                ? "bg-primary text-primary-foreground"
+                : "border border-border text-muted-foreground hover:border-primary/50"
+            }`}
+          >
+            {alt}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // Painel de questões escalonadas do tópico — por cima do PDF (o leitor continua visível atrás),
 // mesmo tratamento de overlay do NovoCartaoForm. Antes de gerar, só pede o total; depois de
@@ -36,6 +68,9 @@ export default function PainelQuestoes({
 }) {
   const [blocosStr, setBlocosStr] = useState<string[]>([""]);
   const [gabaritoAberto, setGabaritoAberto] = useState(true);
+  // "lista" = numeração corrida de sempre; "grupos" = mesma separação A-D usada no painel acima,
+  // útil pra conferir o gabarito só do grupo que o usuário está respondendo agora
+  const [visaoGabarito, setVisaoGabarito] = useState<"lista" | "grupos">("lista");
 
   const blocosNum = blocosStr.map((s) => parseInt(s));
   const podeGerar = blocosNum.length > 0 && blocosNum.every((n) => Number.isFinite(n) && n >= 4 && n <= 200);
@@ -208,45 +243,73 @@ export default function PainelQuestoes({
             </div>
 
             <div className="space-y-2 border-t border-border pt-3">
-              <button
-                type="button"
-                onClick={() => setGabaritoAberto((v) => !v)}
-                className="flex items-center justify-between w-full text-left"
-              >
-                <span className="text-xs font-semibold text-foreground">
-                  Gabarito <span className="font-normal text-muted-foreground">· {marcadasGabarito}/{questoes.total} marcadas</span>
-                </span>
-                {gabaritoAberto ? (
-                  <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setGabaritoAberto((v) => !v)}
+                  className="flex items-center gap-1.5 text-left min-w-0"
+                >
+                  <span className="text-xs font-semibold text-foreground truncate">
+                    Gabarito <span className="font-normal text-muted-foreground">· {marcadasGabarito}/{questoes.total} marcadas</span>
+                  </span>
+                  {gabaritoAberto ? (
+                    <ChevronUp className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  )}
+                </button>
+                {gabaritoAberto && (
+                  <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setVisaoGabarito("lista")}
+                      title="Lista numerada"
+                      className={`h-6 w-6 rounded flex items-center justify-center transition-colors ${
+                        visaoGabarito === "lista" ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <List className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVisaoGabarito("grupos")}
+                      title="Separado por grupo A-D"
+                      className={`h-6 w-6 rounded flex items-center justify-center transition-colors ${
+                        visaoGabarito === "grupos" ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <LayoutGrid className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 )}
-              </button>
+              </div>
               {gabaritoAberto && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5">
-                  {questoes.resultados.map((r) => (
-                    <div key={r.numero} className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1.5">
-                      <span className="text-[11px] font-mono text-muted-foreground w-6 flex-shrink-0 text-right">{r.numero}.</span>
-                      <div className="flex gap-1">
-                        {ALTERNATIVAS.map((alt) => (
-                          <button
-                            key={alt}
-                            type="button"
-                            title={`Marcar alternativa ${alt} na questão ${r.numero}`}
-                            onClick={() => onMarcarAlternativa(r.numero, r.alternativa === alt ? null : alt)}
-                            className={`h-6 w-6 rounded-md text-[10px] font-semibold flex items-center justify-center transition-colors ${
-                              r.alternativa === alt
-                                ? "bg-primary text-primary-foreground"
-                                : "border border-border text-muted-foreground hover:border-primary/50"
-                            }`}
-                          >
-                            {alt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                visaoGabarito === "lista" ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5">
+                    {questoes.resultados.map((r) => (
+                      <LinhaGabarito key={r.numero} r={r} onMarcarAlternativa={onMarcarAlternativa} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {porGrupo.map(({ grupo, porBloco }) => {
+                      const itens = porBloco.flatMap(([, its]) => its);
+                      if (itens.length === 0) return null;
+                      return (
+                        <div key={grupo}>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${GRUPO_BADGE[grupo]}`}>
+                            {GRUPO_LABEL[grupo]}
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5 mt-1.5">
+                            {itens.map((r) => (
+                              <LinhaGabarito key={r.numero} r={r} onMarcarAlternativa={onMarcarAlternativa} />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
               )}
             </div>
           </div>

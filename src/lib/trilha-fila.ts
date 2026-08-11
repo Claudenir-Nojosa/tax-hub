@@ -459,6 +459,17 @@ function paginaFimEfetiva(ref: { paginaFim?: number }, pdf: Pick<PdfEstudo, "pag
   return Math.min(ref.paginaFim, pdf.paginaConteudoFim ?? pdf.totalPaginas);
 }
 
+// nº REAL de questões daquele grupo no PDF do tópico (soma de todos os blocos, ver
+// gerarQuestoesGrupos/sincronizarCadernoComQuestoes em estudo-data.ts/biblioteca-utils.ts) — usado
+// pra decidir se um grupo A-D está de fato TERMINADO. `cadernos[grupo].acertos+erros` sozinho não
+// basta: ele conta só o que já foi MARCADO, então marcar 1 de 10 questões do grupo (acertos+erros=1
+// > 0) já contava como "feito" antes desta correção — bug real reportado pelo usuário (Grupo A
+// aparecia 100% concluído com 1 questão marcada, faltando as outras 9).
+function totalQuestoesDoGrupo(materia: string, topico: string, grupo: Grupo, pdfs: PdfEstudo[]): number {
+  const pdf = resolverPdfDoTopico(materia, topico, pdfs);
+  return pdf?.questoes?.resultados.filter((r) => r.grupo === grupo).length ?? 0;
+}
+
 function estaAtividadeConcluida(
   ref: MetaAtividadeRef,
   topicos: Record<string, TopicoState>,
@@ -482,16 +493,21 @@ function estaAtividadeConcluida(
     case "questoes": {
       const grupo = ref.id.split(":").pop() as Grupo;
       const c = estado?.cadernos[grupo];
-      const feito = !!c && c.acertos + c.erros > 0;
+      const total = ref.topico ? totalQuestoesDoGrupo(ref.materia, ref.topico, grupo, pdfs) : 0;
+      // só "feito" quando TODAS as questões do grupo foram marcadas (acerto ou erro) — não basta
+      // ter marcado uma só (ver totalQuestoesDoGrupo)
+      const feito = !!c && total > 0 && c.acertos + c.erros >= total;
       return { concluida: feito, desempenhoPerc: feito ? calcularPerc(c!.acertos, c!.erros) : undefined };
     }
     case "reforco": {
       const grupo = ref.id.split(":").pop() as Grupo;
       const c = estado?.cadernos[grupo];
-      const feito = !!c && c.acertos + c.erros > 0;
+      const total = ref.topico ? totalQuestoesDoGrupo(ref.materia, ref.topico, grupo, pdfs) : 0;
+      const feito = !!c && total > 0 && c.acertos + c.erros >= total;
       const perc = feito ? calcularPerc(c!.acertos, c!.erros) : undefined;
-      // um reforço só "conclui" quando o desempenho volta pra cima do limiar — refazer e continuar
-      // fraco mantém a atividade pendente (vai voltar a aparecer como reforço depois do cooldown)
+      // um reforço só "conclui" quando TODAS as questões foram remarcadas E o desempenho volta pra
+      // cima do limiar — refazer parcialmente, ou refazer inteiro e continuar fraco, mantém a
+      // atividade pendente (volta a aparecer como reforço depois do cooldown)
       return { concluida: perc !== undefined && perc >= LIMIAR_REFORCO_PERC, desempenhoPerc: perc };
     }
     case "reforco_imediato":

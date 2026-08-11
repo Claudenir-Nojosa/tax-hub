@@ -236,6 +236,15 @@ export default function TrilhaTab({
     }
     if (a.tipo === "cartas") {
       onIrParaCartas?.();
+      return;
+    }
+    // questões (grupos A-D, reforço, reforço rápido) sem link externo cadastrado — abre o PDF do
+    // próprio tópico, que é de onde se responde as questões escalonadas (ver PainelQuestoes.tsx,
+    // aberto de dentro do leitor). Pedido do usuário: clicar já leva pro PDF certo, sem precisar
+    // procurar na Biblioteca.
+    if ((a.tipo === "questoes" || a.tipo === "reforco" || a.tipo === "reforco_imediato") && a.topico) {
+      const pdf = pdfs.find((p) => p.materia === a.materia && p.topicos?.includes(a.topico!));
+      onIrParaBiblioteca?.(pdf ? { pdfId: pdf.id } : undefined);
     }
   };
 
