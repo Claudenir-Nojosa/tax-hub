@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import {
   AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, Clock, ClipboardList, Eye, EyeOff, Flag,
-  Highlighter, Layers, ListChecks, NotebookText, Pause, Play,
+  Highlighter, Layers, ListChecks, NotebookText, Pause, Pencil, Play,
 } from "lucide-react";
 import {
   dateKeyLocal, gerarQuestoesGrupos, topicoKey,
@@ -260,6 +260,16 @@ export default function LeitorPdf({
 
   const definirFimConteudo = () => onAtualizarPdf({ paginaConteudoFim: paginaVisivel });
 
+  // digitar o número da página direto, sem precisar rolar até lá — além de mais rápido, evita
+  // rolar/arrastar a barra até o fim só pra configurar isso, que era exatamente o que fazia o
+  // sistema de leitura confundir "naveguei até aqui pra configurar" com "li até aqui de verdade"
+  const [editandoFimConteudo, setEditandoFimConteudo] = useState(false);
+  const comitarFimConteudoManual = (valor: string) => {
+    const n = parseInt(valor);
+    if (Number.isFinite(n) && n >= 1) onAtualizarPdf({ paginaConteudoFim: Math.min(n, pdf.totalPaginas) });
+    setEditandoFimConteudo(false);
+  };
+
   const concluirLeitura = () => {
     if (!chaveTopico) return;
     const estado = topicos[chaveTopico];
@@ -508,16 +518,46 @@ export default function LeitorPdf({
         </button>
 
         {/* fim do conteúdo — a partir daqui o PDF só tem questão, não teoria; é essa página (não
-            o total) que define "terminei de ler" e o % de leitura */}
-        <button
-          type="button"
-          onClick={definirFimConteudo}
-          title={pdf.paginaConteudoFim ? `Fim do conteúdo: pág. ${pdf.paginaConteudoFim} — clique pra atualizar pra pág. ${paginaVisivel}` : `Marcar a página visível (${paginaVisivel}) como fim do conteúdo — depois disso só tem questão`}
-          className="hidden sm:flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-muted text-muted-foreground hover:bg-accent transition-colors flex-shrink-0"
-        >
-          <Flag className="h-3 w-3" />
-          {pdf.paginaConteudoFim ? `Fim: pág. ${pdf.paginaConteudoFim}` : "Fim do conteúdo"}
-        </button>
+            o total) que define "terminei de ler" e o % de leitura. Além do botão (marca a página
+            visível agora), dá pra digitar o número direto — evita ter que rolar/arrastar até lá só
+            pra configurar isso. */}
+        <div className="hidden sm:flex items-center gap-1 flex-shrink-0">
+          {editandoFimConteudo ? (
+            <input
+              type="number"
+              autoFocus
+              min={1}
+              max={pdf.totalPaginas}
+              defaultValue={pdf.paginaConteudoFim ?? paginaVisivel}
+              onBlur={(e) => comitarFimConteudoManual(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") setEditandoFimConteudo(false);
+              }}
+              className="w-16 text-[11px] border border-border rounded-md px-1.5 py-1 bg-muted text-foreground focus:outline-none focus:border-primary"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={definirFimConteudo}
+              title={pdf.paginaConteudoFim ? `Fim do conteúdo: pág. ${pdf.paginaConteudoFim} — clique pra atualizar pra pág. ${paginaVisivel}` : `Marcar a página visível (${paginaVisivel}) como fim do conteúdo — depois disso só tem questão`}
+              className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-muted text-muted-foreground hover:bg-accent transition-colors"
+            >
+              <Flag className="h-3 w-3" />
+              {pdf.paginaConteudoFim ? `Fim: pág. ${pdf.paginaConteudoFim}` : "Fim do conteúdo"}
+            </button>
+          )}
+          {!editandoFimConteudo && (
+            <button
+              type="button"
+              onClick={() => setEditandoFimConteudo(true)}
+              title="Digitar o número da página do fim do conteúdo manualmente"
+              className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          )}
+        </div>
 
         {/* concluir a leitura do tópico — só aparece depois que o usuário passou do fim do
             conteúdo; não é automático (bater a página não garante que o conteúdo foi assimilado) */}
