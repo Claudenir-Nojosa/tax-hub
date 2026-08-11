@@ -231,6 +231,12 @@ export interface TrilhaDinamicaState {
   // bootstrap preguiçoso na 1ª leitura via avancarFilaMetasSeNecessario, nunca inicializado "na
   // marra" fora desse caminho.
   filaMetas?: FilaMetasState;
+  // reforço geral de matéria (aproveitamento agregado — todos os cadernos A-D de todos os tópicos
+  // — abaixo de LIMIAR_REFORCO_PERC, ver construirFilaGlobal em trilha-fila.ts): registro do
+  // bloco de 20 questões feito, escrito na aba Questões. Um por matéria (não histórico) — feita
+  // essa rodada, a atividade não reaparece pra essa matéria (mesmo espírito one-shot de
+  // revisoes30Feitas). Nome -> resultado.
+  reforcosMateria?: Record<string, { acertos: number; erros: number; feitoEm: string }>;
 }
 
 // Uma atividade atribuída a uma Meta. Guarda um snapshot dos campos DESCRITIVOS (que não mudam
@@ -308,11 +314,19 @@ export interface EstudoState {
 export type Alternativa = "A" | "B" | "C" | "D" | "E";
 
 // Resultado de UMA questão da lista escalonada gerada a partir do PDF — grupo A-D é derivado da
-// posição na lista (ver gerarQuestoesGrupos), não escolhido à mão. acertou null = ainda não
-// respondida (distinto de false = respondida e errada). alternativa = a letra que o usuário
-// marcou no gabarito (independente de acertou/errou — é só o registro de qual opção ele indicou).
+// posição DENTRO DO PRÓPRIO BLOCO (ver gerarQuestoesGrupos), não escolhido à mão. acertou null =
+// ainda não respondida (distinto de false = respondida e errada). alternativa = a letra que o
+// usuário marcou no gabarito (independente de acertou/errou — é só o registro de qual opção ele
+// indicou).
 export interface QuestaoResultado {
-  numero: number; // 1-based, posição na lista de questões do tópico
+  numero: number; // 1-based, posição GLOBAL na lista inteira (todos os blocos, pra numeração
+                   // simples no Gabarito)
+  // 1-based — de qual bloco de questões do PDF essa questão é. A maioria dos PDFs tem 1 bloco só
+  // (bloco 1); PDFs com vários cadernos separados dentro do mesmo tópico (ex.: 23+25+30 questões
+  // em 3 listas distintas) têm bloco 1/2/3 — cada bloco reinicia o rodízio A-D do ZERO, não
+  // divide o total combinado de uma vez (ver gerarQuestoesGrupos). Ausente em dados gerados antes
+  // desta mudança = trata como bloco único (mesmo comportamento de sempre).
+  bloco?: number;
   grupo: Grupo;
   acertou: boolean | null;
   alternativa?: Alternativa;
@@ -320,23 +334,35 @@ export interface QuestaoResultado {
 
 // Lista de questões de um tópico, mapeada a partir do PDF aberto no leitor (páginas depois de
 // PdfEstudo.paginaConteudoFim). O agregado (quantos certos/errados por grupo) é sincronizado pra
-// TopicoState.cadernos via sincronizarCadernoComQuestoes (biblioteca-utils.ts) — esta lista é a
-// fonte do detalhe POR QUESTÃO; o caderno do Edital guarda só o agregado, como sempre guardou.
+// TopicoState.cadernos via sincronizarCadernoComQuestoes (biblioteca-utils.ts) — esta soma
+// atravessa TODOS os blocos automaticamente (filtra só por `grupo`, não por `bloco`), então
+// "Grupo A" do tópico já significa "Grupo A de todos os blocos combinados" sem precisar de
+// nenhuma lógica extra ali. `resultados` é a fonte do detalhe POR QUESTÃO; o caderno do Edital
+// guarda só o agregado, como sempre guardou.
 export interface PdfQuestoes {
-  total: number;
+  total: number; // soma de todos os blocos — guardado junto só pra exibição, sem recalcular à toa
   resultados: QuestaoResultado[];
   criadoEm: string;
 }
 
 const ORDEM_GRUPOS_QUESTOES: Grupo[] = ["A", "B", "C", "D"];
 
-// Distribui N questões em grupos A-D por rodízio: questão 1→A, 2→B, 3→C, 4→D, 5→A... (ex.: 20
-// questões → A:1,5,9,13,17 · B:2,6,10,14,18 · C:3,7,11,15,19 · D:4,8,12,16,20).
-export function gerarQuestoesGrupos(total: number): QuestaoResultado[] {
+// Distribui os blocos de questões em grupos A-D por rodízio — CADA BLOCO reinicia o rodízio do
+// zero (bloco 1 questão 1→A, 2→B...; bloco 2 questão 1→A de novo, não continua o rodízio do bloco
+// 1). Pedido do usuário: um PDF pode ter vários cadernos de questões SEPARADOS dentro do mesmo
+// tópico (ex.: "Fluência de Dados" com um bloco de 23, outro de 25, outro de 30 questões) — juntar
+// tudo num rodízio só (comportamento antigo, um `total` único) distribuía errado, ignorando que
+// cada bloco é uma lista independente com seu próprio "questão 1". Pra 1 bloco só (o caso comum),
+// o resultado é idêntico a antes.
+export function gerarQuestoesGrupos(blocos: number[]): QuestaoResultado[] {
   const resultados: QuestaoResultado[] = [];
-  for (let n = 1; n <= total; n++) {
-    resultados.push({ numero: n, grupo: ORDEM_GRUPOS_QUESTOES[(n - 1) % 4], acertou: null });
-  }
+  let numeroGlobal = 0;
+  blocos.forEach((tamanho, idx) => {
+    for (let n = 1; n <= tamanho; n++) {
+      numeroGlobal++;
+      resultados.push({ numero: numeroGlobal, bloco: idx + 1, grupo: ORDEM_GRUPOS_QUESTOES[(n - 1) % 4], acertou: null });
+    }
+  });
   return resultados;
 }
 

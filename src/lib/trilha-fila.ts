@@ -1,5 +1,5 @@
 import {
-  calcularPagPorHora, calcularPerc, dateKeyLocal, topicoKey,
+  calcularPagPorHora, calcularPerc, dateKeyLocal, defaultTopicoState, topicoKey,
   type AtividadeCalendario, type Bloco, type ChecklistRevisaoLink, type EstudoConfigCiclo,
   type Grupo, type MetaAtividadeRef, type MetaPersistida, type NivelImportancia, type PdfEstudo,
   type TopicoState, type TrilhaDinamicaState,
@@ -25,7 +25,7 @@ import {
 
 export type FilaAtividadeTipo =
   | "teoria" | "questoes" | "reforco" | "reforco_imediato"
-  | "revisao_link" | "revisao_link_faltando" | "revisao_materia" | "cartas";
+  | "revisao_link" | "revisao_link_faltando" | "revisao_materia" | "reforco_materia" | "cartas";
 
 export interface FilaAtividade {
   id: string;
@@ -51,6 +51,13 @@ export interface FilaAtividade {
   paginaInicio?: number;
   paginaFim?: number;
   todosCapitulos?: CapituloBlocoItem[];
+  // só em "teoria" fatiada (pdfId+paginaInicio/paginaFim presentes) — minutos já lidos DESTE
+  // pedaço, derivados da posição real do PDF (pdf.paginaAtual) no ritmo de leitura AO VIVO do
+  // usuário (não o ritmo congelado no momento em que o pedaço foi criado) — por isso pode passar
+  // de `minutosEstimados` (o usuário lendo mais devagar do que a estimativa original previu não é
+  // um bug, é sinal real: ver TabelaAtividades, que mostra "feito/estimado" e libera a próxima
+  // atividade da cadeia quando feito >= estimado, mesmo sem a atividade estar concluída).
+  minutosFeitos?: number;
 }
 
 // heurísticas de duração quando não há histórico real ainda pra tirar a média (documentadas como
@@ -60,8 +67,17 @@ export interface FilaAtividade {
 export const MINUTOS_ESTIMADO_REVISAO30 = 60;
 export const MINUTOS_ESTIMADO_CARTAS = 20;
 export const MINUTOS_ESTIMADO_TEORIA_PADRAO = 60; // tópico sem PDF/página mapeada nenhuma
+// reforço geral de matéria — 20 questões a ~2min cada (mesma taxa de MINUTOS_ESTIMADO_QUESTAO_PADRAO)
+export const MINUTOS_ESTIMADO_REFORCO_MATERIA = 40;
+export const QUESTOES_REFORCO_MATERIA = 20;
+// nº mínimo de questões respondidas na matéria (soma de todos os cadernos A-D de todos os tópicos)
+// antes de julgar o aproveitamento agregado — sem isso, 2-3 questões erradas no começo já dispararia
+// o reforço com uma amostra pequena demais pra significar algo
+const MINIMO_QUESTOES_REFORCO_MATERIA = 20;
 
-function resolverPdfDoTopico(materia: string, topico: string, pdfs: PdfEstudo[]): PdfEstudo | undefined {
+// exportado pra page.tsx (bookkeeping de "Marcar como estudado" automático — ver
+// avancarEstudoAutomaticoSeNecessario) reaproveitar sem duplicar a lógica de resolução de PDF
+export function resolverPdfDoTopico(materia: string, topico: string, pdfs: PdfEstudo[]): PdfEstudo | undefined {
   return pdfs.find((p) => p.materia === materia && (p.topicos?.includes(topico) ?? false));
 }
 
@@ -89,7 +105,10 @@ interface ChunkTeoria {
 // TabelaAtividades expandir a checklist. Sem capítulos, cai no intervalo de página mapeado pro
 // tópico (intervalosPaginas) e fatia por PÁGINA pura. [] = nada mapeado, ou já lido por completo
 // (o tópico continua na fila via o fallback de 1 atividade só, ver construirFilaGlobal).
-function gerarChunksTeoria(
+// exportado (além do uso interno em construirFilaGlobal) pra page.tsx conseguir checar "sobrou
+// alguma coisa pra ler desse tópico?" (chunks.length === 0) sem duplicar a lógica de resolução de
+// capítulo/página — ver avancarEstudoAutomaticoSeNecessario
+export function gerarChunksTeoria(
   pdf: PdfEstudo, topico: string, pagPorHora: number | null, capitulosConcluidos: string[]
 ): ChunkTeoria[] {
   const ritmo = pagPorHora && pagPorHora > 0 ? pagPorHora : PAG_POR_HORA_PADRAO;
@@ -105,14 +124,22 @@ function gerarChunksTeoria(
       while (i < resolvidos.length && !resolvidos[i].lido) {
         const c = resolvidos[i];
         grupo.push({ ...c, indice: i + 1 });
-        minutosAcumulados += ((c.paginaFim - c.paginaInicio + 1) / ritmo) * 60;
+        // páginas que REALMENTE faltam desse capítulo — não o span inteiro dele. Só o PRIMEIRO
+        // capítulo não lido de todos pode estar pela metade (pdf.paginaAtual é um ponteiro único
+        // e linear); os de depois nunca foram tocados, então a conta já reduz sozinha pro span
+        // inteiro deles. Sem isso, um capítulo de 42 páginas com só 5 restantes (usuário já leu
+        // as outras 37) estimava 84min em vez dos ~10min reais.
+        const paginasRestantesDoCapitulo = c.paginaFim - Math.max(c.paginaInicio - 1, pdf.paginaAtual);
+        minutosAcumulados += (paginasRestantesDoCapitulo / ritmo) * 60;
         i++;
         if (minutosAcumulados >= MAX_MINUTOS_ATIVIDADE_TEORIA) break;
       }
       const primeiro = grupo[0];
       const ultimo = grupo[grupo.length - 1];
       chunks.push({
-        paginaInicio: primeiro.paginaInicio,
+        // Math.max: se o 1º capítulo do pedaço está pela metade, abre exatamente de onde parou —
+        // não no início nominal dele (senão o clique levaria pra trás, pra página já lida)
+        paginaInicio: Math.max(primeiro.paginaInicio, pdf.paginaAtual + 1),
         paginaFim: ultimo.paginaFim,
         titulo: grupo.length > 1
           ? `${topico} — Capítulos ${primeiro.indice}-${ultimo.indice} de ${resolvidos.length}`
@@ -336,6 +363,41 @@ export function construirFilaGlobal(params: {
         });
       }
     }
+
+    // reforço geral de matéria — aproveitamento agregado (todos os cadernos A-D de todos os
+    // tópicos) abaixo de LIMIAR_REFORCO_PERC, com amostra mínima (MINIMO_QUESTOES_REFORCO_MATERIA)
+    // pra não disparar com 2-3 questões erradas no começo. One-shot por matéria (mesmo espírito de
+    // revisão de matéria) — feito o bloco de 20 questões (registrado na aba Questões, ver
+    // trilha.reforcosMateria), não reaparece pra essa matéria.
+    if (!trilha.reforcosMateria?.[m.nome]) {
+      let acertosMateria = 0;
+      let totalMateria = 0;
+      for (const topico of m.topicos) {
+        const estado = topicos[topicoKey(m.nome, topico)];
+        if (!estado) continue;
+        for (const grupo of GRUPOS_QUESTOES) {
+          const c = estado.cadernos[grupo];
+          acertosMateria += c.acertos;
+          totalMateria += c.acertos + c.erros;
+        }
+      }
+      if (totalMateria >= MINIMO_QUESTOES_REFORCO_MATERIA) {
+        const percMateria = calcularPerc(acertosMateria, totalMateria - acertosMateria);
+        if (percMateria < LIMIAR_REFORCO_PERC) {
+          fila.push({
+            id: `rm:${m.nome}`,
+            tipo: "reforco_materia",
+            materia: m.nome,
+            titulo: `Reforço geral — ${m.nome} (${percMateria}% de aproveitamento, ${QUESTOES_REFORCO_MATERIA} questões)`,
+            minutosEstimados: MINUTOS_ESTIMADO_REFORCO_MATERIA,
+            link: configCiclo.materias[m.nome]?.linkRevisaoMateria,
+            desempenhoPerc: percMateria,
+            concluida: false,
+            elegivelDesde: hoje,
+          });
+        }
+      }
+    }
   }
 
   // cartas — atividade global (não por matéria), mesma regra de sempre: domingos a cada 14 dias
@@ -424,6 +486,10 @@ function estaAtividadeConcluida(
       return { concluida: !!(estado?.linkRevisao7d || estado?.linkRevisao30d || estado?.revisaoLinkDispensada) };
     case "revisao_materia":
       return { concluida: (trilha.revisoes30Feitas[ref.materia] ?? []).length > 0 };
+    case "reforco_materia": {
+      const registro = trilha.reforcosMateria?.[ref.materia];
+      return { concluida: !!registro, desempenhoPerc: registro ? calcularPerc(registro.acertos, registro.erros) : undefined };
+    }
     case "cartas": {
       const data = ref.id.split(":")[1];
       return { concluida: trilha.cartasFeitasEm.includes(data) };
@@ -477,6 +543,9 @@ export function computarMetaAtual(
   const metaPersistida = trilha.filaMetas.metas[trilha.filaMetas.metaAtual];
   if (!metaPersistida) return undefined;
 
+  const pagPorHoraAoVivo = calcularPagPorHora(calendario);
+  const ritmoAoVivo = pagPorHoraAoVivo && pagPorHoraAoVivo > 0 ? pagPorHoraAoVivo : PAG_POR_HORA_PADRAO;
+
   const atividades: FilaAtividade[] = metaPersistida.atividades.map((ref) => {
     const { concluida, desempenhoPerc } = estaAtividadeConcluida(ref, topicos, trilha, blocos, pdfs);
     // recalcula a checklist de capítulos AO VIVO (nunca persistida) — só os capítulos dentro do
@@ -488,11 +557,19 @@ export function computarMetaAtual(
           .map((c, i) => ({ ...c, indice: i + 1 }))
           .filter((c) => c.paginaInicio >= ref.paginaInicio! && c.paginaFim <= ref.paginaFim!)
       : undefined;
+    // minutos já lidos DESTE pedaço, no ritmo AO VIVO (não o congelado em minutosEstimados na
+    // criação) — pode passar de minutosEstimados se o usuário estiver lendo mais devagar do que a
+    // estimativa original previu, e é exatamente esse sinal que a UI usa pra liberar a próxima
+    // atividade da cadeia mesmo sem esta estar concluída (ver TabelaAtividades)
+    const minutosFeitos = pdf && ref.paginaInicio !== undefined && ref.paginaFim !== undefined
+      ? Math.round((Math.max(0, Math.min(pdf.paginaAtual, ref.paginaFim) - (ref.paginaInicio - 1)) / ritmoAoVivo) * 60)
+      : undefined;
     return {
       id: ref.id, tipo: ref.tipo as FilaAtividadeTipo, materia: ref.materia, topico: ref.topico,
       titulo: ref.titulo, relevancia: ref.relevancia, minutosEstimados: ref.minutosEstimados,
       link: ref.link, desempenhoPerc, concluida, elegivelDesde: metaPersistida.iniciadaEm,
       pdfId: ref.pdfId, paginaInicio: ref.paginaInicio, paginaFim: ref.paginaFim, todosCapitulos,
+      minutosFeitos,
     };
   });
 
@@ -526,12 +603,28 @@ export function computarMetaAtual(
     fechavel: total > 0 && concluidas === total,
   };
 
-  // projeção honesta (mesmo espírito de estimativaConclusaoTrilha.dataPrevista) via throughput
-  // real — nenhuma atividade concluída ainda = sem base pra projetar, não inventa uma data
+  // projeção honesta (mesmo espírito de estimativaConclusaoTrilha.dataPrevista) — combina duas
+  // fontes e usa a MAIS OTIMISTA (menos dias) das duas, nunca a pior sozinha:
+  // 1) throughput REAL em MINUTOS (não contagem de atividades — 1 atividade de 90min concluída
+  //    não é o mesmo ritmo que 1 de 15min);
+  // 2) o ritmo CONFIGURADO no Ciclo (orcamentoMinutos ÷ 7 — a Meta inteira já é dimensionada pra
+  //    caber numa semana desse orçamento, ver abrirProximaMeta). Usar só a fonte 1 sozinha (como
+  //    era antes) sofre MUITO com pouco dado: 1 atividade pequena concluída no dia 1 projetava
+  //    ritmo de "1 atividade/dia" e estourava a data pra 2 semanas à frente mesmo numa Meta
+  //    dimensionada pra 1 semana — bug real reportado pelo usuário (Meta aberta dia 07/08 projetando
+  //    21/08). A fonte 2 funciona como teto: nunca deixa a projeção estourar além do que o próprio
+  //    orçamento semanal já preveria, mesmo com pouquíssimo dado real ainda.
   let liberadaEmProjetada: string | null = null;
   if (concluidas > 0 && concluidas < total) {
-    const atividadesPorDia = concluidas / diasDecorridos;
-    const diasRestantes = Math.ceil((total - concluidas) / atividadesPorDia);
+    const minutosConcluidos = atividades.filter((a) => a.concluida).reduce((s, a) => s + a.minutosEstimados, 0);
+    const minutosRestantes = atividades.filter((a) => !a.concluida).reduce((s, a) => s + a.minutosEstimados, 0);
+    const minutosPorDiaReal = minutosConcluidos / diasDecorridos;
+    const diasRestantesReal = minutosPorDiaReal > 0 ? Math.ceil(minutosRestantes / minutosPorDiaReal) : Infinity;
+
+    const minutosPorDiaConfigurado = metaPersistida.orcamentoMinutos / 7;
+    const diasRestantesConfigurado = minutosPorDiaConfigurado > 0 ? Math.ceil(minutosRestantes / minutosPorDiaConfigurado) : Infinity;
+
+    const diasRestantes = Math.max(1, Math.min(diasRestantesReal, diasRestantesConfigurado));
     const d = parseDateKey(hoje);
     d.setDate(d.getDate() + diasRestantes);
     liberadaEmProjetada = dateKeyLocal(d);
@@ -670,10 +763,20 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
 }
 
 // Efeito colateral explícito (chamar de um useEffect, mesmo padrão do bookkeeping de
-// conclusaoMaterias que já existe em TrilhaTab.tsx) — bootstrap da Meta 1 quando a trilha nunca
-// passou pelo motor de fila, e promoção automática pra Meta N+1 quando a atual está `fechavel`
-// (todas as atividades concluídas). NÃO promove sozinho enquanto sobrar pendência — pra isso é o
-// botão manual (finalizarMetaManualmente). undefined = nada a fazer.
+// conclusaoMaterias que já existe em TrilhaTab.tsx) — três casos, nessa ordem:
+// 1) bootstrap da Meta 1 quando a trilha nunca passou pelo motor de fila;
+// 2) promoção pra Meta N+1 quando a atual está `fechavel` (todas as atividades concluídas) — NÃO
+//    promove sozinho enquanto sobrar pendência, pra isso é o botão manual (finalizarMetaManualmente);
+// 3) injeção de atividades recém-elegíveis na Meta ABERTA (pedido do usuário: completar uma
+//    atividade que libera outra — ex.: terminar a teoria de um tópico libera o Grupo A do
+//    escalonamento A-D de um tópico anterior — deve aparecer JÁ na Meta corrente, não esperar a
+//    próxima). Só injeta o que a fila já considera elegível-e-pendente e ainda não foi atribuído a
+//    NENHUMA Meta — não reabre nem fecha Meta nenhuma, só CRESCE a atual.
+// Todos os três casos compartilham esta ÚNICA função (e um ÚNICO useEffect em page.tsx) de propósito
+// — dois efeitos concorrentes escrevendo em `trilhaDinamica` no mesmo ciclo de render correm o
+// risco de um sobrescrever o outro (cada um parte do mesmo `trilha` "velho" do fechamento de
+// render atual), então bootstrap/fechamento/injeção viram um SÓ cálculo atômico.
+// undefined = nada a fazer.
 export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDinamicaState | undefined {
   const hoje = params.hoje ?? dateKeyLocal();
   const { trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs, blocos } = params;
@@ -688,17 +791,40 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
   const resultado = computarMetaAtual({
     hoje, trilha, configCiclo, topicos, calendario, blocos, pdfs, capitulosConcluidos: params.capitulosConcluidos,
   });
-  if (!resultado || !resultado.metaAtual.fechavel) return undefined;
+  if (!resultado) return undefined;
 
-  const trilhaComMetaFechada: TrilhaDinamicaState = {
-    ...trilha,
-    filaMetas: {
-      ...trilha.filaMetas,
-      metas: { ...trilha.filaMetas.metas, [metaAberta.numero]: { ...metaAberta, fechadaEm: hoje } },
-    },
+  if (resultado.metaAtual.fechavel) {
+    const trilhaComMetaFechada: TrilhaDinamicaState = {
+      ...trilha,
+      filaMetas: {
+        ...trilha.filaMetas,
+        metas: { ...trilha.filaMetas.metas, [metaAberta.numero]: { ...metaAberta, fechadaEm: hoje } },
+      },
+    };
+    // fechada por conclusão total (fechavel) — nada pendente, carryOver vazio
+    return abrirProximaMeta({ ...params, trilha: trilhaComMetaFechada, hoje, carryOver: [] });
+  }
+
+  // caso 3: Meta aberta, ainda não fechável — injeta o que virou elegível-e-pendente desde a
+  // última passada e ainda não está em NENHUMA Meta (passada ou atual)
+  const fila = construirFilaGlobal({
+    hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs, blocos, trilha,
+    capitulosConcluidos: params.capitulosConcluidos,
+  });
+  const idsJaAtribuidos = new Set(
+    Object.values(trilha.filaMetas.metas).flatMap((m) => m.atividades.map((a) => a.id))
+  );
+  const novos = fila.filter((a) => !idsJaAtribuidos.has(a.id));
+  if (novos.length === 0) return undefined;
+
+  const metaComInjecao: MetaPersistida = {
+    ...metaAberta,
+    atividades: [...metaAberta.atividades, ...novos.map((a) => paraRef(a, false))],
   };
-  // fechada por conclusão total (fechavel) — nada pendente, carryOver vazio
-  return abrirProximaMeta({ ...params, trilha: trilhaComMetaFechada, hoje, carryOver: [] });
+  return {
+    ...trilha,
+    filaMetas: { ...trilha.filaMetas, metas: { ...trilha.filaMetas.metas, [metaAberta.numero]: metaComInjecao } },
+  };
 }
 
 // Botão "Finalize ou ignore as atividades da meta atual" — fecha a Meta aberta MESMO com
@@ -735,4 +861,52 @@ export function finalizarMetaManualmente(params: ParamsAbrirMeta): TrilhaDinamic
     : trilha;
 
   return abrirProximaMeta({ ...params, trilha: trilhaComMetaFechada, hoje, carryOver });
+}
+
+// Efeito colateral explícito (mesmo padrão de avancarFilaMetasSeNecessario) — o fatiamento de
+// teoria (gerarChunksTeoria) julga cada PEDAÇO como concluído pela posição real de leitura
+// (pdf.paginaAtual), mas isso nunca marcava TopicoState.estudado sozinho: o usuário lia o último
+// pedaço de um tópico inteiro pela Trilha, via a linha ficar verde na tabela, mas o Edital
+// continuava mostrando como não estudado — porque "Marcar como estudado" sempre foi um clique
+// manual à parte (LeitorPdf.tsx concluirLeitura), pensado pra quando NADA na Trilha sabia que a
+// leitura tinha, de fato, terminado. Agora que gerarChunksTeoria sabe exatamente disso (fila vazia
+// = nada sobrou pra ler), fecha esse buraco: quando um tópico tem PDF mapeado (capítulos OU
+// intervalosPaginas — sem isso não dá pra saber se "acabou", então nunca mexe) e não sobra nenhum
+// chunk pendente, marca estudado automaticamente. undefined = nada mudou.
+export function avancarEstudoAutomaticoSeNecessario(params: {
+  materiasAtivas: MateriaLike[];
+  configCiclo: EstudoConfigCiclo;
+  topicos: Record<string, TopicoState>;
+  pdfs: PdfEstudo[];
+  calendario: Record<string, AtividadeCalendario[]>;
+  capitulosConcluidos?: string[];
+  hoje?: string;
+}): Record<string, TopicoState> | undefined {
+  const { materiasAtivas, configCiclo, topicos, pdfs, calendario } = params;
+  const capitulosConcluidos = params.capitulosConcluidos ?? [];
+  const hoje = params.hoje ?? dateKeyLocal();
+  const pagPorHora = calcularPagPorHora(calendario);
+  const ativas = materiasAtivas.filter((m) => configCiclo.materias[m.nome]?.incluir);
+
+  let mudou = false;
+  const novosTopicos = { ...topicos };
+  for (const m of ativas) {
+    for (const topico of m.topicos) {
+      const key = topicoKey(m.nome, topico);
+      const estado = novosTopicos[key];
+      if (estado?.estudado) continue;
+      const pdf = resolverPdfDoTopico(m.nome, topico, pdfs);
+      if (!pdf) continue;
+      const temMapeamento = (pdf.capitulos?.length ?? 0) > 0 || (pdf.intervalosPaginas?.some((t) => t.topico === topico) ?? false);
+      if (!temMapeamento) continue; // sem mapeamento não dá pra saber se "acabou" — nunca mexe
+      if (gerarChunksTeoria(pdf, topico, pagPorHora, capitulosConcluidos).length > 0) continue;
+      novosTopicos[key] = {
+        ...(estado ?? defaultTopicoState()),
+        estudado: true,
+        estudadoEm: estado?.estudadoEm ?? hoje,
+      };
+      mudou = true;
+    }
+  }
+  return mudou ? novosTopicos : undefined;
 }

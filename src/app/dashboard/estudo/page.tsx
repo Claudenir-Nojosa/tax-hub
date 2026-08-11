@@ -26,8 +26,8 @@ import {
   type Bloco,
   MATERIAS,
 } from "@/lib/estudo-data";
-import { computarMetaSemana, chaveCapitulo } from "@/lib/trilha-dinamica";
-import { avancarFilaMetasSeNecessario } from "@/lib/trilha-fila";
+import { chaveCapitulo } from "@/lib/trilha-dinamica";
+import { avancarEstudoAutomaticoSeNecessario, avancarFilaMetasSeNecessario, computarMetaAtual } from "@/lib/trilha-fila";
 import type { AberturaPdfSolicitada } from "@/components/estudo/trilha/TrilhaLinhas";
 import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks, Users } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
@@ -524,31 +524,47 @@ export default function EstudoPage() {
     state.calendario, state.pdfs, state.blocos, state.capitulosConcluidos, updateTrilhaDinamica,
   ]);
 
-  // progresso de horas por matéria (trilha dinâmica), nos dois alvos que a Trilha já mostra —
-  // "nesta atividade" (trecho do tamanho de hoje, não reseta ao virar o dia) e "na semana" (alvo
-  // cheio da matéria) — usado tanto pro toast de "meta batida" no leitor (metaMinutosRestantes,
-  // derivado do alvo da semana) quanto pras 2 barras de progresso dentro do leitor (metasEstudo)
-  const { metaMinutosRestantes, metasEstudo } = (() => {
-    const t = state.trilhaDinamica;
-    if (!t?.ativa) return { metaMinutosRestantes: undefined, metasEstudo: undefined };
-    const meta = computarMetaSemana({
-      trilha: t, configCiclo: state.configCiclo, materiasAtivas: materiasFiltradas ?? MATERIAS,
-      topicos: state.topicos, calendario: state.calendario, pdfs: state.pdfs,
-      blocos: state.blocos, capitulosConcluidos: state.capitulosConcluidos,
+  // "Marcar como estudado" automático — o fatiamento de teoria (gerarChunksTeoria) já sabe quando
+  // não sobra nenhum pedaço de leitura pendente pra um tópico (pdf.paginaAtual alcançou tudo que
+  // tinha mapeado), mas isso nunca propagava sozinho pra TopicoState.estudado (sempre foi um clique
+  // manual à parte, dentro do leitor) — usuário reportou terminar a leitura de um tópico inteiro
+  // pela Trilha e o Edital continuar mostrando como não estudado. Nível compartilhado pelo mesmo
+  // motivo do bootstrap de Metas acima: precisa rodar mesmo sem a aba Trilha estar aberta.
+  useEffect(() => {
+    if (!state.trilhaDinamica?.ativa) return;
+    const novosTopicos = avancarEstudoAutomaticoSeNecessario({
+      materiasAtivas: materiasFiltradas ?? MATERIAS,
+      configCiclo: state.configCiclo,
+      topicos: state.topicos,
+      pdfs: state.pdfs,
+      calendario: state.calendario,
+      capitulosConcluidos: state.capitulosConcluidos,
+      hoje: dateKeyLocal(),
     });
-    const restantes: Record<string, number> = {};
-    const metas: Record<string, { atividadeFeitos: number; atividadeAlvo: number; semanaFeitos: number; semanaAlvo: number }> = {};
-    for (const b of meta.blocos) {
-      restantes[b.materia] = Math.max(0, b.minutosAlvoSemana - b.minutosFeitosSemana);
-      metas[b.materia] = {
-        atividadeFeitos: b.minutosFeitosSemana,
-        atividadeAlvo: b.minutosAlvoAtividade,
-        semanaFeitos: b.minutosFeitosSemana,
-        semanaAlvo: b.minutosAlvoSemana,
-      };
-    }
-    return { metaMinutosRestantes: restantes, metasEstudo: metas };
-  })();
+    if (novosTopicos) updateTopicos(novosTopicos);
+  }, [
+    state.trilhaDinamica?.ativa, materiasFiltradas, state.configCiclo, state.topicos,
+    state.pdfs, state.calendario, state.capitulosConcluidos, updateTopicos,
+  ]);
+
+  // Meta atual da fila (trilha-fila.ts) — o leitor deriva dela as 2 barras de progresso e o aviso
+  // de "meta batida" (ver BibliotecaTab.tsx), achando a atividade de teoria que bate com o PDF
+  // aberto. Trocou de computarMetaSemana (motor semanal antigo) porque os alvos de lá tinham
+  // parado de bater com o que a Trilha realmente pede (usuário reportou: "os sliders... não estão
+  // condizente" — o "trecho de hoje" do motor semanal não tem mais nenhuma relação com o pedaço
+  // específico que a Meta atual atribuiu pra essa leitura).
+  const metaAtualParaLeitor = useMemo(() => {
+    const t = state.trilhaDinamica;
+    if (!t?.ativa) return undefined;
+    return computarMetaAtual({
+      hoje: dateKeyLocal(), trilha: t, configCiclo: state.configCiclo,
+      topicos: state.topicos, calendario: state.calendario, blocos: state.blocos,
+      pdfs: state.pdfs, capitulosConcluidos: state.capitulosConcluidos,
+    })?.metaAtual;
+  }, [
+    state.trilhaDinamica, state.configCiclo, state.topicos, state.calendario,
+    state.blocos, state.pdfs, state.capitulosConcluidos,
+  ]);
 
   if (!loaded) {
     return (
@@ -672,6 +688,8 @@ export default function EstudoPage() {
               materiasConcurso={materiasFiltradas}
               blocos={state.blocos}
               onUpdateBlocos={updateBlocos}
+              trilha={state.trilhaDinamica}
+              onUpdateTrilha={updateTrilhaDinamica}
             />
           )}
 
@@ -690,8 +708,7 @@ export default function EstudoPage() {
                 handleTimerSalvar(minutos, tipo, descricao, undefined, materia, topico, paginas)
               }
               onAdicionarCartas={adicionarCartas}
-              metaMinutosRestantes={metaMinutosRestantes}
-              metasEstudo={metasEstudo}
+              metaAtual={metaAtualParaLeitor}
               aberturaSolicitada={aberturaPdf}
               onAberturaConsumida={() => setAberturaPdf(null)}
               capitulosConcluidos={state.capitulosConcluidos}
