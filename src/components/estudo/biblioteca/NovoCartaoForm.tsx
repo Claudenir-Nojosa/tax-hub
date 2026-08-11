@@ -36,7 +36,7 @@ export default function NovoCartaoForm({
     <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4" onClick={onCancelar}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-card border border-border rounded-2xl w-full max-w-lg p-4 space-y-3 max-h-[85vh] overflow-y-auto"
+        className="bg-card border border-border rounded-2xl w-full max-w-3xl p-5 space-y-4 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -52,13 +52,13 @@ export default function NovoCartaoForm({
         </div>
 
         <div>
-          <label className="text-[11px] font-medium text-muted-foreground block mb-1">{frenteLabel}</label>
+          <label className="text-xs font-medium text-muted-foreground block mb-1.5">{frenteLabel}</label>
           <textarea
             value={frente}
             onChange={(e) => setFrente(e.target.value)}
-            rows={3}
+            rows={8}
             autoFocus={tipo === "monstro"}
-            className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
+            className="w-full text-base leading-relaxed border border-border rounded-lg px-3.5 py-3 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-y min-h-[180px]"
           />
         </div>
 
@@ -87,13 +87,13 @@ export default function NovoCartaoForm({
         )}
 
         <div>
-          <label className="text-[11px] font-medium text-muted-foreground block mb-1">{versoLabel}</label>
+          <label className="text-xs font-medium text-muted-foreground block mb-1.5">{versoLabel}</label>
           <textarea
             value={verso}
             onChange={(e) => setVerso(e.target.value)}
-            rows={4}
+            rows={10}
             autoFocus={tipo === "armadilha"}
-            className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
+            className="w-full text-base leading-relaxed border border-border rounded-lg px-3.5 py-3 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-y min-h-[220px]"
           />
         </div>
 

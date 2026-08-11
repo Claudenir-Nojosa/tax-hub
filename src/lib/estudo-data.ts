@@ -453,6 +453,23 @@ export function calcularPagPorHora(calendario: Record<string, AtividadeCalendari
   return minutos > 0 ? totalPaginas / (minutos / 60) : null;
 }
 
+// mesma conta de calcularPagPorHora, mas só com as sessões DESTE tópico específico — usado pra
+// "minutos feitos" de uma atividade de teoria (ver computarMetaAtual em trilha-fila.ts). A média
+// GERAL (todas as matérias/tópicos já lidos) pode divergir muito do ritmo real de UM tópico denso
+// (ex.: 76min reais registrados em 2 sessões de Direito Administrativo hoje, mas a média geral —
+// puxada por matérias mais leves e rápidas de ler — estimava só 51min pro mesmo trecho). null sem
+// sessão registrada ainda pra esse tópico — quem chama cai pro fallback de calcularPagPorHora.
+export function calcularPagPorHoraTopico(
+  calendario: Record<string, AtividadeCalendario[]>, materia: string, topico: string
+): number | null {
+  const sessoes = Object.values(calendario).flat().filter(
+    (a) => (a.paginas ?? 0) > 0 && a.materia === materia && a.topico === topico
+  );
+  const totalPaginas = sessoes.reduce((s, a) => s + (a.paginas ?? 0), 0);
+  const minutos = sessoes.reduce((s, a) => s + a.duracao, 0);
+  return minutos > 0 ? totalPaginas / (minutos / 60) : null;
+}
+
 // --- Tipos de Concurso ---
 
 export interface MateriaConcurso {

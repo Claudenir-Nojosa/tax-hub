@@ -1,5 +1,5 @@
 import {
-  calcularPagPorHora, calcularPerc, dateKeyLocal, defaultTopicoState, topicoKey,
+  calcularPagPorHora, calcularPagPorHoraTopico, calcularPerc, dateKeyLocal, defaultTopicoState, topicoKey,
   type AtividadeCalendario, type Bloco, type ChecklistRevisaoLink, type EstudoConfigCiclo,
   type Grupo, type MetaAtividadeRef, type MetaPersistida, type NivelImportancia, type PdfEstudo,
   type TopicoState, type TrilhaDinamicaState,
@@ -611,9 +611,15 @@ export function computarMetaAtual(
     // minutos já lidos DESTE pedaço, no ritmo AO VIVO (não o congelado em minutosEstimados na
     // criação) — pode passar de minutosEstimados se o usuário estiver lendo mais devagar do que a
     // estimativa original previu, e é exatamente esse sinal que a UI usa pra liberar a próxima
-    // atividade da cadeia mesmo sem esta estar concluída (ver TabelaAtividades)
+    // atividade da cadeia mesmo sem esta estar concluída (ver TabelaAtividades). Prefere o ritmo
+    // DESTE tópico especificamente — a média GERAL (todas as matérias já lidas) pode divergir muito
+    // de um tópico denso específico (caso real: 76min reais registrados hoje em Direito
+    // Administrativo, média geral puxada por matérias mais rápidas estimava só 51min pro mesmo
+    // trecho). Sem sessão registrada ainda pra esse tópico, cai pro ritmo geral de sempre.
+    const ritmoDoTopico = ref.topico ? calcularPagPorHoraTopico(calendario, ref.materia, ref.topico) : null;
+    const ritmoParaEsteRef = ritmoDoTopico && ritmoDoTopico > 0 ? ritmoDoTopico : ritmoAoVivo;
     const minutosFeitos = pdf && ref.paginaInicio !== undefined && limite !== undefined
-      ? Math.round((Math.max(0, Math.min(pdf.paginaAtual, limite) - (ref.paginaInicio - 1)) / ritmoAoVivo) * 60)
+      ? Math.round((Math.max(0, Math.min(pdf.paginaAtual, limite) - (ref.paginaInicio - 1)) / ritmoParaEsteRef) * 60)
       : undefined;
     // minutosEstimados também precisa respeitar o limite EFETIVO — se ele encolheu (paginaConteudoFim/
     // capítulos editados depois do ref congelado, ver paginaFimEfetiva), o número exibido não pode
@@ -623,7 +629,7 @@ export function computarMetaAtual(
     // Só recalcula quando o limite efetivo é MENOR que o congelado — no caso comum (nada mudou),
     // minutosEstimados continua o valor congelado de sempre.
     const minutosEstimados = pdf && ref.paginaInicio !== undefined && limite !== undefined && limite < ref.paginaFim!
-      ? Math.max(1, Math.round(((limite - (ref.paginaInicio - 1)) / ritmoAoVivo) * 60))
+      ? Math.max(1, Math.round(((limite - (ref.paginaInicio - 1)) / ritmoParaEsteRef) * 60))
       : ref.minutosEstimados;
     return {
       id: ref.id, tipo: ref.tipo as FilaAtividadeTipo, materia: ref.materia, topico: ref.topico,
