@@ -23,6 +23,7 @@ const SUBTIPO_LABEL: Partial<Record<FilaAtividadeTipo, string>> = {
   revisao_link: "revisão de link",
   revisao_link_faltando: "falta link",
   revisao_materia: "revisão de matéria",
+  reforco_materia: "reforço geral",
   cartas: "cartas",
 };
 
@@ -67,9 +68,16 @@ export default function TabelaAtividades({
     });
   };
 
-  // índice da 1ª atividade ainda não concluída — ela e tudo antes ficam desbloqueados; tudo depois
-  // fica com cadeado até virar a "primeira pendente" (-1 = tudo concluído, nada bloqueado)
-  const primeiroPendenteIdx = atividades.findIndex((a) => !a.concluida);
+  // "passou" = concluída de verdade OU já leu tempo suficiente pra bater a estimativa (mesmo sem
+  // concluir formalmente) — pedido do usuário: se o tempo feito alcançar o estimado (ex.: 64/60),
+  // libera a atividade de baixo mesmo assim, sem exigir a conclusão. Não afeta o status dot (que
+  // continua só olhando `concluida` — "passou do tempo" não é "concluída", só destrava a cadeia).
+  const passouOuConcluiu = (a: FilaAtividade) =>
+    a.concluida || (a.minutosFeitos !== undefined && a.minutosFeitos >= a.minutosEstimados);
+
+  // índice da 1ª atividade que ainda não "passou" — ela e tudo antes ficam desbloqueados; tudo
+  // depois fica com cadeado até virar a "primeira pendente" (-1 = tudo passou, nada bloqueado)
+  const primeiroPendenteIdx = atividades.findIndex((a) => !passouOuConcluiu(a));
 
   return (
     <div className="overflow-x-auto -mx-1">
@@ -87,13 +95,8 @@ export default function TabelaAtividades({
         </thead>
         <tbody>
           {atividades.map((a, i) => {
-            const bloqueada = !a.concluida && primeiroPendenteIdx !== -1 && i > primeiroPendenteIdx;
+            const bloqueada = !passouOuConcluiu(a) && primeiroPendenteIdx !== -1 && i > primeiroPendenteIdx;
             const cor = resolverCorMateria(a.materia, materiasAtivas);
-            const dotClasse = a.concluida
-              ? "bg-emerald-500"
-              : a.tipo === "revisao_link_faltando"
-                ? "bg-amber-500"
-                : "bg-muted-foreground/30";
             const subtipo = SUBTIPO_LABEL[a.tipo];
             // além dos tipos com link externo, teoria (abre o PDF) e cartas (vai pra aba Cartas)
             // também são clicáveis — onAbrirLink decide o destino certo por tipo. Bloqueada nunca é
@@ -101,23 +104,29 @@ export default function TabelaAtividades({
             const clicavel = !bloqueada && (!!a.link || a.tipo === "teoria" || a.tipo === "cartas");
             const temCapitulos = !bloqueada && (a.todosCapitulos?.length ?? 0) > 0;
             const expandido = expandidos.has(a.id);
+            const passouDoTempo = !a.concluida && a.minutosFeitos !== undefined && a.minutosFeitos >= a.minutosEstimados;
             return (
               <Fragment key={a.id}>
                 <tr
                   onClick={clicavel ? () => onAbrirLink(a) : undefined}
-                  className={`border-b border-border/50 ${clicavel ? "cursor-pointer hover:bg-accent/40" : ""} ${a.concluida ? "opacity-60" : ""} ${bloqueada ? "opacity-40" : ""}`}
+                  className={`border-b border-border/50 ${clicavel ? "cursor-pointer hover:bg-accent/40" : ""} ${a.concluida ? "bg-emerald-500/[0.06]" : ""} ${bloqueada ? "opacity-40" : ""}`}
                 >
                   <td className="py-2 px-1">
                     {bloqueada ? (
                       <Lock className="h-3 w-3 text-muted-foreground/50" />
+                    ) : a.concluida ? (
+                      <span title="Concluída"><CheckCircle2 className="h-4 w-4 text-emerald-500" /></span>
                     ) : (
-                      <span className={`block w-2 h-2 rounded-full ${dotClasse}`} title={a.concluida ? "Concluída" : "Pendente"} />
+                      <span
+                        className={`block w-2 h-2 rounded-full ${a.tipo === "revisao_link_faltando" ? "bg-amber-500" : "bg-muted-foreground/30"}`}
+                        title="Pendente"
+                      />
                     )}
                   </td>
                   <td className="py-2 px-2">
                     <span className="flex items-center gap-1.5 min-w-0">
                       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
-                      <span className="truncate">{a.materia}</span>
+                      <span className={`truncate ${a.concluida ? "text-emerald-600 dark:text-emerald-400" : ""}`}>{a.materia}</span>
                     </span>
                   </td>
                   <td className="py-2 px-2">
@@ -147,7 +156,18 @@ export default function TabelaAtividades({
                     </span>
                   </td>
                   <td className="py-2 px-2"><Estrelas nivel={a.relevancia} /></td>
-                  <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">{a.minutosEstimados}min</td>
+                  <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">
+                    {a.minutosFeitos !== undefined ? (
+                      <span
+                        className={passouDoTempo ? "text-amber-500 font-medium" : undefined}
+                        title={passouDoTempo ? "Já passou do tempo estimado — a próxima atividade já foi liberada" : undefined}
+                      >
+                        {a.minutosFeitos}/{a.minutosEstimados}min
+                      </span>
+                    ) : (
+                      `${a.minutosEstimados}min`
+                    )}
+                  </td>
                   <td className="py-2 px-2 text-right tabular-nums">
                     {a.desempenhoPerc !== undefined ? `${a.desempenhoPerc}%` : <span className="text-muted-foreground/40">—</span>}
                   </td>

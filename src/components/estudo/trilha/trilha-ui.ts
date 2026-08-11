@@ -119,6 +119,7 @@ const TIPO_FILA_PARA_PASSO: Record<FilaAtividadeTipo, TipoPasso> = {
   revisao_link: "linkQuestoes",
   revisao_link_faltando: "linkQuestoes",
   revisao_materia: "revisao",
+  reforco_materia: "reforco",
   cartas: "cartas",
 };
 

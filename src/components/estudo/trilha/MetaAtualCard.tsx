@@ -22,18 +22,26 @@ export default function MetaAtualCard({ meta, acaoCanto }: { meta: MetaAtual; ac
       </div>
       <div className="text-lg sm:text-xl font-bold leading-snug mb-3">Meta {meta.numero}</div>
 
-      <div className="relative pt-2 pb-1">
-        <div className="h-2.5 rounded-full bg-white/20 overflow-hidden">
+      {/* container do tamanho exato da barra (h-2.5) — o foguete centraliza no `top-1/2` DESSE
+          container, então fica de fato em cima da barra (metade pra cima, metade pra baixo dela),
+          não flutuando acima como antes (quando o container tinha padding extra e o foguete ficava
+          alinhado no topo do padding, não no centro da barra) */}
+      <div className="relative h-2.5 mt-3 mb-2">
+        <div className="absolute inset-0 rounded-full bg-white/20 overflow-hidden">
           <div
             className="h-full rounded-full bg-white transition-all duration-500"
             style={{ width: `${perc}%` }}
           />
         </div>
         <div
-          className="absolute top-0 -translate-y-1/2 -translate-x-1/2 transition-all duration-500"
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all duration-500"
           style={{ left: `${perc}%` }}
         >
-          <Rocket className="h-5 w-5 text-white rotate-90 drop-shadow" />
+          {/* o ícone Rocket do lucide aponta o nariz ~45° pra cima-direita por padrão (path vai de
+              ~9,12 até ~22,2 no viewBox 24x24) — rotate-90 (usado antes) levava o nariz pra
+              baixo-direita, não horizontal; rotate-45 é o que de fato deita ele apontando pra
+              direita, alinhado com a barra */}
+          <Rocket className="h-5 w-5 text-white rotate-45 drop-shadow" />
         </div>
       </div>
       <div className="text-xs text-emerald-100 mt-1">
@@ -46,14 +54,16 @@ export default function MetaAtualCard({ meta, acaoCanto }: { meta: MetaAtual; ac
           label="Desempenho atingido"
           valor={meta.desempenhoPerc !== null ? `${meta.desempenhoPerc}%` : "—"}
           tone="success"
+          wrapLabel
         />
-        <StatTile icone={Clock} label="Horas estudadas" valor={fmtHoras(Math.round(meta.horasEstudadas * 60))} tone="primary" />
-        <StatTile icone={ListChecks} label="Questões resolvidas" valor={meta.questoesResolvidas} tone="purple" />
+        <StatTile icone={Clock} label="Horas estudadas" valor={fmtHoras(Math.round(meta.horasEstudadas * 60))} tone="primary" wrapLabel />
+        <StatTile icone={ListChecks} label="Questões resolvidas" valor={meta.questoesResolvidas} tone="purple" wrapLabel />
         <StatTile
           icone={TrendingUp}
           label="Média horas/dia"
           valor={fmtHoras(Math.round(meta.mediaHorasDiaria * 60))}
           tone="warning"
+          wrapLabel
         />
       </div>
     </EstudoHero>
