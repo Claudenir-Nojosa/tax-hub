@@ -388,6 +388,13 @@ export function construirFilaGlobal(params: {
         if (!estado) continue;
         for (const grupo of GRUPOS_QUESTOES) {
           const c = estado.cadernos[grupo];
+          // só entra na média quando o grupo está TOTALMENTE marcado — meio caminho andado (ex.:
+          // 3 de 10 questões do Grupo A já respondidas) não é resultado final, é só progresso em
+          // andamento; contar isso na média gerava reforço disparando com dado incompleto (caso
+          // real: usuário ainda respondendo o Grupo A, reforço apareceu achando 65%, terminou o
+          // grupo e o resultado final foi 70% — nem deveria ter disparado)
+          const totalGrupo = totalQuestoesDoGrupo(m.nome, topico, grupo, pdfs);
+          if (totalGrupo === 0 || c.acertos + c.erros < totalGrupo) continue;
           acertosMateria += c.acertos;
           totalMateria += c.acertos + c.erros;
         }
@@ -656,33 +663,20 @@ export function computarMetaAtual(
     fechavel: total > 0 && concluidas === total,
   };
 
-  // projeção honesta (mesmo espírito de estimativaConclusaoTrilha.dataPrevista) — combina duas
-  // fontes e usa a MAIS OTIMISTA (menos dias) das duas, nunca a pior sozinha:
-  // 1) throughput REAL em MINUTOS (não contagem de atividades — 1 atividade de 90min concluída
-  //    não é o mesmo ritmo que 1 de 15min);
-  // 2) o ritmo CONFIGURADO no Ciclo (orcamentoMinutos ÷ 7 — a Meta inteira já é dimensionada pra
-  //    caber numa semana desse orçamento, ver abrirProximaMeta). Usar só a fonte 1 sozinha (como
-  //    era antes) sofre MUITO com pouco dado: 1 atividade pequena concluída no dia 1 projetava
-  //    ritmo de "1 atividade/dia" e estourava a data pra 2 semanas à frente mesmo numa Meta
-  //    dimensionada pra 1 semana — bug real reportado pelo usuário (Meta aberta dia 07/08 projetando
-  //    21/08). A fonte 2 funciona como teto: nunca deixa a projeção estourar além do que o próprio
-  //    orçamento semanal já preveria, mesmo com pouquíssimo dado real ainda.
+  // "Liberada em" — pedido explícito do usuário: SEMPRE 7 dias corridos a partir de quando a Meta
+  // ATUAL abriu (metaPersistida.iniciadaEm), sem projeção por throughput. A projeção por minutos
+  // concluídos/dia sofria muito com pouco dado (e, depois da agregação de stats por TODAS as Metas,
+  // ficou ainda pior — diasDecorridos passou a contar desde o início da TRILHA inteira, não da Meta
+  // atual, fazendo o throughput real parecer artificialmente baixo e estourando a projeção pra
+  // semanas à frente). Meta só avança de fato quando concluída (fechavel/finalizarMetaManualmente)
+  // — esta data é só a expectativa "1 Meta = 1 semana", não uma trava.
   let liberadaEmProjetada: string | null = null;
-  if (concluidas > 0 && concluidas < total) {
-    const minutosConcluidos = atividades.filter((a) => a.concluida).reduce((s, a) => s + a.minutosEstimados, 0);
-    const minutosRestantes = atividades.filter((a) => !a.concluida).reduce((s, a) => s + a.minutosEstimados, 0);
-    const minutosPorDiaReal = minutosConcluidos / diasDecorridos;
-    const diasRestantesReal = minutosPorDiaReal > 0 ? Math.ceil(minutosRestantes / minutosPorDiaReal) : Infinity;
-
-    const minutosPorDiaConfigurado = metaPersistida.orcamentoMinutos / 7;
-    const diasRestantesConfigurado = minutosPorDiaConfigurado > 0 ? Math.ceil(minutosRestantes / minutosPorDiaConfigurado) : Infinity;
-
-    const diasRestantes = Math.max(1, Math.min(diasRestantesReal, diasRestantesConfigurado));
-    const d = parseDateKey(hoje);
-    d.setDate(d.getDate() + diasRestantes);
-    liberadaEmProjetada = dateKeyLocal(d);
-  } else if (total > 0 && concluidas === total) {
+  if (total > 0 && concluidas === total) {
     liberadaEmProjetada = hoje; // fechável agora
+  } else if (total > 0) {
+    const d = parseDateKey(metaPersistida.iniciadaEm);
+    d.setDate(d.getDate() + 7);
+    liberadaEmProjetada = dateKeyLocal(d);
   }
 
   return { metaAtual, proximaMeta: { numero: metaPersistida.numero + 1, liberadaEmProjetada } };

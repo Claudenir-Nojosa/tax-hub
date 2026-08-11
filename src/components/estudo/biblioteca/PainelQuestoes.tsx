@@ -7,13 +7,16 @@ import { GRUPO_BADGE, GRUPO_LABEL, type Alternativa, type Grupo, type PdfQuestoe
 const GRUPOS: Grupo[] = ["A", "B", "C", "D"];
 const ALTERNATIVAS: Alternativa[] = ["A", "B", "C", "D", "E"];
 
-// linha do Gabarito (número + chips A-E) — reaproveitada pelas duas visões (lista numerada e por
-// grupo), só muda o agrupamento em volta dela
+// linha do Gabarito (número + chips A-E + acerto/erro) — reaproveitada pelas duas visões (lista
+// numerada e por grupo), só muda o agrupamento em volta dela. Os botões de acerto/erro escrevem no
+// MESMO r.acertou que os chips numerados lá em cima (onMarcar é o mesmo callback) — marcar aqui já
+// atualiza sozinho os contadores "X✓ Y✗" dos cards por grupo, sem precisar rolar a tela.
 function LinhaGabarito({
-  r, onMarcarAlternativa,
+  r, onMarcarAlternativa, onMarcar,
 }: {
   r: QuestaoResultado;
   onMarcarAlternativa: (numero: number, alternativa: Alternativa | null) => void;
+  onMarcar: (numero: number, acertou: boolean | null) => void;
 }) {
   return (
     <div className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1.5">
@@ -34,6 +37,32 @@ function LinhaGabarito({
             {alt}
           </button>
         ))}
+      </div>
+      <div className="flex gap-1 ml-auto flex-shrink-0 pl-1.5 border-l border-border">
+        <button
+          type="button"
+          title={`Marcar questão ${r.numero} como certa`}
+          onClick={() => onMarcar(r.numero, r.acertou === true ? null : true)}
+          className={`h-6 w-6 rounded-md flex items-center justify-center transition-colors ${
+            r.acertou === true
+              ? "bg-emerald-500 text-white"
+              : "border border-border text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-500"
+          }`}
+        >
+          <Check className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          title={`Marcar questão ${r.numero} como errada`}
+          onClick={() => onMarcar(r.numero, r.acertou === false ? null : false)}
+          className={`h-6 w-6 rounded-md flex items-center justify-center transition-colors ${
+            r.acertou === false
+              ? "bg-red-500 text-white"
+              : "border border-border text-muted-foreground hover:border-red-500/50 hover:text-red-500"
+          }`}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
       </div>
     </div>
   );
@@ -287,7 +316,7 @@ export default function PainelQuestoes({
                 visaoGabarito === "lista" ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5">
                     {questoes.resultados.map((r) => (
-                      <LinhaGabarito key={r.numero} r={r} onMarcarAlternativa={onMarcarAlternativa} />
+                      <LinhaGabarito key={r.numero} r={r} onMarcarAlternativa={onMarcarAlternativa} onMarcar={onMarcar} />
                     ))}
                   </div>
                 ) : (
@@ -302,7 +331,7 @@ export default function PainelQuestoes({
                           </span>
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5 mt-1.5">
                             {itens.map((r) => (
-                              <LinhaGabarito key={r.numero} r={r} onMarcarAlternativa={onMarcarAlternativa} />
+                              <LinhaGabarito key={r.numero} r={r} onMarcarAlternativa={onMarcarAlternativa} onMarcar={onMarcar} />
                             ))}
                           </div>
                         </div>
