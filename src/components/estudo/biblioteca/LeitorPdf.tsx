@@ -342,12 +342,16 @@ export default function LeitorPdf({
   // dispara o aviso de "passou do conteúdo indicado" a cada NOVO limite cruzado (fim de capítulo,
   // ou o paginaFimAlvo único quando não há capítulos) — "Continuar mesmo assim" só fecha o card,
   // não impede o PRÓXIMO limite de avisar quando for cruzado também
-  const handlePaginaVisivel = (pagina: number) => {
+  const handlePaginaVisivel = (pagina: number, viaSalto: boolean) => {
     setPaginaVisivel(pagina);
     // "Parei aqui" automático — só avança quando a página visível é MAIOR que a maior já vista
     // nesta sessão (rolar pra trás pra reler não move o bookmark pra trás; o botão manual "Parei
-    // aqui" continua existindo pra forçar um commit exato quando quiser).
-    if (pagina > maiorPaginaVistaRef.current) {
+    // aqui" continua existindo pra forçar um commit exato quando quiser). viaSalto exclui PULOS
+    // programáticos (botão "Voltar à página X", campo "ir para página") — chegar numa página assim
+    // não é "ter lido até aqui"; sem essa checagem, pular pro fim do PDF só pra configurar o "Fim
+    // do conteúdo" (ver definirFimConteudo) marcava o trecho inteiro como lido e disparava
+    // "Marcar como estudado" sozinho, mesmo sem o usuário ter lido nada no meio do caminho.
+    if (!viaSalto && pagina > maiorPaginaVistaRef.current) {
       maiorPaginaVistaRef.current = pagina;
       commitarPagina(pagina);
     }

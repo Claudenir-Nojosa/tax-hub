@@ -160,7 +160,10 @@ const CSS_TEXT_LAYER = `
 interface Props {
   blob: Blob;
   paginaInicial: number;
-  onPaginaVisivel?: (pagina: number) => void;
+  // viaSalto=true quando a página mudou por um PULO programático (scrollParaPagina — botão "Voltar
+  // à página X" do aviso, ou o campo "ir para página"), não por rolagem de verdade. O chamador usa
+  // isso pra não tratar o destino do pulo como "lido até aqui" (ver LeitorPdf.tsx/handlePaginaVisivel).
+  onPaginaVisivel?: (pagina: number, viaSalto: boolean) => void;
 }
 
 // controle imperativo exposto pro pai (LeitorPdf) — hoje só usado pelo botão "Voltar à página X"
@@ -186,6 +189,15 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
   const paginaVisivelRef = useRef(0);
   const janelaRef = useRef(janela);
   janelaRef.current = janela;
+  // true durante um PULO programático (scrollParaPagina) e por mais ~250ms depois que o scroll
+  // pára — janela generosa o bastante pra cobrir a animação "smooth" inteira, mesmo em pulos
+  // longos. Enquanto true, a página relatada em onPaginaVisivel vem com viaSalto=true (ver
+  // recalcular), pra o pai não contar o DESTINO do pulo como "lido até aqui" — pedido do usuário:
+  // pular pro fim do PDF só pra configurar o "Fim do conteúdo" não pode marcar o tópico como
+  // estudado sozinho. Rolagem manual de verdade, a partir de onde o pulo parou, volta a contar
+  // normalmente assim que o timeout abaixo zera a flag.
+  const pulandoRef = useRef(false);
+  const pularTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // página + fração de scroll dentro dela, capturada ANTES de um clique de zoom — sem isso, mudar
   // o zoom reflui a altura de todas as páginas mas o scrollTop (um valor em pixel absoluto) fica
   // parado, então o mesmo pixel passa a apontar pra outra página ("sair da página" ao dar zoom,
@@ -200,6 +212,7 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
       const alvo = c?.querySelector<HTMLElement>(`[data-pagina="${pagina}"]`);
       if (alvo && c) {
         interagiuRef.current = true;
+        pulandoRef.current = true;
         c.scrollTo({ top: alvo.offsetTop - 8, behavior: "smooth" });
       }
     },
@@ -317,7 +330,14 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
     }
     if (atual !== paginaVisivelRef.current) {
       paginaVisivelRef.current = atual;
-      onPaginaVisivel?.(atual);
+      onPaginaVisivel?.(atual, pulandoRef.current);
+    }
+    // enquanto o pulo estiver "quente", cada evento de scroll (inclusive os da própria animação
+    // smooth) adia o fim da janela mais 250ms — só quando o scroll fica quieto por esse tempo é
+    // que a próxima rolagem volta a ser tratada como leitura de verdade
+    if (pulandoRef.current) {
+      if (pularTimeoutRef.current) clearTimeout(pularTimeoutRef.current);
+      pularTimeoutRef.current = setTimeout(() => { pulandoRef.current = false; }, 250);
     }
   }, [onPaginaVisivel]);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { CheckCircle2, ChevronDown, ChevronRight, Circle, ExternalLink, Lock, Star } from "lucide-react";
 import type { MateriaConcurso, MateriaDef } from "@/lib/estudo-data";
 import type { FilaAtividade, FilaAtividadeTipo } from "@/lib/trilha-fila";
@@ -29,6 +29,46 @@ const SUBTIPO_LABEL: Partial<Record<FilaAtividadeTipo, string>> = {
 
 function tipoPrincipal(tipo: FilaAtividadeTipo): "Teoria" | "Questões" {
   return tipo === "teoria" ? "Teoria" : "Questões";
+}
+
+// título truncado ("...") — ao passar o mouse, se o texto de fato transbordar, desliza ele pra
+// esquerda até revelar o final, na velocidade de leitura (~40px/s), e volta pro início ao sair.
+// Sem JS não dá pra saber a largura real do texto (varia por linha) pra calcular o deslocamento.
+function TextoComMarquee({ texto, className }: { texto: string; className?: string }) {
+  const containerRef = useRef<HTMLSpanElement>(null);
+  const textoRef = useRef<HTMLSpanElement>(null);
+  const [deslocamento, setDeslocamento] = useState(0);
+  const [duracao, setDuracao] = useState(0);
+
+  const iniciar = () => {
+    const container = containerRef.current;
+    const span = textoRef.current;
+    if (!container || !span) return;
+    const excesso = span.scrollWidth - container.clientWidth;
+    if (excesso <= 0) return;
+    setDuracao(Math.max(1, excesso / 40));
+    setDeslocamento(excesso);
+  };
+
+  return (
+    <span
+      ref={containerRef}
+      className={`overflow-hidden whitespace-nowrap block ${className ?? ""}`}
+      onMouseEnter={iniciar}
+      onMouseLeave={() => setDeslocamento(0)}
+    >
+      <span
+        ref={textoRef}
+        className="inline-block"
+        style={{
+          transform: `translateX(-${deslocamento}px)`,
+          transition: `transform ${deslocamento > 0 ? duracao : 0.2}s linear`,
+        }}
+      >
+        {texto}
+      </span>
+    </span>
+  );
 }
 
 function Estrelas({ nivel }: { nivel?: "alta" | "media" | "baixa" }) {
@@ -152,7 +192,7 @@ export default function TabelaAtividades({
                     </div>
                   </td>
                   <td className="py-2 px-2 max-w-[220px]">
-                    <span className="flex items-center gap-1 truncate" title={bloqueada ? "Conclua a atividade anterior primeiro" : a.titulo}>
+                    <span className="flex items-center gap-1 min-w-0" title={bloqueada ? "Conclua a atividade anterior primeiro" : a.titulo}>
                       {temCapitulos && (
                         <button
                           type="button"
@@ -163,7 +203,7 @@ export default function TabelaAtividades({
                           {expandido ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                         </button>
                       )}
-                      <span className="truncate">{a.titulo}</span>
+                      <TextoComMarquee texto={a.titulo} className="min-w-0 flex-1" />
                       {!!a.link && <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
                     </span>
                   </td>

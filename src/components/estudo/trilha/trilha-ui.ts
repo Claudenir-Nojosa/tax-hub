@@ -10,8 +10,13 @@ import type { FilaAtividadeTipo, MetaAtual } from "@/lib/trilha-fila";
 // STATUS_CONFIG/TIPO_CONFIG/fmtData da trilha antiga foram removidos junto com ela.
 
 export function fmtHoras(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
+  // arredonda ANTES de separar h/min — chamadores costumam passar resultado de divisão
+  // (minutosFeitos/60*ritmo, somas de duração etc.), que sofre de imprecisão de ponto flutuante
+  // (ex.: 538.2000000000045). Sem isso, `min % 60` herdava a parte fracionária inteira e virava
+  // "8h58.200000000000045" na tela em vez de "8h58".
+  const minInteiro = Math.round(min);
+  const h = Math.floor(minInteiro / 60);
+  const m = minInteiro % 60;
   if (h > 0 && m > 0) return `${h}h${m.toString().padStart(2, "0")}`;
   if (h > 0) return `${h}h`;
   return `${m}min`;

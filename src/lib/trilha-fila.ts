@@ -615,9 +615,19 @@ export function computarMetaAtual(
     const minutosFeitos = pdf && ref.paginaInicio !== undefined && limite !== undefined
       ? Math.round((Math.max(0, Math.min(pdf.paginaAtual, limite) - (ref.paginaInicio - 1)) / ritmoAoVivo) * 60)
       : undefined;
+    // minutosEstimados também precisa respeitar o limite EFETIVO — se ele encolheu (paginaConteudoFim/
+    // capítulos editados depois do ref congelado, ver paginaFimEfetiva), o número exibido não pode
+    // continuar refletindo o boundary velho e oversized. Caso real: capítulo "sem fim declarado"
+    // congelado com paginaFim=299 (fallback pro totalPaginas do PDF inteiro, antes de
+    // paginaConteudoFim=63 ser cadastrado) mostrava 392min pra um trecho que hoje é só ~2 páginas.
+    // Só recalcula quando o limite efetivo é MENOR que o congelado — no caso comum (nada mudou),
+    // minutosEstimados continua o valor congelado de sempre.
+    const minutosEstimados = pdf && ref.paginaInicio !== undefined && limite !== undefined && limite < ref.paginaFim!
+      ? Math.max(1, Math.round(((limite - (ref.paginaInicio - 1)) / ritmoAoVivo) * 60))
+      : ref.minutosEstimados;
     return {
       id: ref.id, tipo: ref.tipo as FilaAtividadeTipo, materia: ref.materia, topico: ref.topico,
-      titulo: ref.titulo, relevancia: ref.relevancia, minutosEstimados: ref.minutosEstimados,
+      titulo: ref.titulo, relevancia: ref.relevancia, minutosEstimados,
       link: ref.link, desempenhoPerc, concluida, elegivelDesde: metaPersistida.iniciadaEm,
       pdfId: ref.pdfId, paginaInicio: ref.paginaInicio, paginaFim: ref.paginaFim, todosCapitulos,
       minutosFeitos,
@@ -933,6 +943,33 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
     };
   }
 
+  // caso 0.75: auto-cura de reforco_materia que não é mais válido — recalcula a fila FRESCA (com o
+  // critério corrigido: só conta grupo A-D TOTALMENTE marcado, ver totalQuestoesDoGrupo) e remove da
+  // Meta aberta qualquer reforco_materia persistido que não apareceria mais nela hoje. Caso real: um
+  // "Reforço geral" foi criado com o cálculo antigo (contava questão parcialmente marcada), o usuário
+  // terminou o grupo e o aproveitamento real ficou acima do limiar — o item persistido não some
+  // sozinho, então essa auto-cura resolve. Nunca mexe numa já concluída (defensivo — nem entraria
+  // aqui: reforcosMateria[materia] já existiria e a fila fresca nem geraria o item de novo).
+  const filaFresca = construirFilaGlobal({
+    hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs, blocos, trilha,
+    capitulosConcluidos: params.capitulosConcluidos,
+  });
+  const idsValidosNaFilaFresca = new Set(filaFresca.map((a) => a.id));
+  const atividadesSemReforcoInvalido = metaAberta.atividades.filter((ref) => {
+    if (ref.tipo !== "reforco_materia") return true;
+    if (idsValidosNaFilaFresca.has(ref.id)) return true;
+    return estaAtividadeConcluida(ref, topicos, trilha, blocos, pdfs).concluida;
+  });
+  if (atividadesSemReforcoInvalido.length < metaAberta.atividades.length) {
+    return {
+      ...trilha,
+      filaMetas: {
+        ...trilha.filaMetas,
+        metas: { ...trilha.filaMetas.metas, [metaAberta.numero]: { ...metaAberta, atividades: atividadesSemReforcoInvalido } },
+      },
+    };
+  }
+
   if (resultado.metaAtual.fechavel) {
     const trilhaComMetaFechada: TrilhaDinamicaState = {
       ...trilha,
@@ -946,15 +983,12 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
   }
 
   // caso 3: Meta aberta, ainda não fechável — injeta o que virou elegível-e-pendente desde a
-  // última passada e ainda não está em NENHUMA Meta (passada ou atual)
-  const fila = construirFilaGlobal({
-    hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs, blocos, trilha,
-    capitulosConcluidos: params.capitulosConcluidos,
-  });
+  // última passada e ainda não está em NENHUMA Meta (passada ou atual). Reaproveita filaFresca (já
+  // calculada acima, no caso 0.75) — mesmos parâmetros, sem sentido recalcular de novo.
   const idsJaAtribuidos = new Set(
     Object.values(trilha.filaMetas.metas).flatMap((m) => m.atividades.map((a) => a.id))
   );
-  const novos = fila.filter((a) => !idsJaAtribuidos.has(a.id) && TIPOS_INJETAVEIS_MEIO_META.has(a.tipo));
+  const novos = filaFresca.filter((a) => !idsJaAtribuidos.has(a.id) && TIPOS_INJETAVEIS_MEIO_META.has(a.tipo));
   if (novos.length === 0) return undefined;
 
   // novos são sempre tipo questões (TIPOS_INJETAVEIS_MEIO_META exclui teoria) — questoesPrimeiro
