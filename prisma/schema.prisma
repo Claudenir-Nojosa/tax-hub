@@ -261,7 +261,10 @@ model PdfConcurso {
 }
 
 // currículo de simulados (compartilhado por concurso) — PDF da prova real + gabarito oficial por
-// parte. Resultado de cada tentativa fica em SimuladoTentativa, por usuário
+// parte. Resultado de cada tentativa fica em SimuladoTentativa, por usuário. Um simulado pode ter
+// várias partes com PDFs DIFERENTES (ex.: prova de Conhecimentos Gerais num PDF, Conhecimentos
+// Específicos noutro) — por isso o arquivo é por PARTE, não um storagePath único no topo (ver
+// campo `storagePath`/`arquivoEnviado` dentro de cada item de `partes`, não mais aqui).
 model SimuladoConcurso {
   id              String   @id @default(cuid())
   concursoId      String
@@ -270,10 +273,8 @@ model SimuladoConcurso {
   orgao           String?
   banca           String?
   ano             Int?
-  storagePath     String
-  arquivoEnviado  Boolean  @default(false)
-  // partes: [{ id: "geral"|"especifica", nome, numeroQuestoes, tempoMinutos,
-  //            gabarito: [{ numero, alternativaCorreta }] }]
+  // partes: [{ id: "geral"|"especifica", nome, numeroQuestoes, tempoMinutos, storagePath?,
+  //            arquivoEnviado, gabarito: [{ numero, alternativaCorreta }] }]
   partes          Json
   criadoPorUserId String?
   criadoEm        DateTime @default(now())

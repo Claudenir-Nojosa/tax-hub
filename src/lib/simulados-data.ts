@@ -7,12 +7,16 @@ import type { Alternativa } from "./estudo-data"
 
 export type ItemGabarito = { numero: number; alternativaCorreta: Alternativa | null }
 
+// o PDF é POR PARTE, não um arquivo único do simulado inteiro — casos reais têm um PDF pra
+// Conhecimentos Gerais e outro totalmente separado pra Conhecimentos Específicos
 export type ParteSimulado = {
   id: string
   nome: string
   numeroQuestoes: number
   tempoMinutos: number
   gabarito: ItemGabarito[]
+  storagePath?: string
+  arquivoEnviado: boolean
 }
 
 export type SimuladoConcurso = {
@@ -21,8 +25,6 @@ export type SimuladoConcurso = {
   orgao?: string
   banca?: string
   ano?: number
-  storagePath: string
-  arquivoEnviado: boolean
   partes: ParteSimulado[]
   criadoEm: string
   updatedAt: string
@@ -33,7 +35,7 @@ export function novoIdSimulado(): string {
 }
 
 export function novaParteSimulado(nome: string): ParteSimulado {
-  return { id: `parte_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, nome, numeroQuestoes: 0, tempoMinutos: 240, gabarito: [] }
+  return { id: `parte_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, nome, numeroQuestoes: 0, tempoMinutos: 240, gabarito: [], arquivoEnviado: false }
 }
 
 // gabarito alinhado ao numeroQuestoes atual da parte — cresce/encolhe preservando o que já tinha

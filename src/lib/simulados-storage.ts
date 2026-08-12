@@ -32,9 +32,11 @@ function comTimeout<T>(promise: Promise<T>, timeoutMs: number, mensagem: string)
   ])
 }
 
-export async function salvarArquivoSimulado(id: string, arquivo: File | Blob, concursoId: string): Promise<void> {
+// arquivo é POR PARTE (ver ParteSimulado.storagePath em simulados-data.ts) — um simulado com
+// Conhecimentos Gerais + Específicos tem 2 PDFs distintos, cada um sob a própria parteId
+export async function salvarArquivoSimulado(id: string, parteId: string, arquivo: File | Blob, concursoId: string): Promise<void> {
   const { path, token } = (await jsonOuErro(
-    await fetch(`/api/estudo/simulados/${id}/arquivo?concursoId=${encodeURIComponent(concursoId)}`, { method: "POST" })
+    await fetch(`/api/estudo/simulados/${id}/arquivo?concursoId=${encodeURIComponent(concursoId)}&parteId=${encodeURIComponent(parteId)}`, { method: "POST" })
   )) as { path: string; token: string }
   const { error } = await obterClienteBrowser()
     .storage.from("simulados-pdfs")
@@ -42,9 +44,9 @@ export async function salvarArquivoSimulado(id: string, arquivo: File | Blob, co
   if (error) throw new Error(error.message)
 }
 
-export async function obterArquivoSimulado(id: string): Promise<Blob | null> {
+export async function obterArquivoSimulado(id: string, parteId: string): Promise<Blob | null> {
   const res = await comTimeout(
-    fetch(`/api/estudo/simulados/${id}/arquivo`),
+    fetch(`/api/estudo/simulados/${id}/arquivo?parteId=${encodeURIComponent(parteId)}`),
     15000,
     "Tempo esgotado ao preparar o download do PDF — tente de novo"
   )
@@ -55,11 +57,11 @@ export async function obterArquivoSimulado(id: string): Promise<Blob | null> {
   return comTimeout(resArquivo.blob(), 60000, "Tempo esgotado ao processar o PDF baixado — tente de novo")
 }
 
-export async function excluirArquivoSimulado(id: string): Promise<void> {
+export async function excluirArquivoSimulado(id: string, parteId: string): Promise<void> {
   try {
-    const res = await fetch(`/api/estudo/simulados/${id}/arquivo`, { method: "DELETE" })
-    if (!res.ok) console.error(`[simulados-storage] Falha ao excluir arquivo ${id} do Storage (${res.status}) — pode ter ficado órfão`)
+    const res = await fetch(`/api/estudo/simulados/${id}/arquivo?parteId=${encodeURIComponent(parteId)}`, { method: "DELETE" })
+    if (!res.ok) console.error(`[simulados-storage] Falha ao excluir arquivo ${id}/${parteId} do Storage (${res.status}) — pode ter ficado órfão`)
   } catch (e) {
-    console.error(`[simulados-storage] Erro de rede ao excluir arquivo ${id} do Storage — pode ter ficado órfão`, e)
+    console.error(`[simulados-storage] Erro de rede ao excluir arquivo ${id}/${parteId} do Storage — pode ter ficado órfão`, e)
   }
 }

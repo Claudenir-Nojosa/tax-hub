@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { FileStack, Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import type { ParteSimulado, SimuladoConcurso } from "@/lib/simulados-data";
-import { salvarArquivoSimulado, obterArquivoSimulado } from "@/lib/simulados-storage";
+import { salvarArquivoSimulado } from "@/lib/simulados-storage";
 import EstudoHero from "../ui/EstudoHero";
 import EmptyState from "../ui/EmptyState";
 import FormSimulado from "./FormSimulado";
@@ -12,7 +12,8 @@ import SimuladoRow from "./SimuladoRow";
 import PainelTentativa from "./PainelTentativa";
 
 // Currículo de Simulados (Fase 1 do plano "Simulados + Discursiva"): cadastro do PDF da prova real
-// + gabarito oficial por parte. Self-fetching (como ConcurseirosTab) porque SimuladoConcurso vive
+// (um arquivo POR PARTE — Conhecimentos Gerais e Específicos costumam vir em PDFs separados) +
+// gabarito oficial por parte. Self-fetching (como ConcurseirosTab) porque SimuladoConcurso vive
 // em tabela própria, fora do blob EstudoState que o resto da página carrega.
 
 async function jsonOuErro(res: Response): Promise<Record<string, unknown>> {
@@ -26,7 +27,6 @@ export default function SimuladosTab({ concursoId }: { concursoId: string }) {
   const [erro, setErro] = useState(false);
   const [formAberto, setFormAberto] = useState(false);
   const [editando, setEditando] = useState<SimuladoConcurso | null>(null);
-  const [baixandoId, setBaixandoId] = useState<string | null>(null);
   const [fazendo, setFazendo] = useState<SimuladoConcurso | null>(null);
 
   useEffect(() => {
@@ -41,54 +41,43 @@ export default function SimuladosTab({ concursoId }: { concursoId: string }) {
 
   const salvar = async (
     dados: { id: string; nome: string; orgao?: string; banca?: string; ano?: number; partes: ParteSimulado[] },
-    arquivo?: File
+    arquivosPorParte: Record<string, File>
   ) => {
     try {
+      // sobe cada PDF pendente ANTES de gravar o registro — o path não depende da linha existir
+      // (mesmo padrão da Biblioteca), então funciona igual pra criar ou editar. Um PATCH/POST só
+      // no final (com `partes` já carregando storagePath/arquivoEnviado) evita regravar N vezes.
+      let partesFinais = dados.partes;
+      for (const [parteId, arquivo] of Object.entries(arquivosPorParte)) {
+        try {
+          await salvarArquivoSimulado(dados.id, parteId, arquivo, concursoId);
+          partesFinais = partesFinais.map((p) => (p.id === parteId ? { ...p, arquivoEnviado: true } : p));
+        } catch (e) {
+          const nomeParte = partesFinais.find((p) => p.id === parteId)?.nome ?? parteId;
+          toast.error(`Não consegui enviar o PDF de "${nomeParte}". ${e instanceof Error ? e.message : ""}`.trim());
+        }
+      }
+
       if (editando) {
         const atualizado = (await jsonOuErro(
           await fetch(`/api/concurso/${concursoId}/simulados/${dados.id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ nome: dados.nome, orgao: dados.orgao ?? null, banca: dados.banca ?? null, ano: dados.ano ?? null, partes: dados.partes }),
+            body: JSON.stringify({ nome: dados.nome, orgao: dados.orgao ?? null, banca: dados.banca ?? null, ano: dados.ano ?? null, partes: partesFinais }),
           })
         )) as unknown as SimuladoConcurso;
-        let final = atualizado;
-        if (arquivo) {
-          await salvarArquivoSimulado(dados.id, arquivo, concursoId);
-          final = (await jsonOuErro(
-            await fetch(`/api/concurso/${concursoId}/simulados/${dados.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ arquivoEnviado: true }),
-            })
-          )) as unknown as SimuladoConcurso;
-        }
-        setSimulados((prev) => (prev ?? []).map((s) => (s.id === final.id ? final : s)));
+        setSimulados((prev) => (prev ?? []).map((s) => (s.id === atualizado.id ? atualizado : s)));
         setEditando(null);
         setFormAberto(false);
         toast.success("Simulado atualizado.");
       } else {
-        let criado = (await jsonOuErro(
+        const criado = (await jsonOuErro(
           await fetch(`/api/concurso/${concursoId}/simulados`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(dados),
+            body: JSON.stringify({ ...dados, partes: partesFinais }),
           })
         )) as unknown as SimuladoConcurso;
-        if (arquivo) {
-          try {
-            await salvarArquivoSimulado(criado.id, arquivo, concursoId);
-            criado = (await jsonOuErro(
-              await fetch(`/api/concurso/${concursoId}/simulados/${criado.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ arquivoEnviado: true }),
-              })
-            )) as unknown as SimuladoConcurso;
-          } catch (e) {
-            toast.error(`Simulado criado, mas não consegui enviar o PDF. ${e instanceof Error ? e.message : ""}`.trim());
-          }
-        }
         setSimulados((prev) => [criado, ...(prev ?? [])]);
         setFormAberto(false);
         toast.success("Simulado adicionado.");
@@ -99,7 +88,7 @@ export default function SimuladosTab({ concursoId }: { concursoId: string }) {
   };
 
   const excluir = async (s: SimuladoConcurso) => {
-    if (!confirm(`Excluir "${s.nome}"? O PDF e o gabarito cadastrados somem.`)) return;
+    if (!confirm(`Excluir "${s.nome}"? Os PDFs e o gabarito cadastrados somem.`)) return;
     const anterior = simulados ?? [];
     setSimulados(anterior.filter((x) => x.id !== s.id));
     try {
@@ -107,24 +96,6 @@ export default function SimuladosTab({ concursoId }: { concursoId: string }) {
     } catch (e) {
       setSimulados(anterior);
       toast.error(e instanceof Error ? e.message : "Erro ao excluir simulado");
-    }
-  };
-
-  const baixar = async (s: SimuladoConcurso) => {
-    setBaixandoId(s.id);
-    try {
-      const blob = await obterArquivoSimulado(s.id);
-      if (!blob) { toast.error("Arquivo não encontrado no Storage."); return; }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${s.nome}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao baixar o PDF");
-    } finally {
-      setBaixandoId(null);
     }
   };
 
@@ -202,8 +173,6 @@ export default function SimuladosTab({ concursoId }: { concursoId: string }) {
             <SimuladoRow
               key={s.id}
               simulado={s}
-              baixando={baixandoId === s.id}
-              onBaixar={() => baixar(s)}
               onEditar={() => { setFormAberto(false); setEditando(s); window.scrollTo({ top: 0, behavior: "smooth" }); }}
               onExcluir={() => excluir(s)}
               onFazerSimulado={() => setFazendo(s)}

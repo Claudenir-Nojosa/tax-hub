@@ -1,19 +1,23 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { ChevronDown, FileUp, Loader2, Plus, Trash2, X } from "lucide-react";
 import type { Alternativa } from "@/lib/estudo-data";
 import { alinharGabarito, novaParteSimulado, novoIdSimulado, type ParteSimulado, type SimuladoConcurso } from "@/lib/simulados-data";
 import GabaritoInput from "./GabaritoInput";
 
-// Cadastro/edição de um simulado curricular: metadados + PDF da prova + gabarito oficial por
-// parte. Mesmo espírito do FormPdf.tsx da Biblioteca, mas sem tópicos/capítulos — aqui o "conteúdo"
-// é uma prova inteira, não um material de estudo fatiável.
+// Cadastro/edição de um simulado curricular: metadados + gabarito oficial por parte. O PDF é POR
+// PARTE (não um arquivo único do simulado inteiro) — casos reais têm um PDF pra Conhecimentos
+// Gerais e outro totalmente separado pra Conhecimentos Específicos, então cada parte tem seu
+// próprio dropzone (dentro da seção expandida dela, junto do gabarito).
 export default function FormSimulado({
   simuladoParaEditar, onSalvar, onFechar,
 }: {
   simuladoParaEditar?: SimuladoConcurso;
-  onSalvar: (dados: { id: string; nome: string; orgao?: string; banca?: string; ano?: number; partes: ParteSimulado[] }, arquivo?: File) => void | Promise<void>;
+  onSalvar: (
+    dados: { id: string; nome: string; orgao?: string; banca?: string; ano?: number; partes: ParteSimulado[] },
+    arquivosPorParte: Record<string, File>
+  ) => void | Promise<void>;
   onFechar: () => void;
 }) {
   const [nome, setNome] = useState(simuladoParaEditar?.nome ?? "");
@@ -26,9 +30,8 @@ export default function FormSimulado({
       : [novaParteSimulado("Conhecimentos Gerais"), novaParteSimulado("Conhecimentos Específicos")]
   );
   const [parteAberta, setParteAberta] = useState<string | null>(partes[0]?.id ?? null);
-  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [arquivosPorParte, setArquivosPorParte] = useState<Record<string, File>>({});
   const [enviando, setEnviando] = useState(false);
-  const arquivoRef = useRef<HTMLInputElement>(null);
 
   const podeSalvar = nome.trim() !== "";
 
@@ -66,7 +69,7 @@ export default function FormSimulado({
           ano: Number.isFinite(anoNum) ? anoNum : undefined,
           partes,
         },
-        arquivo ?? undefined
+        arquivosPorParte
       );
     } finally {
       setEnviando(false);
@@ -87,39 +90,6 @@ export default function FormSimulado({
           <X className="h-4 w-4" />
         </button>
       </div>
-
-      <input
-        ref={arquivoRef}
-        type="file"
-        accept="application/pdf"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) setArquivo(f);
-          e.target.value = "";
-        }}
-      />
-      <button
-        type="button"
-        onClick={() => arquivoRef.current?.click()}
-        className={`w-full mb-3 rounded-xl border-2 border-dashed px-4 py-4 text-center transition-colors ${
-          arquivo
-            ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/20"
-            : "border-primary/30 hover:border-primary bg-primary/5"
-        }`}
-      >
-        <FileUp className={`h-5 w-5 mx-auto mb-1 ${arquivo ? "text-emerald-500" : "text-primary/60"}`} />
-        <div className="text-xs font-medium text-foreground">
-          {arquivo
-            ? `✓ ${arquivo.name} (${(arquivo.size / 1024 / 1024).toFixed(1)} MB)`
-            : simuladoParaEditar?.arquivoEnviado
-            ? "Anexar/substituir o PDF da prova (opcional)"
-            : "Clique pra anexar o PDF da prova"}
-        </div>
-        <div className="text-[10px] text-muted-foreground mt-0.5">
-          {arquivo ? "Clique pra trocar" : "O usuário baixa esse PDF pra imprimir e fazer o simulado"}
-        </div>
-      </button>
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_90px] gap-3 mb-4">
         <div>
@@ -166,7 +136,7 @@ export default function FormSimulado({
 
       <div className="space-y-2 mb-4">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground">Partes da prova (ex.: conhecimentos gerais / específicos)</span>
+          <span className="text-[11px] font-medium text-muted-foreground">Partes da prova (ex.: conhecimentos gerais / específicos) — cada uma com o próprio PDF</span>
           <button
             type="button"
             onClick={() => {
@@ -181,6 +151,7 @@ export default function FormSimulado({
         </div>
         {partes.map((parte) => {
           const aberta = parteAberta === parte.id;
+          const arquivo = arquivosPorParte[parte.id];
           return (
             <div key={parte.id} className="rounded-lg border border-border overflow-hidden">
               <div className="flex items-center gap-2 px-3 py-2 bg-muted/30">
@@ -198,6 +169,11 @@ export default function FormSimulado({
                     className="flex-1 min-w-0 text-xs font-medium bg-transparent text-foreground focus:outline-none border-b border-transparent focus:border-primary"
                   />
                 </button>
+                {(arquivo || parte.arquivoEnviado) && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 flex-shrink-0">
+                    PDF ✓
+                  </span>
+                )}
                 <label className="text-[10px] text-muted-foreground flex-shrink-0">Questões</label>
                 <input
                   type="number"
@@ -217,7 +193,11 @@ export default function FormSimulado({
                 {partes.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => { setPartes((prev) => prev.filter((p) => p.id !== parte.id)); if (parteAberta === parte.id) setParteAberta(null); }}
+                    onClick={() => {
+                      setPartes((prev) => prev.filter((p) => p.id !== parte.id));
+                      setArquivosPorParte((prev) => { const n = { ...prev }; delete n[parte.id]; return n; });
+                      if (parteAberta === parte.id) setParteAberta(null);
+                    }}
                     className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors flex-shrink-0"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -225,7 +205,31 @@ export default function FormSimulado({
                 )}
               </div>
               {aberta && (
-                <div className="p-3">
+                <div className="p-3 space-y-3">
+                  <label className={`block w-full rounded-xl border-2 border-dashed px-4 py-3 text-center transition-colors cursor-pointer ${
+                    arquivo || parte.arquivoEnviado
+                      ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/20"
+                      : "border-primary/30 hover:border-primary bg-primary/5"
+                  }`}>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) setArquivosPorParte((prev) => ({ ...prev, [parte.id]: f }));
+                        e.target.value = "";
+                      }}
+                    />
+                    <FileUp className={`h-4 w-4 mx-auto mb-1 ${arquivo ? "text-emerald-500" : "text-primary/60"}`} />
+                    <div className="text-xs font-medium text-foreground">
+                      {arquivo
+                        ? `✓ ${arquivo.name} (${(arquivo.size / 1024 / 1024).toFixed(1)} MB)`
+                        : parte.arquivoEnviado
+                        ? "Anexar/substituir o PDF desta parte (opcional)"
+                        : `Clique pra anexar o PDF de "${parte.nome || "esta parte"}"`}
+                    </div>
+                  </label>
                   <GabaritoInput gabarito={parte.gabarito} onChange={(numero, alt) => marcarGabarito(parte.id, numero, alt)} />
                 </div>
               )}

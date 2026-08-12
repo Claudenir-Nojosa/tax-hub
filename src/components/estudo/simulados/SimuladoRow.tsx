@@ -1,14 +1,12 @@
 "use client";
 
-import { CheckCircle2, Download, FileWarning, GraduationCap, Loader2, Pencil, Trash2 } from "lucide-react";
+import { CheckCircle2, FileWarning, GraduationCap, Pencil, Trash2 } from "lucide-react";
 import type { SimuladoConcurso } from "@/lib/simulados-data";
 
 export default function SimuladoRow({
-  simulado, baixando, onBaixar, onEditar, onExcluir, onFazerSimulado,
+  simulado, onEditar, onExcluir, onFazerSimulado,
 }: {
   simulado: SimuladoConcurso;
-  baixando: boolean;
-  onBaixar: () => void;
   onEditar: () => void;
   onExcluir: () => void;
   onFazerSimulado: () => void;
@@ -16,6 +14,12 @@ export default function SimuladoRow({
   const totalQuestoes = simulado.partes.reduce((s, p) => s + p.numeroQuestoes, 0);
   const totalMarcadas = simulado.partes.reduce((s, p) => s + p.gabarito.filter((g) => g.alternativaCorreta).length, 0);
   const gabaritoCompleto = totalQuestoes > 0 && totalMarcadas === totalQuestoes;
+
+  // PDF é por parte — status agregado considera só as partes com questões de verdade (uma parte
+  // vazia/desativada não deveria contar como "faltando PDF")
+  const partesRelevantes = simulado.partes.filter((p) => p.numeroQuestoes > 0);
+  const partesComPdf = partesRelevantes.filter((p) => p.arquivoEnviado);
+  const temAlgumPdf = partesComPdf.length > 0;
 
   return (
     <div className="px-4 py-3 flex items-start justify-between gap-3">
@@ -31,7 +35,15 @@ export default function SimuladoRow({
               <FileWarning className="h-2.5 w-2.5" /> gabarito {totalMarcadas}/{totalQuestoes}
             </span>
           ) : null}
-          {!simulado.arquivoEnviado && (
+          {partesRelevantes.length > 0 && partesComPdf.length === partesRelevantes.length ? (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+              PDF completo
+            </span>
+          ) : temAlgumPdf ? (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+              PDF {partesComPdf.length}/{partesRelevantes.length}
+            </span>
+          ) : (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300">
               sem PDF
             </span>
@@ -40,11 +52,11 @@ export default function SimuladoRow({
         <div className="text-[11px] text-muted-foreground mt-1">
           {[simulado.orgao, simulado.banca, simulado.ano].filter(Boolean).join(" · ") || "—"}
           {" · "}
-          {simulado.partes.map((p) => `${p.nome} (${p.numeroQuestoes}q, ${p.tempoMinutos}min)`).join(" · ")}
+          {simulado.partes.map((p) => `${p.nome} (${p.numeroQuestoes}q, ${p.tempoMinutos}min${p.arquivoEnviado ? ", PDF ✓" : ""})`).join(" · ")}
         </div>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
-        {simulado.arquivoEnviado && (
+        {temAlgumPdf && (
           <button
             type="button"
             onClick={onFazerSimulado}
@@ -52,17 +64,6 @@ export default function SimuladoRow({
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-medium transition-colors"
           >
             <GraduationCap className="h-3.5 w-3.5" /> Fazer
-          </button>
-        )}
-        {simulado.arquivoEnviado && (
-          <button
-            type="button"
-            onClick={onBaixar}
-            disabled={baixando}
-            title="Baixar PDF da prova"
-            className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-60 disabled:cursor-wait"
-          >
-            {baixando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
           </button>
         )}
         <button

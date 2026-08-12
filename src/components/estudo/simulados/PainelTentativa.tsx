@@ -42,7 +42,7 @@ export default function PainelTentativa({
   const [respondendoParteId, setRespondendoParteId] = useState<string | null>(null);
   const [respostasEmEdicao, setRespostasEmEdicao] = useState<RespostaTentativa[]>([]);
   const [ocupado, setOcupado] = useState(false);
-  const [baixando, setBaixando] = useState(false);
+  const [baixandoParteId, setBaixandoParteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(base)
@@ -129,21 +129,23 @@ export default function PainelTentativa({
     }
   };
 
-  const baixarPdf = async () => {
-    setBaixando(true);
+  // arquivo é POR PARTE (Conhecimentos Gerais e Específicos costumam ser PDFs separados) — baixa
+  // só o da parte que o usuário está prestes a fazer
+  const baixarPdf = async (parte: ParteSimulado) => {
+    setBaixandoParteId(parte.id);
     try {
-      const blob = await obterArquivoSimulado(simulado.id);
+      const blob = await obterArquivoSimulado(simulado.id, parte.id);
       if (!blob) { toast.error("Arquivo não encontrado no Storage."); return; }
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${simulado.nome}.pdf`;
+      a.download = `${simulado.nome} — ${parte.nome}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao baixar o PDF");
     } finally {
-      setBaixando(false);
+      setBaixandoParteId(null);
     }
   };
 
@@ -155,16 +157,9 @@ export default function PainelTentativa({
             <div className="text-sm font-semibold text-foreground">{simulado.nome}</div>
             <div className="text-[11px] text-muted-foreground">{[simulado.orgao, simulado.banca, simulado.ano].filter(Boolean).join(" · ")}</div>
           </div>
-          <div className="flex items-center gap-1">
-            {simulado.arquivoEnviado && (
-              <button type="button" onClick={baixarPdf} disabled={baixando} title="Baixar PDF da prova" className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-60">
-                {baixando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              </button>
-            )}
-            <button type="button" onClick={onFechar} className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+          <button type="button" onClick={onFechar} className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors flex-shrink-0">
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         {tentativas === null ? (
@@ -218,26 +213,52 @@ export default function PainelTentativa({
                       </div>
 
                       {!tp?.iniciadoEm && (
-                        <button
-                          type="button"
-                          onClick={() => iniciarParte(parte)}
-                          disabled={ocupado || parte.numeroQuestoes === 0}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors disabled:opacity-40"
-                        >
-                          <Play className="h-3.5 w-3.5" /> Iniciar
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => iniciarParte(parte)}
+                            disabled={ocupado || parte.numeroQuestoes === 0}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-colors disabled:opacity-40"
+                          >
+                            <Play className="h-3.5 w-3.5" /> Iniciar
+                          </button>
+                          {parte.arquivoEnviado && (
+                            <button
+                              type="button"
+                              onClick={() => baixarPdf(parte)}
+                              disabled={baixandoParteId === parte.id}
+                              title="Baixar PDF desta parte"
+                              className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-60"
+                            >
+                              {baixandoParteId === parte.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                            </button>
+                          )}
+                        </div>
                       )}
 
                       {tp?.iniciadoEm && !tp.concluidoEm && respondendoParteId !== parte.id && (
                         <div className="space-y-2">
                           <TimerParte iniciadoEm={tp.iniciadoEm} tempoMinutos={parte.tempoMinutos} />
-                          <button
-                            type="button"
-                            onClick={() => abrirGabarito(parte, tp)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition-colors"
-                          >
-                            <Send className="h-3.5 w-3.5" /> Terminei — preencher gabarito
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => abrirGabarito(parte, tp)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition-colors"
+                            >
+                              <Send className="h-3.5 w-3.5" /> Terminei — preencher gabarito
+                            </button>
+                            {parte.arquivoEnviado && (
+                              <button
+                                type="button"
+                                onClick={() => baixarPdf(parte)}
+                                disabled={baixandoParteId === parte.id}
+                                title="Baixar PDF desta parte"
+                                className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-60"
+                              >
+                                {baixandoParteId === parte.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
 

@@ -9,8 +9,9 @@ async function checarAcesso(concursoId: string, userId: string): Promise<boolean
   return acesso > 0
 }
 
-// PATCH — edita metadados/gabarito, ou marca arquivoEnviado (chamado pelo client depois do upload
-// direto no Storage terminar, já que a rota de arquivo não toca na linha do banco)
+// PATCH — edita metadados/partes (gabarito, e também storagePath/arquivoEnviado DE CADA PARTE,
+// já que o arquivo é por parte — o client manda o array `partes` inteiro já atualizado depois de
+// terminar um upload direto no Storage, a rota de arquivo não toca na linha do banco)
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string; simuladoId: string }> }) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
@@ -21,7 +22,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!existente) return NextResponse.json({ error: "Não encontrado" }, { status: 404 })
 
   const body = (await req.json()) as Partial<{
-    nome: string; orgao: string | null; banca: string | null; ano: number | null; partes: ParteSimulado[]; arquivoEnviado: boolean
+    nome: string; orgao: string | null; banca: string | null; ano: number | null; partes: ParteSimulado[]
   }>
 
   const atualizado = await db.simuladoConcurso.update({
@@ -33,7 +34,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(body.ano !== undefined && { ano: body.ano }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Json genérico
       ...(body.partes !== undefined && { partes: body.partes as any }),
-      ...(body.arquivoEnviado !== undefined && { arquivoEnviado: body.arquivoEnviado }),
     },
   })
   return NextResponse.json({
@@ -42,15 +42,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     orgao: atualizado.orgao ?? undefined,
     banca: atualizado.banca ?? undefined,
     ano: atualizado.ano ?? undefined,
-    storagePath: atualizado.storagePath,
-    arquivoEnviado: atualizado.arquivoEnviado,
     partes: atualizado.partes as unknown as ParteSimulado[],
     criadoEm: atualizado.criadoEm.toISOString(),
     updatedAt: atualizado.updatedAt.toISOString(),
   })
 }
 
-// DELETE — remove a linha + best-effort no Storage (mesmo padrão de excluir() na BibliotecaTab)
+// DELETE — remove a linha + best-effort no Storage (mesmo padrão de excluir() na BibliotecaTab) —
+// o arquivo é por parte, então precisa remover UM objeto por parte que tiver storagePath
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string; simuladoId: string }> }) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
@@ -62,12 +61,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   await db.simuladoConcurso.delete({ where: { id: simuladoId } })
 
-  if (existente.arquivoEnviado) {
+  const partes = (existente.partes as unknown as ParteSimulado[] | null) ?? []
+  const paths = partes.map((p) => p.storagePath).filter((p): p is string => !!p)
+  if (paths.length > 0) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY
     if (url && key) {
       const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-      await admin.storage.from("simulados-pdfs").remove([existente.storagePath]).catch(() => { /* best-effort */ })
+      await admin.storage.from("simulados-pdfs").remove(paths).catch(() => { /* best-effort */ })
     }
   }
   return NextResponse.json({ ok: true })
