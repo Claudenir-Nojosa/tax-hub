@@ -25,7 +25,14 @@ import {
 
 export type FilaAtividadeTipo =
   | "teoria" | "questoes" | "reforco" | "reforco_imediato"
-  | "revisao_link" | "revisao_link_faltando" | "revisao_materia" | "reforco_materia" | "cartas";
+  | "revisao_link" | "revisao_link_faltando" | "revisao_materia" | "reforco_materia" | "cartas"
+  | "simulado" | "discursiva";
+
+// currículo LEVE de Simulados/Discursivas (só id+nome — nunca o gabarito/rubrica inteiros, que
+// vivem em tabelas próprias e são grandes demais pra trafegar em toda passada da fila). Quem
+// chama construirFilaGlobal busca essas listas separado (ver page.tsx) e passa aqui.
+export interface SimuladoResumo { id: string; nome: string }
+export interface DiscursivaResumo { id: string; tema: string }
 
 export interface FilaAtividade {
   id: string;
@@ -66,6 +73,11 @@ export interface FilaAtividade {
 // também por estimativaConclusaoTrilha lá.
 export const MINUTOS_ESTIMADO_REVISAO30 = 60;
 export const MINUTOS_ESTIMADO_CARTAS = 20;
+// tempo REAL de uma parte de simulado (4h — mesmo espírito da prova de verdade, ver plano) —
+// só informativo pro "minutosEstimados" da atividade na fila; o cronômetro de cada parte usa o
+// tempoMinutos configurado NO PRÓPRIO simulado (SimuladoConcurso.partes), não esta constante
+export const MINUTOS_ESTIMADO_SIMULADO = 240;
+export const MINUTOS_ESTIMADO_DISCURSIVA = 60;
 export const MINUTOS_ESTIMADO_TEORIA_PADRAO = 60; // tópico sem PDF/página mapeada nenhuma
 // reforço geral de matéria — 20 questões a ~2min cada (mesma taxa de MINUTOS_ESTIMADO_QUESTAO_PADRAO)
 export const MINUTOS_ESTIMADO_REFORCO_MATERIA = 40;
@@ -201,6 +213,8 @@ export function construirFilaGlobal(params: {
   blocos: Record<string, Bloco>;
   trilha: TrilhaDinamicaState;
   capitulosConcluidos?: string[];
+  simulados?: SimuladoResumo[];
+  discursivaTemas?: DiscursivaResumo[];
 }): FilaAtividade[] {
   const hoje = params.hoje ?? dateKeyLocal();
   const { materiasAtivas, configCiclo, topicos, calendario, pdfs, blocos, trilha } = params;
@@ -436,6 +450,41 @@ export function construirFilaGlobal(params: {
     });
   }
 
+  // simulados/discursivas — atividades globais (não por matéria), liberadas só depois que o
+  // edital INTEIRO das matérias ativas está 100% (todos os tópicos com teoria + grupos A-D
+  // completos, mesmo sinal que já agenda a revisão de 30 questões — trilha.conclusaoMaterias).
+  // Sem matéria ativa nenhuma (ciclo vazio), nunca libera. Cada simulado/tema é one-shot na fila
+  // (não reoferece depois de feito, ver trilha.simuladosFeitos/discursivasFeitas) — refazer
+  // simulados/discursivas fica disponível a qualquer hora dentro das próprias abas, só não volta a
+  // "pedir" pela Trilha.
+  const editalCompleto = ativas.length > 0 && ativas.every((m) => !!trilha.conclusaoMaterias[m.nome]);
+  if (editalCompleto) {
+    for (const s of params.simulados ?? []) {
+      if (trilha.simuladosFeitos?.[s.id]) continue;
+      fila.push({
+        id: `simulado:${s.id}`,
+        tipo: "simulado",
+        materia: "Simulados",
+        titulo: s.nome,
+        minutosEstimados: MINUTOS_ESTIMADO_SIMULADO,
+        concluida: false,
+        elegivelDesde: hoje,
+      });
+    }
+    for (const d of params.discursivaTemas ?? []) {
+      if ((trilha.discursivasFeitas?.[d.id] ?? []).length > 0) continue;
+      fila.push({
+        id: `discursiva:${d.id}`,
+        tipo: "discursiva",
+        materia: "Discursivas",
+        titulo: d.tema,
+        minutosEstimados: MINUTOS_ESTIMADO_DISCURSIVA,
+        concluida: false,
+        elegivelDesde: hoje,
+      });
+    }
+  }
+
   return fila;
 }
 
@@ -541,6 +590,14 @@ function estaAtividadeConcluida(
     case "cartas": {
       const data = ref.id.split(":")[1];
       return { concluida: trilha.cartasFeitasEm.includes(data) };
+    }
+    case "simulado": {
+      const id = ref.id.split(":")[1];
+      return { concluida: !!trilha.simuladosFeitos?.[id] };
+    }
+    case "discursiva": {
+      const id = ref.id.split(":")[1];
+      return { concluida: (trilha.discursivasFeitas?.[id] ?? []).length > 0 };
     }
     default:
       return { concluida: false };
@@ -708,6 +765,8 @@ interface ParamsAbrirMeta {
   pdfs: PdfEstudo[];
   blocos: Record<string, Bloco>;
   capitulosConcluidos?: string[];
+  simulados?: SimuladoResumo[];
+  discursivaTemas?: DiscursivaResumo[];
 }
 
 // Intercala refs por MATÉRIA (round-robin) — recebe já misturado carry-over + candidatos novos
@@ -810,7 +869,10 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
   const hoje = params.hoje ?? dateKeyLocal();
   const { trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs, blocos, carryOver, capitulosConcluidos } = params;
 
-  const fila = construirFilaGlobal({ hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs, blocos, trilha, capitulosConcluidos });
+  const fila = construirFilaGlobal({
+    hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs, blocos, trilha, capitulosConcluidos,
+    simulados: params.simulados, discursivaTemas: params.discursivaTemas,
+  });
   const idsJaAtribuidos = new Set(
     Object.values(trilha.filaMetas?.metas ?? {}).flatMap((m) => m.atividades.map((a) => a.id))
   );
@@ -962,6 +1024,7 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
   const filaFresca = construirFilaGlobal({
     hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs, blocos, trilha,
     capitulosConcluidos: params.capitulosConcluidos,
+    simulados: params.simulados, discursivaTemas: params.discursivaTemas,
   });
   const idsValidosNaFilaFresca = new Set(filaFresca.map((a) => a.id));
   const atividadesSemReforcoInvalido = metaAberta.atividades.filter((ref) => {

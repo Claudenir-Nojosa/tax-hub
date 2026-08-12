@@ -42,7 +42,7 @@ export function resolverCorMateria(
 // Tipo de cada item que pode aparecer no checklist da Trilha — usado tanto pra colorir o ícone
 // (TrilhaTab) quanto pra gerar a mensagem "estilo Duolingo" do Dashboard (mesma classificação,
 // dois lugares diferentes na tela).
-export type TipoPasso = "estudo" | "reforco" | "questoes" | "reforcoImediato" | "linkQuestoes" | "revisao" | "cartas";
+export type TipoPasso = "estudo" | "reforco" | "questoes" | "reforcoImediato" | "linkQuestoes" | "revisao" | "cartas" | "simulado" | "discursiva";
 
 export const TIPO_ITEM_COR: Record<TipoPasso, string> = {
   estudo: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary",
@@ -52,6 +52,8 @@ export const TIPO_ITEM_COR: Record<TipoPasso, string> = {
   linkQuestoes: "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400",
   revisao: "bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400",
   cartas: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-950/60 dark:text-fuchsia-400",
+  simulado: "bg-sky-100 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400",
+  discursiva: "bg-violet-100 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400",
 };
 
 export interface ProximaAtividade {
@@ -126,6 +128,8 @@ const TIPO_FILA_PARA_PASSO: Record<FilaAtividadeTipo, TipoPasso> = {
   revisao_materia: "revisao",
   reforco_materia: "reforco",
   cartas: "cartas",
+  simulado: "simulado",
+  discursiva: "discursiva",
 };
 
 export function proximaAtividadeFila(metaAtual: MetaAtual): ProximaAtividade | null {

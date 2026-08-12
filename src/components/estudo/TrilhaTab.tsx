@@ -17,7 +17,8 @@ import {
   estimativaConclusaoTrilha, type EstimativaConclusao, type MetaSemana, type SemanaHistorico,
 } from "@/lib/trilha-dinamica";
 import {
-  computarMetaAtual, finalizarMetaManualmente, type FilaAtividade, type MetaAtual,
+  computarMetaAtual, finalizarMetaManualmente, type DiscursivaResumo, type FilaAtividade,
+  type MetaAtual, type SimuladoResumo,
 } from "@/lib/trilha-fila";
 import { fmtHoras, gerarMensagemGustavo, useMensagemGustavoIA } from "./trilha/trilha-ui";
 import {
@@ -59,6 +60,13 @@ interface Props {
   onIrParaBiblioteca?: (abertura?: AberturaPdfSolicitada) => void;
   onIrParaCartas?: () => void;
   onAdicionarCartas?: (cartas: Carta[]) => void;
+  // currículo leve de Simulados/Discursivas — só pra fila global saber o que oferecer quando o
+  // edital bater 100% (ver construirFilaGlobal em trilha-fila.ts); o conteúdo de verdade vive nas
+  // próprias abas (SimuladosTab/DiscursivasTab)
+  simulados?: SimuladoResumo[];
+  discursivaTemas?: DiscursivaResumo[];
+  onIrParaSimulados?: () => void;
+  onIrParaDiscursivas?: () => void;
 }
 
 function fmtDataLonga(dateKey: string): string {
@@ -144,7 +152,7 @@ export default function TrilhaTab({
   trilha, topicos, configCiclo, calendario, pdfs, materiasConcurso, nomeUsuario,
   blocos, onUpdateBlocos, capitulosConcluidos, onToggleCapitulo,
   onUpdateTrilha, onUpdateTopicos, onIrParaCiclo, onIrParaBiblioteca, onIrParaCartas,
-  onAdicionarCartas,
+  onAdicionarCartas, simulados, discursivaTemas, onIrParaSimulados, onIrParaDiscursivas,
 }: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
     materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
@@ -215,6 +223,7 @@ export default function TrilhaTab({
     try {
       const novaTrilha = finalizarMetaManualmente({
         hoje, trilha, configCiclo, materiasAtivas, topicos, calendario, pdfs, blocos, capitulosConcluidos,
+        simulados, discursivaTemas,
       });
       onUpdateTrilha(novaTrilha);
     } finally {
@@ -252,6 +261,14 @@ export default function TrilhaTab({
     }
     if (a.tipo === "cartas") {
       onIrParaCartas?.();
+      return;
+    }
+    if (a.tipo === "simulado") {
+      onIrParaSimulados?.();
+      return;
+    }
+    if (a.tipo === "discursiva") {
+      onIrParaDiscursivas?.();
       return;
     }
     // questões (grupos A-D, reforço rápido) sem link externo cadastrado — abre o PDF do próprio

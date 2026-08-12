@@ -27,9 +27,12 @@ import {
   MATERIAS,
 } from "@/lib/estudo-data";
 import { chaveCapitulo } from "@/lib/trilha-dinamica";
-import { avancarEstudoAutomaticoSeNecessario, avancarFilaMetasSeNecessario, computarMetaAtual } from "@/lib/trilha-fila";
+import {
+  avancarEstudoAutomaticoSeNecessario, avancarFilaMetasSeNecessario, computarMetaAtual,
+  type DiscursivaResumo, type SimuladoResumo,
+} from "@/lib/trilha-fila";
 import type { AberturaPdfSolicitada } from "@/components/estudo/trilha/TrilhaLinhas";
-import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks, Users } from "lucide-react";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks, Users, FileStack, NotebookPen } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -46,6 +49,8 @@ const CartasTab = dynamic(() => import("@/components/estudo/cartas/CartasTab"), 
 const ResumosTab = dynamic(() => import("@/components/estudo/ResumosTab"), { ssr: false });
 const TrilhaTab = dynamic(() => import("@/components/estudo/TrilhaTab"), { ssr: false });
 const BibliotecaTab = dynamic(() => import("@/components/estudo/biblioteca/BibliotecaTab"), { ssr: false });
+const SimuladosTab = dynamic(() => import("@/components/estudo/simulados/SimuladosTab"), { ssr: false });
+const DiscursivasTab = dynamic(() => import("@/components/estudo/discursivas/DiscursivasTab"), { ssr: false });
 const TimerEstudo = dynamic(() => import("@/components/estudo/timer/TimerEstudo"), { ssr: false });
 const CompararEditaisTab = dynamic(() => import("@/components/estudo/CompararEditaisTab"), { ssr: false });
 const ConcurseirosTab = dynamic(() => import("@/components/estudo/ConcurseirosTab"), { ssr: false });
@@ -53,13 +58,15 @@ const ConcurseirosTab = dynamic(() => import("@/components/estudo/ConcurseirosTa
 const storageKey = (concursoId: string | null) =>
   concursoId ? `taxhub_estudo_c_${concursoId}` : "taxhub_estudo_v1";
 
-type Tab = "dashboard" | "edital" | "questoes" | "biblioteca" | "ciclo" | "trilha" | "calendario" | "relatorios" | "cartas" | "resumos" | "comparar" | "concurseiros";
+type Tab = "dashboard" | "edital" | "questoes" | "biblioteca" | "simulados" | "discursivas" | "ciclo" | "trilha" | "calendario" | "relatorios" | "cartas" | "resumos" | "comparar" | "concurseiros";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "edital", label: "Edital", icon: BookOpen },
   { id: "questoes", label: "Questões", icon: ListChecks },
   { id: "biblioteca", label: "Biblioteca", icon: Library },
+  { id: "simulados", label: "Simulados", icon: FileStack },
+  { id: "discursivas", label: "Discursivas", icon: NotebookPen },
   { id: "ciclo", label: "Ciclo de Estudos", icon: RotateCcw },
   { id: "trilha", label: "Trilha", icon: Route },
   { id: "calendario", label: "Calendário", icon: CalendarDays },
@@ -500,6 +507,23 @@ export default function EstudoPage() {
     return filtrarTopicosExcluidos(materias, state.topicosExcluidos);
   }, [concursoAtivo?.materias, state.topicosExcluidos]);
 
+  // currículo LEVE (só id+nome/tema) de Simulados/Discursivas, pra fila global saber o que oferecer
+  // quando o edital bater 100% (ver construirFilaGlobal) — nunca o gabarito/rubrica inteiros, que
+  // ficam nas próprias abas (SimuladosTab/DiscursivasTab), que se auto-buscam por conta própria.
+  const [simuladosResumo, setSimuladosResumo] = useState<SimuladoResumo[]>([]);
+  const [discursivasResumo, setDiscursivasResumo] = useState<DiscursivaResumo[]>([]);
+  useEffect(() => {
+    if (!concursoAtivo?.id) { setSimuladosResumo([]); setDiscursivasResumo([]); return; }
+    fetch(`/api/concurso/${concursoAtivo.id}/simulados`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: { id: string; nome: string }[]) => setSimuladosResumo(data.map((s) => ({ id: s.id, nome: s.nome }))))
+      .catch(() => setSimuladosResumo([]));
+    fetch(`/api/concurso/${concursoAtivo.id}/discursivas`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: { id: string; tema: string }[]) => setDiscursivasResumo(data.map((d) => ({ id: d.id, tema: d.tema }))))
+      .catch(() => setDiscursivasResumo([]));
+  }, [concursoAtivo?.id]);
+
   // Fila de Metas (trilha-fila.ts) — bootstrap em nível compartilhado (não só dentro da aba
   // Trilha), pra Dashboard também enxergar `computarMetaAtual` mesmo se o usuário nunca abrir a
   // aba Trilha (senão MensagemDoDia/CardTrilha ficariam "preparando" indefinidamente). Mesmo
@@ -517,11 +541,14 @@ export default function EstudoPage() {
       pdfs: state.pdfs,
       blocos: state.blocos,
       capitulosConcluidos: state.capitulosConcluidos,
+      simulados: simuladosResumo,
+      discursivaTemas: discursivasResumo,
     });
     if (resultado) updateTrilhaDinamica(resultado);
   }, [
     state.trilhaDinamica, state.configCiclo, materiasFiltradas, state.topicos,
     state.calendario, state.pdfs, state.blocos, state.capitulosConcluidos, updateTrilhaDinamica,
+    simuladosResumo, discursivasResumo,
   ]);
 
   // "Marcar como estudado" automático — o fatiamento de teoria (gerarChunksTeoria) já sabe quando
@@ -715,6 +742,14 @@ export default function EstudoPage() {
             />
           )}
 
+          {activeTab === "simulados" && (
+            <SimuladosTab concursoId={concursoAtivo?.id ?? ""} />
+          )}
+
+          {activeTab === "discursivas" && (
+            <DiscursivasTab concursoId={concursoAtivo?.id ?? ""} materiasConcurso={materiasFiltradas} />
+          )}
+
           {activeTab === "ciclo" && (
             <CicloTab
               config={state.configCiclo}
@@ -742,6 +777,10 @@ export default function EstudoPage() {
               onIrParaBiblioteca={(abertura) => { setAberturaPdf(abertura ?? null); setActiveTab("biblioteca"); }}
               onIrParaCartas={() => setActiveTab("cartas")}
               onAdicionarCartas={adicionarCartas}
+              simulados={simuladosResumo}
+              discursivaTemas={discursivasResumo}
+              onIrParaSimulados={() => setActiveTab("simulados")}
+              onIrParaDiscursivas={() => setActiveTab("discursivas")}
             />
           )}
 

@@ -26,9 +26,11 @@ const SUBTIPO_LABEL: Partial<Record<FilaAtividadeTipo, string>> = {
   cartas: "cartas",
 };
 
-function tipoPrincipal(tipo: FilaAtividadeTipo): "Teoria" | "Questões" | "Reforço" {
+function tipoPrincipal(tipo: FilaAtividadeTipo): "Teoria" | "Questões" | "Reforço" | "Simulado" | "Discursiva" {
   if (tipo === "teoria") return "Teoria";
   if (tipo === "reforco" || tipo === "reforco_materia" || tipo === "reforco_imediato") return "Reforço";
+  if (tipo === "simulado") return "Simulado";
+  if (tipo === "discursiva") return "Discursiva";
   return "Questões";
 }
 
@@ -154,6 +156,7 @@ export default function TabelaAtividades({
             const clicavel =
               !bloqueada &&
               (!!a.link || a.tipo === "teoria" || a.tipo === "cartas" || a.tipo === "reforco_materia" ||
+                a.tipo === "simulado" || a.tipo === "discursiva" ||
                 ((a.tipo === "questoes" || a.tipo === "reforco" || a.tipo === "reforco_imediato") && !!a.topico));
             const temCapitulos = !bloqueada && (a.todosCapitulos?.length ?? 0) > 0;
             const expandido = expandidos.has(a.id);

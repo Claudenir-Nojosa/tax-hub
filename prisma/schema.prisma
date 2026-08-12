@@ -39,6 +39,8 @@ model User {
   empresasReforma  EmpresaReforma[]
   clientesRecuperacaoCredito ClienteRecuperacaoCredito[]
   resumosEstudo    ResumoEstudo[]
+  simuladoTentativas  SimuladoTentativa[]
+  discursivaRespostas DiscursivaResposta[]
 }
 
 // Resumos gerados por IA na aba "Resumos" do Estudo: o usuário sobe um PDF de material, a IA
@@ -182,6 +184,8 @@ model Concurso {
   acessos     ConcursoAcesso[]
   progressos  ConcursoProgressoUsuario[]
   pdfs        PdfConcurso[]
+  simulados       SimuladoConcurso[]
+  discursivaTemas DiscursivaTema[]
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 }
@@ -254,6 +258,81 @@ model PdfConcurso {
   updatedAt         DateTime @updatedAt
 
   @@index([concursoId])
+}
+
+// currículo de simulados (compartilhado por concurso) — PDF da prova real + gabarito oficial por
+// parte. Resultado de cada tentativa fica em SimuladoTentativa, por usuário
+model SimuladoConcurso {
+  id              String   @id @default(cuid())
+  concursoId      String
+  concurso        Concurso @relation(fields: [concursoId], references: [id], onDelete: Cascade)
+  nome            String
+  orgao           String?
+  banca           String?
+  ano             Int?
+  storagePath     String
+  arquivoEnviado  Boolean  @default(false)
+  // partes: [{ id: "geral"|"especifica", nome, numeroQuestoes, tempoMinutos,
+  //            gabarito: [{ numero, alternativaCorreta }] }]
+  partes          Json
+  criadoPorUserId String?
+  criadoEm        DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tentativas      SimuladoTentativa[]
+
+  @@index([concursoId])
+}
+
+// tentativa de um usuário num SimuladoConcurso — cronômetro de parede (ancorado em iniciadoEm,
+// não em memória) + respostas marcadas por parte
+model SimuladoTentativa {
+  id           String           @id @default(cuid())
+  simuladoId   String
+  simulado     SimuladoConcurso @relation(fields: [simuladoId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status       String           // "em_andamento" | "concluida"
+  // partes: [{ parteId, iniciadoEm?, concluidoEm?, respostas: [{ numero, alternativaMarcada }] }]
+  partes       Json
+  criadoEm     DateTime         @default(now())
+  concluidaEm  DateTime?
+
+  @@index([simuladoId, userId])
+  @@index([userId, concluidaEm])
+}
+
+// tema de discursiva (compartilhado por concurso) — rubrica opcional pra IA usar na correção
+model DiscursivaTema {
+  id              String   @id @default(cuid())
+  concursoId      String
+  concurso        Concurso @relation(fields: [concursoId], references: [id], onDelete: Cascade)
+  materia         String?
+  tema            String
+  orientacoes     String?  @db.Text
+  pontosChave     Json?    // string[] — rubrica opcional pra IA
+  criadoPorUserId String?
+  criadoEm        DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  respostas       DiscursivaResposta[]
+
+  @@index([concursoId])
+}
+
+// resposta de um usuário a um DiscursivaTema — texto + correção da IA (nota 0-10 + feedback)
+model DiscursivaResposta {
+  id            String         @id @default(cuid())
+  temaId        String
+  tema          DiscursivaTema @relation(fields: [temaId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  texto         String         @db.Text
+  notaIA        Float?
+  feedbackIA    Json?          // { pontosFortes, pontosFracos, sugestoes, justificativa }
+  minutosGastos Int?
+  criadoEm      DateTime       @default(now())
+
+  @@index([temaId, userId])
+  @@index([userId, criadoEm])
 }
 
 // "Mandar Incentivo" — mensagem direta de um usuário pra outro (aba Pré-Aprovados do Estudo).

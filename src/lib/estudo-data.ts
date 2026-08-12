@@ -237,6 +237,13 @@ export interface TrilhaDinamicaState {
   // essa rodada, a atividade não reaparece pra essa matéria (mesmo espírito one-shot de
   // revisoes30Feitas). Nome -> resultado.
   reforcosMateria?: Record<string, { acertos: number; erros: number; feitoEm: string }>;
+  // Simulados/Discursivas (ver trilha-fila.ts) — só bookkeeping de "já fiz", pra fila global saber
+  // o que ainda oferecer; texto da resposta/gabarito/feedback ficam nas tabelas próprias
+  // (SimuladoTentativa/DiscursivaResposta), não aqui. simuladosFeitos é one-shot (id -> dateKey da
+  // 1ª tentativa concluída); discursivasFeitas guarda TODAS as datas (permite repetir o tema depois
+  // de já ter aparecido na fila uma vez, sem contar como pendência de novo).
+  simuladosFeitos?: Record<string, string>;
+  discursivasFeitas?: Record<string, string[]>;
 }
 
 // Uma atividade atribuída a uma Meta. Guarda um snapshot dos campos DESCRITIVOS (que não mudam
