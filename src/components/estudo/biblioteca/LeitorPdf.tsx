@@ -190,13 +190,24 @@ export default function LeitorPdf({
 
   // barras de progresso de horas (atividade do dia + semana) — soma o cronômetro AO VIVO
   // (segundos, já tickando a cada 1s) em cima do baseline vindo da abertura do leitor, igual ao
-  // toast de "meta batida" logo abaixo faz com metaRestanteRef
+  // toast de "meta batida" logo abaixo faz com metaRestanteRef. O baseline precisa ser CONGELADO no
+  // momento em que o leitor abriu, não recalculado a cada render: `metaEstudo` vem de
+  // computarMetaAtual, que deriva minutosFeitos de pdf.paginaAtual — e paginaAtual AVANÇA sozinho
+  // conforme o usuário rola (commitarPagina), na MESMA sessão. Sem congelar, cada segundo que passa
+  // conta a leitura ATUAL duas vezes: uma pela estimativa de páginas (que já capturou o avanço) e
+  // de novo pelo cronômetro somado em cima — bug real reportado: 5min lidos de verdade, barra
+  // mostrando 8min.
+  const metaBaselineRef = useRef<{ atividadeFeitos: number; atividadeAlvo: number; semanaFeitos: number; semanaAlvo: number } | null>(null);
+  if (metaEstudo && metaBaselineRef.current === null) {
+    metaBaselineRef.current = { ...metaEstudo };
+  }
+  const metaBaseline = metaBaselineRef.current;
   const minutosSessaoLeitura = Math.floor(segundos / 60);
-  const metaAoVivo = metaEstudo && {
-    atividadeFeitos: Math.min(metaEstudo.atividadeAlvo, metaEstudo.atividadeFeitos + minutosSessaoLeitura),
-    atividadeAlvo: metaEstudo.atividadeAlvo,
-    semanaFeitos: Math.min(metaEstudo.semanaAlvo, metaEstudo.semanaFeitos + minutosSessaoLeitura),
-    semanaAlvo: metaEstudo.semanaAlvo,
+  const metaAoVivo = metaBaseline && {
+    atividadeFeitos: Math.min(metaBaseline.atividadeAlvo, metaBaseline.atividadeFeitos + minutosSessaoLeitura),
+    atividadeAlvo: metaBaseline.atividadeAlvo,
+    semanaFeitos: Math.min(metaBaseline.semanaAlvo, metaBaseline.semanaFeitos + minutosSessaoLeitura),
+    semanaAlvo: metaBaseline.semanaAlvo,
   };
 
   // pomodoro: DERIVADO do acumulado real (segundos/segundosQuestoes, qual estiver ativo agora),

@@ -9,7 +9,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import {
   MATERIAS, calcularStreakDias, dateKeyLocal, diasSemAtividade,
-  type AtividadeCalendario, type Bloco, type EstudoConfigCiclo, type MateriaConcurso,
+  type AtividadeCalendario, type Bloco, type Carta, type EstudoConfigCiclo, type MateriaConcurso,
   type MateriaDef, type PdfEstudo, type TopicoState, type TrilhaDinamicaState,
 } from "@/lib/estudo-data";
 import {
@@ -26,6 +26,7 @@ import {
 import MetaAtualCard from "./trilha/MetaAtualCard";
 import TabelaAtividades from "./trilha/TabelaAtividades";
 import ProximaMetaCard from "./trilha/ProximaMetaCard";
+import DialogRevisaoReforco from "./trilha/DialogRevisaoReforco";
 import EstudoHero from "./ui/EstudoHero";
 import SectionCard from "./ui/SectionCard";
 
@@ -57,6 +58,7 @@ interface Props {
   onIrParaCiclo?: () => void;
   onIrParaBiblioteca?: (abertura?: AberturaPdfSolicitada) => void;
   onIrParaCartas?: () => void;
+  onAdicionarCartas?: (cartas: Carta[]) => void;
 }
 
 function fmtDataLonga(dateKey: string): string {
@@ -142,6 +144,7 @@ export default function TrilhaTab({
   trilha, topicos, configCiclo, calendario, pdfs, materiasConcurso, nomeUsuario,
   blocos, onUpdateBlocos, capitulosConcluidos, onToggleCapitulo,
   onUpdateTrilha, onUpdateTopicos, onIrParaCiclo, onIrParaBiblioteca, onIrParaCartas,
+  onAdicionarCartas,
 }: Props) {
   const materiasAtivas: (MateriaDef | MateriaConcurso)[] =
     materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
@@ -186,6 +189,9 @@ export default function TrilhaTab({
   }, [trilha, hoje, configCiclo, topicos, calendario, blocos, pdfs, capitulosConcluidos]);
 
   const [finalizandoMeta, setFinalizandoMeta] = useState(false);
+  // reforço (por tópico ou geral da matéria) clicado — abre o diálogo de revisão antes de ir pras
+  // questões (ver DialogRevisaoReforco), pedido do usuário
+  const [atividadeRevisao, setAtividadeRevisao] = useState<FilaAtividade | null>(null);
 
   if (!trilha?.ativa || !meta) {
     return (
@@ -216,9 +222,20 @@ export default function TrilhaTab({
     }
   };
 
+  const abrirPdfDoTopico = (materia: string, topico: string) => {
+    const pdf = pdfs.find((p) => p.materia === materia && p.topicos?.includes(topico));
+    onIrParaBiblioteca?.(pdf ? { pdfId: pdf.id } : undefined);
+  };
+
   // clique numa linha da tabela de atividades — cada tipo tem um destino diferente: link externo
   // (questões/revisão), o PDF certo (teoria) ou a aba Cartas
   const abrirAtividade = (a: FilaAtividade) => {
+    // reforço (por tópico ou geral da matéria) sempre passa pelo diálogo de revisão primeiro —
+    // mesmo quando tem link cadastrado, "Ir pras questões" dentro do diálogo decide o destino
+    if (a.tipo === "reforco" || a.tipo === "reforco_materia") {
+      setAtividadeRevisao(a);
+      return;
+    }
     if (a.link) {
       window.open(a.link, "_blank", "noopener,noreferrer");
       return;
@@ -230,22 +247,33 @@ export default function TrilhaTab({
         onIrParaBiblioteca?.({ pdfId: a.pdfId, paginaInicio: a.paginaInicio, paginaFim: a.paginaFim });
         return;
       }
-      const pdf = pdfs.find((p) => p.materia === a.materia && p.topicos?.includes(a.topico!));
-      onIrParaBiblioteca?.(pdf ? { pdfId: pdf.id } : undefined);
+      abrirPdfDoTopico(a.materia, a.topico);
       return;
     }
     if (a.tipo === "cartas") {
       onIrParaCartas?.();
       return;
     }
-    // questões (grupos A-D, reforço, reforço rápido) sem link externo cadastrado — abre o PDF do
-    // próprio tópico, que é de onde se responde as questões escalonadas (ver PainelQuestoes.tsx,
-    // aberto de dentro do leitor). Pedido do usuário: clicar já leva pro PDF certo, sem precisar
-    // procurar na Biblioteca.
-    if ((a.tipo === "questoes" || a.tipo === "reforco" || a.tipo === "reforco_imediato") && a.topico) {
-      const pdf = pdfs.find((p) => p.materia === a.materia && p.topicos?.includes(a.topico!));
-      onIrParaBiblioteca?.(pdf ? { pdfId: pdf.id } : undefined);
+    // questões (grupos A-D, reforço rápido) sem link externo cadastrado — abre o PDF do próprio
+    // tópico, que é de onde se responde as questões escalonadas (ver PainelQuestoes.tsx, aberto de
+    // dentro do leitor). Pedido do usuário: clicar já leva pro PDF certo, sem precisar procurar na
+    // Biblioteca.
+    if ((a.tipo === "questoes" || a.tipo === "reforco_imediato") && a.topico) {
+      abrirPdfDoTopico(a.materia, a.topico);
     }
+  };
+
+  // "Ir pras questões" dentro do diálogo de revisão de reforço — mesmo destino que o clique direto
+  // teria (link cadastrado, senão o PDF do tópico)
+  const irParaQuestoesDaRevisao = () => {
+    const a = atividadeRevisao;
+    setAtividadeRevisao(null);
+    if (!a) return;
+    if (a.link) {
+      window.open(a.link, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (a.topico) abrirPdfDoTopico(a.materia, a.topico);
   };
 
   const historico = analisarHistoricoSemanas({ hoje, trilha, configCiclo, calendario });
@@ -325,6 +353,16 @@ export default function TrilhaTab({
       </div>
 
       {estimativa && <CardEstimativa estimativa={estimativa} onIrParaCiclo={onIrParaCiclo} />}
+
+      {atividadeRevisao && (
+        <DialogRevisaoReforco
+          atividade={atividadeRevisao}
+          pdfs={pdfs}
+          onFechar={() => setAtividadeRevisao(null)}
+          onIrParaQuestoes={irParaQuestoesDaRevisao}
+          onAdicionarCartas={(cartas) => onAdicionarCartas?.(cartas)}
+        />
+      )}
     </div>
   );
 }

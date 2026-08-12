@@ -18,7 +18,6 @@ import { resolverCorMateria } from "./trilha-ui";
 // vez", nunca esconde um progresso real já feito.
 
 const SUBTIPO_LABEL: Partial<Record<FilaAtividadeTipo, string>> = {
-  reforco: "reforço",
   reforco_imediato: "reforço rápido",
   revisao_link: "revisão de link",
   revisao_link_faltando: "falta link",
@@ -27,8 +26,10 @@ const SUBTIPO_LABEL: Partial<Record<FilaAtividadeTipo, string>> = {
   cartas: "cartas",
 };
 
-function tipoPrincipal(tipo: FilaAtividadeTipo): "Teoria" | "Questões" {
-  return tipo === "teoria" ? "Teoria" : "Questões";
+function tipoPrincipal(tipo: FilaAtividadeTipo): "Teoria" | "Questões" | "Reforço" {
+  if (tipo === "teoria") return "Teoria";
+  if (tipo === "reforco" || tipo === "reforco_materia" || tipo === "reforco_imediato") return "Reforço";
+  return "Questões";
 }
 
 // título truncado ("...") — ao passar o mouse, se o texto de fato transbordar, desliza ele pra
@@ -152,7 +153,7 @@ export default function TabelaAtividades({
             // clicável, mesmo que o tipo permita.
             const clicavel =
               !bloqueada &&
-              (!!a.link || a.tipo === "teoria" || a.tipo === "cartas" ||
+              (!!a.link || a.tipo === "teoria" || a.tipo === "cartas" || a.tipo === "reforco_materia" ||
                 ((a.tipo === "questoes" || a.tipo === "reforco" || a.tipo === "reforco_imediato") && !!a.topico));
             const temCapitulos = !bloqueada && (a.todosCapitulos?.length ?? 0) > 0;
             const expandido = expandidos.has(a.id);

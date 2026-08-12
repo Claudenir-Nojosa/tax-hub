@@ -741,6 +741,7 @@ export default function EstudoPage() {
               onIrParaCiclo={() => setActiveTab("ciclo")}
               onIrParaBiblioteca={(abertura) => { setAberturaPdf(abertura ?? null); setActiveTab("biblioteca"); }}
               onIrParaCartas={() => setActiveTab("cartas")}
+              onAdicionarCartas={adicionarCartas}
             />
           )}
 

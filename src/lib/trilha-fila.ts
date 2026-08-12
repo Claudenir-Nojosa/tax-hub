@@ -864,16 +864,19 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
 }
 
 // tipos que podem ser injetados NO MEIO de uma Meta já aberta (ver caso 3 abaixo) — só o que é
-// "responder questões" (escalonamento A-D, reforço, revisões por caderno de link/matéria). Pedido
-// explícito do usuário: concluir uma atividade não deve fazer aparecer OUTRA na mesma Meta, a não
-// ser que seja questões — ex.: terminar a teoria do tópico 2 libera o Grupo A do escalonamento do
-// tópico 1 (que já tinha a teoria pronta) — isso aparece JÁ na Meta corrente. "teoria" fica de fora
-// de propósito: a composição de leitura da Meta é decidida uma vez, na abertura (ver
-// intercalarPorCiclo), e fica ESTÁVEL até a Meta fechar — não cresce sozinha no meio do caminho.
-// "cartas" também fica de fora (não é uma atividade que "outra atividade libera").
+// "responder questões" (escalonamento A-D, revisões por caderno de link/matéria) mais o reforço
+// RÁPIDO pós-estudo (é literalmente "logo depois de terminar a teoria", faz sentido continuar
+// imediato). Pedido explícito do usuário: concluir uma atividade não deve fazer aparecer OUTRA na
+// mesma Meta, a não ser que seja questões — ex.: terminar a teoria do tópico 2 libera o Grupo A do
+// escalonamento do tópico 1 (que já tinha a teoria pronta) — isso aparece JÁ na Meta corrente.
+// "reforco" e "reforco_materia" ficam de FORA de propósito (mudança pedida pelo usuário): mesmo
+// desempenho fraco liberando o reforço no meio da Meta, ele só entra na PRÓXIMA — dá tempo do
+// usuário revisar os pontos que errou (ver TrilhaTab.tsx) antes de cair pra cima dele sem aviso.
+// "teoria" também fica de fora de propósito: a composição de leitura da Meta é decidida uma vez, na
+// abertura (ver intercalarPorCiclo), e fica ESTÁVEL até a Meta fechar — não cresce sozinha no meio
+// do caminho. "cartas" também fica de fora (não é uma atividade que "outra atividade libera").
 const TIPOS_INJETAVEIS_MEIO_META = new Set<FilaAtividadeTipo>([
-  "questoes", "reforco", "reforco_imediato", "revisao_link", "revisao_link_faltando",
-  "revisao_materia", "reforco_materia",
+  "questoes", "reforco_imediato", "revisao_link", "revisao_link_faltando", "revisao_materia",
 ]);
 
 // Efeito colateral explícito (chamar de um useEffect, mesmo padrão do bookkeeping de
