@@ -896,6 +896,20 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
   for (const ref of carryOverProcessado) addNaMateria(ref.materia, ref);
   for (const a of candidatosNovos) addNaMateria(a.materia, paraRef(a, false));
 
+  // dentro de CADA matéria, questões/reforço na frente da teoria — mesma regra de questoesPrimeiro,
+  // mas aplicada AQUI (antes da seleção/rodízio), não só na reordenação de exibição no fim desta
+  // função. Sem isso, um reforço (ou qualquer não-teoria) podia nunca ser selecionado: dentro da
+  // própria matéria ele sempre nasce DEPOIS dos pedaços de teoria (ordem de push em
+  // construirFilaGlobal), então o rodízio só chega nele depois de esgotar a teoria daquela matéria
+  // — com o teto de META_ATIVIDADES_MAX (15) atingido antes disso (caso real: matéria com só 2
+  // pedaços de teoria na frente já bastou pra um reforço nunca entrar em nenhuma Meta, mesmo
+  // continuando um candidato válido a cada abertura seguinte). Aqui só decide QUEM ENTRA; a
+  // reordenação de EXIBIÇÃO final (mais abaixo) continua necessária pra a Meta já nascer com
+  // questões na frente visualmente, não só ter sido selecionada com prioridade.
+  for (const [materia, lista] of porMateria) {
+    porMateria.set(materia, questoesPrimeiro(lista));
+  }
+
   // agrupa as matérias que entraram no rodízio pelo ciclo configurado (A/B/C) — matéria sem
   // divisao configurada (ou não encontrada em configCiclo.materias) cai no ciclo A por padrão
   const materiasPorCiclo: Record<"A" | "B" | "C", string[]> = { A: [], B: [], C: [] };
