@@ -12,14 +12,17 @@ function fmtDataCurta(dateKey: string): string {
 // Card lateral bloqueado (print do Guruja) — "Liberada em: DD/MM" é uma PROJEÇÃO honesta (mesmo
 // espírito de estimativaConclusaoTrilha.dataPrevista, via throughput real desde que a Meta atual
 // abriu), não uma trava de calendário fixa; sem nenhuma atividade concluída ainda, mostra "sem
-// estimativa ainda" em vez de inventar uma data. O botão fecha a Meta atual mesmo com pendências —
-// elas viram carry-over automático na próxima (nunca são deletadas).
+// estimativa ainda" em vez de inventar uma data. O botão fecha a Meta atual (pendências, se houver,
+// viram carry-over automático — nunca são deletadas) e abre a próxima na mesma chamada — SEMPRE por
+// clique explícito do usuário, nunca sozinho (pedido dele: concluir a última atividade não deve
+// empurrar pra próxima Meta sem avisar — ver avancarFilaMetasSeNecessario em trilha-fila.ts).
 export default function ProximaMetaCard({
-  proximaMeta, onFinalizarOuIgnorar, finalizando,
+  proximaMeta, onFinalizarOuIgnorar, finalizando, metaFechavel,
 }: {
   proximaMeta: ProximaMetaPreview;
   onFinalizarOuIgnorar: () => void;
   finalizando?: boolean;
+  metaFechavel?: boolean;
 }) {
   return (
     <SectionCard titulo="Próxima meta" icone={Lock} corIcone="bg-muted-foreground">
@@ -40,9 +43,17 @@ export default function ProximaMetaCard({
         type="button"
         onClick={onFinalizarOuIgnorar}
         disabled={finalizando}
-        className="w-full px-3 py-2 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className={
+          metaFechavel
+            ? "w-full px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            : "w-full px-3 py-2 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        }
       >
-        {finalizando ? "Avançando…" : "Finalize ou ignore as atividades da meta atual"}
+        {finalizando
+          ? "Avançando…"
+          : metaFechavel
+            ? "Meta concluída — avançar para a próxima"
+            : "Finalize ou ignore as atividades da meta atual"}
       </button>
     </SectionCard>
   );

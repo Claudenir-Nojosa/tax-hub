@@ -81,6 +81,7 @@ function MensagemDoDia({ state, materiasConcurso, nomeUsuario }: { state: Estudo
     // o que soa como se o usuário tivesse abandonado algo que nem começou
     diasSemAtividade: trilha ? Math.min(diasSemAtividade(state.calendario), Math.max(0, diffDias(trilha.iniciadaEm, dateKeyLocal()))) : 0,
     historico: trilha ? analisarHistoricoSemanas({ trilha, configCiclo: state.configCiclo, calendario: state.calendario }) : [],
+    hoje: dateKeyLocal(),
   };
   const mensagemBase = meta ? gerarMensagemGustavo(meta, metaAtual, opts) : { titulo: "", corpo: "", humor: "lendo" as const };
   const { titulo, corpo, humor } = useMensagemGustavoIA(mensagemBase, meta, metaAtual, opts);

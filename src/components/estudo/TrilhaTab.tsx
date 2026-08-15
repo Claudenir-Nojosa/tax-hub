@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  MATERIAS, calcularStreakDias, dateKeyLocal, diasSemAtividade,
+  MATERIAS, calcularStreakDias, dateKeyLocal, diasSemAtividade, topicoKey,
   type AtividadeCalendario, type Bloco, type Carta, type EstudoConfigCiclo, type MateriaConcurso,
   type MateriaDef, type PdfEstudo, type TopicoState, type TrilhaDinamicaState,
 } from "@/lib/estudo-data";
@@ -17,8 +17,8 @@ import {
   estimativaConclusaoTrilha, type EstimativaConclusao, type MetaSemana, type SemanaHistorico,
 } from "@/lib/trilha-dinamica";
 import {
-  computarMetaAtual, finalizarMetaManualmente, type DiscursivaResumo, type FilaAtividade,
-  type MetaAtual, type SimuladoResumo,
+  computarHistoricoMetas, computarMetaAtual, finalizarMetaManualmente, type DiscursivaResumo,
+  type FilaAtividade, type MetaAtual, type SimuladoResumo,
 } from "@/lib/trilha-fila";
 import { fmtHoras, gerarMensagemGustavo, useMensagemGustavoIA } from "./trilha/trilha-ui";
 import {
@@ -27,6 +27,7 @@ import {
 import MetaAtualCard from "./trilha/MetaAtualCard";
 import TabelaAtividades from "./trilha/TabelaAtividades";
 import ProximaMetaCard from "./trilha/ProximaMetaCard";
+import HistoricoMetasCard from "./trilha/HistoricoMetasCard";
 import DialogRevisaoReforco from "./trilha/DialogRevisaoReforco";
 import EstudoHero from "./ui/EstudoHero";
 import SectionCard from "./ui/SectionCard";
@@ -125,7 +126,7 @@ function CardEstimativa({ estimativa, onIrParaCiclo }: { estimativa: EstimativaC
 // bolha de fala do Gustavo — mesmo padrão visual da que já existe no Dashboard, aqui ancorada no
 // topo da própria Trilha; texto vem de gerarMensagemGustavo (fonte única, mesma fala nos 2 lugares)
 function GustavoBubble({
-  meta, metaAtual, nomeUsuario, streakDias, diasInativo, historico,
+  meta, metaAtual, nomeUsuario, streakDias, diasInativo, historico, hoje,
 }: {
   meta: MetaSemana;
   metaAtual: MetaAtual | null;
@@ -133,8 +134,9 @@ function GustavoBubble({
   streakDias: number;
   diasInativo: number;
   historico: SemanaHistorico[];
+  hoje: string;
 }) {
-  const opts = { nomeUsuario, streakDias, diasSemAtividade: diasInativo, historico };
+  const opts = { nomeUsuario, streakDias, diasSemAtividade: diasInativo, historico, hoje };
   const mensagemBase = gerarMensagemGustavo(meta, metaAtual, opts);
   const { titulo, corpo, humor } = useMensagemGustavoIA(mensagemBase, meta, metaAtual, opts);
   return (
@@ -196,6 +198,14 @@ export default function TrilhaTab({
     return computarMetaAtual({ hoje, trilha, configCiclo, topicos, calendario, blocos, pdfs, capitulosConcluidos });
   }, [trilha, hoje, configCiclo, topicos, calendario, blocos, pdfs, capitulosConcluidos]);
 
+  // histórico de Metas antigas (issue do usuário: "queria que no lado dessa página, mostra-se o
+  // histórico das metas antigas, o que foi feito de fato") — hidratado ao vivo, mesma lógica de
+  // conclusão da Meta atual (ver computarHistoricoMetas em trilha-fila.ts)
+  const historicoMetas = useMemo(() => {
+    if (!trilha?.ativa) return [];
+    return computarHistoricoMetas({ hoje, trilha, configCiclo, topicos, calendario, blocos, pdfs, capitulosConcluidos });
+  }, [trilha, hoje, configCiclo, topicos, calendario, blocos, pdfs, capitulosConcluidos]);
+
   const [finalizandoMeta, setFinalizandoMeta] = useState(false);
   // reforço (por tópico ou geral da matéria) clicado — abre o diálogo de revisão antes de ir pras
   // questões (ver DialogRevisaoReforco), pedido do usuário
@@ -239,9 +249,9 @@ export default function TrilhaTab({
   // clique numa linha da tabela de atividades — cada tipo tem um destino diferente: link externo
   // (questões/revisão), o PDF certo (teoria) ou a aba Cartas
   const abrirAtividade = (a: FilaAtividade) => {
-    // reforço (por tópico ou geral da matéria) sempre passa pelo diálogo de revisão primeiro —
-    // mesmo quando tem link cadastrado, "Ir pras questões" dentro do diálogo decide o destino
-    if (a.tipo === "reforco" || a.tipo === "reforco_materia") {
+    // reforço (grupo A-D esfriado ou reforço por tópico) sempre passa pelo diálogo de revisão
+    // primeiro — mesmo quando tem link cadastrado, "Ir pras questões" dentro do diálogo decide o destino
+    if (a.tipo === "reforco" || a.tipo === "reforco_topico") {
       setAtividadeRevisao(a);
       return;
     }
@@ -280,12 +290,20 @@ export default function TrilhaTab({
     }
   };
 
-  // "Ir pras questões" dentro do diálogo de revisão de reforço — mesmo destino que o clique direto
-  // teria (link cadastrado, senão o PDF do tópico)
+  // "Ir pras questões"/"Ir para o PDF" dentro do diálogo de revisão de reforço — mesmo destino que
+  // o clique direto teria (link cadastrado, senão o PDF do tópico). Pra "reforco_topico" esse
+  // clique É a conclusão da atividade — não existe outro passo (pedido do usuário: só o aviso +
+  // esse botão, sem registrar acertos/erros de questão nova nenhuma).
   const irParaQuestoesDaRevisao = () => {
     const a = atividadeRevisao;
     setAtividadeRevisao(null);
     if (!a) return;
+    if (a.tipo === "reforco_topico" && a.topico) {
+      onUpdateTrilha({
+        ...trilha,
+        reforcosTopico: { ...trilha.reforcosTopico, [topicoKey(a.materia, a.topico)]: { feitoEm: hoje } },
+      });
+    }
     if (a.link) {
       window.open(a.link, "_blank", "noopener,noreferrer");
       return;
@@ -313,6 +331,7 @@ export default function TrilhaTab({
         streakDias={streakDias}
         diasInativo={diasInativo}
         historico={historico}
+        hoje={hoje}
       />
 
       {/* Meta atual + próxima meta (fila de atividades, trilha-fila.ts) — substitui o hero semanal
@@ -348,11 +367,15 @@ export default function TrilhaTab({
               />
             </SectionCard>
           </div>
-          <ProximaMetaCard
-            proximaMeta={metaAtualResult.proximaMeta}
-            onFinalizarOuIgnorar={finalizarMeta}
-            finalizando={finalizandoMeta}
-          />
+          <div className="space-y-4 min-w-0">
+            <ProximaMetaCard
+              proximaMeta={metaAtualResult.proximaMeta}
+              onFinalizarOuIgnorar={finalizarMeta}
+              finalizando={finalizandoMeta}
+              metaFechavel={metaAtualResult.metaAtual.fechavel}
+            />
+            <HistoricoMetasCard historico={historicoMetas} materiasAtivas={materiasAtivas} />
+          </div>
         </div>
       )}
 

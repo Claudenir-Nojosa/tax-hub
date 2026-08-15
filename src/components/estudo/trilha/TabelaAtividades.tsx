@@ -22,13 +22,13 @@ const SUBTIPO_LABEL: Partial<Record<FilaAtividadeTipo, string>> = {
   revisao_link: "revisão de link",
   revisao_link_faltando: "falta link",
   revisao_materia: "revisão de matéria",
-  reforco_materia: "reforço geral",
+  reforco_topico: "reforço",
   cartas: "cartas",
 };
 
-function tipoPrincipal(tipo: FilaAtividadeTipo): "Teoria" | "Questões" | "Reforço" | "Simulado" | "Discursiva" {
+export function tipoPrincipal(tipo: FilaAtividadeTipo): "Teoria" | "Questões" | "Reforço" | "Simulado" | "Discursiva" {
   if (tipo === "teoria") return "Teoria";
-  if (tipo === "reforco" || tipo === "reforco_materia" || tipo === "reforco_imediato") return "Reforço";
+  if (tipo === "reforco" || tipo === "reforco_topico" || tipo === "reforco_imediato") return "Reforço";
   if (tipo === "simulado") return "Simulado";
   if (tipo === "discursiva") return "Discursiva";
   return "Questões";
@@ -155,9 +155,9 @@ export default function TabelaAtividades({
             // clicável, mesmo que o tipo permita.
             const clicavel =
               !bloqueada &&
-              (!!a.link || a.tipo === "teoria" || a.tipo === "cartas" || a.tipo === "reforco_materia" ||
+              (!!a.link || a.tipo === "teoria" || a.tipo === "cartas" ||
                 a.tipo === "simulado" || a.tipo === "discursiva" ||
-                ((a.tipo === "questoes" || a.tipo === "reforco" || a.tipo === "reforco_imediato") && !!a.topico));
+                ((a.tipo === "questoes" || a.tipo === "reforco" || a.tipo === "reforco_topico" || a.tipo === "reforco_imediato") && !!a.topico));
             const temCapitulos = !bloqueada && (a.todosCapitulos?.length ?? 0) > 0;
             const expandido = expandidos.has(a.id);
             const passouDoTempo = !a.concluida && a.minutosFeitos !== undefined && a.minutosFeitos >= a.minutosEstimados;

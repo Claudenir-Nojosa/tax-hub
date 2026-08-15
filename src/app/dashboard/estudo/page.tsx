@@ -715,8 +715,6 @@ export default function EstudoPage() {
               materiasConcurso={materiasFiltradas}
               blocos={state.blocos}
               onUpdateBlocos={updateBlocos}
-              trilha={state.trilhaDinamica}
-              onUpdateTrilha={updateTrilhaDinamica}
             />
           )}
 

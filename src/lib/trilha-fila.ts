@@ -1,8 +1,9 @@
 import {
-  calcularPagPorHora, calcularPagPorHoraTopico, calcularPerc, dateKeyLocal, defaultTopicoState, topicoKey,
+  calcularMedia, calcularPagPorHora, calcularPagPorHoraTopico, calcularPerc, dateKeyLocal,
+  defaultTopicoState, topicoKey,
   type AtividadeCalendario, type Bloco, type ChecklistRevisaoLink, type EstudoConfigCiclo,
   type Grupo, type MetaAtividadeRef, type MetaPersistida, type NivelImportancia, type PdfEstudo,
-  type TopicoState, type TrilhaDinamicaState,
+  type TopicoCaderno, type TopicoState, type TrilhaDinamicaState,
 } from "./estudo-data";
 import {
   GRUPOS_QUESTOES, DIAS_REVISAO_MATERIA, LIMIAR_REFORCO_PERC, PAG_POR_HORA_PADRAO,
@@ -25,7 +26,7 @@ import {
 
 export type FilaAtividadeTipo =
   | "teoria" | "questoes" | "reforco" | "reforco_imediato"
-  | "revisao_link" | "revisao_link_faltando" | "revisao_materia" | "reforco_materia" | "cartas"
+  | "revisao_link" | "revisao_link_faltando" | "revisao_materia" | "reforco_topico" | "cartas"
   | "simulado" | "discursiva";
 
 // currículo LEVE de Simulados/Discursivas (só id+nome — nunca o gabarito/rubrica inteiros, que
@@ -79,13 +80,27 @@ export const MINUTOS_ESTIMADO_CARTAS = 20;
 export const MINUTOS_ESTIMADO_SIMULADO = 240;
 export const MINUTOS_ESTIMADO_DISCURSIVA = 60;
 export const MINUTOS_ESTIMADO_TEORIA_PADRAO = 60; // tópico sem PDF/página mapeada nenhuma
-// reforço geral de matéria — 20 questões a ~2min cada (mesma taxa de MINUTOS_ESTIMADO_QUESTAO_PADRAO)
-export const MINUTOS_ESTIMADO_REFORCO_MATERIA = 40;
-export const QUESTOES_REFORCO_MATERIA = 20;
-// nº mínimo de questões respondidas na matéria (soma de todos os cadernos A-D de todos os tópicos)
-// antes de julgar o aproveitamento agregado — sem isso, 2-3 questões erradas no começo já dispararia
-// o reforço com uma amostra pequena demais pra significar algo
-const MINIMO_QUESTOES_REFORCO_MATERIA = 20;
+// reforço por tópico — não é um bloco NOVO de questões, é só reabrir o PDF e reler o que já foi
+// errado no caderno existente (ver DialogRevisaoReforco.tsx) — por isso a estimativa é curta, só o
+// tempo de reler, não de responder questões novas. Escopo por TÓPICO, não mais por matéria inteira
+// (pedido do usuário: reforço tem que reagir ao desempenho de CADA tópico, não escondido atrás da
+// média de todos os tópicos da matéria — um tópico fraco perdido no meio de vários bons nunca
+// disparava reforço nenhum antes).
+export const MINUTOS_ESTIMADO_REFORCO_TOPICO = 15;
+// nº mínimo de questões respondidas no tópico (soma de todos os cadernos A-D dele, mesmo parciais —
+// mesmo critério de calcularMedia, a % que a aba Edital já mostra) antes de julgar o aproveitamento
+// — sem isso, 2-3 questões erradas no começo já dispararia o reforço com uma amostra pequena demais
+const MINIMO_QUESTOES_REFORCO_TOPICO = 10;
+
+// Elegibilidade do reforço por tópico (amostra mínima + abaixo do limiar) — UMA função só,
+// exportada, usada tanto aqui (geração do reforço em construirFilaGlobal) quanto em QuestoesTab.tsx
+// (decidir se mostra o bloco de registro pra um tópico), pra nunca dessincronizar o que a UI oferece
+// do que de fato entra na fila.
+export function elegivelParaReforcoTopico(cadernos: Record<Grupo, TopicoCaderno>): { elegivel: boolean; perc: number } {
+  const total = GRUPOS_QUESTOES.reduce((s, g) => s + cadernos[g].acertos + cadernos[g].erros, 0);
+  const perc = calcularMedia(cadernos);
+  return { elegivel: total >= MINIMO_QUESTOES_REFORCO_TOPICO && perc < LIMIAR_REFORCO_PERC, perc };
+}
 
 // teto/piso de QUANTIDADE de atividades por Meta — cada Meta representa ~1 semana de trabalho
 // (calendário-fixo: Meta 1 = semana 1, Meta 2 = semana 2, mas só ABRE quando a anterior fecha, ver
@@ -389,46 +404,35 @@ export function construirFilaGlobal(params: {
       }
     }
 
-    // reforço geral de matéria — aproveitamento agregado (todos os cadernos A-D de todos os
-    // tópicos) abaixo de LIMIAR_REFORCO_PERC, com amostra mínima (MINIMO_QUESTOES_REFORCO_MATERIA)
-    // pra não disparar com 2-3 questões erradas no começo. One-shot por matéria (mesmo espírito de
-    // revisão de matéria) — feito o bloco de 20 questões (registrado na aba Questões, ver
-    // trilha.reforcosMateria), não reaparece pra essa matéria.
-    if (!trilha.reforcosMateria?.[m.nome]) {
-      let acertosMateria = 0;
-      let totalMateria = 0;
-      for (const topico of m.topicos) {
-        const estado = topicos[topicoKey(m.nome, topico)];
-        if (!estado) continue;
-        for (const grupo of GRUPOS_QUESTOES) {
-          const c = estado.cadernos[grupo];
-          // só entra na média quando o grupo está TOTALMENTE marcado — meio caminho andado (ex.:
-          // 3 de 10 questões do Grupo A já respondidas) não é resultado final, é só progresso em
-          // andamento; contar isso na média gerava reforço disparando com dado incompleto (caso
-          // real: usuário ainda respondendo o Grupo A, reforço apareceu achando 65%, terminou o
-          // grupo e o resultado final foi 70% — nem deveria ter disparado)
-          const totalGrupo = totalQuestoesDoGrupo(m.nome, topico, grupo, pdfs);
-          if (totalGrupo === 0 || c.acertos + c.erros < totalGrupo) continue;
-          acertosMateria += c.acertos;
-          totalMateria += c.acertos + c.erros;
-        }
-      }
-      if (totalMateria >= MINIMO_QUESTOES_REFORCO_MATERIA) {
-        const percMateria = calcularPerc(acertosMateria, totalMateria - acertosMateria);
-        if (percMateria < LIMIAR_REFORCO_PERC) {
-          fila.push({
-            id: `rm:${m.nome}`,
-            tipo: "reforco_materia",
-            materia: m.nome,
-            titulo: `Reforço geral — ${m.nome} (${percMateria}% de aproveitamento, ${QUESTOES_REFORCO_MATERIA} questões)`,
-            minutosEstimados: MINUTOS_ESTIMADO_REFORCO_MATERIA,
-            link: configCiclo.materias[m.nome]?.linkRevisaoMateria,
-            desempenhoPerc: percMateria,
-            concluida: false,
-            elegivelDesde: hoje,
-          });
-        }
-      }
+    // reforço por TÓPICO — aproveitamento agregado dos cadernos A-D DESSE tópico (calcularMedia,
+    // mesma média que a aba Edital já exibe pro usuário — não a média de toda a matéria) abaixo de
+    // LIMIAR_REFORCO_PERC, com amostra mínima (MINIMO_QUESTOES_REFORCO_TOPICO) pra não disparar com
+    // 2-3 questões erradas no começo. Pedido explícito do usuário: reforço tinha que reagir a CADA
+    // tópico fraco, não a uma média de matéria que escondia tópicos ruins atrás de tópicos bons (ex.:
+    // real — Direito Administrativo com vários tópicos >70% e só "Princípios da Administração" a
+    // 19%, a média da matéria nunca caía o bastante pra disparar nada). Não é um bloco novo de
+    // questões — é só o aviso pra reabrir o PDF do tópico e reler o que já foi errado (sem link
+    // próprio: cai sempre no PDF via abrirPdfDoTopico, ver irParaQuestoesDaRevisao em TrilhaTab.tsx).
+    // One-shot por tópico (mesmo espírito da revisão de matéria) — feito, não reaparece pra esse
+    // tópico (trilha.reforcosTopico).
+    for (const topico of m.topicos) {
+      const chave = topicoKey(m.nome, topico);
+      if (trilha.reforcosTopico?.[chave]) continue;
+      const estado = topicos[chave];
+      if (!estado) continue;
+      const { elegivel, perc: percTopico } = elegivelParaReforcoTopico(estado.cadernos);
+      if (!elegivel) continue;
+      fila.push({
+        id: `rt:${m.nome}:${topico}`,
+        tipo: "reforco_topico",
+        materia: m.nome,
+        topico,
+        titulo: `Reforço — ${topico} (${percTopico}% de aproveitamento)`,
+        minutosEstimados: MINUTOS_ESTIMADO_REFORCO_TOPICO,
+        desempenhoPerc: percTopico,
+        concluida: false,
+        elegivelDesde: hoje,
+      });
     }
   }
 
@@ -583,9 +587,11 @@ function estaAtividadeConcluida(
       return { concluida: !!(estado?.linkRevisao7d || estado?.linkRevisao30d || estado?.revisaoLinkDispensada) };
     case "revisao_materia":
       return { concluida: (trilha.revisoes30Feitas[ref.materia] ?? []).length > 0 };
-    case "reforco_materia": {
-      const registro = trilha.reforcosMateria?.[ref.materia];
-      return { concluida: !!registro, desempenhoPerc: registro ? calcularPerc(registro.acertos, registro.erros) : undefined };
+    case "reforco_topico": {
+      // sem acertos/erros pra recalcular — marcado como feito direto no clique de "ir pro PDF"
+      // (ver DialogRevisaoReforco.tsx / irParaQuestoesDaRevisao em TrilhaTab.tsx)
+      const registro = ref.topico ? trilha.reforcosTopico?.[topicoKey(ref.materia, ref.topico)] : undefined;
+      return { concluida: !!registro };
     }
     case "cartas": {
       const data = ref.id.split(":")[1];
@@ -755,6 +761,58 @@ export function computarMetaAtual(
   return { metaAtual, proximaMeta: { numero: metaPersistida.numero + 1, liberadaEmProjetada } };
 }
 
+export interface MetaHistoricoResumo {
+  numero: number;
+  iniciadaEm: string;
+  fechadaEm?: string;
+  fechamentoManual?: boolean;
+  concluidas: number;
+  total: number;
+  materias: {
+    materia: string;
+    concluidas: number;
+    total: number;
+    // atividade por atividade, pra UI poder expandir e mostrar o que foi feito de fato — não só
+    // a contagem agregada (pedido do usuário)
+    atividades: { titulo: string; tipo: FilaAtividadeTipo; concluida: boolean }[];
+  }[];
+}
+
+// Pedido do usuário: mostrar, ao lado da Meta atual, o que de fato foi feito nas Metas ANTERIORES
+// — a Meta 1 fica visível igual à atual (mesma hidratação ao vivo via estaAtividadeConcluida), só
+// que sem `fechavel`/`liberadaEmProjetada` (não faz sentido pra Meta que já passou). Mais recente
+// primeiro. Nunca inclui a Meta ATUAL — essa é o card grande de cima (MetaAtualCard).
+export function computarHistoricoMetas(params: ParamsBaseFila): MetaHistoricoResumo[] {
+  const { trilha, topicos, blocos, pdfs } = params;
+  if (!trilha.filaMetas) return [];
+  const metaAtualNumero = trilha.filaMetas.metaAtual;
+  return Object.values(trilha.filaMetas.metas)
+    .filter((m) => m.numero !== metaAtualNumero)
+    .sort((a, b) => b.numero - a.numero)
+    .map((m) => {
+      const hidratadas = m.atividades.map((ref) => ({
+        ref, ...estaAtividadeConcluida(ref, topicos, trilha, blocos, pdfs),
+      }));
+      const porMateria = new Map<string, { concluidas: number; total: number; atividades: { titulo: string; tipo: FilaAtividadeTipo; concluida: boolean }[] }>();
+      for (const h of hidratadas) {
+        const acumulado = porMateria.get(h.ref.materia) ?? { concluidas: 0, total: 0, atividades: [] };
+        acumulado.total += 1;
+        if (h.concluida) acumulado.concluidas += 1;
+        acumulado.atividades.push({ titulo: h.ref.titulo, tipo: h.ref.tipo as FilaAtividadeTipo, concluida: h.concluida });
+        porMateria.set(h.ref.materia, acumulado);
+      }
+      return {
+        numero: m.numero,
+        iniciadaEm: m.iniciadaEm,
+        fechadaEm: m.fechadaEm,
+        fechamentoManual: m.fechamentoManual,
+        concluidas: hidratadas.filter((h) => h.concluida).length,
+        total: m.atividades.length,
+        materias: Array.from(porMateria.entries()).map(([materia, v]) => ({ materia, ...v })),
+      };
+    });
+}
+
 interface ParamsAbrirMeta {
   hoje?: string;
   trilha: TrilhaDinamicaState;
@@ -794,17 +852,37 @@ interface ParamsAbrirMeta {
 // nasceram junto com a Meta. Aplicada em TODO write de `atividades` (abertura, injeção, auto-cura)
 // pra manter o invariante sempre válido, e também usada como auto-cura pra Metas persistidas antes
 // dessa regra existir (ver "caso 0.5" em avancarFilaMetasSeNecessario).
+// Reforço por tópico (tipo "reforco_topico") vai na FRENTE de tudo, até de questões normais -- não
+// só à frente da teoria. Bug real reportado pelo usuário (2026-08-15): com só "não-teoria primeiro"
+// (sem separar reforço das questões comuns), um tópico com reforço pendente MAS TAMBÉM questões
+// normais pendentes só entregava o reforço na 2ª rodada do rodízio (ver intercalarPorCiclo) -- e o
+// teto de META_ATIVIDADES_MAX (15) é atingido ainda dentro da 1ª rodada quando há muitas matérias,
+// então o reforço nunca chegava a entrar em NENHUMA Meta, apesar de o usuário estar abaixo de 70%
+// em vários tópicos ao mesmo tempo (só o que "por sorte" não tinha questão normal na frente aparecia).
 function questoesPrimeiro(atividades: MetaAtividadeRef[]): MetaAtividadeRef[] {
-  const questoes = atividades.filter((a) => a.tipo !== "teoria");
+  const reforcoTopico = atividades.filter((a) => a.tipo === "reforco_topico");
+  const outrasQuestoes = atividades.filter((a) => a.tipo !== "teoria" && a.tipo !== "reforco_topico");
   const teoria = atividades.filter((a) => a.tipo === "teoria");
-  return [...questoes, ...teoria];
+  return [...reforcoTopico, ...outrasQuestoes, ...teoria];
 }
 
+// Qual ciclo "abre a rodada" roda por Meta (numeroMeta % 3) -- bug real reportado pelo usuário
+// (2026-08-15): a ordem fixa A→B→C, combinada com o teto META_ATIVIDADES_MAX (15) aplicado sobre a
+// lista JÁ achatada (não por ciclo), fazia o ciclo C nunca entrar em NENHUMA Meta sempre que A
+// (sozinho) já tivesse matérias suficientes pra encostar no teto -- não é hipotético, é o caso real
+// do usuário: ~13 matérias configuradas em A contra só ~2-3 em C. Girar quem entra primeiro garante
+// que, a cada 3 Metas, cada ciclo tenha pelo menos uma vez prioridade total antes do teto cortar --
+// não elimina 100% o desbalanceamento de fundo (o usuário também pode reequilibrar as divisões A/B/C
+// na aba Ciclo), mas garante que NENHUM ciclo fique starved pra sempre.
 function intercalarPorCiclo(
-  porMateria: Map<string, MetaAtividadeRef[]>, materiasPorCiclo: Record<"A" | "B" | "C", string[]>
+  porMateria: Map<string, MetaAtividadeRef[]>,
+  materiasPorCiclo: Record<"A" | "B" | "C", string[]>,
+  numeroMeta: number
 ): MetaAtividadeRef[] {
   const resultado: MetaAtividadeRef[] = [];
-  const ciclos: ("A" | "B" | "C")[] = ["A", "B", "C"];
+  const ordemBase: ("A" | "B" | "C")[] = ["A", "B", "C"];
+  const inicio = ((numeroMeta - 1) % ordemBase.length + ordemBase.length) % ordemBase.length;
+  const ciclos = [...ordemBase.slice(inicio), ...ordemBase.slice(0, inicio)];
   let restante = true;
   while (restante) {
     restante = false;
@@ -917,10 +995,10 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
     const divisao = configCiclo.materias[materia]?.divisao ?? "A";
     materiasPorCiclo[divisao].push(materia);
   }
-  const candidatos = intercalarPorCiclo(porMateria, materiasPorCiclo);
+  const numero = (trilha.filaMetas?.metaAtual ?? 0) + 1;
+  const candidatos = intercalarPorCiclo(porMateria, materiasPorCiclo, numero);
 
   const orcamentoMinutos = Object.values(configCiclo.horasPorDia).reduce((s, v) => s + v, 0);
-  const numero = (trilha.filaMetas?.metaAtual ?? 0) + 1;
 
   const atividadesSelecionadas: MetaAtividadeRef[] = [];
   let somaMinutos = 0;
@@ -945,28 +1023,35 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
 // imediato). Pedido explícito do usuário: concluir uma atividade não deve fazer aparecer OUTRA na
 // mesma Meta, a não ser que seja questões — ex.: terminar a teoria do tópico 2 libera o Grupo A do
 // escalonamento do tópico 1 (que já tinha a teoria pronta) — isso aparece JÁ na Meta corrente.
-// "reforco" e "reforco_materia" ficam de FORA de propósito (mudança pedida pelo usuário): mesmo
-// desempenho fraco liberando o reforço no meio da Meta, ele só entra na PRÓXIMA — dá tempo do
-// usuário revisar os pontos que errou (ver TrilhaTab.tsx) antes de cair pra cima dele sem aviso.
-// "teoria" também fica de fora de propósito: a composição de leitura da Meta é decidida uma vez, na
+// "reforco" (grupo A-D específico, esfriado) fica de FORA de propósito: mesmo desempenho fraco
+// liberando o reforço no meio da Meta, ele só entra na PRÓXIMA — dá tempo do usuário revisar os
+// pontos que errou (ver TrilhaTab.tsx) antes de cair pra cima dele sem aviso. "reforco_topico" NÃO
+// tem essa restrição (pedido explícito do usuário): é só um aviso leve pra reler o que já errou no
+// PDF, não uma atividade nova de responder questões — não precisa esperar a próxima Meta, entra
+// assim que o tópico cruza o limiar, mesmo com a Meta atual já aberta.
+// "teoria" fica de fora de propósito: a composição de leitura da Meta é decidida uma vez, na
 // abertura (ver intercalarPorCiclo), e fica ESTÁVEL até a Meta fechar — não cresce sozinha no meio
 // do caminho. "cartas" também fica de fora (não é uma atividade que "outra atividade libera").
 const TIPOS_INJETAVEIS_MEIO_META = new Set<FilaAtividadeTipo>([
-  "questoes", "reforco_imediato", "revisao_link", "revisao_link_faltando", "revisao_materia",
+  "questoes", "reforco_imediato", "revisao_link", "revisao_link_faltando", "revisao_materia", "reforco_topico",
 ]);
 
 // Efeito colateral explícito (chamar de um useEffect, mesmo padrão do bookkeeping de
-// conclusaoMaterias que já existe em TrilhaTab.tsx) — três casos, nessa ordem:
+// conclusaoMaterias que já existe em TrilhaTab.tsx) — dois casos, nessa ordem:
 // 1) bootstrap da Meta 1 quando a trilha nunca passou pelo motor de fila;
-// 2) promoção pra Meta N+1 quando a atual está `fechavel` (todas as atividades concluídas) — NÃO
-//    promove sozinho enquanto sobrar pendência, pra isso é o botão manual (finalizarMetaManualmente);
-// 3) injeção de atividades de QUESTÕES recém-elegíveis na Meta ABERTA (ver TIPOS_INJETAVEIS_MEIO_META
-//    — teoria nunca entra por aqui). Só injeta o que a fila já considera elegível-e-pendente e ainda
-//    não foi atribuído a NENHUMA Meta — não reabre nem fecha Meta nenhuma, só CRESCE a atual.
-// Todos os três casos compartilham esta ÚNICA função (e um ÚNICO useEffect em page.tsx) de propósito
-// — dois efeitos concorrentes escrevendo em `trilhaDinamica` no mesmo ciclo de render correm o
-// risco de um sobrescrever o outro (cada um parte do mesmo `trilha` "velho" do fechamento de
-// render atual), então bootstrap/fechamento/injeção viram um SÓ cálculo atômico.
+// 2) injeção de atividades recém-elegíveis na Meta ABERTA (questões + reforço por tópico — ver
+//    TIPOS_INJETAVEIS_MEIO_META; teoria e reforço de grupo A-D nunca entram por aqui). Só injeta o
+//    que a fila já considera elegível-e-pendente e ainda não foi atribuído a NENHUMA Meta — não
+//    reabre nem fecha Meta nenhuma, só CRESCE a atual.
+// A promoção pra Meta N+1 NUNCA é automática, mesmo quando a atual está `fechavel` (todas as
+// atividades concluídas) — pedido explícito do usuário: ele quer CLICAR pra avançar, não ser
+// empurrado pra próxima Meta no instante em que a última atividade é marcada. `fechavel` só liga o
+// aviso "meta entregue" (ver DashboardTab.tsx) e o botão fica disponível (ProximaMetaCard), mas quem
+// de fato fecha+abre é sempre finalizarMetaManualmente, disparado pelo clique do usuário.
+// Ambos os casos compartilham esta ÚNICA função (e um ÚNICO useEffect em page.tsx) de propósito —
+// dois efeitos concorrentes escrevendo em `trilhaDinamica` no mesmo ciclo de render correm o risco
+// de um sobrescrever o outro (cada um parte do mesmo `trilha` "velho" do fechamento de render
+// atual), então bootstrap/injeção viram um SÓ cálculo atômico.
 // undefined = nada a fazer.
 export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDinamicaState | undefined {
   const hoje = params.hoje ?? dateKeyLocal();
@@ -1028,13 +1113,18 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
     };
   }
 
-  // caso 0.75: auto-cura de reforco_materia que não é mais válido — recalcula a fila FRESCA (com o
-  // critério corrigido: só conta grupo A-D TOTALMENTE marcado, ver totalQuestoesDoGrupo) e remove da
-  // Meta aberta qualquer reforco_materia persistido que não apareceria mais nela hoje. Caso real: um
-  // "Reforço geral" foi criado com o cálculo antigo (contava questão parcialmente marcada), o usuário
-  // terminou o grupo e o aproveitamento real ficou acima do limiar — o item persistido não some
+  // caso 0.75: auto-cura de reforco_topico que não é mais válido — recalcula a fila FRESCA e remove
+  // da Meta aberta qualquer reforco_topico persistido que não apareceria mais nela hoje. Caso real
+  // (herdado da versão por matéria, mesmo espírito aqui por tópico): o usuário respondeu mais
+  // questões do tópico e o aproveitamento real subiu acima do limiar — o item persistido não some
   // sozinho, então essa auto-cura resolve. Nunca mexe numa já concluída (defensivo — nem entraria
-  // aqui: reforcosMateria[materia] já existiria e a fila fresca nem geraria o item de novo).
+  // aqui: reforcosTopico[chave] já existiria e a fila fresca nem geraria o item de novo).
+  //
+  // Trata também "reforco_materia" (nome LEGADO — Metas já abertas antes da migração pra reforço por
+  // tópico podem ter esse tipo persistido no JSON, mesmo o TS não reconhecendo mais essa string).
+  // Sem essa segunda checagem, esse item ficava PRESO PRA SEMPRE: estaAtividadeConcluida não tem
+  // case pra ele (cai no default, concluida sempre false) e nunca fica "concluído" nem some sozinho
+  // — inclusive sobrevivia a "Finalize ou ignore" (vira carry-over, se arrasta pra Meta seguinte).
   const filaFresca = construirFilaGlobal({
     hoje, materiasAtivas, configCiclo, topicos, calendario, pdfs, blocos, trilha,
     capitulosConcluidos: params.capitulosConcluidos,
@@ -1042,7 +1132,8 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
   });
   const idsValidosNaFilaFresca = new Set(filaFresca.map((a) => a.id));
   const atividadesSemReforcoInvalido = metaAberta.atividades.filter((ref) => {
-    if (ref.tipo !== "reforco_materia") return true;
+    if ((ref.tipo as string) === "reforco_materia") return false;
+    if (ref.tipo !== "reforco_topico") return true;
     if (idsValidosNaFilaFresca.has(ref.id)) return true;
     return estaAtividadeConcluida(ref, topicos, trilha, blocos, pdfs).concluida;
   });
@@ -1056,29 +1147,25 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
     };
   }
 
-  if (resultado.metaAtual.fechavel) {
-    const trilhaComMetaFechada: TrilhaDinamicaState = {
-      ...trilha,
-      filaMetas: {
-        ...trilha.filaMetas,
-        metas: { ...trilha.filaMetas.metas, [metaAberta.numero]: { ...metaAberta, fechadaEm: hoje } },
-      },
-    };
-    // fechada por conclusão total (fechavel) — nada pendente, carryOver vazio
-    return abrirProximaMeta({ ...params, trilha: trilhaComMetaFechada, hoje, carryOver: [] });
-  }
+  // caso 2 (antigo): promoção automática pra Meta N+1 quando `fechavel` foi removida de propósito
+  // — pedido explícito do usuário: ele quer CLICAR pra avançar (botão "Avançar" em
+  // ProximaMetaCard.tsx, que chama finalizarMetaManualmente), não ser empurrado pra próxima Meta no
+  // instante em que a última atividade é marcada. `fechavel` continua calculado e exposto (badge
+  // "meta entregue" no Dashboard, botão liberado no card) — só o fechamento automático saiu daqui.
 
-  // caso 3: Meta aberta, ainda não fechável — injeta o que virou elegível-e-pendente desde a
-  // última passada e ainda não está em NENHUMA Meta (passada ou atual). Reaproveita filaFresca (já
-  // calculada acima, no caso 0.75) — mesmos parâmetros, sem sentido recalcular de novo.
+  // caso 3: Meta aberta (fechável ou não — o fechamento em si é sempre manual, ver acima) — injeta
+  // o que virou elegível-e-pendente desde a última passada e ainda não está em NENHUMA Meta (passada
+  // ou atual). Reaproveita filaFresca (já calculada acima, no caso 0.75) — mesmos parâmetros, sem
+  // sentido recalcular de novo.
   const idsJaAtribuidos = new Set(
     Object.values(trilha.filaMetas.metas).flatMap((m) => m.atividades.map((a) => a.id))
   );
   const novos = filaFresca.filter((a) => !idsJaAtribuidos.has(a.id) && TIPOS_INJETAVEIS_MEIO_META.has(a.tipo));
   if (novos.length === 0) return undefined;
 
-  // novos são sempre tipo questões (TIPOS_INJETAVEIS_MEIO_META exclui teoria) — questoesPrimeiro
-  // garante que entram na FRENTE, junto das outras questões já na Meta, nunca atrás da teoria
+  // novos são sempre questões ou reforço por tópico (TIPOS_INJETAVEIS_MEIO_META exclui teoria e
+  // reforço de grupo) — questoesPrimeiro garante que entram na FRENTE, reforço por tópico até antes
+  // das outras questões, nunca atrás da teoria
   const metaComInjecao: MetaPersistida = {
     ...metaAberta,
     atividades: questoesPrimeiro([...metaAberta.atividades, ...novos.map((a) => paraRef(a, false))]),

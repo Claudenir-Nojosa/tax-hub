@@ -2,15 +2,13 @@
 
 import { useState } from "react";
 import {
-  MATERIAS, topicoKey, dateKeyLocal, defaultTopicoState, blocoDoTopico, calcularPerc,
+  MATERIAS, topicoKey, dateKeyLocal, defaultTopicoState, blocoDoTopico,
   type TopicoState, type MateriaConcurso, type ChecklistRevisaoLink, type EstudoConfigCiclo, type Bloco,
-  type TrilhaDinamicaState,
 } from "@/lib/estudo-data";
 import {
   statusRevisaoLink, statusRevisaoLinkBloco, CHECKPOINTS_REVISAO_LINK, DIAS_REVISAO_MATERIA,
-  LIMIAR_REFORCO_PERC, type StatusRevisaoLink,
+  type StatusRevisaoLink,
 } from "@/lib/trilha-dinamica";
-import { QUESTOES_REFORCO_MATERIA } from "@/lib/trilha-fila";
 import { resolverCorMateria } from "./trilha/trilha-ui";
 import { ChevronDown, ChevronRight, ExternalLink, Search, Link2, Trophy, Zap, Layers, Plus, Trash2 } from "lucide-react";
 
@@ -22,10 +20,6 @@ interface Props {
   materiasConcurso?: MateriaConcurso[]; // se passado, usa em vez de MATERIAS hardcoded
   blocos: Record<string, Bloco>;
   onUpdateBlocos: (blocos: Record<string, Bloco>) => void;
-  // reforço geral de matéria (<70% de aproveitamento agregado) — registro de acertos/erros do
-  // bloco de 20 questões, ver trilha-fila.ts. undefined = trilha não ativa, seção some.
-  trilha?: TrilhaDinamicaState;
-  onUpdateTrilha?: (trilha: TrilhaDinamicaState) => void;
 }
 
 // Badge de status de UM checkpoint da revisão do link — mesmo motor da Trilha
@@ -110,31 +104,14 @@ function LinkInput({
 
 export default function QuestoesTab({
   topicos, onUpdate, configCiclo, onUpdateConfigCiclo, materiasConcurso, blocos, onUpdateBlocos,
-  trilha, onUpdateTrilha,
 }: Props) {
   const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
   const [busca, setBusca] = useState("");
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
-  const [rascunhoReforco, setRascunhoReforco] = useState<Record<string, { acertos: string; erros: string }>>({});
   const hoje = dateKeyLocal();
 
   const toggleExpand = (nome: string) => {
     setExpandidos((prev) => ({ ...prev, [nome]: !prev[nome] }));
-  };
-
-  // registra o resultado do bloco de 20 questões do reforço geral (ver construirFilaGlobal em
-  // trilha-fila.ts) — one-shot por matéria, mesmo espírito da revisão de matéria
-  const salvarReforcoMateria = (materia: string) => {
-    if (!trilha || !onUpdateTrilha) return;
-    const rascunho = rascunhoReforco[materia];
-    const acertos = Math.max(0, parseInt(rascunho?.acertos || "0", 10) || 0);
-    const erros = Math.max(0, parseInt(rascunho?.erros || "0", 10) || 0);
-    if (acertos + erros === 0) return;
-    onUpdateTrilha({
-      ...trilha,
-      reforcosMateria: { ...trilha.reforcosMateria, [materia]: { acertos, erros, feitoEm: hoje } },
-    });
-    setRascunhoReforco((prev) => ({ ...prev, [materia]: { acertos: "", erros: "" } }));
   };
 
   const updateLinkTopico = (materia: string, topico: string, checkpoint: ChecklistRevisaoLink, link: string) => {
@@ -291,55 +268,6 @@ export default function QuestoesTab({
                       />
                     </div>
                   </div>
-
-                  {/* Reforço geral (<70% de aproveitamento agregado — todos os cadernos A-D de
-                      todos os tópicos, ver construirFilaGlobal em trilha-fila.ts) — aparece na
-                      Trilha sozinho quando o aproveitamento cai, aqui só registra o resultado do
-                      bloco de 20 questões depois de feito. One-shot por matéria. */}
-                  {trilha && (
-                    <div className="px-4 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2 bg-red-50/50 dark:bg-red-950/10">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground flex items-center gap-1.5">
-                          <Zap className="h-3.5 w-3.5 text-red-500 flex-shrink-0" /> Reforço geral ({QUESTOES_REFORCO_MATERIA} questões, aproveitamento &lt;{LIMIAR_REFORCO_PERC}%)
-                        </p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          {trilha.reforcosMateria?.[m.nome]
-                            ? (() => {
-                                const r = trilha.reforcosMateria![m.nome];
-                                return `Feito em ${r.feitoEm}: ${r.acertos}/${r.acertos + r.erros} (${calcularPerc(r.acertos, r.erros)}%)`;
-                              })()
-                            : `Some da Trilha automaticamente quando o aproveitamento geral cai abaixo de ${LIMIAR_REFORCO_PERC}% — registre o resultado do bloco de ${QUESTOES_REFORCO_MATERIA} questões aqui depois de fazer.`}
-                        </p>
-                      </div>
-                      {!trilha.reforcosMateria?.[m.nome] && (
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <input
-                            type="number"
-                            min={0}
-                            placeholder="Acertos"
-                            value={rascunhoReforco[m.nome]?.acertos ?? ""}
-                            onChange={(e) => setRascunhoReforco((prev) => ({ ...prev, [m.nome]: { acertos: e.target.value, erros: prev[m.nome]?.erros ?? "" } }))}
-                            className="w-20 text-xs border border-border rounded-md px-2 py-1 bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                          />
-                          <input
-                            type="number"
-                            min={0}
-                            placeholder="Erros"
-                            value={rascunhoReforco[m.nome]?.erros ?? ""}
-                            onChange={(e) => setRascunhoReforco((prev) => ({ ...prev, [m.nome]: { acertos: prev[m.nome]?.acertos ?? "", erros: e.target.value } }))}
-                            className="w-20 text-xs border border-border rounded-md px-2 py-1 bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => salvarReforcoMateria(m.nome)}
-                            className="px-2.5 py-1 rounded-md bg-red-600 hover:bg-red-700 text-white text-xs font-medium whitespace-nowrap"
-                          >
-                            Salvar
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
 
                   {/* Blocos: agrupam vários tópicos num único caderno de questões (ex.: os
                       "Blocos de Assuntos" do QuestFlow) — a atividade de questões da Trilha

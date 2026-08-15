@@ -231,12 +231,15 @@ export interface TrilhaDinamicaState {
   // bootstrap preguiçoso na 1ª leitura via avancarFilaMetasSeNecessario, nunca inicializado "na
   // marra" fora desse caminho.
   filaMetas?: FilaMetasState;
-  // reforço geral de matéria (aproveitamento agregado — todos os cadernos A-D de todos os tópicos
-  // — abaixo de LIMIAR_REFORCO_PERC, ver construirFilaGlobal em trilha-fila.ts): registro do
-  // bloco de 20 questões feito, escrito na aba Questões. Um por matéria (não histórico) — feita
-  // essa rodada, a atividade não reaparece pra essa matéria (mesmo espírito one-shot de
-  // revisoes30Feitas). Nome -> resultado.
-  reforcosMateria?: Record<string, { acertos: number; erros: number; feitoEm: string }>;
+  // reforço por TÓPICO (aproveitamento agregado dos cadernos A-D DESSE tópico — mesma média que a
+  // aba Edital mostra, ver calcularMedia — abaixo de LIMIAR_REFORCO_PERC, ver construirFilaGlobal
+  // em trilha-fila.ts): não é um bloco novo de questões pra responder e corrigir — é só um empurrão
+  // pra reabrir o PDF e reler as questões que já foram erradas no caderno existente (ver
+  // DialogRevisaoReforco.tsx). Marcado como feito assim que o usuário clica pra ir ao PDF a partir
+  // desse aviso — não guarda acertos/erros (não há questão nova sendo respondida). Um por tópico
+  // (não histórico) — feito, a atividade não reaparece pra esse tópico (mesmo espírito one-shot de
+  // revisoes30Feitas). Chave = topicoKey(materia, topico) -> resultado.
+  reforcosTopico?: Record<string, { feitoEm: string }>;
   // Simulados/Discursivas (ver trilha-fila.ts) — só bookkeeping de "já fiz", pra fila global saber
   // o que ainda oferecer; texto da resposta/gabarito/feedback ficam nas tabelas próprias
   // (SimuladoTentativa/DiscursivaResposta), não aqui. simuladosFeitos é one-shot (id -> dateKey da

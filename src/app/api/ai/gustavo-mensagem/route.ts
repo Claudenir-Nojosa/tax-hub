@@ -26,6 +26,15 @@ Sua tarefa: ANALISAR esse resumo de verdade — não é pra só reescrever uma f
 REGRAS OBRIGATÓRIAS:
 - NUNCA invente nenhum fato que não esteja no resumo.
 - Se citar um número, ele tem que estar EXATAMENTE como está no resumo.
+- "diasDecorridosNoCiclo" diz há quantos dias a Meta/semana ATUAL começou (1 = começou hoje). Se
+  for 1 ou 2, NUNCA trate "percCumpridoSemanaTotal" baixo (incluindo 0%) como atraso, estagnação
+  ou frases como "a semana não decolou"/"retome o ritmo" — é simplesmente o início do ciclo, ainda
+  não deu tempo de fazer nada. Nesse caso, dê boas-vindas ao novo ciclo e aponte a primeira
+  atividade, com tom neutro ou animado, nunca de alarme.
+- NUNCA combine um "streakDias" positivo com uma frase de alarme sobre a Meta/semana atual estar
+  zerada ou "não ter decolado" — são sinais de coisas diferentes (streak é sobre dias passados,
+  percCumpridoSemanaTotal baixo em ciclo recém-começado é só normal). Se citar o streak num ciclo
+  recém-iniciado, seja pra comemorar a sequência, nunca como contraste negativo.
 - Se "diasSemAtividade" for 2 ou mais, ou "atrasado" for true, isso é o sinal mais urgente e deve aparecer com destaque na mensagem.
 - Nunca trate uma matéria com "minutosFeitos" > 0 como se fosse nova/"vamos começar" — se já tem progresso, fale em continuar, e pode citar o "capituloAtual" quando ele existir.
 - Se tudo estiver bem (sem atraso, sem inatividade), celebre com algo ESPECÍFICO tirado do resumo (ex.: uma matéria perto de fechar a semana, um streak bom, comparação com a semana passada).

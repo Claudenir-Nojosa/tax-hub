@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import {
-  CORES_MATERIA, COR_MATERIA_PADRAO,
+  CORES_MATERIA, COR_MATERIA_PADRAO, dateKeyLocal,
   type MateriaBase, type MateriaConcurso, type MateriaDef,
 } from "@/lib/estudo-data";
-import type { MetaSemana, SemanaHistorico } from "@/lib/trilha-dinamica";
+import { diffDias, type MetaSemana, type SemanaHistorico } from "@/lib/trilha-dinamica";
 import type { FilaAtividadeTipo, MetaAtual } from "@/lib/trilha-fila";
 
 // Helpers de apresentação compartilhados entre as abas do Estudo (Trilha, Biblioteca etc.).
@@ -126,7 +126,7 @@ const TIPO_FILA_PARA_PASSO: Record<FilaAtividadeTipo, TipoPasso> = {
   revisao_link: "linkQuestoes",
   revisao_link_faltando: "linkQuestoes",
   revisao_materia: "revisao",
-  reforco_materia: "reforco",
+  reforco_topico: "reforco",
   cartas: "cartas",
   simulado: "simulado",
   discursiva: "discursiva",
@@ -269,6 +269,13 @@ export interface ResumoSemanaIA {
   nomeUsuario?: string;
   streakDias: number;
   diasSemAtividade: number;
+  // 1-based: hoje é o Nº dia desde que este CICLO (a Meta atual, ou a semana quando ainda não há
+  // Meta) começou — 1 = começou hoje. Existe só pra IA nunca confundir "0% cumprido porque acabou
+  // de começar" com atraso de verdade; sem esse número, um ciclo iniciado há minutos e outro
+  // estagnado há 5 dias eram indistinguíveis pra ela (bug real, visto ao vivo: mensagem "a semana
+  // ainda não decolou" gerada no PRIMEIRO dia de uma Meta nova, contradizendo o streak positivo
+  // citado na mesma frase — ver regra correspondente no prompt em /api/ai/gustavo-mensagem).
+  diasDecorridosNoCiclo: number;
   percCumpridoSemanaTotal: number;
   atrasado: boolean;
   ritmoNecessarioMinDia: number | null;
@@ -298,8 +305,17 @@ export interface ResumoSemanaIA {
 export function montarResumoSemanaIA(
   meta: MetaSemana,
   metaAtual: MetaAtual | null,
-  opts: { nomeUsuario?: string; streakDias: number; diasSemAtividade?: number; historico?: SemanaHistorico[] }
+  opts: {
+    nomeUsuario?: string; streakDias: number; diasSemAtividade?: number; historico?: SemanaHistorico[];
+    hoje?: string;
+  }
 ): ResumoSemanaIA {
+  const hoje = opts.hoje ?? dateKeyLocal();
+  // Meta da fila é a fonte de verdade de "quando este ciclo começou" quando disponível (mesmo
+  // início que abre o card "Meta N" na Trilha); cai pro início da SEMANA (MetaSemana) só no
+  // fallback antigo, antes do bootstrap da fila rodar.
+  const diasDecorridosNoCiclo = Math.max(1, diffDias(metaAtual?.iniciadaEm ?? meta.inicioSemana, hoje) + 1);
+
   const pendentesPorTipo = (tipo: FilaAtividadeTipo) =>
     metaAtual ? metaAtual.atividades.filter((a) => a.tipo === tipo && !a.concluida).length : 0;
 
@@ -334,6 +350,7 @@ export function montarResumoSemanaIA(
     nomeUsuario: opts.nomeUsuario,
     streakDias: opts.streakDias,
     diasSemAtividade: opts.diasSemAtividade ?? 0,
+    diasDecorridosNoCiclo,
     percCumpridoSemanaTotal: meta.percCumpridoSemana,
     atrasado: meta.atrasado,
     ritmoNecessarioMinDia: meta.ritmoNecessarioMinDia,
@@ -374,7 +391,10 @@ export function useMensagemGustavoIA(
   base: MensagemGustavo,
   meta: MetaSemana | null,
   metaAtual: MetaAtual | null,
-  opts: { nomeUsuario?: string; streakDias: number; diasSemAtividade?: number; historico?: SemanaHistorico[] }
+  opts: {
+    nomeUsuario?: string; streakDias: number; diasSemAtividade?: number; historico?: SemanaHistorico[];
+    hoje?: string;
+  }
 ): MensagemGustavo {
   const resumo = meta ? montarResumoSemanaIA(meta, metaAtual, opts) : null;
   const chave = resumo ? JSON.stringify(resumo) : `${base.titulo}|||${base.corpo}`;
