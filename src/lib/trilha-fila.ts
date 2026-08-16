@@ -704,35 +704,31 @@ export function computarMetaAtual(
   });
 
   // concluidas/total ficam escopados só na Meta ATUAL (é o que a barra "X✓ de Y" e `fechavel`
-  // precisam) — os 4 stats abaixo (Desempenho/Horas/Questões/Média), por pedido do usuário, somam
-  // TODAS as Metas já abertas até agora, não só a corrente (senão zeravam toda vez que uma Meta
-  // nova abria, mesmo com dezenas de atividades concluídas nas Metas anteriores).
+  // precisam) — os 4 stats abaixo (Desempenho/Horas/Questões/Média) são histórico completo (ver
+  // comentário abaixo), não escopados a Meta nenhuma.
   const concluidas = atividades.filter((a) => a.concluida).length;
   const total = atividades.length;
 
-  const concluidasTodasMetas = Object.values(trilha.filaMetas.metas)
-    .flatMap((m) => m.atividades)
-    .map((ref) => ({ ref, ...estaAtividadeConcluida(ref, topicos, trilha, blocos, pdfs) }))
-    .filter((a) => a.concluida);
+  // Desempenho/Horas/Questões/Média: histórico COMPLETO do usuário (todos os cadernos de todos os
+  // tópicos, todo o calendário desde a primeira sessão registrada) — não só o que passou
+  // formalmente pelas Metas da Trilha desde trilha.iniciadaEm. Pedido explícito do usuário: os
+  // números da Trilha devem bater com os do Dashboard geral (mesma fórmula de
+  // totalQuestoes/percAcertos usada em DashboardTab.tsx), não um subconjunto dele.
+  const questoesResolvidas = Object.values(topicos).reduce((acc, t) =>
+    acc + GRUPOS_QUESTOES.reduce((s, g) => s + t.cadernos[g].acertos + t.cadernos[g].erros, 0), 0);
+  const totalAcertosCaderno = Object.values(topicos).reduce((acc, t) =>
+    acc + GRUPOS_QUESTOES.reduce((s, g) => s + t.cadernos[g].acertos, 0), 0);
+  const desempenhoPerc = questoesResolvidas > 0 ? Math.round((totalAcertosCaderno / questoesResolvidas) * 100) : null;
 
-  const desempenhos = concluidasTodasMetas.filter((a) => a.desempenhoPerc !== undefined).map((a) => a.desempenhoPerc!);
-  const desempenhoPerc = desempenhos.length > 0 ? Math.round(desempenhos.reduce((s, v) => s + v, 0) / desempenhos.length) : null;
-
-  const horasEstudadas = Object.entries(calendario)
-    .filter(([data]) => data >= trilha.iniciadaEm && data <= hoje)
-    .flatMap(([, ativs]) => ativs)
+  const horasEstudadas = Object.values(calendario)
+    .flat()
     .reduce((s, a) => s + a.duracao, 0) / 60;
 
-  const questoesResolvidas = concluidasTodasMetas
-    .filter((a) => a.ref.tipo === "questoes" || a.ref.tipo === "reforco")
-    .reduce((s, a) => {
-      const grupo = a.ref.id.split(":").pop() as Grupo;
-      const estado = a.ref.topico ? topicos[topicoKey(a.ref.materia, a.ref.topico)] : undefined;
-      const c = estado?.cadernos[grupo];
-      return s + (c ? c.acertos + c.erros : 0);
-    }, 0);
-
-  const diasDecorridos = Math.max(1, diffDias(trilha.iniciadaEm, hoje) + 1);
+  // dias decorridos desde a primeira sessão registrada no calendário (não mais desde que a Trilha
+  // foi iniciada, já que horasEstudadas agora cobre o histórico completo)
+  const diasComSessao = Object.keys(calendario).filter((data) => (calendario[data]?.length ?? 0) > 0);
+  const primeiroDia = diasComSessao.length > 0 ? diasComSessao.reduce((min, d) => (d < min ? d : min)) : hoje;
+  const diasDecorridos = Math.max(1, diffDias(primeiroDia, hoje) + 1);
   const mediaHorasDiaria = horasEstudadas / diasDecorridos;
 
   const metaAtual: MetaAtual = {
