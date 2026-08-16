@@ -1,6 +1,7 @@
 import { Flame, Pencil } from "lucide-react";
 import type { Carta } from "@/lib/estudo-data";
 import { CARTA_CONFIG, labelDue } from "./carta-config";
+import TextoCarta from "./carta-texto";
 
 export default function CartaVisual({ carta, onExcluir, onEditar }: { carta: Carta; onExcluir: (id: string) => void; onEditar: (carta: Carta) => void }) {
   const cfg = CARTA_CONFIG[carta.tipo];
@@ -46,9 +47,12 @@ export default function CartaVisual({ carta, onExcluir, onEditar }: { carta: Car
         </div>
       </div>
 
-      {/* Texto da carta */}
+      {/* Texto da carta — lacuna (Tesouro) some aqui igual à frente na revisão, nunca entrega
+          a resposta no grid do baralho */}
       <div className="px-4 pb-3 flex-1">
-        <p className="text-sm text-white/90 leading-snug line-clamp-3">{carta.frente}</p>
+        <p className="text-sm text-white/90 leading-snug line-clamp-3">
+          <TextoCarta texto={carta.frente} revelarLacunas={false} />
+        </p>
       </div>
 
       {/* Footer */}

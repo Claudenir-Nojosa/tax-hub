@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Gem, Swords, X, Zap } from "lucide-react";
 import type { TipoCarta } from "@/lib/estudo-data";
+import { temLacuna } from "../cartas/carta-texto";
+import TextareaFormatavel from "../cartas/TextareaFormatavel";
 
 // mesma config visual das cartas em CartasTab.tsx, reduzida aos 3 tipos que o leitor oferece
 // (sem "boss", que só existe como escalada de Monstro dentro da sessão de revisão)
@@ -28,9 +30,11 @@ export default function NovoCartaoForm({
   const [gabarito, setGabarito] = useState<"verdadeiro" | "falso">("verdadeiro");
 
   const cfg = TIPO_CARTAO_CONFIG[tipo as "monstro" | "armadilha" | "tesouro"];
-  const frenteLabel = tipo === "monstro" ? "Pergunta" : tipo === "armadilha" ? "Afirmação (Verdadeiro ou Falso?)" : "Texto com lacuna (use ___ pra indicar)";
-  const versoLabel = tipo === "monstro" ? "Resposta" : tipo === "armadilha" ? "Explicação" : "Texto completo";
-  const podeSalvar = frente.trim() !== "" && verso.trim() !== "";
+  const frenteLabel = tipo === "monstro" ? "Pergunta" : tipo === "armadilha" ? "Afirmação (Verdadeiro ou Falso?)" : "Frase completa (selecione a parte que falta e clique em \"Lacuna\")";
+  const versoLabel = tipo === "monstro" ? "Resposta" : tipo === "armadilha" ? "Explicação" : "Explicação adicional (opcional)";
+  // Tesouro com lacuna marcada em {{...}} não exige verso (vira só explicação opcional) — os
+  // outros tipos, e Tesouro sem lacuna (formato antigo), continuam exigindo os dois.
+  const podeSalvar = frente.trim() !== "" && (tipo === "tesouro" ? (temLacuna(frente) || verso.trim() !== "") : verso.trim() !== "");
 
   return (
     <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-3 sm:p-4" onClick={onCancelar}>
@@ -53,11 +57,12 @@ export default function NovoCartaoForm({
 
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">{frenteLabel}</label>
-          <textarea
+          <TextareaFormatavel
             value={frente}
-            onChange={(e) => setFrente(e.target.value)}
+            onChange={setFrente}
             rows={8}
             autoFocus={tipo === "monstro"}
+            permitirLacuna={tipo === "tesouro"}
             className="w-full text-base leading-relaxed border border-border rounded-lg px-3.5 py-3 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-y min-h-[180px]"
           />
         </div>
@@ -88,9 +93,9 @@ export default function NovoCartaoForm({
 
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">{versoLabel}</label>
-          <textarea
+          <TextareaFormatavel
             value={verso}
-            onChange={(e) => setVerso(e.target.value)}
+            onChange={setVerso}
             rows={10}
             autoFocus={tipo === "armadilha"}
             className="w-full text-base leading-relaxed border border-border rounded-lg px-3.5 py-3 bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-y min-h-[220px]"

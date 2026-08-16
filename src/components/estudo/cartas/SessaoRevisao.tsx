@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Eye, Star, Trophy, XCircle } from "lucide-react";
 import { calcularProximaRevisao, type Carta } from "@/lib/estudo-data";
 import { CARTA_CONFIG } from "./carta-config";
+import TextoCarta, { temLacuna } from "./carta-texto";
 
 export default function SessaoRevisao({
   cartasParaRevisar,
@@ -80,6 +81,12 @@ export default function SessaoRevisao({
 
   const cfg = CARTA_CONFIG[carta.tipo];
   const Icon = cfg.icone;
+  // Tesouro autorado no formato novo (frase com {{lacuna}} marcada na própria frente) vira um
+  // cloze de verdade — mesma frase, lacuna revelada no lugar ao virar, sem recap de "Pergunta"
+  // separado (seria redundante mostrar a mesma frase duas vezes). Tesouro antigo (sem {{}}, frente
+  // com "___" literal e verso como texto solto) cai no fallback genérico de sempre — nunca quebra
+  // carta já existente.
+  const clozeAtivo = carta.tipo === "tesouro" && temLacuna(carta.frente);
 
   return (
     <div className="flex flex-col items-center px-2">
@@ -121,7 +128,11 @@ export default function SessaoRevisao({
 
         {!flipped ? (
           <div className="flex flex-col flex-1">
-            <p className="text-lg text-white font-medium leading-relaxed flex-1">{carta.frente}</p>
+            <TextoCarta
+              texto={carta.frente}
+              revelarLacunas={false}
+              className="text-lg text-white font-medium leading-relaxed flex-1"
+            />
             {carta.materia && (
               <p className="text-xs text-white/40 mt-3">{carta.materia}{carta.topico ? ` · ${carta.topico}` : ""}</p>
             )}
@@ -133,11 +144,26 @@ export default function SessaoRevisao({
               Ver Resposta
             </button>
           </div>
+        ) : clozeAtivo ? (
+          <div className="flex flex-col flex-1">
+            <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mb-1">Frase completa</p>
+            <TextoCarta
+              texto={carta.frente}
+              revelarLacunas
+              className="text-base text-white font-medium leading-relaxed"
+            />
+            {carta.verso.trim() && (
+              <div className="border-t border-white/15 mt-4 pt-4">
+                <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mb-1">Explicação</p>
+                <TextoCarta texto={carta.verso} revelarLacunas className="text-sm text-white/80 leading-relaxed" />
+              </div>
+            )}
+          </div>
         ) : (
           <div className="flex flex-col flex-1">
             <div className="mb-4">
               <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mb-1">Pergunta</p>
-              <p className="text-sm text-white/60 leading-relaxed">{carta.frente}</p>
+              <TextoCarta texto={carta.frente} revelarLacunas className="text-sm text-white/60 leading-relaxed" />
             </div>
             <div className="border-t border-white/15 pt-4 flex-1">
               <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mb-1">Resposta</p>
@@ -146,7 +172,7 @@ export default function SessaoRevisao({
                   {carta.gabarito === "verdadeiro" ? "✓ VERDADEIRO" : "✗ FALSO"}
                 </p>
               )}
-              <p className="text-base text-white font-medium leading-relaxed">{carta.verso}</p>
+              <TextoCarta texto={carta.verso} revelarLacunas className="text-base text-white font-medium leading-relaxed" />
             </div>
           </div>
         )}

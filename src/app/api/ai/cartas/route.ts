@@ -84,9 +84,9 @@ REGRAS:
 2. Use os 3 tipos de carta de forma equilibrada:
    - "monstro": pergunta dissertativa aberta (ex: "Explique a diferença entre isenção e imunidade")
    - "armadilha": afirmação para marcar Verdadeiro ou Falso — inclua o campo "gabarito": "verdadeiro" ou "falso"
-   - "tesouro": complete a lacuna usando ___ (ex: "O prazo para lançamento é de ___")
-3. A frente deve ser a pergunta/afirmação/texto com lacuna
-4. O verso deve ser a resposta completa, didática e autocontida
+   - "tesouro": UMA frase completa e autocontida na frente, com a parte que deve ficar oculta marcada entre chaves duplas {{assim}} (ex: "O prazo para lançamento é de {{cinco anos}}"). Marque só a parte essencial, nunca a frase inteira. Pode destacar outra palavra da MESMA frase em **negrito** se fizer sentido, mas isso é raro e opcional.
+3. Para "monstro" e "armadilha", a frente é a pergunta/afirmação e o verso é a resposta completa. Para "tesouro", a frase com a lacuna {{}} JÁ é autossuficiente na frente — o verso fica vazio ("") a menos que valha a pena uma explicação extra curta (opcional).
+4. Pode usar **negrito** (dois asteriscos) pra destacar uma palavra-chave importante em qualquer tipo de carta, se ajudar a memorização — não abuse, só quando fizer diferença real.
 5. Infira a matéria e o tópico com base no conteúdo
 
 Retorne APENAS um JSON válido com esta estrutura:

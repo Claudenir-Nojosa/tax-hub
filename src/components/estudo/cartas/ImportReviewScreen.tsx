@@ -1,6 +1,7 @@
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import type { Carta } from "@/lib/estudo-data";
 import { CARTA_CONFIG } from "./carta-config";
+import TextoCarta from "./carta-texto";
 
 export default function ImportReviewScreen({
   sugestoes,
@@ -66,7 +67,7 @@ export default function ImportReviewScreen({
                   <span className="text-[9px] font-bold text-white tracking-wider">{cfg.texto}</span>
                 </div>
                 <p className={`text-sm font-medium leading-snug mb-1 ${sel ? "text-white" : "text-foreground dark:text-foreground"}`}>
-                  {carta.frente}
+                  <TextoCarta texto={carta.frente} />
                 </p>
                 {carta.tipo === "armadilha" && carta.gabarito && (
                   <p className={`text-xs font-bold mb-1 ${carta.gabarito === "verdadeiro" ? "text-emerald-400" : "text-red-400"}`}>
@@ -74,7 +75,7 @@ export default function ImportReviewScreen({
                   </p>
                 )}
                 <p className={`text-xs leading-relaxed line-clamp-2 ${sel ? "text-white/70" : "text-muted-foreground"}`}>
-                  {carta.verso}
+                  <TextoCarta texto={carta.verso} />
                 </p>
                 {carta.materia && (
                   <p className={`text-[10px] mt-1.5 font-medium ${sel ? "text-white/50" : "text-muted-foreground"}`}>

@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { MATERIAS, type Carta, type MateriaConcurso, type TipoCarta } from "@/lib/estudo-data";
 import { CARTA_CONFIG, novaCarta } from "./carta-config";
+import { temLacuna } from "./carta-texto";
+import TextareaFormatavel from "./TextareaFormatavel";
 
 export default function FormCriarCarta({
   onSalvar,
@@ -35,7 +37,12 @@ export default function FormCriarCarta({
     [materia, materiasAtivas]
   );
 
-  const podesSalvar = frente.trim().length > 0 && verso.trim().length > 0;
+  // Tesouro no formato novo (lacuna marcada em {{...}} na própria frente) não exige verso — é só
+  // uma explicação opcional. Cartas Tesouro antigas (sem {{}}, frente/verso como dois textos
+  // separados) continuam exigindo os dois, pra não travar a edição de conteúdo já existente.
+  const podesSalvar =
+    frente.trim().length > 0 &&
+    (tipo === "tesouro" ? (temLacuna(frente) || verso.trim().length > 0) : verso.trim().length > 0);
 
   function salvar() {
     if (!podesSalvar) return;
@@ -74,25 +81,25 @@ export default function FormCriarCarta({
     tipo === "monstro" ? "Pergunta dissertativa" :
     tipo === "armadilha" ? "Afirmação (Verdadeiro ou Falso?)" :
     tipo === "boss" ? "Questão desafiadora (múltiplos conceitos)" :
-    "Texto com lacuna (use ___ para indicar a lacuna)";
+    "Frase completa (selecione a parte que falta e clique em \"Lacuna\")";
 
   const versoLabel =
     tipo === "monstro" ? "Resposta / Gabarito" :
     tipo === "armadilha" ? "Explicação da resposta" :
     tipo === "boss" ? "Resolução completa e fundamentação" :
-    "Texto completo (preenche a lacuna)";
+    "Explicação adicional (opcional)";
 
   const frentePlaceholder =
     tipo === "monstro" ? "Ex: Explique a diferença entre isenção e imunidade tributária." :
     tipo === "armadilha" ? "Ex: A isenção impede o aproveitamento do crédito de ICMS." :
     tipo === "boss" ? "Ex: Analise o tratamento do ICMS diferencial de alíquota nas operações interestaduais com base na EC 87/2015 e a responsabilidade do destinatário." :
-    "Ex: O lançamento por homologação ocorre quando ___.";
+    "Ex: O lançamento por homologação ocorre quando a legislação atribui ao sujeito passivo o dever de antecipar o pagamento.";
 
   const versoPlaceholder =
     tipo === "monstro" ? "Ex: A isenção é a dispensa legal do pagamento do tributo devido, enquanto a imunidade é uma vedação constitucional..." :
     tipo === "armadilha" ? "Ex: A afirmação é FALSA. O STF firmou que a isenção não gera direito ao crédito de ICMS porque..." :
     tipo === "boss" ? "Ex: A EC 87/2015 estendeu o DIFAL para operações com consumidor final não contribuinte, criando responsabilidade compartilhada entre estados..." :
-    "Ex: O lançamento por homologação ocorre quando a legislação atribui ao sujeito passivo o dever de antecipar o pagamento sem prévio exame da autoridade administrativa.";
+    "Ex: Esse é o caso mais comum de tributos como ICMS e IPI (opcional).";
 
   return (
     <div className="max-w-lg mx-auto">
@@ -161,11 +168,12 @@ export default function FormCriarCarta({
 
       <div className="mb-4">
         <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">{frenteLabel}</label>
-        <textarea
+        <TextareaFormatavel
           value={frente}
-          onChange={(e) => setFrente(e.target.value)}
+          onChange={setFrente}
           rows={3}
           placeholder={frentePlaceholder}
+          permitirLacuna={tipo === "tesouro"}
           className="w-full bg-card border border-border text-foreground text-sm rounded-lg px-3 py-2.5 placeholder:text-muted-foreground dark:placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
         />
       </div>
@@ -196,9 +204,9 @@ export default function FormCriarCarta({
 
       <div className="mb-6">
         <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">{versoLabel}</label>
-        <textarea
+        <TextareaFormatavel
           value={verso}
-          onChange={(e) => setVerso(e.target.value)}
+          onChange={setVerso}
           rows={4}
           placeholder={versoPlaceholder}
           className="w-full bg-card border border-border text-foreground text-sm rounded-lg px-3 py-2.5 placeholder:text-muted-foreground dark:placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none"
