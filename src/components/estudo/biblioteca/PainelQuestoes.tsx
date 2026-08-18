@@ -80,6 +80,7 @@ export default function PainelQuestoes({
   onGerar,
   onMarcar,
   onMarcarAlternativa,
+  onAdicionarBloco,
   onRefazer,
   onFechar,
 }: {
@@ -92,17 +93,31 @@ export default function PainelQuestoes({
   onGerar: (blocos: number[]) => void;
   onMarcar: (numero: number, acertou: boolean | null) => void;
   onMarcarAlternativa: (numero: number, alternativa: Alternativa | null) => void;
+  // acrescenta mais um bloco à lista já gerada (sem apagar os blocos/respostas já existentes) —
+  // pro caso de perceber depois que faltava um caderno de questões pro tópico
+  onAdicionarBloco: (tamanho: number) => void;
   onRefazer: () => void;
   onFechar: () => void;
 }) {
   const [blocosStr, setBlocosStr] = useState<string[]>([""]);
   const [gabaritoAberto, setGabaritoAberto] = useState(true);
+  const [novoBlocoAberto, setNovoBlocoAberto] = useState(false);
+  const [novoBlocoStr, setNovoBlocoStr] = useState("");
   // "lista" = numeração corrida de sempre; "grupos" = mesma separação A-D usada no painel acima,
   // útil pra conferir o gabarito só do grupo que o usuário está respondendo agora
   const [visaoGabarito, setVisaoGabarito] = useState<"lista" | "grupos">("lista");
 
   const blocosNum = blocosStr.map((s) => parseInt(s));
   const podeGerar = blocosNum.length > 0 && blocosNum.every((n) => Number.isFinite(n) && n >= 4 && n <= 200);
+
+  const novoBlocoNum = parseInt(novoBlocoStr);
+  const podeAdicionarBloco = Number.isFinite(novoBlocoNum) && novoBlocoNum >= 4 && novoBlocoNum <= 200;
+  const confirmarNovoBloco = () => {
+    if (!podeAdicionarBloco) return;
+    onAdicionarBloco(novoBlocoNum);
+    setNovoBlocoStr("");
+    setNovoBlocoAberto(false);
+  };
 
   // dentro de cada grupo A-D, subagrupa por BLOCO (só pra mostrar de onde vem cada questão quando
   // há mais de um bloco — com um bloco só, todo mundo cai em "bloco 1" e o rótulo nem aparece)
@@ -203,20 +218,62 @@ export default function PainelQuestoes({
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
-                {materia} · {topico} · {questoes.total} questões
-                {totalBlocos > 1 ? ` · ${totalBlocos} blocos` : ""}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm("Refazer a distribuição das questões? Os resultados já marcados desse tópico se perdem.")) onRefazer();
-                }}
-                className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <RotateCcw className="h-3 w-3" /> Refazer
-              </button>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  {materia} · {topico} · {questoes.total} questões
+                  {totalBlocos > 1 ? ` · ${totalBlocos} blocos` : ""}
+                </p>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setNovoBlocoAberto((v) => !v)}
+                    className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                  >
+                    <Plus className="h-3 w-3" /> Adicionar bloco
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm("Refazer a distribuição das questões? Os resultados já marcados desse tópico se perdem.")) onRefazer();
+                    }}
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <RotateCcw className="h-3 w-3" /> Refazer
+                  </button>
+                </div>
+              </div>
+              {novoBlocoAberto && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={4}
+                    max={200}
+                    value={novoBlocoStr}
+                    onChange={(e) => setNovoBlocoStr(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && confirmarNovoBloco()}
+                    placeholder="Ex.: 20"
+                    autoFocus
+                    className="w-28 text-sm border border-border rounded-lg px-3 py-2 bg-muted text-foreground focus:outline-none focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={confirmarNovoBloco}
+                    disabled={!podeAdicionarBloco}
+                    className="px-3 py-2 rounded-lg bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground text-xs font-semibold transition-colors"
+                  >
+                    Adicionar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setNovoBlocoAberto(false); setNovoBlocoStr(""); }}
+                    className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors flex-shrink-0"
+                    title="Cancelar"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">

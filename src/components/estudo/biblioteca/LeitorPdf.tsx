@@ -8,7 +8,7 @@ import {
   Highlighter, Layers, ListChecks, NotebookText, Pause, Pencil, Play,
 } from "lucide-react";
 import {
-  dateKeyLocal, gerarQuestoesGrupos, topicoKey,
+  adicionarBlocoQuestoes, dateKeyLocal, gerarQuestoesGrupos, topicoKey,
   type Alternativa, type AnotacaoPdf, type AtividadeTipo, type Carta, type CapituloPdf, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
 } from "@/lib/estudo-data";
 import { resolverCapitulos } from "@/lib/trilha-dinamica";
@@ -326,6 +326,13 @@ export default function LeitorPdf({
       resultados: pdf.questoes.resultados.map((r) => (r.numero === numero ? { ...r, alternativa: alternativa ?? undefined } : r)),
     };
     onAtualizarPdf({ questoes });
+  };
+
+  const adicionarBloco = (tamanho: number) => {
+    if (!pdf.questoes || !topicoAtual) return;
+    const questoes = adicionarBlocoQuestoes(pdf.questoes, tamanho);
+    onAtualizarPdf({ questoes });
+    onUpdateTopicos(sincronizarCadernoComQuestoes(topicos, pdf.materia, topicoAtual, questoes));
   };
 
   const refazerQuestoes = () => {
@@ -784,6 +791,7 @@ export default function LeitorPdf({
             onGerar={gerarQuestoes}
             onMarcar={marcarQuestao}
             onMarcarAlternativa={marcarAlternativa}
+            onAdicionarBloco={adicionarBloco}
             onRefazer={refazerQuestoes}
             onFechar={() => setPainelQuestoesAberto(false)}
           />

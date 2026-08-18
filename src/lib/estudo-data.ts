@@ -379,6 +379,22 @@ export function gerarQuestoesGrupos(blocos: number[]): QuestaoResultado[] {
   return resultados;
 }
 
+// Acrescenta mais um bloco a uma lista de questões já existente, sem mexer nas questões já
+// geradas (numero/grupo/acertou/alternativa de cada uma continuam intocados) — pedido do usuário:
+// perceber depois que faltava um caderno de questões pro tópico e completar, sem precisar
+// "Refazer" (que apaga tudo, inclusive o que já foi respondido). O bloco novo entra com seu
+// próprio rodízio A-D do zero, como qualquer outro bloco (ver gerarQuestoesGrupos), numerado a
+// partir do próximo `numero` global da lista.
+export function adicionarBlocoQuestoes(questoes: PdfQuestoes, tamanho: number): PdfQuestoes {
+  const ultimoBloco = questoes.resultados.reduce((max, r) => Math.max(max, r.bloco ?? 1), 0);
+  const ultimoNumero = questoes.resultados.reduce((max, r) => Math.max(max, r.numero), 0);
+  const novos: QuestaoResultado[] = [];
+  for (let n = 1; n <= tamanho; n++) {
+    novos.push({ numero: ultimoNumero + n, bloco: ultimoBloco + 1, grupo: ORDEM_GRUPOS_QUESTOES[(n - 1) % 4], acertou: null });
+  }
+  return { ...questoes, total: questoes.total + tamanho, resultados: [...questoes.resultados, ...novos] };
+}
+
 // intervalo de páginas de UM tópico dentro de um PdfEstudo específico — permite abrir o leitor já
 // na página certa e avisar quando o usuário passa da página final indicada (ver TrilhaTab "Ler
 // PDF" e LeitorPdf paginaAbertura/paginaFimAlvo). Preenchido manualmente ou sugerido por IA
