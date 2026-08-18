@@ -102,16 +102,22 @@ export function elegivelParaReforcoTopico(cadernos: Record<Grupo, TopicoCaderno>
   return { elegivel: total >= MINIMO_QUESTOES_REFORCO_TOPICO && perc < LIMIAR_REFORCO_PERC, perc };
 }
 
-// teto/piso de QUANTIDADE de atividades por Meta — cada Meta representa ~1 semana de trabalho
+// PISO de quantidade de atividades por Meta — cada Meta representa ~1 semana de trabalho
 // (calendário-fixo: Meta 1 = semana 1, Meta 2 = semana 2, mas só ABRE quando a anterior fecha, ver
-// avancarFilaMetasSeNecessario). orcamentoMinutos sozinho não é teto suficiente: no dia 1 (nada
-// lido ainda), praticamente TODO tópico de TODA matéria tem sua 1ª atividade elegível ao mesmo
-// tempo, e pedaços de teoria já lidos-quase-todo (carry-over refatiado) podem ter só alguns minutos
-// cada — sem um teto de contagem, a Meta engolia a fila inteira (caso real: 281 atividades numa
-// Meta só) antes de bater o orçamento de minutos. META_ATIVIDADES_MIN garante ATÉ 15 mesmo que o
-// orçamento configurado seja folgado; META_ATIVIDADES_MAX é o teto duro, nunca ultrapassado.
+// avancarFilaMetasSeNecessario). Garante uma Meta minimamente útil mesmo com orçamento semanal
+// curto (ex.: poucas horas configuradas no Ciclo) — sem isso a seleção podia parar cedo demais.
+//
+// Existiu também um TETO (META_ATIVIDADES_MAX = 15) até 2026-08-18 -- removido a pedido explícito
+// do usuário: com `questoesPrimeiro` priorizando questões/reforço na frente da teoria dentro de
+// cada matéria, um teto de contagem baixo fazia a Meta lotar só de questões/reforço quando havia
+// bastante coisa pendente desses tipos, sem sobrar espaço nenhum pra teoria -- o oposto do que ele
+// queria ("a partir do momento que é criado atividade de questões, ou de reforço, tira um espaço
+// que seria ADEQUADO, IDEAL, ter de teoria"). Sem o teto, quem limita o tamanho da Meta agora é só
+// o orçamento de minutos (`orcamentoMinutos`, abaixo) combinado com este piso -- risco aceito e
+// assumido pelo usuário: no dia 1 (nada lido ainda) ou com muita coisa retroativamente elegível de
+// uma vez, a Meta pode ficar bem maior que de costume (caso histórico real que motivou o teto
+// original: uma Meta chegou a 281 atividades before o piso/teto existirem).
 const META_ATIVIDADES_MIN = 10;
-const META_ATIVIDADES_MAX = 15;
 
 // exportado pra page.tsx (bookkeeping de "Marcar como estudado" automático — ver
 // avancarEstudoAutomaticoSeNecessario) reaproveitar sem duplicar a lógica de resolução de PDF
@@ -999,7 +1005,6 @@ function abrirProximaMeta(params: ParamsAbrirMeta & { carryOver: MetaAtividadeRe
   const atividadesSelecionadas: MetaAtividadeRef[] = [];
   let somaMinutos = 0;
   for (const ref of candidatos) {
-    if (atividadesSelecionadas.length >= META_ATIVIDADES_MAX) break;
     if (atividadesSelecionadas.length >= META_ATIVIDADES_MIN && somaMinutos >= orcamentoMinutos) break;
     atividadesSelecionadas.push(ref);
     somaMinutos += ref.minutosEstimados;
@@ -1065,32 +1070,12 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
   });
   if (!resultado) return undefined;
 
-  // caso 0: auto-cura de Metas que ficaram gigantes ANTES do teto de META_ATIVIDADES_MAX existir
-  // (caso real: Meta com 281 atividades). Mantém TODAS as já concluídas (nunca perde progresso
-  // real) + completa o resto até o teto respeitando a ordem original (prioridade/carry-over já
-  // embutida); o excedente pendente simplesmente deixa de estar atribuído a esta Meta e volta a
-  // ser candidato normal pra próxima Meta (mesmo caminho de "novos" abaixo, só que futuramente).
-  if (metaAberta.atividades.length > META_ATIVIDADES_MAX) {
-    const concluidaPorId = new Map(resultado.metaAtual.atividades.map((a) => [a.id, a.concluida]));
-    const concluidas = metaAberta.atividades.filter((ref) => concluidaPorId.get(ref.id));
-    const pendentes = metaAberta.atividades.filter((ref) => !concluidaPorId.get(ref.id));
-    const vagas = Math.max(0, META_ATIVIDADES_MAX - concluidas.length);
-    const atividadesAparadas = questoesPrimeiro([...concluidas, ...pendentes.slice(0, vagas)]);
-    // se já concluiu SOZINHO mais do que o teto (ex.: 20 concluídas dentro da Meta de 281), não dá
-    // pra aparar mais nada — todo pendente já foi removido e só sobram as concluídas, que nunca
-    // são cortadas. Sem essa guarda, isso devolvia um objeto NOVO (mesmo conteúdo, referência
-    // diferente) toda vez que o efeito rodava — setState -> re-render -> efeito de novo -> objeto
-    // novo de novo -> loop infinito (bug real em produção: React error #185, "too many re-renders").
-    // Só atualiza quando a aparação de fato reduz a quantidade.
-    if (atividadesAparadas.length >= metaAberta.atividades.length) return undefined;
-    return {
-      ...trilha,
-      filaMetas: {
-        ...trilha.filaMetas,
-        metas: { ...trilha.filaMetas.metas, [metaAberta.numero]: { ...metaAberta, atividades: atividadesAparadas } },
-      },
-    };
-  }
+  // caso 0 (removido 2026-08-18, a pedido explícito do usuário): existia um teto de contagem
+  // (META_ATIVIDADES_MAX) e esta função aparava Metas que ficassem maiores que ele. O teto em si
+  // foi removido (ver comentário de META_ATIVIDADES_MIN, acima) porque limitar a QUANTIDADE
+  // espremia teoria pra fora sempre que havia bastante questão/reforço pendente — o usuário
+  // preferiu aceitar Metas ocasionalmente maiores (ex.: dia 1, ou muita coisa liberando de uma
+  // vez) a perder espaço de teoria. Sem teto, não sobra nada pra "aparar" aqui.
 
   // caso 0.5: auto-cura de ORDEM — Metas persistidas antes de "questões sempre na frente" existir
   // podem ter questões no meio/fim da lista, atrás de teoria ainda pendente na cadeia bloqueada.
