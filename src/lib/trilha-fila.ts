@@ -1159,12 +1159,29 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
   const novos = filaFresca.filter((a) => !idsJaAtribuidos.has(a.id) && TIPOS_INJETAVEIS_MEIO_META.has(a.tipo));
   if (novos.length === 0) return undefined;
 
+  // NUNCA deixa a injeção estourar o teto da Meta (META_ATIVIDADES_MAX) -- sem isso, a Meta cresce
+  // sem limite até "caso 0" (trim, acima) cortar o excesso numa passada FUTURA; se essa passada
+  // rodar bem perto do instante em que uma atividade acabou de ser concluída, ela pode ainda não
+  // estar refletida como `concluida` naquele cálculo específico e acabar cortada junto com o
+  // excesso pendente -- bug real reportado pelo usuário (2026-08-18): Grupo D de um tópico,
+  // respondido e salvo certinho, sumiu da Meta pouco depois de concluído. Prevenir é melhor que
+  // proteger depois -- a Meta simplesmente nunca ultrapassa o teto aqui, então "caso 0" nunca mais
+  // precisa agir sobre Metas novas (só sobrevive pra curar as antigas, de antes deste limite
+  // existir). O que não coube espera a próxima Meta, igual qualquer outro candidato. Prioriza
+  // reforço por tópico (nunca deve esperar, ver TIPOS_INJETAVEIS_MEIO_META) sobre as demais.
+  const vagas = META_ATIVIDADES_MAX - metaAberta.atividades.length;
+  if (vagas <= 0) return undefined;
+  const novosPriorizados = [
+    ...novos.filter((a) => a.tipo === "reforco_topico"),
+    ...novos.filter((a) => a.tipo !== "reforco_topico"),
+  ].slice(0, vagas);
+
   // novos são sempre questões ou reforço por tópico (TIPOS_INJETAVEIS_MEIO_META exclui teoria e
   // reforço de grupo) — questoesPrimeiro garante que entram na FRENTE, reforço por tópico até antes
   // das outras questões, nunca atrás da teoria
   const metaComInjecao: MetaPersistida = {
     ...metaAberta,
-    atividades: questoesPrimeiro([...metaAberta.atividades, ...novos.map((a) => paraRef(a, false))]),
+    atividades: questoesPrimeiro([...metaAberta.atividades, ...novosPriorizados.map((a) => paraRef(a, false))]),
   };
   return {
     ...trilha,
