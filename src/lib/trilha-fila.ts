@@ -1159,29 +1159,25 @@ export function avancarFilaMetasSeNecessario(params: ParamsAbrirMeta): TrilhaDin
   const novos = filaFresca.filter((a) => !idsJaAtribuidos.has(a.id) && TIPOS_INJETAVEIS_MEIO_META.has(a.tipo));
   if (novos.length === 0) return undefined;
 
-  // NUNCA deixa a injeção estourar o teto da Meta (META_ATIVIDADES_MAX) -- sem isso, a Meta cresce
-  // sem limite até "caso 0" (trim, acima) cortar o excesso numa passada FUTURA; se essa passada
-  // rodar bem perto do instante em que uma atividade acabou de ser concluída, ela pode ainda não
-  // estar refletida como `concluida` naquele cálculo específico e acabar cortada junto com o
-  // excesso pendente -- bug real reportado pelo usuário (2026-08-18): Grupo D de um tópico,
-  // respondido e salvo certinho, sumiu da Meta pouco depois de concluído. Prevenir é melhor que
-  // proteger depois -- a Meta simplesmente nunca ultrapassa o teto aqui, então "caso 0" nunca mais
-  // precisa agir sobre Metas novas (só sobrevive pra curar as antigas, de antes deste limite
-  // existir). O que não coube espera a próxima Meta, igual qualquer outro candidato. Prioriza
-  // reforço por tópico (nunca deve esperar, ver TIPOS_INJETAVEIS_MEIO_META) sobre as demais.
-  const vagas = META_ATIVIDADES_MAX - metaAberta.atividades.length;
-  if (vagas <= 0) return undefined;
-  const novosPriorizados = [
-    ...novos.filter((a) => a.tipo === "reforco_topico"),
-    ...novos.filter((a) => a.tipo !== "reforco_topico"),
-  ].slice(0, vagas);
-
-  // novos são sempre questões ou reforço por tópico (TIPOS_INJETAVEIS_MEIO_META exclui teoria e
-  // reforço de grupo) — questoesPrimeiro garante que entram na FRENTE, reforço por tópico até antes
-  // das outras questões, nunca atrás da teoria
+  // Revertido (2026-08-18, mesmo dia): tentei antes limitar a injeção ao teto de
+  // META_ATIVIDADES_MAX pra fechar uma corrida em "caso 0" (trim) que suspeitei ter cortado uma
+  // atividade recém-concluída (Grupo D de um tópico, ver histórico). Só que isso quebrou o
+  // comportamento pedido explicitamente pelo usuário ANTES desta mudança (ver comentário de
+  // TIPOS_INJETAVEIS_MEIO_META acima: "concluir uma atividade não deve fazer aparecer OUTRA na
+  // mesma Meta, a não ser que seja questões" -- ou seja, questões TÊM que aparecer na hora): com a
+  // Meta já no teto (caso comum, 15 é o normal), a injeção parava de acontecer até a PRÓXIMA Meta
+  // abrir, mesmo pra questões recém-liberadas por uma teoria que acabou de ser concluída (bug
+  // real reportado pelo usuário no mesmo dia: nada apareceu depois de concluir "Situação Líquida
+  // ... Parte 2", que deveria ter liberado Grupo A de "Parte 1" e Grupo B de "Conceitos,
+  // Objetivos..."). A proteção de "caso 0" contra cortar uma atividade concluída já é
+  // sincronamente correta dentro de UMA chamada desta função (o `topicos` usado pra decidir
+  // `concluida` é o MESMO em toda a função, sem gap assíncrono no meio) -- se o Grupo D realmente
+  // sumiu por causa do trim, o gatilho mais provável não é esta injeção, e sim duas abas/
+  // dispositivos abertos ao mesmo tempo salvando por cima um do outro (fora do escopo deste
+  // arquivo). Volta a injetar sem teto, como era antes.
   const metaComInjecao: MetaPersistida = {
     ...metaAberta,
-    atividades: questoesPrimeiro([...metaAberta.atividades, ...novosPriorizados.map((a) => paraRef(a, false))]),
+    atividades: questoesPrimeiro([...metaAberta.atividades, ...novos.map((a) => paraRef(a, false))]),
   };
   return {
     ...trilha,
