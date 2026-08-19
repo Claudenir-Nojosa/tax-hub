@@ -109,10 +109,25 @@ regra nenhuma).
    camada de Metas da seção 7 abaixo é quem reverte isso, especificamente pro conceito de "Meta
    N" que a UI mostra hoje (decisão nova, também explícita do usuário, pra um propósito
    diferente: carry-over de ATIVIDADES discretas, não de minutos da semana).
-8. **Reforço de tópicos fracos A-D**: um grupo "feito" com **menos de 70% de acerto**
-   (`LIMIAR_REFORCO_PERC`) volta a aparecer na trilha depois de **3 dias** sem atualização
-   (`REFORCO_COOLDOWN_DIAS`). Qualquer novo registro de acertos/erros nesse grupo reinicia a
-   contagem (`TopicoCaderno.atualizadoEm`).
+8. **Reforço de tópicos fracos A-D — tentativas ilimitadas, histórico nunca sobrescrito**: um grupo
+   "feito" com **menos de 70% de acerto** (`LIMIAR_REFORCO_PERC`) na sua ÚLTIMA tentativa (não mais
+   o agregado do caderno) volta a aparecer na trilha depois de **3 dias** sem atualização
+   (`REFORCO_COOLDOWN_DIAS`), oferecendo uma NOVA rodada. Cada rodada é um bloco de questões
+   dedicado só àquele grupo (`adicionarRodadaReforco`, sem rotação A-D) — as tentativas anteriores
+   nunca são tocadas, e o histórico completo (tentativa 1, 2, 3... infinitas) é derivado ao vivo de
+   `PdfQuestoes.resultados` agrupado por bloco (`tentativasDoGrupo`, estudo-data.ts), sem nenhum
+   campo novo persistido. Pedido explícito do usuário: ele queria "marcação real" (responder
+   questões de novo, não uma confirmação sem nota), mas com o percentual de cada tentativa visível
+   separadamente — nunca reescrevendo o resultado original só porque uma rodada de reforço foi
+   melhor. A conclusão da atividade (`estaAtividadeConcluida`, `trilha-fila.ts`) exige só que a
+   rodada-alvo tenha sido respondida por inteiro, **não** que tenha batido 70% — o limiar decide
+   apenas se uma PRÓXIMA rodada será oferecida depois do cooldown, não se a atual conclui. Cada
+   rodada tem seu próprio id (`` r:materia:topico:grupo:tentativa ``, não mais só
+   `` r:materia:topico:grupo ``), já que a fila de Metas nunca reoferece um id já atribuído — sem
+   isso, a 2ª rodada em diante nunca voltaria a aparecer. `TopicoCaderno.acertos/erros` (usado em
+   Edital, Dashboard, XP, escalonamento) continua sendo o agregado de TODAS as tentativas somadas
+   — não muda de significado, só a Trilha passou a olhar por tentativa isolada pra esta atividade
+   específica.
 9. **Revisão das questões do link**: cada tópico tem até 2 links de caderno cadastrados na aba
    Questões (`linkRevisao7d`/`linkRevisao30d`, distintos do reforço rápido do item 4). Quando os
    4 grupos A-D do tópico ficam feitos, a revisão entra na trilha em **dois checkpoints

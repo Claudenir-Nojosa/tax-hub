@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Check, ChevronDown, ChevronUp, LayoutGrid, List, ListChecks, Plus, RotateCcw, X } from "lucide-react";
-import { GRUPO_BADGE, GRUPO_LABEL, type Alternativa, type Grupo, type PdfQuestoes, type QuestaoResultado } from "@/lib/estudo-data";
+import { calcularPerc, GRUPO_BADGE, GRUPO_LABEL, tentativasDoGrupo, type Alternativa, type Grupo, type PdfQuestoes, type QuestaoResultado } from "@/lib/estudo-data";
+import { LIMIAR_REFORCO_PERC } from "@/lib/trilha-dinamica";
 
 const GRUPOS: Grupo[] = ["A", "B", "C", "D"];
 const ALTERNATIVAS: Alternativa[] = ["A", "B", "C", "D", "E"];
@@ -81,6 +82,7 @@ export default function PainelQuestoes({
   onMarcar,
   onMarcarAlternativa,
   onAdicionarBloco,
+  onAdicionarRodadaReforco,
   onRefazer,
   onFechar,
 }: {
@@ -96,6 +98,10 @@ export default function PainelQuestoes({
   // acrescenta mais um bloco à lista já gerada (sem apagar os blocos/respostas já existentes) —
   // pro caso de perceber depois que faltava um caderno de questões pro tópico
   onAdicionarBloco: (tamanho: number) => void;
+  // nova rodada de reforço pra UM grupo específico (fica só naquele grupo, sem rotação A-D) — a
+  // tentativa anterior fica intocada, com seu percentual próprio preservado (ver
+  // adicionarRodadaReforco/tentativasDoGrupo em estudo-data.ts)
+  onAdicionarRodadaReforco: (grupo: Grupo, tamanho: number) => void;
   onRefazer: () => void;
   onFechar: () => void;
 }) {
@@ -103,6 +109,8 @@ export default function PainelQuestoes({
   const [gabaritoAberto, setGabaritoAberto] = useState(true);
   const [novoBlocoAberto, setNovoBlocoAberto] = useState(false);
   const [novoBlocoStr, setNovoBlocoStr] = useState("");
+  const [rodadaAberta, setRodadaAberta] = useState<Grupo | null>(null);
+  const [rodadaStr, setRodadaStr] = useState("");
   // "lista" = numeração corrida de sempre; "grupos" = mesma separação A-D usada no painel acima,
   // útil pra conferir o gabarito só do grupo que o usuário está respondendo agora
   const [visaoGabarito, setVisaoGabarito] = useState<"lista" | "grupos">("lista");
@@ -119,8 +127,19 @@ export default function PainelQuestoes({
     setNovoBlocoAberto(false);
   };
 
+  const rodadaNum = parseInt(rodadaStr);
+  const podeConfirmarRodada = Number.isFinite(rodadaNum) && rodadaNum >= 4 && rodadaNum <= 200;
+  const confirmarRodada = (grupo: Grupo) => {
+    if (!podeConfirmarRodada) return;
+    onAdicionarRodadaReforco(grupo, rodadaNum);
+    setRodadaStr("");
+    setRodadaAberta(null);
+  };
+
   // dentro de cada grupo A-D, subagrupa por BLOCO (só pra mostrar de onde vem cada questão quando
-  // há mais de um bloco — com um bloco só, todo mundo cai em "bloco 1" e o rótulo nem aparece)
+  // há mais de um bloco — com um bloco só, todo mundo cai em "bloco 1" e o rótulo nem aparece).
+  // podeReforcar: a ÚLTIMA tentativa desse grupo (ver tentativasDoGrupo) já foi respondida por
+  // inteiro e ficou abaixo do limiar — oferece uma rodada nova sem tocar nas anteriores.
   const porGrupo = GRUPOS.map((g) => {
     const itensDoGrupo = questoes?.resultados.filter((r) => r.grupo === g) ?? [];
     const porBloco = new Map<number, typeof itensDoGrupo>();
@@ -128,7 +147,10 @@ export default function PainelQuestoes({
       const b = r.bloco ?? 1;
       porBloco.set(b, [...(porBloco.get(b) ?? []), r]);
     }
-    return { grupo: g, porBloco: [...porBloco.entries()].sort(([a], [b]) => a - b) };
+    const tentativas = tentativasDoGrupo(questoes, g);
+    const ultimaTentativa = tentativas[tentativas.length - 1];
+    const podeReforcar = !!ultimaTentativa && ultimaTentativa.pendentes === 0 && ultimaTentativa.perc < LIMIAR_REFORCO_PERC;
+    return { grupo: g, porBloco: [...porBloco.entries()].sort(([a], [b]) => a - b), podeReforcar };
   });
   const totalBlocos = new Set(questoes?.resultados.map((r) => r.bloco ?? 1)).size;
   const marcadasGabarito = questoes?.resultados.filter((r) => r.alternativa).length ?? 0;
@@ -277,7 +299,7 @@ export default function PainelQuestoes({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
-              {porGrupo.map(({ grupo, porBloco }) => {
+              {porGrupo.map(({ grupo, porBloco, podeReforcar }) => {
                 const todosItens = porBloco.flatMap(([, itens]) => itens);
                 const acertos = todosItens.filter((r) => r.acertou === true).length;
                 const erros = todosItens.filter((r) => r.acertou === false).length;
@@ -291,38 +313,87 @@ export default function PainelQuestoes({
                       </span>
                     </div>
                     <div className="space-y-2">
-                      {porBloco.map(([numeroBloco, itens]) => (
-                        <div key={numeroBloco}>
-                          {totalBlocos > 1 && (
-                            <p className="text-[10px] text-muted-foreground mb-1">Bloco {numeroBloco}</p>
-                          )}
-                          <div className="flex flex-wrap gap-1.5">
-                            {itens.map((r) => {
-                              const cor =
-                                r.acertou === true
-                                  ? "bg-emerald-500 text-white border-emerald-500"
-                                  : r.acertou === false
-                                  ? "bg-red-500 text-white border-red-500"
-                                  : "border-border text-muted-foreground hover:border-primary/50";
-                              return (
-                                <button
-                                  key={r.numero}
-                                  type="button"
-                                  title={`Questão ${r.numero} — clique pra alternar certo/errado/pendente`}
-                                  onClick={() => {
-                                    const proximo = r.acertou === null ? true : r.acertou === true ? false : null;
-                                    onMarcar(r.numero, proximo);
-                                  }}
-                                  className={`h-7 w-7 rounded-md border text-[11px] font-semibold flex items-center justify-center transition-colors ${cor}`}
-                                >
-                                  {r.acertou === true ? <Check className="h-3.5 w-3.5" /> : r.acertou === false ? <X className="h-3.5 w-3.5" /> : r.numero}
-                                </button>
-                              );
-                            })}
+                      {porBloco.map(([numeroBloco, itens]) => {
+                        const respondida = itens.every((r) => r.acertou !== null);
+                        const percBloco = calcularPerc(itens.filter((r) => r.acertou === true).length, itens.filter((r) => r.acertou === false).length);
+                        return (
+                          <div key={numeroBloco}>
+                            {totalBlocos > 1 && (
+                              <p className="text-[10px] text-muted-foreground mb-1">
+                                Bloco {numeroBloco}{respondida ? ` · ${percBloco}%` : ""}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-1.5">
+                              {itens.map((r) => {
+                                const cor =
+                                  r.acertou === true
+                                    ? "bg-emerald-500 text-white border-emerald-500"
+                                    : r.acertou === false
+                                    ? "bg-red-500 text-white border-red-500"
+                                    : "border-border text-muted-foreground hover:border-primary/50";
+                                return (
+                                  <button
+                                    key={r.numero}
+                                    type="button"
+                                    title={`Questão ${r.numero} — clique pra alternar certo/errado/pendente`}
+                                    onClick={() => {
+                                      const proximo = r.acertou === null ? true : r.acertou === true ? false : null;
+                                      onMarcar(r.numero, proximo);
+                                    }}
+                                    className={`h-7 w-7 rounded-md border text-[11px] font-semibold flex items-center justify-center transition-colors ${cor}`}
+                                  >
+                                    {r.acertou === true ? <Check className="h-3.5 w-3.5" /> : r.acertou === false ? <X className="h-3.5 w-3.5" /> : r.numero}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
+                    {podeReforcar && (
+                      <div className="mt-2.5 pt-2.5 border-t border-border/60">
+                        {rodadaAberta === grupo ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={4}
+                              max={200}
+                              value={rodadaStr}
+                              onChange={(e) => setRodadaStr(e.target.value)}
+                              onKeyDown={(e) => e.key === "Enter" && confirmarRodada(grupo)}
+                              placeholder="Ex.: 10"
+                              autoFocus
+                              className="w-24 text-sm border border-border rounded-lg px-2 py-1.5 bg-muted text-foreground focus:outline-none focus:border-primary"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => confirmarRodada(grupo)}
+                              disabled={!podeConfirmarRodada}
+                              className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-colors"
+                            >
+                              Começar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setRodadaAberta(null); setRodadaStr(""); }}
+                              className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors flex-shrink-0"
+                              title="Cancelar"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => { setRodadaAberta(grupo); setRodadaStr(""); }}
+                            className="flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400 hover:underline"
+                          >
+                            <RotateCcw className="h-3 w-3" /> Nova rodada de reforço
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

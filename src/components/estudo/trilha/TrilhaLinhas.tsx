@@ -7,7 +7,7 @@ import {
 } from "@/lib/estudo-data";
 import {
   type AnaliseMateria, type BlocoEstudoSemana, type QuestaoLiberada,
-  type ReforcoGrupo, type ReforcoImediatoPendente, type Revisao30, type RevisaoLinkPendente,
+  type ReforcoImediatoPendente, type Revisao30, type RevisaoLinkPendente,
 } from "@/lib/trilha-dinamica";
 import { resolverCorMateria, fmtHoras } from "./trilha-ui";
 import { alvoLeituraPdf } from "../biblioteca/biblioteca-utils";
@@ -207,31 +207,7 @@ export function CorpoBloco({
   );
 }
 
-// ─── Questões: grupos A-D liberados + reforços fracos ────────────────────────
-
-export function CorpoReforcos({
-  reforcos, materiasAtivas, onRegistrar,
-}: {
-  reforcos: ReforcoGrupo[];
-  materiasAtivas: (MateriaDef | MateriaConcurso)[];
-  onRegistrar: (r: ReforcoGrupo, acertos: number, erros: number) => void;
-}) {
-  return (
-    <div>
-      <div className="text-sm font-semibold text-foreground dark:text-foreground">
-        {reforcos.length} grupo{reforcos.length !== 1 ? "s" : ""} pra reforçar
-      </div>
-      <div className="text-[11px] text-muted-foreground mb-2">
-        Desempenho abaixo de {"70%"} — refaça e atualize o resultado.
-      </div>
-      <div className="space-y-1 max-h-64 overflow-y-auto pr-1 -mr-1">
-        {reforcos.map((r) => (
-          <LinhaReforco key={r.id} r={r} materiasAtivas={materiasAtivas} onRegistrar={onRegistrar} />
-        ))}
-      </div>
-    </div>
-  );
-}
+// ─── Questões: grupos A-D liberados ──────────────────────────────────────────
 
 export function CorpoQuestoes({
   questoes, materiasAtivas, onRegistrar,
@@ -572,52 +548,3 @@ function LinhaQuestao({
   );
 }
 
-// ─── Linha de grupo pra reforçar — igual à de questão liberada, mas com os inputs pré-preenchidos
-// (o usuário está corrigindo um resultado existente, não começando do zero) e um badge de % ────
-
-function LinhaReforco({
-  r, materiasAtivas, onRegistrar,
-}: {
-  r: ReforcoGrupo;
-  materiasAtivas: (MateriaDef | MateriaConcurso)[];
-  onRegistrar: (r: ReforcoGrupo, acertos: number, erros: number) => void;
-}) {
-  const [aberto, setAberto] = useState(false);
-  const [acertos, setAcertos] = useState(String(r.acertos));
-  const [erros, setErros] = useState(String(r.erros));
-  const cor = resolverCorMateria(r.materia, materiasAtivas);
-  const podeSalvar = acertos !== "" && erros !== "" && Number(acertos) + Number(erros) > 0;
-
-  return (
-    <div className="rounded-lg hover:bg-accent dark:hover:bg-muted/40 px-2 py-1.5 -mx-2 transition-colors">
-      <button type="button" onClick={() => setAberto((v) => !v)} className="w-full flex items-center gap-2.5 text-left">
-        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${GRUPO_BADGE[r.grupo]}`}>{GRUPO_LABEL[r.grupo]}</span>
-        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cor.dot}`} />
-        <div className="flex-1 min-w-0">
-          <span className="text-sm text-foreground">{r.materia}</span>
-          <span className="text-xs text-muted-foreground"> · tópico {r.ordemTopico}: </span>
-          <span className="text-xs text-muted-foreground" title={r.topico}>{r.topico.length > 50 ? r.topico.slice(0, 50) + "…" : r.topico}</span>
-        </div>
-        <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 flex-shrink-0">{r.perc}%</span>
-        <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground flex-shrink-0 transition-transform ${aberto ? "rotate-180" : ""}`} />
-      </button>
-      {aberto && (
-        <div className="mt-2 flex items-center gap-2 pl-1">
-          <span className="text-[10px] text-muted-foreground flex-1">{r.acertos} acerto{r.acertos !== 1 ? "s" : ""} / {r.erros} erro{r.erros !== 1 ? "s" : ""} — refaça e atualize</span>
-          <label className="text-[11px] text-muted-foreground">Acertos</label>
-          <input type="number" min={0} value={acertos} onChange={(e) => setAcertos(e.target.value)} className="w-16 bg-muted border border-border rounded-md px-2 py-1 text-sm text-foreground dark:text-foreground outline-none focus:border-emerald-400" />
-          <label className="text-[11px] text-muted-foreground">Erros</label>
-          <input type="number" min={0} value={erros} onChange={(e) => setErros(e.target.value)} className="w-16 bg-muted border border-border rounded-md px-2 py-1 text-sm text-foreground dark:text-foreground outline-none focus:border-emerald-400" />
-          <button
-            type="button"
-            disabled={!podeSalvar}
-            onClick={() => onRegistrar(r, Number(acertos), Number(erros))}
-            className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-medium"
-          >
-            Salvar
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}

@@ -1,6 +1,6 @@
 import {
   calcularMedia, calcularPagPorHora, calcularPagPorHoraTopico, calcularPerc, dateKeyLocal,
-  defaultTopicoState, topicoKey,
+  defaultTopicoState, resolverPdfDoTopico, tentativasDoGrupo, topicoKey,
   type AtividadeCalendario, type Bloco, type ChecklistRevisaoLink, type EstudoConfigCiclo,
   type Grupo, type MetaAtividadeRef, type MetaPersistida, type NivelImportancia, type PdfEstudo,
   type TopicoCaderno, type TopicoState, type TrilhaDinamicaState,
@@ -118,12 +118,6 @@ export function elegivelParaReforcoTopico(cadernos: Record<Grupo, TopicoCaderno>
 // uma vez, a Meta pode ficar bem maior que de costume (caso histórico real que motivou o teto
 // original: uma Meta chegou a 281 atividades before o piso/teto existirem).
 const META_ATIVIDADES_MIN = 10;
-
-// exportado pra page.tsx (bookkeeping de "Marcar como estudado" automático — ver
-// avancarEstudoAutomaticoSeNecessario) reaproveitar sem duplicar a lógica de resolução de PDF
-export function resolverPdfDoTopico(materia: string, topico: string, pdfs: PdfEstudo[]): PdfEstudo | undefined {
-  return pdfs.find((p) => p.materia === materia && (p.topicos?.includes(topico) ?? false));
-}
 
 // tamanho-alvo de UMA atividade de leitura — tópicos maiores que isso são fatiados em VÁRIAS
 // atividades sequenciais (um pedaço de páginas/capítulos cada), pra a Meta poder intercalar com
@@ -323,14 +317,15 @@ export function construirFilaGlobal(params: {
       });
     }
 
-    // reforço A-D (desempenho fraco, já esfriado)
-    for (const r of analisarReforcos(m, topicos, hoje)) {
+    // reforço A-D (desempenho fraco, já esfriado) — cada rodada tem seu próprio id (r.tentativa),
+    // nunca reaparece a mesma depois de atribuída (ver avancarFilaMetasSeNecessario)
+    for (const r of analisarReforcos(m, topicos, hoje, pdfs)) {
       fila.push({
         id: r.id,
         tipo: "reforco",
         materia: m.nome,
         topico: r.topico,
-        titulo: `Reforço Grupo ${r.grupo} — ${r.topico}`,
+        titulo: `Reforço Grupo ${r.grupo} — ${r.topico} (tentativa ${r.tentativa})`,
         relevancia: topicos[topicoKey(m.nome, r.topico)]?.importancia,
         minutosEstimados: mediaMinutosQuestao,
         desempenhoPerc: r.perc,
@@ -531,9 +526,15 @@ function paginaFimEfetiva(ref: { paginaFim?: number }, pdf: Pick<PdfEstudo, "pag
 // basta: ele conta só o que já foi MARCADO, então marcar 1 de 10 questões do grupo (acertos+erros=1
 // > 0) já contava como "feito" antes desta correção — bug real reportado pelo usuário (Grupo A
 // aparecia 100% concluído com 1 questão marcada, faltando as outras 9).
+// Conta só a tentativa 1 (a liberação ORIGINAL via escalonamento, ver tentativasDoGrupo em
+// estudo-data.ts) — NÃO soma rodadas de reforço (adicionarRodadaReforco): senão, criar uma rodada
+// de reforço pra um grupo já concluído faria "total" crescer sem `cadernos[grupo].acertos+erros`
+// acompanhar na hora (as questões novas começam sem resposta), e a atividade "questões liberadas"
+// já concluída voltaria a aparecer como pendente por causa de uma atividade completamente
+// diferente (o reforço).
 function totalQuestoesDoGrupo(materia: string, topico: string, grupo: Grupo, pdfs: PdfEstudo[]): number {
   const pdf = resolverPdfDoTopico(materia, topico, pdfs);
-  return pdf?.questoes?.resultados.filter((r) => r.grupo === grupo).length ?? 0;
+  return tentativasDoGrupo(pdf?.questoes, grupo)[0]?.itens.length ?? 0;
 }
 
 function estaAtividadeConcluida(
@@ -566,15 +567,19 @@ function estaAtividadeConcluida(
       return { concluida: feito, desempenhoPerc: feito ? calcularPerc(c!.acertos, c!.erros) : undefined };
     }
     case "reforco": {
-      const grupo = ref.id.split(":").pop() as Grupo;
-      const c = estado?.cadernos[grupo];
-      const total = ref.topico ? totalQuestoesDoGrupo(ref.materia, ref.topico, grupo, pdfs) : 0;
-      const feito = !!c && total > 0 && c.acertos + c.erros >= total;
-      const perc = feito ? calcularPerc(c!.acertos, c!.erros) : undefined;
-      // um reforço só "conclui" quando TODAS as questões foram remarcadas E o desempenho volta pra
-      // cima do limiar — refazer parcialmente, ou refazer inteiro e continuar fraco, mantém a
-      // atividade pendente (volta a aparecer como reforço depois do cooldown)
-      return { concluida: perc !== undefined && perc >= LIMIAR_REFORCO_PERC, desempenhoPerc: perc };
+      // id: r:materia:topico:grupo:tentativa — os 2 últimos segmentos (não só o último, como nos
+      // outros tipos) porque agora cada RODADA de reforço tem seu próprio id (ver analisarReforcos
+      // em trilha-dinamica.ts)
+      const partes = ref.id.split(":");
+      const grupo = partes[partes.length - 2] as Grupo;
+      const tentativaAlvo = Number(partes[partes.length - 1]);
+      const pdf = ref.topico ? resolverPdfDoTopico(ref.materia, ref.topico, pdfs) : undefined;
+      const alvo = tentativasDoGrupo(pdf?.questoes, grupo).find((t) => t.numero === tentativaAlvo);
+      // conclui quando a rodada-alvo existe e foi respondida por inteiro — NÃO exige perc >= 70%
+      // (isso decide só se uma PRÓXIMA rodada será oferecida depois do cooldown, não se esta
+      // conclui): pedido explícito do usuário, cada tentativa vira um registro próprio no
+      // histórico, nunca sobrescrevendo a anterior, mesmo que continue fraca.
+      return { concluida: !!alvo && alvo.pendentes === 0, desempenhoPerc: alvo?.perc };
     }
     case "reforco_imediato":
       return { concluida: !!estado?.reforcoImediatoFeito };

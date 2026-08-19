@@ -1,5 +1,5 @@
 import {
-  calcularPagPorHora, dateKeyLocal, topicoKey, calcularPerc,
+  calcularPagPorHora, dateKeyLocal, topicoKey, calcularPerc, resolverPdfDoTopico, tentativasDoGrupo,
   type AtividadeCalendario, type Bloco, type CapituloPdf, type ChecklistRevisaoLink, type EstudoConfigCiclo,
   type Grupo, type PdfEstudo, type RevisaoLinkTopico, type TopicoState, type TrilhaDinamicaState,
 } from "./estudo-data";
@@ -166,24 +166,36 @@ export function analisarMateria(
 }
 
 export interface ReforcoGrupo {
-  id: string; // estável: `r:${materia}:${topico}:${grupo}`
+  id: string; // estável POR RODADA: `r:${materia}:${topico}:${grupo}:${tentativa}` — a fila de Metas
+              // nunca reoferece um id já atribuído (ver avancarFilaMetasSeNecessario em
+              // trilha-fila.ts), então cada nova rodada de reforço precisa de um id próprio; o
+              // número da tentativa vai no id, não como campo separado, mesma convenção já usada
+              // pros outros tipos (grupo/checkpoint extraídos do id, sem campo novo em FilaAtividade)
   materia: string;
   topico: string;
   ordemTopico: number; // 1-based no edital
   grupo: Grupo;
-  acertos: number;
+  tentativa: number; // número da PRÓXIMA tentativa sendo oferecida (a que ainda não existe)
+  acertos: number; // da ÚLTIMA tentativa já respondida (não é mais o agregado de todas)
   erros: number;
-  perc: number; // % de acerto atual (calcularPerc)
+  perc: number; // % de acerto da última tentativa (calcularPerc)
 }
 
-// grupos "feitos" (acertos+erros > 0) com desempenho fraco (< LIMIAR_REFORCO_PERC) que já
+// grupos "feitos" (última tentativa completa) com desempenho fraco (< LIMIAR_REFORCO_PERC) que já
 // esfriaram (sem atualizadoEm, ou atualizadoEm há REFORCO_COOLDOWN_DIAS ou mais) — candidatos a
-// reaparecer na trilha como reforço. Grupos ainda não feitos ficam de fora (isso é "pendente",
-// não "fraco" — já aparecem em questoesLiberadas via analisarMateria).
+// reaparecer na trilha oferecendo uma NOVA rodada de reforço. Grupos ainda não feitos ficam de
+// fora (isso é "pendente", não "fraco" — já aparecem em questoesLiberadas via analisarMateria).
+// Olha a ÚLTIMA TENTATIVA (tentativasDoGrupo, derivada de PdfQuestoes.resultados por bloco), não
+// mais o agregado de TopicoCaderno — pedido explícito do usuário: cada rodada de reforço vira uma
+// tentativa nova, com seu próprio percentual, nunca sobrescrevendo as anteriores (ver
+// adicionarRodadaReforco em estudo-data.ts). O agregado de TopicoCaderno continua existindo e
+// sendo usado por tudo mais (Edital, Dashboard, XP, escalonamento) — só esta função específica
+// (e o que dela depende) passou a olhar por tentativa.
 export function analisarReforcos(
   materia: MateriaLike,
   topicos: Record<string, TopicoState>,
-  hoje: string
+  hoje: string,
+  pdfs: PdfEstudo[]
 ): ReforcoGrupo[] {
   const nomes = materia.topicos;
   const reforcos: ReforcoGrupo[] = [];
@@ -192,19 +204,23 @@ export function analisarReforcos(
     if (!estado?.estudado) continue;
     for (const grupo of GRUPOS_QUESTOES) {
       const c = estado.cadernos[grupo];
-      if (!c || c.acertos + c.erros === 0) continue; // não feito — pendente, não fraco
-      const perc = calcularPerc(c.acertos, c.erros);
-      if (perc >= LIMIAR_REFORCO_PERC) continue;
+      if (!c || c.acertos + c.erros === 0) continue; // nunca respondido — pendente, não fraco
       if (c.atualizadoEm && diffDias(c.atualizadoEm, hoje) < REFORCO_COOLDOWN_DIAS) continue;
+      const pdf = resolverPdfDoTopico(materia.nome, nomes[i], pdfs);
+      const tentativas = tentativasDoGrupo(pdf?.questoes, grupo);
+      const ultima = tentativas[tentativas.length - 1];
+      if (!ultima || ultima.pendentes > 0) continue; // rodada atual ainda em andamento — nada novo a oferecer
+      if (ultima.perc >= LIMIAR_REFORCO_PERC) continue; // recuperou
       reforcos.push({
-        id: `r:${materia.nome}:${nomes[i]}:${grupo}`,
+        id: `r:${materia.nome}:${nomes[i]}:${grupo}:${ultima.numero + 1}`,
         materia: materia.nome,
         topico: nomes[i],
         ordemTopico: i + 1,
         grupo,
-        acertos: c.acertos,
-        erros: c.erros,
-        perc,
+        tentativa: ultima.numero + 1,
+        acertos: ultima.acertos,
+        erros: ultima.erros,
+        perc: ultima.perc,
       });
     }
   }
@@ -977,7 +993,7 @@ export function computarMetaSemana(params: {
     blocos,
     blocosConcluidos,
     questoesPendentes: analises.flatMap((a) => a.questoesLiberadas),
-    reforcos: ativas.flatMap((m) => analisarReforcos(m, topicos, hoje)),
+    reforcos: ativas.flatMap((m) => analisarReforcos(m, topicos, hoje, pdfs)),
     reforcosImediatos: ativas.flatMap((m) => analisarReforcosImediatos(m, topicos)),
     revisoesLink: ativas.flatMap((m) => analisarRevisoesLinkMateria(m, topicos, blocosQuestoes, hoje)),
     revisoes30,

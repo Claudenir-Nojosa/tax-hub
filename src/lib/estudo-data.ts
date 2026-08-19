@@ -395,6 +395,73 @@ export function adicionarBlocoQuestoes(questoes: PdfQuestoes, tamanho: number): 
   return { ...questoes, total: questoes.total + tamanho, resultados: [...questoes.resultados, ...novos] };
 }
 
+// Acrescenta uma RODADA DE REFORÇO a um grupo específico — um bloco novo com `tamanho` questões
+// TODAS do mesmo grupo (sem rotação A-D como um bloco normal). Usado quando um grupo A-D voltou
+// fraco na Trilha (ver analisarReforcos em trilha-dinamica.ts) e o usuário quer tentar de novo: as
+// questões da(s) tentativa(s) anteriores desse grupo nunca são tocadas (mesmo espírito de
+// adicionarBlocoQuestoes acima) — pedido explícito do usuário, ele quer o percentual de cada
+// tentativa (1ª, 2ª, 3ª...) separado, nunca sobrescrito. Ver tentativasDoGrupo, que reconstrói
+// esse histórico a partir daqui.
+export function adicionarRodadaReforco(questoes: PdfQuestoes, grupo: Grupo, tamanho: number): PdfQuestoes {
+  const ultimoBloco = questoes.resultados.reduce((max, r) => Math.max(max, r.bloco ?? 1), 0);
+  const ultimoNumero = questoes.resultados.reduce((max, r) => Math.max(max, r.numero), 0);
+  const novos: QuestaoResultado[] = [];
+  for (let n = 1; n <= tamanho; n++) {
+    novos.push({ numero: ultimoNumero + n, bloco: ultimoBloco + 1, grupo, acertou: null });
+  }
+  return { ...questoes, total: questoes.total + tamanho, resultados: [...questoes.resultados, ...novos] };
+}
+
+export interface TentativaGrupo {
+  numero: number; // 1 = tentativa original (bloco(s) rotacionados A-D, o de sempre); 2, 3... =
+                   // rodadas de reforço, em ordem de criação
+  bloco?: number; // só presente nas tentativas 2+ (a rodada de reforço é um bloco dedicado, só
+                   // daquele grupo — a tentativa 1 pode juntar vários blocos originais, ex.:
+                   // "23+25+30 questões" do mesmo tópico, então não tem UM bloco só pra apontar)
+  itens: QuestaoResultado[];
+  acertos: number;
+  erros: number;
+  pendentes: number;
+  perc: number;
+}
+
+function resumirTentativa(numero: number, itens: QuestaoResultado[]): TentativaGrupo {
+  const acertos = itens.filter((r) => r.acertou === true).length;
+  const erros = itens.filter((r) => r.acertou === false).length;
+  return { numero, bloco: itens[0]?.bloco, itens, acertos, erros, pendentes: itens.length - acertos - erros, perc: calcularPerc(acertos, erros) };
+}
+
+// Histórico de tentativas de UM grupo (A-D) dentro do tópico, derivado 100% de
+// PdfQuestoes.resultados — nenhum campo novo precisa ser persistido pra isso. Um bloco conta como
+// "rodada de reforço" (tentativa 2+) quando TODOS os seus itens pertencem a um único grupo — só
+// acontece via adicionarRodadaReforco; blocos originais (gerarQuestoesGrupos/adicionarBlocoQuestoes)
+// sempre rotacionam A-D com tamanho mínimo 4 (validado em PainelQuestoes.tsx), então sempre tocam
+// ≥2 grupos distintos e nunca são confundidos com uma rodada de reforço.
+export function tentativasDoGrupo(questoes: PdfQuestoes | undefined, grupo: Grupo): TentativaGrupo[] {
+  if (!questoes) return [];
+  const porBloco = new Map<number, QuestaoResultado[]>();
+  for (const r of questoes.resultados) {
+    const b = r.bloco ?? 1;
+    porBloco.set(b, [...(porBloco.get(b) ?? []), r]);
+  }
+
+  const itensOriginais: QuestaoResultado[] = [];
+  const rodadasReforco: QuestaoResultado[][] = [];
+  for (const [, itens] of [...porBloco.entries()].sort(([a], [b]) => a - b)) {
+    const gruposDoBloco = new Set(itens.map((r) => r.grupo));
+    if (gruposDoBloco.size === 1 && itens[0].grupo === grupo) {
+      rodadasReforco.push(itens);
+    } else {
+      itensOriginais.push(...itens.filter((r) => r.grupo === grupo));
+    }
+  }
+
+  const tentativas: TentativaGrupo[] = [];
+  if (itensOriginais.length > 0) tentativas.push(resumirTentativa(1, itensOriginais));
+  for (const itens of rodadasReforco) tentativas.push(resumirTentativa(tentativas.length + 1, itens));
+  return tentativas;
+}
+
 // intervalo de páginas de UM tópico dentro de um PdfEstudo específico — permite abrir o leitor já
 // na página certa e avisar quando o usuário passa da página final indicada (ver TrilhaTab "Ler
 // PDF" e LeitorPdf paginaAbertura/paginaFimAlvo). Preenchido manualmente ou sugerido por IA
@@ -836,6 +903,14 @@ export function blocoDoTopico(
   topico: string
 ): Bloco | undefined {
   return Object.values(blocos).find((b) => b.materia === materia && b.topicos.includes(topico));
+}
+
+// PDF (se algum) que cobre esse tópico — movida de trilha-fila.ts pra cá pra trilha-dinamica.ts
+// também poder usar (analisarReforcos precisa resolver o PdfQuestoes do tópico pra montar o
+// histórico de tentativas) sem criar import circular (trilha-fila.ts já importa de
+// trilha-dinamica.ts, então o caminho inverso não é permitido).
+export function resolverPdfDoTopico(materia: string, topico: string, pdfs: PdfEstudo[]): PdfEstudo | undefined {
+  return pdfs.find((p) => p.materia === materia && (p.topicos?.includes(topico) ?? false));
 }
 
 // Remove tópicos ocultos de uma lista de matérias — usado por TODA aba exceto o Edital (que

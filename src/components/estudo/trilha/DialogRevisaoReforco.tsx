@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { BookOpen, RotateCcw, X } from "lucide-react";
-import { type Carta, type Grupo, type PdfEstudo } from "@/lib/estudo-data";
+import { tentativasDoGrupo, type Carta, type Grupo, type PdfEstudo } from "@/lib/estudo-data";
 import type { FilaAtividade } from "@/lib/trilha-fila";
 import NovoCartaoForm from "../biblioteca/NovoCartaoForm";
 import { novaCartaManual } from "../biblioteca/biblioteca-utils";
@@ -32,12 +32,20 @@ export default function DialogRevisaoReforco({
     return <DialogReforcoTopicoSimples atividade={atividade} onFechar={onFechar} onIrParaQuestoes={onIrParaQuestoes} />;
   }
 
-  const grupo = atividade.tipo === "reforco" ? (atividade.id.split(":").pop() as Grupo) : undefined;
+  // id: r:materia:topico:grupo:tentativa — os 2 últimos segmentos (grupo mudou de posição desde
+  // que cada RODADA de reforço passou a ter seu próprio id, ver analisarReforcos em
+  // trilha-dinamica.ts)
+  const partesId = atividade.tipo === "reforco" ? atividade.id.split(":") : [];
+  const grupo = atividade.tipo === "reforco" ? (partesId[partesId.length - 2] as Grupo) : undefined;
   const pdf = atividade.topico
     ? pdfs.find((p) => p.materia === atividade.materia && p.topicos?.includes(atividade.topico!))
     : undefined;
-  const questoesErradas = grupo && pdf?.questoes
-    ? pdf.questoes.resultados.filter((r) => r.grupo === grupo && r.acertou === false).map((r) => r.numero)
+  const tentativas = grupo ? tentativasDoGrupo(pdf?.questoes, grupo) : [];
+  // tentativa que MOTIVOU esta oferta de reforço — a mais recente já respondida (a nova, alvo
+  // desta oferta, ainda não existe: só é criada quando o usuário inicia a rodada)
+  const ultimaTentativa = tentativas[tentativas.length - 1];
+  const questoesErradas = ultimaTentativa
+    ? ultimaTentativa.itens.filter((r) => r.acertou === false).map((r) => r.numero)
     : [];
 
   if (criandoCartao) {
@@ -79,6 +87,17 @@ export default function DialogRevisaoReforco({
             ? `Aproveitamento ${atividade.desempenhoPerc}%${grupo ? ` — Grupo ${grupo}` : ""} — abaixo do esperado`
             : "Desempenho abaixo do esperado nesse trecho"}
         </div>
+
+        {tentativas.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span className="font-medium text-foreground">Histórico:</span>
+            {tentativas.map((t) => (
+              <span key={t.numero} className="font-mono">
+                tentativa {t.numero}: {t.perc}%{t.numero < tentativas.length ? " ·" : ""}
+              </span>
+            ))}
+          </div>
+        )}
 
         {questoesErradas.length > 0 && (
           <div>
