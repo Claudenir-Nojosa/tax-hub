@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Maximize, Minimize, Volume2, VolumeX } from "lucide-react";
 
 type Direcao = "baixo" | "cima" | "esquerda" | "direita";
 
@@ -26,7 +27,38 @@ const TECLAS_MOVIMENTO = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRig
 export default function Acampamento({ onIrParaMapa }: { onIrParaMapa?: () => void }) {
   const [pos, setPos] = useState({ x: 50, y: 58 });
   const [direcao, setDirecao] = useState<Direcao>("baixo");
+  const [telaCheia, setTelaCheia] = useState(false);
+  const [tocandoMusica, setTocandoMusica] = useState(false);
   const teclas = useRef<Set<string>>(new Set());
+  const containerRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  // navegador bloqueia autoplay com som sem gesto do usuário — por isso começa pausado, e o
+  // botão de música é o próprio gesto que libera o play
+  const alternarMusica = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (tocandoMusica) {
+      audio.pause();
+    } else {
+      audio.play().catch(() => {});
+    }
+    setTocandoMusica((v) => !v);
+  };
+
+  useEffect(() => {
+    const onFullscreenChange = () => setTelaCheia(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  const alternarTelaCheia = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      containerRef.current?.requestFullscreen();
+    }
+  };
 
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
@@ -72,8 +104,20 @@ export default function Acampamento({ onIrParaMapa }: { onIrParaMapa?: () => voi
   }, []);
 
   return (
-    <div className="rounded-2xl overflow-hidden border border-amber-800/20 dark:border-amber-100/10 bg-black">
-      <div className="relative w-full mx-auto" style={{ aspectRatio: "1562 / 1007", maxWidth: 900 }}>
+    <div
+      ref={containerRef}
+      className={`overflow-hidden border border-amber-800/20 dark:border-amber-100/10 bg-black ${
+        telaCheia ? "w-screen h-screen flex items-center justify-center" : "rounded-2xl"
+      }`}
+    >
+      <div
+        className="relative mx-auto"
+        style={
+          telaCheia
+            ? { aspectRatio: "1562 / 1007", height: "100vh", maxWidth: "100vw" }
+            : { aspectRatio: "1562 / 1007", width: "100%", maxWidth: 900 }
+        }
+      >
         <img
           src="/cenarios/acampamento.png"
           alt="Acampamento — campo de descanso"
@@ -93,17 +137,38 @@ export default function Acampamento({ onIrParaMapa }: { onIrParaMapa?: () => voi
             imageRendering: "pixelated",
           }}
         />
-        {onIrParaMapa && (
+        <audio ref={audioRef} src="/sons/acampamento.mp3" loop preload="none" />
+        <div className="absolute top-3 right-3 flex items-center gap-2">
           <button
             type="button"
-            onClick={onIrParaMapa}
-            className="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-black/60 hover:bg-black/75 text-white text-xs font-medium border border-white/15 transition-colors"
+            onClick={alternarMusica}
+            title={tocandoMusica ? "Pausar música" : "Tocar música"}
+            className="h-8 w-8 rounded-lg bg-black/60 hover:bg-black/75 text-white flex items-center justify-center border border-white/15 transition-colors"
           >
-            Ir para o mapa do mundo →
+            {tocandoMusica ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
           </button>
-        )}
+          <button
+            type="button"
+            onClick={alternarTelaCheia}
+            title={telaCheia ? "Sair da tela cheia" : "Tela cheia"}
+            className="h-8 w-8 rounded-lg bg-black/60 hover:bg-black/75 text-white flex items-center justify-center border border-white/15 transition-colors"
+          >
+            {telaCheia ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+          </button>
+          {onIrParaMapa && (
+            <button
+              type="button"
+              onClick={onIrParaMapa}
+              className="px-3 py-1.5 rounded-lg bg-black/60 hover:bg-black/75 text-white text-xs font-medium border border-white/15 transition-colors"
+            >
+              Ir para o mapa do mundo →
+            </button>
+          )}
+        </div>
       </div>
-      <p className="text-center text-[11px] text-muted-foreground py-2">Use as setas do teclado pra andar pelo acampamento</p>
+      {!telaCheia && (
+        <p className="text-center text-[11px] text-muted-foreground py-2">Use as setas do teclado pra andar pelo acampamento</p>
+      )}
     </div>
   );
 }
