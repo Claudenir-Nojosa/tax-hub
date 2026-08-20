@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronDown, ChevronUp, LayoutGrid, List, ListChecks, Plus, RotateCcw, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, LayoutGrid, List, ListChecks, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { calcularPerc, GRUPO_BADGE, GRUPO_LABEL, tentativasDoGrupo, type Alternativa, type Grupo, type PdfQuestoes, type QuestaoResultado } from "@/lib/estudo-data";
 import { LIMIAR_REFORCO_PERC } from "@/lib/trilha-dinamica";
 
@@ -16,9 +16,10 @@ function LinhaGabarito({
   r, onMarcarAlternativa, onMarcar,
 }: {
   r: QuestaoResultado;
-  onMarcarAlternativa: (numero: number, alternativa: Alternativa | null) => void;
-  onMarcar: (numero: number, acertou: boolean | null) => void;
+  onMarcarAlternativa: (bloco: number, numero: number, alternativa: Alternativa | null) => void;
+  onMarcar: (bloco: number, numero: number, acertou: boolean | null) => void;
 }) {
+  const bloco = r.bloco ?? 1;
   return (
     <div className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1.5">
       <span className="text-[11px] font-mono text-muted-foreground w-6 flex-shrink-0 text-right">{r.numero}.</span>
@@ -28,7 +29,7 @@ function LinhaGabarito({
             key={alt}
             type="button"
             title={`Marcar alternativa ${alt} na questão ${r.numero}`}
-            onClick={() => onMarcarAlternativa(r.numero, r.alternativa === alt ? null : alt)}
+            onClick={() => onMarcarAlternativa(bloco, r.numero, r.alternativa === alt ? null : alt)}
             className={`h-6 w-6 rounded-md text-[10px] font-semibold flex items-center justify-center transition-colors ${
               r.alternativa === alt
                 ? "bg-primary text-primary-foreground"
@@ -43,7 +44,7 @@ function LinhaGabarito({
         <button
           type="button"
           title={`Marcar questão ${r.numero} como certa`}
-          onClick={() => onMarcar(r.numero, r.acertou === true ? null : true)}
+          onClick={() => onMarcar(bloco, r.numero, r.acertou === true ? null : true)}
           className={`h-6 w-6 rounded-md flex items-center justify-center transition-colors ${
             r.acertou === true
               ? "bg-emerald-500 text-white"
@@ -55,7 +56,7 @@ function LinhaGabarito({
         <button
           type="button"
           title={`Marcar questão ${r.numero} como errada`}
-          onClick={() => onMarcar(r.numero, r.acertou === false ? null : false)}
+          onClick={() => onMarcar(bloco, r.numero, r.acertou === false ? null : false)}
           className={`h-6 w-6 rounded-md flex items-center justify-center transition-colors ${
             r.acertou === false
               ? "bg-red-500 text-white"
@@ -83,6 +84,7 @@ export default function PainelQuestoes({
   onMarcarAlternativa,
   onAdicionarBloco,
   onAdicionarRodadaReforco,
+  onRemoverBloco,
   onRefazer,
   onFechar,
 }: {
@@ -93,8 +95,9 @@ export default function PainelQuestoes({
   // têm vários cadernos separados dentro do mesmo tópico (ex.: 23+25+30 questões); cada bloco
   // reinicia o rodízio A-D do zero (ver gerarQuestoesGrupos em estudo-data.ts)
   onGerar: (blocos: number[]) => void;
-  onMarcar: (numero: number, acertou: boolean | null) => void;
-  onMarcarAlternativa: (numero: number, alternativa: Alternativa | null) => void;
+  // identidade de uma questão é (bloco, numero) — numero sozinho reinicia em 1 a cada bloco
+  onMarcar: (bloco: number, numero: number, acertou: boolean | null) => void;
+  onMarcarAlternativa: (bloco: number, numero: number, alternativa: Alternativa | null) => void;
   // acrescenta mais um bloco à lista já gerada (sem apagar os blocos/respostas já existentes) —
   // pro caso de perceber depois que faltava um caderno de questões pro tópico
   onAdicionarBloco: (tamanho: number) => void;
@@ -104,6 +107,9 @@ export default function PainelQuestoes({
   // com seu percentual próprio preservado (ver adicionarRodadaReforco/tentativasDoGrupo em
   // estudo-data.ts)
   onAdicionarRodadaReforco: (grupo: Grupo, tamanho: number) => void;
+  // apaga um bloco inteiro (todas as questões dele, respondidas ou não) — pra quando o usuário
+  // criou um bloco por engano/duplicado
+  onRemoverBloco: (bloco: number) => void;
   onRefazer: () => void;
   onFechar: () => void;
 }) {
@@ -127,6 +133,12 @@ export default function PainelQuestoes({
     setNovoBlocoAberto(false);
   };
 
+  const confirmarRemoverBloco = (bloco: number, totalQuestoesBloco: number) => {
+    if (confirm(`Remover o Bloco ${bloco} (${totalQuestoesBloco} questões)? Os resultados já marcados nele se perdem.`)) {
+      onRemoverBloco(bloco);
+    }
+  };
+
   // dentro de cada grupo A-D, subagrupa por BLOCO (só pra mostrar de onde vem cada questão quando
   // há mais de um bloco — com um bloco só, todo mundo cai em "bloco 1" e o rótulo nem aparece).
   // podeReforcar: a ÚLTIMA tentativa desse grupo (ver tentativasDoGrupo) já foi respondida por
@@ -145,7 +157,15 @@ export default function PainelQuestoes({
     const podeReforcar = !!ultimaTentativa && ultimaTentativa.pendentes === 0 && ultimaTentativa.perc < LIMIAR_REFORCO_PERC && errosUltimaTentativa > 0;
     return { grupo: g, porBloco: [...porBloco.entries()].sort(([a], [b]) => a - b), podeReforcar, errosUltimaTentativa };
   });
-  const totalBlocos = new Set(questoes?.resultados.map((r) => r.bloco ?? 1)).size;
+  // lista de blocos (número + quantas questões) só pra gerenciar (excluir) — independente do
+  // agrupamento por grupo A-D acima, que fatia cada bloco em 4 pedaços
+  const mapaBlocos = (questoes?.resultados ?? []).reduce((mapa, r) => {
+    const b = r.bloco ?? 1;
+    mapa.set(b, (mapa.get(b) ?? 0) + 1);
+    return mapa;
+  }, new Map<number, number>());
+  const blocosGerais = [...mapaBlocos.entries()].sort(([a], [b]) => a - b);
+  const totalBlocos = blocosGerais.length;
   const marcadasGabarito = questoes?.resultados.filter((r) => r.alternativa).length ?? 0;
 
   return (
@@ -289,6 +309,23 @@ export default function PainelQuestoes({
                   </button>
                 </div>
               )}
+              {totalBlocos > 1 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {blocosGerais.map(([bloco, qtd]) => (
+                    <div key={bloco} className="flex items-center gap-1 pl-2 pr-1 py-1 rounded-md bg-muted text-[11px] text-muted-foreground">
+                      <span>Bloco {bloco} · {qtd}</span>
+                      <button
+                        type="button"
+                        onClick={() => confirmarRemoverBloco(bloco, qtd)}
+                        title={`Remover Bloco ${bloco}`}
+                        className="h-5 w-5 rounded flex items-center justify-center hover:bg-red-500/15 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
@@ -331,7 +368,7 @@ export default function PainelQuestoes({
                                     title={`Questão ${r.numero} — clique pra alternar certo/errado/pendente`}
                                     onClick={() => {
                                       const proximo = r.acertou === null ? true : r.acertou === true ? false : null;
-                                      onMarcar(r.numero, proximo);
+                                      onMarcar(r.bloco ?? 1, r.numero, proximo);
                                     }}
                                     className={`h-7 w-7 rounded-md border text-[11px] font-semibold flex items-center justify-center transition-colors ${cor}`}
                                   >
@@ -403,10 +440,20 @@ export default function PainelQuestoes({
               </div>
               {gabaritoAberto && (
                 visaoGabarito === "lista" ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5">
-                    {questoes.resultados.map((r) => (
-                      <LinhaGabarito key={r.numero} r={r} onMarcarAlternativa={onMarcarAlternativa} onMarcar={onMarcar} />
-                    ))}
+                  <div className="space-y-3">
+                    {blocosGerais.map(([bloco]) => {
+                      const itens = questoes.resultados.filter((r) => (r.bloco ?? 1) === bloco);
+                      return (
+                        <div key={bloco}>
+                          {totalBlocos > 1 && <p className="text-[10px] text-muted-foreground mb-1">Bloco {bloco}</p>}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5">
+                            {itens.map((r) => (
+                              <LinhaGabarito key={`${bloco}-${r.numero}`} r={r} onMarcarAlternativa={onMarcarAlternativa} onMarcar={onMarcar} />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -420,7 +467,7 @@ export default function PainelQuestoes({
                           </span>
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5 mt-1.5">
                             {itens.map((r) => (
-                              <LinhaGabarito key={r.numero} r={r} onMarcarAlternativa={onMarcarAlternativa} onMarcar={onMarcar} />
+                              <LinhaGabarito key={`${r.bloco ?? 1}-${r.numero}`} r={r} onMarcarAlternativa={onMarcarAlternativa} onMarcar={onMarcar} />
                             ))}
                           </div>
                         </div>

@@ -342,8 +342,12 @@ export type Alternativa = "A" | "B" | "C" | "D" | "E";
 // usuário marcou no gabarito (independente de acertou/errou — é só o registro de qual opção ele
 // indicou).
 export interface QuestaoResultado {
-  numero: number; // 1-based, posição GLOBAL na lista inteira (todos os blocos, pra numeração
-                   // simples no Gabarito)
+  // 1-based, posição DENTRO DO PRÓPRIO BLOCO — reinicia em 1 a cada bloco novo (bate com a
+  // numeração do caderno físico/externo daquele bloco: bloco 1 de 10 questões = 1-10, bloco 2 de
+  // 20 = 1-20 de novo, nunca 11-30). NÃO é único sozinho — a identidade real de uma questão é o
+  // par (bloco, numero); todo código que marca/atualiza uma questão precisa casar os dois campos,
+  // nunca só numero (ver marcarQuestao/marcarAlternativa em LeitorPdf.tsx).
+  numero: number;
   // 1-based — de qual bloco de questões do PDF essa questão é. A maioria dos PDFs tem 1 bloco só
   // (bloco 1); PDFs com vários cadernos separados dentro do mesmo tópico (ex.: 23+25+30 questões
   // em 3 listas distintas) têm bloco 1/2/3 — cada bloco reinicia o rodízio A-D do ZERO, não
@@ -379,11 +383,9 @@ const ORDEM_GRUPOS_QUESTOES: Grupo[] = ["A", "B", "C", "D"];
 // o resultado é idêntico a antes.
 export function gerarQuestoesGrupos(blocos: number[]): QuestaoResultado[] {
   const resultados: QuestaoResultado[] = [];
-  let numeroGlobal = 0;
   blocos.forEach((tamanho, idx) => {
     for (let n = 1; n <= tamanho; n++) {
-      numeroGlobal++;
-      resultados.push({ numero: numeroGlobal, bloco: idx + 1, grupo: ORDEM_GRUPOS_QUESTOES[(n - 1) % 4], acertou: null });
+      resultados.push({ numero: n, bloco: idx + 1, grupo: ORDEM_GRUPOS_QUESTOES[(n - 1) % 4], acertou: null });
     }
   });
   return resultados;
@@ -393,16 +395,25 @@ export function gerarQuestoesGrupos(blocos: number[]): QuestaoResultado[] {
 // geradas (numero/grupo/acertou/alternativa de cada uma continuam intocados) — pedido do usuário:
 // perceber depois que faltava um caderno de questões pro tópico e completar, sem precisar
 // "Refazer" (que apaga tudo, inclusive o que já foi respondido). O bloco novo entra com seu
-// próprio rodízio A-D do zero, como qualquer outro bloco (ver gerarQuestoesGrupos), numerado a
-// partir do próximo `numero` global da lista.
+// próprio rodízio A-D do zero, como qualquer outro bloco (ver gerarQuestoesGrupos), e numero
+// TAMBÉM reinicia em 1 (bate com a numeração do caderno externo desse bloco específico — não
+// continua de onde o bloco anterior parou).
 export function adicionarBlocoQuestoes(questoes: PdfQuestoes, tamanho: number): PdfQuestoes {
   const ultimoBloco = questoes.resultados.reduce((max, r) => Math.max(max, r.bloco ?? 1), 0);
-  const ultimoNumero = questoes.resultados.reduce((max, r) => Math.max(max, r.numero), 0);
   const novos: QuestaoResultado[] = [];
   for (let n = 1; n <= tamanho; n++) {
-    novos.push({ numero: ultimoNumero + n, bloco: ultimoBloco + 1, grupo: ORDEM_GRUPOS_QUESTOES[(n - 1) % 4], acertou: null });
+    novos.push({ numero: n, bloco: ultimoBloco + 1, grupo: ORDEM_GRUPOS_QUESTOES[(n - 1) % 4], acertou: null });
   }
   return { ...questoes, total: questoes.total + tamanho, resultados: [...questoes.resultados, ...novos] };
+}
+
+// Remove um bloco inteiro (todas as questões dele, respondidas ou não) — pedido do usuário: criou
+// um bloco por engano/duplicado e quer tirar sem afetar os outros. Não renumera os blocos
+// restantes (um "buraco" na sequência — ex.: sobrar bloco 1 e 3 — é inofensivo, todo código que
+// agrupa por bloco já lida com qualquer conjunto de números, não assume contiguidade).
+export function removerBlocoQuestoes(questoes: PdfQuestoes, bloco: number): PdfQuestoes {
+  const restantes = questoes.resultados.filter((r) => (r.bloco ?? 1) !== bloco);
+  return { ...questoes, total: restantes.length, resultados: restantes };
 }
 
 // Acrescenta uma RODADA DE REFORÇO a um grupo específico — um bloco novo com `tamanho` questões
@@ -414,10 +425,9 @@ export function adicionarBlocoQuestoes(questoes: PdfQuestoes, tamanho: number): 
 // esse histórico a partir daqui.
 export function adicionarRodadaReforco(questoes: PdfQuestoes, grupo: Grupo, tamanho: number): PdfQuestoes {
   const ultimoBloco = questoes.resultados.reduce((max, r) => Math.max(max, r.bloco ?? 1), 0);
-  const ultimoNumero = questoes.resultados.reduce((max, r) => Math.max(max, r.numero), 0);
   const novos: QuestaoResultado[] = [];
   for (let n = 1; n <= tamanho; n++) {
-    novos.push({ numero: ultimoNumero + n, bloco: ultimoBloco + 1, grupo, acertou: null });
+    novos.push({ numero: n, bloco: ultimoBloco + 1, grupo, acertou: null });
   }
   return { ...questoes, total: questoes.total + tamanho, resultados: [...questoes.resultados, ...novos] };
 }

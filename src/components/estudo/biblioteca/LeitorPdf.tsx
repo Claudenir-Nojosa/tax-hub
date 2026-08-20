@@ -8,7 +8,7 @@ import {
   Highlighter, Layers, ListChecks, NotebookText, Pause, Pencil, Play,
 } from "lucide-react";
 import {
-  adicionarBlocoQuestoes, adicionarRodadaReforco, dateKeyLocal, gerarQuestoesGrupos, topicoKey,
+  adicionarBlocoQuestoes, adicionarRodadaReforco, dateKeyLocal, gerarQuestoesGrupos, removerBlocoQuestoes, topicoKey,
   type Alternativa, type AnotacaoPdf, type AtividadeTipo, type Carta, type CapituloPdf, type Grupo, type PdfEstudo, type PdfQuestoes, type TipoCarta, type TopicoState,
 } from "@/lib/estudo-data";
 import { resolverCapitulos } from "@/lib/trilha-dinamica";
@@ -307,11 +307,14 @@ export default function LeitorPdf({
     onUpdateTopicos(sincronizarCadernoComQuestoes(topicos, pdf.materia, topicoAtual, questoes));
   };
 
-  const marcarQuestao = (numero: number, acertou: boolean | null) => {
+  // identidade real de uma questão é o par (bloco, numero) — numero sozinho reinicia em 1 a cada
+  // bloco (ver QuestaoResultado em estudo-data.ts), então casar só por numero atualizaria a
+  // questão errada sempre que houver mais de um bloco.
+  const marcarQuestao = (bloco: number, numero: number, acertou: boolean | null) => {
     if (!pdf.questoes || !topicoAtual) return;
     const questoes: PdfQuestoes = {
       ...pdf.questoes,
-      resultados: pdf.questoes.resultados.map((r) => (r.numero === numero ? { ...r, acertou } : r)),
+      resultados: pdf.questoes.resultados.map((r) => ((r.bloco ?? 1) === bloco && r.numero === numero ? { ...r, acertou } : r)),
     };
     onAtualizarPdf({ questoes });
     onUpdateTopicos(sincronizarCadernoComQuestoes(topicos, pdf.materia, topicoAtual, questoes));
@@ -319,11 +322,11 @@ export default function LeitorPdf({
 
   // gabarito: só registra qual alternativa o usuário marcou — não mexe no caderno (isso é feito
   // por marcarQuestao/acertou), então não passa por sincronizarCadernoComQuestoes
-  const marcarAlternativa = (numero: number, alternativa: Alternativa | null) => {
+  const marcarAlternativa = (bloco: number, numero: number, alternativa: Alternativa | null) => {
     if (!pdf.questoes) return;
     const questoes: PdfQuestoes = {
       ...pdf.questoes,
-      resultados: pdf.questoes.resultados.map((r) => (r.numero === numero ? { ...r, alternativa: alternativa ?? undefined } : r)),
+      resultados: pdf.questoes.resultados.map((r) => ((r.bloco ?? 1) === bloco && r.numero === numero ? { ...r, alternativa: alternativa ?? undefined } : r)),
     };
     onAtualizarPdf({ questoes });
   };
@@ -338,6 +341,19 @@ export default function LeitorPdf({
   const adicionarRodadaDeReforco = (grupo: Grupo, tamanho: number) => {
     if (!pdf.questoes || !topicoAtual) return;
     const questoes = adicionarRodadaReforco(pdf.questoes, grupo, tamanho);
+    onAtualizarPdf({ questoes });
+    onUpdateTopicos(sincronizarCadernoComQuestoes(topicos, pdf.materia, topicoAtual, questoes));
+  };
+
+  // remove um bloco inteiro; se era o último que restava, equivale a "Refazer" (zera pra tela de
+  // gerar de novo) em vez de deixar um PdfQuestoes vazio (total 0) pendurado
+  const removerBloco = (bloco: number) => {
+    if (!pdf.questoes || !topicoAtual) return;
+    const questoes = removerBlocoQuestoes(pdf.questoes, bloco);
+    if (questoes.resultados.length === 0) {
+      refazerQuestoes();
+      return;
+    }
     onAtualizarPdf({ questoes });
     onUpdateTopicos(sincronizarCadernoComQuestoes(topicos, pdf.materia, topicoAtual, questoes));
   };
@@ -800,6 +816,7 @@ export default function LeitorPdf({
             onMarcarAlternativa={marcarAlternativa}
             onAdicionarBloco={adicionarBloco}
             onAdicionarRodadaReforco={adicionarRodadaDeReforco}
+            onRemoverBloco={removerBloco}
             onRefazer={refazerQuestoes}
             onFechar={() => setPainelQuestoesAberto(false)}
           />
