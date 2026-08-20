@@ -71,7 +71,7 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "discursivas", label: "Discursivas", icon: NotebookPen },
   { id: "ciclo", label: "Ciclo de Estudos", icon: RotateCcw },
   { id: "trilha", label: "Trilha", icon: Route },
-  { id: "mapa", label: "Mapa", icon: Map },
+  // "mapa" (RPG) oculto por pedido do usuário — código intacto, ele quer terminar/testar depois
   { id: "calendario", label: "Calendário", icon: CalendarDays },
   { id: "relatorios", label: "Relatórios", icon: BarChart2 },
   { id: "cartas", label: "Cartas", icon: Layers },
