@@ -24,6 +24,7 @@ import {
   type TrilhaDinamicaState,
   type PdfEstudo,
   type Bloco,
+  type JogoRPGState,
   MATERIAS,
 } from "@/lib/estudo-data";
 import { chaveCapitulo } from "@/lib/trilha-dinamica";
@@ -95,6 +96,7 @@ function mergeWithDefaults(parsed: Partial<EstudoState>, materiasConcurso?: Mate
     topicosExcluidos: parsed.topicosExcluidos ?? [],
     blocos: parsed.blocos ?? {},
     capitulosConcluidos: parsed.capitulosConcluidos ?? [],
+    jogoRPG: parsed.jogoRPG ?? DEFAULT_ESTUDO_STATE.jogoRPG,
     topicos: {
       ...DEFAULT_ESTUDO_STATE.topicos,
       ...(parsed.topicos ?? {}),
@@ -288,6 +290,10 @@ export default function EstudoPage() {
 
   const updateBlocos = useCallback((blocos: Record<string, Bloco>) => {
     setState((prev) => ({ ...prev, blocos }));
+  }, []);
+
+  const updateJogoRPG = useCallback((jogoRPG: JogoRPGState) => {
+    setState((prev) => ({ ...prev, jogoRPG }));
   }, []);
 
   // check manual de um capítulo/subcapítulo na Trilha (bolinha do card "Conteúdo") — reversível,
@@ -785,7 +791,12 @@ export default function EstudoPage() {
           )}
 
           {activeTab === "mapa" && (
-            <MapaTab materiasConcurso={materiasFiltradas} topicos={state.topicos} />
+            <MapaTab
+              materiasConcurso={materiasFiltradas}
+              topicos={state.topicos}
+              jogoRPG={state.jogoRPG}
+              onUpdateJogoRPG={updateJogoRPG}
+            />
           )}
 
           {activeTab === "calendario" && (

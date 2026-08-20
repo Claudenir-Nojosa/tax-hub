@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Check, X } from "lucide-react";
+import { Check, Coins, Sparkles, X } from "lucide-react";
+import type { JogoRPGState } from "@/lib/estudo-data";
 
 // Protótipo — pedido do usuário: só UMA pergunta de exemplo, pra ver como fica a "luta" antes de
 // decidir se vale construir o sistema de verdade (banco de questões real, várias rodadas, XP etc.).
@@ -23,6 +24,11 @@ const HP_NERDAO_MAX = 30;
 // pra quando isso virar o sistema real, com várias rodadas)
 const DANO_ACERTO = HP_NERDAO_MAX;
 const DANO_ERRO = 12;
+// recompensa por derrotar o Nerdão — refazer a mesma luta ("Lutar de novo") concede de novo, sem
+// limite; aceitável pra este protótipo de 1 pergunta só, mas isso muda quando entrar o banco de
+// questões real (cada mob passa a exigir uma pergunta nova/não repetida pra valer recompensa)
+const OURO_NERDAO = 10;
+const XP_NERDAO = 15;
 
 function BarraHP({ atual, max, cor }: { atual: number; max: number; cor: string }) {
   const pct = Math.max(0, Math.round((atual / max) * 100));
@@ -33,7 +39,17 @@ function BarraHP({ atual, max, cor }: { atual: number; max: number; cor: string 
   );
 }
 
-export default function TelaTreino({ telaCheia, onVoltar }: { telaCheia: boolean; onVoltar: () => void }) {
+export default function TelaTreino({
+  telaCheia,
+  jogoRPG,
+  onUpdateJogoRPG,
+  onVoltar,
+}: {
+  telaCheia: boolean;
+  jogoRPG: JogoRPGState;
+  onUpdateJogoRPG: (jogo: JogoRPGState) => void;
+  onVoltar: () => void;
+}) {
   const [hpNerdao, setHpNerdao] = useState(HP_NERDAO_MAX);
   const [hpHeroi, setHpHeroi] = useState(HP_HEROI_MAX);
   const [selecionada, setSelecionada] = useState<string | null>(null);
@@ -49,8 +65,12 @@ export default function TelaTreino({ telaCheia, onVoltar }: { telaCheia: boolean
     setAnimacao(certo ? "dano-nerdao" : "dano-heroi");
     clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => setAnimacao(null), 450);
-    if (certo) setHpNerdao((h) => Math.max(0, h - DANO_ACERTO));
-    else setHpHeroi((h) => Math.max(0, h - DANO_ERRO));
+    if (certo) {
+      setHpNerdao((h) => Math.max(0, h - DANO_ACERTO));
+      onUpdateJogoRPG({ gold: jogoRPG.gold + OURO_NERDAO, xp: jogoRPG.xp + XP_NERDAO });
+    } else {
+      setHpHeroi((h) => Math.max(0, h - DANO_ERRO));
+    }
   };
 
   const reiniciar = () => {
@@ -118,8 +138,16 @@ export default function TelaTreino({ telaCheia, onVoltar }: { telaCheia: boolean
 
       {vitoria && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ top: "-8%" }}>
-          <div className="treino-banner bg-black/75 border-2 border-amber-400 rounded-xl px-8 py-3.5">
+          <div className="treino-banner bg-black/75 border-2 border-amber-400 rounded-xl px-8 py-3.5 flex flex-col items-center gap-1.5">
             <p className="text-2xl font-bold text-amber-300 tracking-wide text-center">Vitória!</p>
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1 text-sm font-mono font-semibold text-amber-300">
+                <Coins className="h-4 w-4" /> +{OURO_NERDAO}
+              </span>
+              <span className="flex items-center gap-1 text-sm font-mono font-semibold text-violet-300">
+                <Sparkles className="h-4 w-4" /> +{XP_NERDAO} XP
+              </span>
+            </div>
           </div>
         </div>
       )}

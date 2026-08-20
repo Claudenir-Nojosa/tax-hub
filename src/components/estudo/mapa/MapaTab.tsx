@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Maximize, Minimize, Volume2, VolumeX } from "lucide-react";
-import { MATERIAS, type MateriaConcurso, type TopicoState } from "@/lib/estudo-data";
+import { Coins, Maximize, Minimize, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { MATERIAS, type JogoRPGState, type MateriaConcurso, type TopicoState } from "@/lib/estudo-data";
 import Acampamento from "./Acampamento";
 import MapaMundo from "./MapaMundo";
 import MapaRegiao from "./MapaRegiao";
@@ -26,9 +26,13 @@ type Tela = "acampamento" | "mundo" | "treino";
 export default function MapaTab({
   materiasConcurso,
   topicos,
+  jogoRPG,
+  onUpdateJogoRPG,
 }: {
   materiasConcurso?: MateriaConcurso[];
   topicos: Record<string, TopicoState>;
+  jogoRPG: JogoRPGState;
+  onUpdateJogoRPG: (jogo: JogoRPGState) => void;
 }) {
   const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
   const [tela, setTela] = useState<Tela>("acampamento");
@@ -81,8 +85,21 @@ export default function MapaTab({
             onEntrarTreino={() => setTela("treino")}
           />
         ) : (
-          <TelaTreino telaCheia={telaCheia} onVoltar={() => setTela("acampamento")} />
+          <TelaTreino
+            telaCheia={telaCheia}
+            jogoRPG={jogoRPG}
+            onUpdateJogoRPG={onUpdateJogoRPG}
+            onVoltar={() => setTela("acampamento")}
+          />
         )}
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 bg-black/60 border border-white/15 rounded-lg px-3 py-1.5">
+          <span className="flex items-center gap-1 text-xs font-mono font-semibold text-amber-300">
+            <Coins className="h-3.5 w-3.5" /> {jogoRPG.gold}
+          </span>
+          <span className="flex items-center gap-1 text-xs font-mono font-semibold text-violet-300">
+            <Sparkles className="h-3.5 w-3.5" /> {jogoRPG.xp} XP
+          </span>
+        </div>
         <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
           <button
             type="button"

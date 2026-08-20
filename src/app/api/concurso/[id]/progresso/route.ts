@@ -86,6 +86,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     ...(dados.trilhaDinamica !== undefined && { trilhaDinamica: dados.trilhaDinamica }),
     topicosExcluidos: dados.topicosExcluidos ?? [],
     capitulosConcluidos: dados.capitulosConcluidos ?? [],
+    jogoRPG: dados.jogoRPG ?? { gold: 0, xp: 0 },
   }
   return NextResponse.json(estudoState)
 }
@@ -178,6 +179,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ...(body.trilhaDinamica !== undefined && { trilhaDinamica: body.trilhaDinamica }),
     topicosExcluidos: body.topicosExcluidos ?? [],
     capitulosConcluidos: body.capitulosConcluidos ?? [],
+    jogoRPG: body.jogoRPG ?? { gold: 0, xp: 0 },
   }
 
   // só reescreve o currículo compartilhado (Concurso.topicosCompartilhados/blocosCompartilhados)

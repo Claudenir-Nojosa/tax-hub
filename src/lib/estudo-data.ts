@@ -318,6 +318,16 @@ export interface EstudoState {
   // desmarca). Complementa `pdf.paginaAtual`: um capítulo conta como lido se QUALQUER um dos dois
   // disser que sim (ver resolverCapitulos em trilha-dinamica.ts).
   capitulosConcluidos: string[];
+  // progresso do RPG (aba Mapa) — ouro/XP ganhos ao derrotar mobs no campo de treino. Independente
+  // do XP acadêmico (calcularXP/NIVEL_CONFIG, sistema de nível do Dashboard) — são duas
+  // gamificações paralelas de propósito, uma sobre ESTUDO (matérias/questões) e outra sobre JOGO
+  // (lutas), não fazem sentido misturadas.
+  jogoRPG: JogoRPGState;
+}
+
+export interface JogoRPGState {
+  gold: number;
+  xp: number;
 }
 
 // --- Biblioteca de PDFs ---
@@ -1642,4 +1652,5 @@ export const DEFAULT_ESTUDO_STATE: EstudoState = {
   topicosExcluidos: [],
   blocos: {},
   capitulosConcluidos: [],
+  jogoRPG: { gold: 0, xp: 0 },
 };
