@@ -5,8 +5,9 @@ import { MATERIAS, type MateriaConcurso, type TopicoState } from "@/lib/estudo-d
 import Acampamento from "./Acampamento";
 import MapaMundo from "./MapaMundo";
 import MapaRegiao from "./MapaRegiao";
+import TelaTreino from "./TelaTreino";
 
-type Tela = "acampamento" | "mundo";
+type Tela = "acampamento" | "mundo" | "treino";
 
 // Fase 1 do RPG medieval de estudos: mapa + acampamento andável, sem batalha/HP/motor de jogo
 // ainda — pedido explícito do usuário ("faça o mapa, depois eu decido o resto"). Entrada é o
@@ -28,7 +29,16 @@ export default function MapaTab({
   const materia = regiaoSelecionada ? materiasAtivas.find((m) => m.nome === regiaoSelecionada) : undefined;
 
   if (tela === "acampamento") {
-    return <Acampamento onIrParaMapa={() => setTela("mundo")} />;
+    return (
+      <Acampamento
+        onIrParaMapa={() => setTela("mundo")}
+        onEntrarTreino={() => setTela("treino")}
+      />
+    );
+  }
+
+  if (tela === "treino") {
+    return <TelaTreino onVoltar={() => setTela("acampamento")} />;
   }
 
   if (materia) {

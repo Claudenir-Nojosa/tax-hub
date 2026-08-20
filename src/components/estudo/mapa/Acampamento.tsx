@@ -24,7 +24,13 @@ const TECLAS_MOVIMENTO = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRig
 // fornecida pelo usuário (public/cenarios/acampamento.png). Só movimento por enquanto: os limites
 // (4-96% / 8-94%) mantêm o personagem dentro do quadro, mas NÃO há colisão real com fogueira/
 // barracas/poço ainda — é uma simplificação deliberada da primeira versão, não um bug.
-export default function Acampamento({ onIrParaMapa }: { onIrParaMapa?: () => void }) {
+export default function Acampamento({
+  onIrParaMapa,
+  onEntrarTreino,
+}: {
+  onIrParaMapa?: () => void;
+  onEntrarTreino?: () => void;
+}) {
   const [pos, setPos] = useState({ x: 50, y: 58 });
   const [direcao, setDirecao] = useState<Direcao>("baixo");
   const [telaCheia, setTelaCheia] = useState(false);
@@ -124,6 +130,15 @@ export default function Acampamento({ onIrParaMapa }: { onIrParaMapa?: () => voi
           className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
           style={{ imageRendering: "pixelated" }}
         />
+        {onEntrarTreino && (
+          <button
+            type="button"
+            onClick={onEntrarTreino}
+            title="Campo de treinamento"
+            className="absolute rounded-lg ring-0 hover:ring-2 hover:ring-amber-400/70 transition-all"
+            style={{ left: "5.76%", top: "41.2%", width: "19.85%", height: "24.8%" }}
+          />
+        )}
         <img
           src={SPRITES[direcao]}
           alt="Ladino"
