@@ -32,7 +32,7 @@ import {
   type DiscursivaResumo, type SimuladoResumo,
 } from "@/lib/trilha-fila";
 import type { AberturaPdfSolicitada } from "@/components/estudo/trilha/TrilhaLinhas";
-import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks, Users, FileStack, NotebookPen } from "lucide-react";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks, Users, FileStack, NotebookPen, Map } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -54,11 +54,12 @@ const DiscursivasTab = dynamic(() => import("@/components/estudo/discursivas/Dis
 const TimerEstudo = dynamic(() => import("@/components/estudo/timer/TimerEstudo"), { ssr: false });
 const CompararEditaisTab = dynamic(() => import("@/components/estudo/CompararEditaisTab"), { ssr: false });
 const ConcurseirosTab = dynamic(() => import("@/components/estudo/ConcurseirosTab"), { ssr: false });
+const MapaTab = dynamic(() => import("@/components/estudo/mapa/MapaTab"), { ssr: false });
 
 const storageKey = (concursoId: string | null) =>
   concursoId ? `taxhub_estudo_c_${concursoId}` : "taxhub_estudo_v1";
 
-type Tab = "dashboard" | "edital" | "questoes" | "biblioteca" | "simulados" | "discursivas" | "ciclo" | "trilha" | "calendario" | "relatorios" | "cartas" | "resumos" | "comparar" | "concurseiros";
+type Tab = "dashboard" | "edital" | "questoes" | "biblioteca" | "simulados" | "discursivas" | "ciclo" | "trilha" | "mapa" | "calendario" | "relatorios" | "cartas" | "resumos" | "comparar" | "concurseiros";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -69,6 +70,7 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "discursivas", label: "Discursivas", icon: NotebookPen },
   { id: "ciclo", label: "Ciclo de Estudos", icon: RotateCcw },
   { id: "trilha", label: "Trilha", icon: Route },
+  { id: "mapa", label: "Mapa", icon: Map },
   { id: "calendario", label: "Calendário", icon: CalendarDays },
   { id: "relatorios", label: "Relatórios", icon: BarChart2 },
   { id: "cartas", label: "Cartas", icon: Layers },
@@ -780,6 +782,10 @@ export default function EstudoPage() {
               onIrParaSimulados={() => setActiveTab("simulados")}
               onIrParaDiscursivas={() => setActiveTab("discursivas")}
             />
+          )}
+
+          {activeTab === "mapa" && (
+            <MapaTab materiasConcurso={materiasFiltradas} topicos={state.topicos} />
           )}
 
           {activeTab === "calendario" && (
