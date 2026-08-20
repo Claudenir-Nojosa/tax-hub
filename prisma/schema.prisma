@@ -41,6 +41,7 @@ model User {
   resumosEstudo    ResumoEstudo[]
   simuladoTentativas  SimuladoTentativa[]
   discursivaRespostas DiscursivaResposta[]
+  campanhasRPG        CampanhaRPG[]
 }
 
 // Resumos gerados por IA na aba "Resumos" do Estudo: o usuário sobe um PDF de material, a IA
@@ -187,6 +188,7 @@ model Concurso {
   simulados       SimuladoConcurso[]
   discursivaTemas DiscursivaTema[]
   questoesRpg     QuestaoRPG[]
+  campanhasRPG    CampanhaRPG[]
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 }
@@ -363,6 +365,36 @@ model QuestaoRPG {
   criadoEm        DateTime @default(now())
 
   @@index([concursoId, materia])
+}
+
+// Progresso de UMA campanha roguelike (aba Mapa) — POR USUÁRIO, diferente de QuestaoRPG/inimigos
+// (currículo, compartilhado). Mesmo espírito de SimuladoTentativa: uma linha ativa por
+// (concurso, usuário). Campos de corrida resetam numa "Nova Campanha" (morrer também reseta);
+// campos permanentes (itens, xpPermanente, histórico) nunca resetam — é o que torna isso um
+// roguelike de verdade, não só uma barra de progresso que reinicia do zero sempre.
+model CampanhaRPG {
+  id          String   @id @default(cuid())
+  concursoId  String
+  concurso    Concurso @relation(fields: [concursoId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      String   // "em_andamento" | "morto" | "vitoria"
+  // --- corrida atual: reseta em "Nova Campanha" ---
+  heroiHP      Int
+  heroiHPMax   Int      @default(28)
+  ouroCorrida  Int      @default(0)
+  xpCorrida    Int      @default(0)
+  rota         Json     @default("[]") // [{ materia, topico }] gerada no início da corrida
+  posicaoAtual Int      @default(0)    // índice dentro de `rota`
+  iniciadaEm   DateTime @default(now())
+  // --- permanente: NUNCA reseta, sobrevive à morte ---
+  itens                Json @default("[]") // string[] ids de item possuídos (fase futura, vazio por enquanto)
+  xpPermanente         Int  @default(0)    // pro sistema de título/nível (fase futura)
+  topicosVencidosTotal Json @default("[]") // topicoKey[] vencidos em QUALQUER corrida (histórico)
+  updatedAt            DateTime @updatedAt
+
+  @@unique([concursoId, userId])
+  @@index([userId])
 }
 
 // "Mandar Incentivo" — mensagem direta de um usuário pra outro (aba Pré-Aprovados do Estudo).
