@@ -113,7 +113,7 @@ export default function Acampamento({
           left: `${pos.x}%`,
           top: `${pos.y}%`,
           transform: "translate(-50%, -95%)",
-          height: 64,
+          height: telaCheia ? 150 : 64,
           width: "auto",
           imageRendering: "pixelated",
         }}

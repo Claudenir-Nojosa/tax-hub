@@ -222,10 +222,14 @@ export default function TelaTreino({
 
             {!vitoria && (
               <>
-                <p className="text-[10px] text-amber-300/80 font-mono uppercase tracking-wide">
+                <p className={`${telaCheia ? "text-sm" : "text-[11px]"} text-amber-300/80 font-mono uppercase tracking-wide`}>
                   {pergunta.banca}{pergunta.orgao ? ` · ${pergunta.orgao}` : ""} · {pergunta.materia} · {pergunta.topico}
                 </p>
-                <p className="text-sm text-white leading-snug max-h-24 overflow-y-auto pr-1">{pergunta.enunciado}</p>
+                <p
+                  className={`${telaCheia ? "text-lg max-h-40" : "text-base max-h-28"} text-white leading-snug overflow-y-auto pr-1`}
+                >
+                  {pergunta.enunciado}
+                </p>
                 <div className="grid grid-cols-2 gap-2">
                   {Object.entries(pergunta.alternativas).map(([letra, texto]) => {
                     const ehCorreta = letra === pergunta.correta;
@@ -242,7 +246,7 @@ export default function TelaTreino({
                         type="button"
                         disabled={!!selecionada}
                         onClick={() => responder(letra)}
-                        className={`flex items-start gap-2 text-left px-3 py-2 rounded-lg border text-xs transition-colors ${estilo}`}
+                        className={`flex items-start gap-2 text-left px-3 py-2 rounded-lg border ${telaCheia ? "text-base" : "text-sm"} transition-colors ${estilo}`}
                       >
                         <span className="font-mono font-semibold flex-shrink-0">{letra}</span>
                         <span className="flex-1">{texto}</span>
