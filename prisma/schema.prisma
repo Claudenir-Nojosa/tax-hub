@@ -186,6 +186,7 @@ model Concurso {
   pdfs        PdfConcurso[]
   simulados       SimuladoConcurso[]
   discursivaTemas DiscursivaTema[]
+  questoesRpg     QuestaoRPG[]
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 }
@@ -334,6 +335,34 @@ model DiscursivaResposta {
 
   @@index([temaId, userId])
   @@index([userId, criadoEm])
+}
+
+// banco de questões do RPG (aba Mapa) — usadas pelos mobs do campo de treino em vez da pergunta
+// única fixa do protótipo inicial. Importadas de cadernos impressos em PDF do TecConcursos
+// (exportação oficial do site, não scraping) via script — ver docs da sessão. Compartilhado por
+// concurso, mesmo padrão de SimuladoConcurso/DiscursivaTema (currículo, não progresso por usuário
+// — a "resposta" de uma luta é efêmera na UI, não precisa de tabela própria ainda).
+model QuestaoRPG {
+  id              String   @id @default(cuid())
+  concursoId      String
+  concurso        Concurso @relation(fields: [concursoId], references: [id], onDelete: Cascade)
+  // id da questão no TecConcursos, quando importada de lá — evita duplicar se o mesmo caderno for
+  // reimportado por engano
+  tecConcursosId  String?
+  banca           String
+  cargo           String?
+  orgao           String?
+  area            String?
+  ano             String?
+  materia         String
+  topico          String
+  enunciado       String   @db.Text
+  alternativas    Json     // { A: "...", B: "...", C: "...", D: "...", E?: "..." }
+  correta         String   // "A".."E"
+  criadoPorUserId String?
+  criadoEm        DateTime @default(now())
+
+  @@index([concursoId, materia])
 }
 
 // "Mandar Incentivo" — mensagem direta de um usuário pra outro (aba Pré-Aprovados do Estudo).

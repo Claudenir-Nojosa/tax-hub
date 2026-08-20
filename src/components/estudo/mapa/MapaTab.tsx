@@ -28,11 +28,13 @@ export default function MapaTab({
   topicos,
   jogoRPG,
   onUpdateJogoRPG,
+  concursoId,
 }: {
   materiasConcurso?: MateriaConcurso[];
   topicos: Record<string, TopicoState>;
   jogoRPG: JogoRPGState;
   onUpdateJogoRPG: (jogo: JogoRPGState) => void;
+  concursoId?: string;
 }) {
   const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
   const [tela, setTela] = useState<Tela>("acampamento");
@@ -89,6 +91,7 @@ export default function MapaTab({
             telaCheia={telaCheia}
             jogoRPG={jogoRPG}
             onUpdateJogoRPG={onUpdateJogoRPG}
+            concursoId={concursoId}
             onVoltar={() => setTela("acampamento")}
           />
         )}

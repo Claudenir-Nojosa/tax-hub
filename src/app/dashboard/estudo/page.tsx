@@ -796,6 +796,7 @@ export default function EstudoPage() {
               topicos={state.topicos}
               jogoRPG={state.jogoRPG}
               onUpdateJogoRPG={updateJogoRPG}
+              concursoId={concursoAtivo?.id}
             />
           )}
 
