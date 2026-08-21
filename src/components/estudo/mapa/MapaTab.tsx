@@ -2,32 +2,39 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Coins, Maximize, Minimize, Sparkles, Volume2, VolumeX } from "lucide-react";
-import { MATERIAS, type JogoRPGState, type MateriaConcurso, type TopicoState } from "@/lib/estudo-data";
+import { MATERIAS, materiasDefaultSefaz, type JogoRPGState, type MateriaConcurso, type TopicoState } from "@/lib/estudo-data";
 import Acampamento from "./Acampamento";
-import { type CampanhaRPGState, novaCampanha } from "./campanha-rpg";
-import { inimigoDoTopico } from "./inimigos-rpg";
+import { catalogoEsgotado, novaCampanha, progressoDaMateria, type CampanhaRPGState } from "./campanha-rpg";
+import { inimigosDaMateria } from "./inimigos-rpg";
 import MapaMundo from "./MapaMundo";
 import MapaRegiao from "./MapaRegiao";
-import TelaCombateCampanha from "./TelaCombateCampanha";
+import TelaCombateCampanha, { type QuestaoErrada } from "./TelaCombateCampanha";
+import TelaEstatisticasRPG from "./TelaEstatisticasRPG";
 import TelaMenu from "./TelaMenu";
+import TelaRevisaoCombate from "./TelaRevisaoCombate";
 import TelaRotaCampanha from "./TelaRotaCampanha";
+import TelaSelecaoMapa from "./TelaSelecaoMapa";
 import TelaTreino from "./TelaTreino";
 
-type Tela = "menu" | "acampamento" | "mundo" | "treino" | "rota" | "combate";
+type Tela = "menu" | "acampamento" | "mundo" | "treino" | "selecaoMapa" | "rota" | "combate" | "revisao" | "estatisticas";
 
-// RPG medieval de estudos. Entrada é o Menu (título do jogo): Nova Campanha entra no roguelike de
-// verdade (rota = todos os tópicos com inimigo pronto, na ordem do currículo; cada inimigo derrotado
-// avança a posição; morrer reseta a corrida mas preserva itens/XP permanente/histórico — ver
-// campanha-rpg.ts). "Ir para o mapa" leva ao modo livre já existente (Acampamento andável → Mapa do
-// Mundo por matéria/tópico, ou treino solto contra o Nerdão) — esse fluxo é 100% derivado do
-// progresso real (TopicoState.estudado) e não persiste nada de novo; roda em paralelo à campanha,
-// sistemas de ouro/XP separados por decisão do usuário.
+// RPG medieval de estudos. Entrada é o Menu (título do jogo): Nova Campanha/Continuar levam pra
+// Seleção de Mapa — cada mapa é uma matéria, escolhida livremente pelo jogador (reformulação que
+// substitui a rota única do edital inteiro do design anterior). Dentro do mapa escolhido, a rota
+// sequencial de inimigos daquela matéria; combate real com perguntas; ao fim de CADA combate, se
+// sobrar questão errada, entra em Revisão (resposta certa + dica de IA) antes de voltar. Estatísticas
+// agrega o histórico (RespostaRPG) por matéria/tópico. Morrer reseta a corrida (progresso por
+// matéria, ouro, XP) mas preserva itens/XP permanente/histórico — ver campanha-rpg.ts. "Ir para o
+// mapa" leva ao modo livre já existente (Acampamento andável → Mapa do Mundo por matéria/tópico, ou
+// treino solto contra o Nerdão) — esse fluxo é 100% derivado do progresso real (TopicoState.estudado)
+// e não persiste nada de novo; roda em paralelo à campanha, sistemas de ouro/XP separados.
 //
-// Tela cheia e música ficam AQUI (não dentro de cada tela) de propósito: menu/acampamento/treino/
-// rota/combate compartilham o mesmo wrapper (só "mundo" fica fora), então trocar entre eles nunca
-// desmonta o <audio>/fullscreen — se cada tela fosse dona do próprio elemento, a troca cortaria o
-// som e derrubaria a tela cheia no meio (bug já reportado pelo usuário nessa área). A música muda de
-// faixa (acampamento.mp3 <-> luta.mp3) conforme a tela, sem trocar de dono.
+// Tela cheia e música ficam AQUI (não dentro de cada tela) de propósito: todas as telas do jogo
+// (menu/acampamento/treino/seleçãoMapa/rota/combate/revisão/estatísticas) compartilham o mesmo
+// wrapper (só "mundo" fica fora), então trocar entre elas nunca desmonta o <audio>/fullscreen — se
+// cada tela fosse dona do próprio elemento, a troca cortaria o som e derrubaria a tela cheia no meio
+// (bug já reportado pelo usuário nessa área). A música muda de faixa (acampamento.mp3 <-> luta.mp3)
+// conforme a tela, sem trocar de dono.
 export default function MapaTab({
   materiasConcurso,
   topicos,
@@ -42,11 +49,19 @@ export default function MapaTab({
   concursoId?: string;
 }) {
   const materiasAtivas = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : MATERIAS;
+  // TelaSelecaoMapa precisa de id/cor reais (MateriaConcurso), que MATERIAS (MateriaDef, sem esses
+  // campos) não tem — fallback próprio via materiasDefaultSefaz() em vez do materiasAtivas genérico
+  // (mesma lição já documentada no app: não misturar o union MateriaConcurso[]|MateriaDef[] com um
+  // consumidor que exige só um dos dois lados).
+  const materiasParaMapa: MateriaConcurso[] = materiasConcurso && materiasConcurso.length > 0 ? materiasConcurso : materiasDefaultSefaz();
   const [tela, setTela] = useState<Tela>("menu");
   const [regiaoSelecionada, setRegiaoSelecionada] = useState<string | null>(null);
 
   const [campanha, setCampanha] = useState<CampanhaRPGState | null>(null);
   const [carregandoCampanha, setCarregandoCampanha] = useState(true);
+  const [materiaEscolhida, setMateriaEscolhida] = useState<string | null>(null);
+  const [erradasCombate, setErradasCombate] = useState<QuestaoErrada[]>([]);
+  const [destinoAposRevisao, setDestinoAposRevisao] = useState<"rota" | "menu">("rota");
 
   const [telaCheia, setTelaCheia] = useState(false);
   const [tocandoMusica, setTocandoMusica] = useState(false);
@@ -78,34 +93,47 @@ export default function MapaTab({
 
   const iniciarNovaCampanha = () => {
     persistirCampanha(novaCampanha(campanha ?? undefined));
-    setTela("rota");
+    setTela("selecaoMapa");
   };
 
-  const itemAtualRota = campanha && campanha.posicaoAtual < campanha.rota.length ? campanha.rota[campanha.posicaoAtual] : undefined;
-  const inimigoAtual = itemAtualRota ? inimigoDoTopico(itemAtualRota.materia, itemAtualRota.topico) : undefined;
+  const inimigoAtual =
+    campanha && materiaEscolhida ? inimigosDaMateria(materiaEscolhida)[progressoDaMateria(campanha, materiaEscolhida)] : undefined;
 
-  const resolverVitoria = (hpFinalHeroi: number, ouroGanho: number, xpGanho: number) => {
-    if (!campanha || !itemAtualRota) return;
-    const topicoKey = `${itemAtualRota.materia}::${itemAtualRota.topico}`;
-    const novaPosicao = campanha.posicaoAtual + 1;
+  const resolverVitoria = (hpFinalHeroi: number, ouroGanho: number, xpGanho: number, erradas: QuestaoErrada[]) => {
+    if (!campanha || !materiaEscolhida || !inimigoAtual) return;
+    const novaPosicao = progressoDaMateria(campanha, materiaEscolhida) + 1;
+    const novoProgresso = { ...campanha.progressoMaterias, [materiaEscolhida]: novaPosicao };
+    const topicoKey = `${inimigoAtual.materia}::${inimigoAtual.topico}`;
     persistirCampanha({
       ...campanha,
-      status: novaPosicao >= campanha.rota.length ? "conteudo_esgotado" : "em_andamento",
+      status: catalogoEsgotado(novoProgresso) ? "conteudo_esgotado" : "em_andamento",
       heroiHP: hpFinalHeroi,
       ouroCorrida: campanha.ouroCorrida + ouroGanho,
       xpCorrida: campanha.xpCorrida + xpGanho,
-      posicaoAtual: novaPosicao,
+      progressoMaterias: novoProgresso,
       topicosVencidosTotal: campanha.topicosVencidosTotal.includes(topicoKey)
         ? campanha.topicosVencidosTotal
         : [...campanha.topicosVencidosTotal, topicoKey],
     });
-    setTela("rota");
+    if (erradas.length > 0) {
+      setErradasCombate(erradas);
+      setDestinoAposRevisao("rota");
+      setTela("revisao");
+    } else {
+      setTela("rota");
+    }
   };
 
-  const resolverDerrota = () => {
+  const resolverDerrota = (erradas: QuestaoErrada[]) => {
     if (!campanha) return;
     persistirCampanha({ ...novaCampanha(campanha), status: "morto" });
-    setTela("menu");
+    if (erradas.length > 0) {
+      setErradasCombate(erradas);
+      setDestinoAposRevisao("menu");
+      setTela("revisao");
+    } else {
+      setTela("menu");
+    }
   };
 
   const musicaAtual = tela === "combate" ? "/sons/luta.mp3" : "/sons/acampamento.mp3";
@@ -144,7 +172,16 @@ export default function MapaTab({
 
   const materia = regiaoSelecionada ? materiasAtivas.find((m) => m.nome === regiaoSelecionada) : undefined;
 
-  if (tela === "menu" || tela === "acampamento" || tela === "treino" || tela === "rota" || tela === "combate") {
+  if (
+    tela === "menu" ||
+    tela === "acampamento" ||
+    tela === "treino" ||
+    tela === "selecaoMapa" ||
+    tela === "rota" ||
+    tela === "combate" ||
+    tela === "revisao" ||
+    tela === "estatisticas"
+  ) {
     return (
       <div
         ref={containerRef}
@@ -164,8 +201,9 @@ export default function MapaTab({
               <TelaMenu
                 campanha={campanha}
                 onNovaCampanha={iniciarNovaCampanha}
-                onContinuar={() => setTela("rota")}
+                onContinuar={() => setTela("selecaoMapa")}
                 onIrParaMapa={() => setTela("acampamento")}
+                onVerEstatisticas={() => setTela("estatisticas")}
               />
             </div>
           ))}
@@ -188,14 +226,39 @@ export default function MapaTab({
           />
         )}
 
-        {tela === "rota" &&
+        {tela === "selecaoMapa" &&
           (campanha ? (
             <div className="flex items-center justify-center w-full h-full p-4 overflow-y-auto">
-              <TelaRotaCampanha campanha={campanha} onEntrarCombate={() => setTela("combate")} onVoltarMenu={() => setTela("menu")} />
+              <TelaSelecaoMapa
+                materiasConcurso={materiasParaMapa}
+                campanha={campanha}
+                onSelecionarMateria={(m) => {
+                  setMateriaEscolhida(m);
+                  setTela("rota");
+                }}
+                onVoltarMenu={() => setTela("menu")}
+              />
             </div>
           ) : (
             <div className="flex items-center justify-center w-full h-full p-10">
               <p className="text-sm text-white/40">Nenhuma campanha ativa.</p>
+            </div>
+          ))}
+
+        {tela === "rota" &&
+          (campanha && materiaEscolhida ? (
+            <div className="flex items-center justify-center w-full h-full p-4 overflow-y-auto">
+              <TelaRotaCampanha
+                materia={materiaEscolhida}
+                campanha={campanha}
+                onEntrarCombate={() => setTela("combate")}
+                onTrocarMapa={() => setTela("selecaoMapa")}
+                onVoltarMenu={() => setTela("menu")}
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center w-full h-full p-10">
+              <p className="text-sm text-white/40">Nenhum mapa selecionado.</p>
             </div>
           ))}
 
@@ -215,6 +278,18 @@ export default function MapaTab({
               <p className="text-sm text-white/40">Nenhuma luta disponível.</p>
             </div>
           ))}
+
+        {tela === "revisao" && (
+          <div className="flex items-center justify-center w-full h-full p-4 overflow-y-auto">
+            <TelaRevisaoCombate erradas={erradasCombate} onContinuar={() => setTela(destinoAposRevisao)} />
+          </div>
+        )}
+
+        {tela === "estatisticas" && (
+          <div className="flex items-center justify-center w-full h-full p-4 overflow-y-auto">
+            <TelaEstatisticasRPG concursoId={concursoId} onVoltarMenu={() => setTela("menu")} />
+          </div>
+        )}
 
         {(tela === "acampamento" || tela === "treino") && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 bg-black/60 border border-white/15 rounded-lg px-3 py-1.5">

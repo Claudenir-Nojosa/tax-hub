@@ -42,6 +42,7 @@ model User {
   simuladoTentativas  SimuladoTentativa[]
   discursivaRespostas DiscursivaResposta[]
   campanhasRPG        CampanhaRPG[]
+  respostasRPG        RespostaRPG[]
 }
 
 // Resumos gerados por IA na aba "Resumos" do Estudo: o usuário sobe um PDF de material, a IA
@@ -189,6 +190,7 @@ model Concurso {
   discursivaTemas DiscursivaTema[]
   questoesRpg     QuestaoRPG[]
   campanhasRPG    CampanhaRPG[]
+  respostasRPG    RespostaRPG[]
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 }
@@ -342,8 +344,8 @@ model DiscursivaResposta {
 // banco de questões do RPG (aba Mapa) — usadas pelos mobs do campo de treino em vez da pergunta
 // única fixa do protótipo inicial. Importadas de cadernos impressos em PDF do TecConcursos
 // (exportação oficial do site, não scraping) via script — ver docs da sessão. Compartilhado por
-// concurso, mesmo padrão de SimuladoConcurso/DiscursivaTema (currículo, não progresso por usuário
-// — a "resposta" de uma luta é efêmera na UI, não precisa de tabela própria ainda).
+// concurso, mesmo padrão de SimuladoConcurso/DiscursivaTema (currículo, não progresso por usuário —
+// a resposta de UMA tentativa fica em RespostaRPG, por usuário).
 model QuestaoRPG {
   id              String   @id @default(cuid())
   concursoId      String
@@ -363,8 +365,33 @@ model QuestaoRPG {
   correta         String   // "A".."E"
   criadoPorUserId String?
   criadoEm        DateTime @default(now())
+  respostas       RespostaRPG[]
 
   @@index([concursoId, materia])
+}
+
+// Histórico de UMA tentativa de responder uma QuestaoRPG (certa ou errada) — por usuário. Base pra
+// dois usos: (1) revisão de fim de combate (as erradas de UMA luta, com a alternativa marcada, pra
+// mandar pra IA gerar um bizu); (2) tela de Estatísticas (agrega por materia/topico via GET). Tabela
+// própria (não um array crescendo dentro de CampanhaRPG) porque farming (refazer a mesma luta) faz
+// esse histórico crescer sem limite — flat/insert-only escala melhor que reescrever um JSON a cada
+// resposta, e permite agregação sem precisar carregar tudo em JS.
+model RespostaRPG {
+  id                 String     @id @default(cuid())
+  userId             String
+  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  concursoId         String
+  concurso           Concurso   @relation(fields: [concursoId], references: [id], onDelete: Cascade)
+  questaoRPGId       String
+  questaoRPG         QuestaoRPG @relation(fields: [questaoRPGId], references: [id], onDelete: Cascade)
+  materia            String
+  topico             String
+  alternativaMarcada String
+  acertou            Boolean
+  criadoEm           DateTime   @default(now())
+
+  @@index([userId, concursoId])
+  @@index([userId, materia, topico])
 }
 
 // Progresso de UMA campanha roguelike (aba Mapa) — POR USUÁRIO, diferente de QuestaoRPG/inimigos
@@ -384,8 +411,11 @@ model CampanhaRPG {
   heroiHPMax   Int      @default(28)
   ouroCorrida  Int      @default(0)
   xpCorrida    Int      @default(0)
-  rota         Json     @default("[]") // [{ materia, topico }] gerada no início da corrida
-  posicaoAtual Int      @default(0)    // índice dentro de `rota`
+  // progresso POR MATÉRIA (mapa escolhido pelo jogador, não mais uma rota única pro edital
+  // inteiro): Record<materiaNome, posicaoAtual> — índice dentro da lista de inimigos DAQUELA
+  // matéria em INIMIGOS_RPG. Depende de INIMIGOS_RPG ser append-only por matéria (nunca
+  // reordenar/inserir no meio) — o índice não é um snapshot, só uma posição.
+  progressoMaterias Json @default("{}")
   iniciadaEm   DateTime @default(now())
   // --- permanente: NUNCA reseta, sobrevive à morte ---
   itens                Json @default("[]") // string[] ids de item possuídos (fase futura, vazio por enquanto)

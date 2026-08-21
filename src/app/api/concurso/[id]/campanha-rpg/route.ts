@@ -6,7 +6,7 @@ import db from "@/lib/db"
 // (currículo, compartilhado). Uma linha ativa por (concurso, usuário) — mesmo padrão de
 // SimuladoTentativa. GET devolve a linha atual (ou null, se o usuário nunca começou uma campanha);
 // POST faz upsert do objeto inteiro — o cliente decide o que muda ("Nova Campanha" reseta os
-// campos de corrida mantendo os permanentes, um combate só atualiza HP/ouro/xp/rota).
+// campos de corrida mantendo os permanentes, um combate só atualiza HP/ouro/xp/progressoMaterias).
 
 async function checarAcesso(concursoId: string, userId: string): Promise<boolean> {
   const acesso = await db.concursoAcesso.count({ where: { concursoId, userId } })
@@ -30,8 +30,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     heroiHPMax: campanha.heroiHPMax,
     ouroCorrida: campanha.ouroCorrida,
     xpCorrida: campanha.xpCorrida,
-    rota: campanha.rota,
-    posicaoAtual: campanha.posicaoAtual,
+    progressoMaterias: campanha.progressoMaterias,
     itens: campanha.itens,
     xpPermanente: campanha.xpPermanente,
     topicosVencidosTotal: campanha.topicosVencidosTotal,
@@ -44,8 +43,7 @@ interface CampanhaBody {
   heroiHPMax: number
   ouroCorrida: number
   xpCorrida: number
-  rota: { materia: string; topico: string }[]
-  posicaoAtual: number
+  progressoMaterias: Record<string, number>
   itens: string[]
   xpPermanente: number
   topicosVencidosTotal: string[]
@@ -67,8 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     heroiHPMax: body.heroiHPMax,
     ouroCorrida: body.ouroCorrida,
     xpCorrida: body.xpCorrida,
-    rota: body.rota,
-    posicaoAtual: body.posicaoAtual,
+    progressoMaterias: body.progressoMaterias,
     itens: body.itens,
     xpPermanente: body.xpPermanente,
     topicosVencidosTotal: body.topicosVencidosTotal,
@@ -86,8 +83,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     heroiHPMax: salvo.heroiHPMax,
     ouroCorrida: salvo.ouroCorrida,
     xpCorrida: salvo.xpCorrida,
-    rota: salvo.rota,
-    posicaoAtual: salvo.posicaoAtual,
+    progressoMaterias: salvo.progressoMaterias,
     itens: salvo.itens,
     xpPermanente: salvo.xpPermanente,
     topicosVencidosTotal: salvo.topicosVencidosTotal,

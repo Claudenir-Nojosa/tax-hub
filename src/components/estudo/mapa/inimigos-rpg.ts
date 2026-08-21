@@ -198,3 +198,16 @@ export const INIMIGOS_RPG: InimigoRPG[] = [
 export function inimigoDoTopico(materia: string, topico: string): InimigoRPG | undefined {
   return INIMIGOS_RPG.find((i) => i.materia === materia && i.topico === topico);
 }
+
+// Nomes das matérias que já têm pelo menos 1 inimigo pronto, na ordem em que aparecem no catálogo
+// (não a ordem alfabética/curricular) — usado pela Seleção de Mapa pra decidir quais mapas ficam
+// jogáveis vs "Em breve". IMPORTANTE: a ordem dos inimigos DENTRO de uma matéria é append-only —
+// CampanhaRPG.progressoMaterias guarda só um ÍNDICE nessa lista, não um snapshot; reordenar ou
+// inserir um inimigo no meio desalinha silenciosamente o progresso de quem já estiver jogando.
+export function materiasComInimigos(): string[] {
+  return [...new Set(INIMIGOS_RPG.map((i) => i.materia))];
+}
+
+export function inimigosDaMateria(materia: string): InimigoRPG[] {
+  return INIMIGOS_RPG.filter((i) => i.materia === materia);
+}
