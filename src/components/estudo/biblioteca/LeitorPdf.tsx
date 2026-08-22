@@ -338,9 +338,9 @@ export default function LeitorPdf({
     onUpdateTopicos(sincronizarCadernoComQuestoes(topicos, pdf.materia, topicoAtual, questoes));
   };
 
-  const adicionarRodadaDeReforco = (grupo: Grupo, tamanho: number) => {
+  const adicionarRodadaDeReforco = (grupo: Grupo, numerosErrados: number[]) => {
     if (!pdf.questoes || !topicoAtual) return;
-    const questoes = adicionarRodadaReforco(pdf.questoes, grupo, tamanho);
+    const questoes = adicionarRodadaReforco(pdf.questoes, grupo, numerosErrados);
     onAtualizarPdf({ questoes });
     onUpdateTopicos(sincronizarCadernoComQuestoes(topicos, pdf.materia, topicoAtual, questoes));
   };

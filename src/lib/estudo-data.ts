@@ -416,20 +416,22 @@ export function removerBlocoQuestoes(questoes: PdfQuestoes, bloco: number): PdfQ
   return { ...questoes, total: restantes.length, resultados: restantes };
 }
 
-// Acrescenta uma RODADA DE REFORÇO a um grupo específico — um bloco novo com `tamanho` questões
-// TODAS do mesmo grupo (sem rotação A-D como um bloco normal). Usado quando um grupo A-D voltou
-// fraco na Trilha (ver analisarReforcos em trilha-dinamica.ts) e o usuário quer tentar de novo: as
-// questões da(s) tentativa(s) anteriores desse grupo nunca são tocadas (mesmo espírito de
-// adicionarBlocoQuestoes acima) — pedido explícito do usuário, ele quer o percentual de cada
-// tentativa (1ª, 2ª, 3ª...) separado, nunca sobrescrito. Ver tentativasDoGrupo, que reconstrói
-// esse histórico a partir daqui.
-export function adicionarRodadaReforco(questoes: PdfQuestoes, grupo: Grupo, tamanho: number): PdfQuestoes {
+// Acrescenta uma RODADA DE REFORÇO a um grupo específico — um bloco novo, TODO do mesmo grupo (sem
+// rotação A-D como um bloco normal), com um item pra cada `numerosErrados` — o `numero` de cada
+// item novo é o MESMO da questão original que foi errada (numero 1, 13, 21... da tentativa
+// anterior), NÃO uma sequência nova 1,2,3... — pedido explícito do usuário: refazer "a questão 13"
+// tem que continuar se chamando 13, senão ele não sabe qual questão física do caderno externo
+// precisa refazer. Usado quando um grupo A-D voltou fraco na Trilha (ver analisarReforcos em
+// trilha-dinamica.ts) e o usuário quer tentar de novo: as questões da(s) tentativa(s) anteriores
+// desse grupo nunca são tocadas (mesmo espírito de adicionarBlocoQuestoes acima) — pedido explícito
+// do usuário, ele quer o percentual de cada tentativa (1ª, 2ª, 3ª...) separado, nunca sobrescrito.
+// Ver tentativasDoGrupo, que reconstrói esse histórico a partir daqui. `numero` só precisa ser único
+// DENTRO do bloco novo (ver QuestaoResultado) — como cada numerosErrados vem de UM bloco original
+// só (a última tentativa), não colide.
+export function adicionarRodadaReforco(questoes: PdfQuestoes, grupo: Grupo, numerosErrados: number[]): PdfQuestoes {
   const ultimoBloco = questoes.resultados.reduce((max, r) => Math.max(max, r.bloco ?? 1), 0);
-  const novos: QuestaoResultado[] = [];
-  for (let n = 1; n <= tamanho; n++) {
-    novos.push({ numero: n, bloco: ultimoBloco + 1, grupo, acertou: null });
-  }
-  return { ...questoes, total: questoes.total + tamanho, resultados: [...questoes.resultados, ...novos] };
+  const novos: QuestaoResultado[] = numerosErrados.map((numero) => ({ numero, bloco: ultimoBloco + 1, grupo, acertou: null }));
+  return { ...questoes, total: questoes.total + numerosErrados.length, resultados: [...questoes.resultados, ...novos] };
 }
 
 export interface TentativaGrupo {

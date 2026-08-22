@@ -102,11 +102,11 @@ export default function PainelQuestoes({
   // pro caso de perceber depois que faltava um caderno de questões pro tópico
   onAdicionarBloco: (tamanho: number) => void;
   // nova rodada de reforço pra UM grupo específico — refaz EXATAMENTE as questões que o usuário
-  // errou na última tentativa (tamanho = nº de erros dela, nunca escolhido pelo usuário: o pedido
-  // é reforçar o que já foi errado, não gerar questões novas). A tentativa anterior fica intocada,
-  // com seu percentual próprio preservado (ver adicionarRodadaReforco/tentativasDoGrupo em
-  // estudo-data.ts)
-  onAdicionarRodadaReforco: (grupo: Grupo, tamanho: number) => void;
+  // errou na última tentativa: numerosErrados são os `numero` ORIGINAIS delas (não uma contagem —
+  // a rodada nova continua chamando "questão 13" de 13, nunca renumera 1,2,3...). A tentativa
+  // anterior fica intocada, com seu percentual próprio preservado (ver
+  // adicionarRodadaReforco/tentativasDoGrupo em estudo-data.ts)
+  onAdicionarRodadaReforco: (grupo: Grupo, numerosErrados: number[]) => void;
   // apaga um bloco inteiro (todas as questões dele, respondidas ou não) — pra quando o usuário
   // criou um bloco por engano/duplicado
   onRemoverBloco: (bloco: number) => void;
@@ -142,8 +142,10 @@ export default function PainelQuestoes({
   // dentro de cada grupo A-D, subagrupa por BLOCO (só pra mostrar de onde vem cada questão quando
   // há mais de um bloco — com um bloco só, todo mundo cai em "bloco 1" e o rótulo nem aparece).
   // podeReforcar: a ÚLTIMA tentativa desse grupo (ver tentativasDoGrupo) já foi respondida por
-  // inteiro e ficou abaixo do limiar — oferece refazer exatamente as `errosUltimaTentativa`
-  // questões erradas dela, sem tocar na tentativa anterior.
+  // inteiro e ficou abaixo do limiar — oferece refazer exatamente as questões erradas dela
+  // (numerosErrados guarda o `numero` ORIGINAL de cada uma, não uma contagem — a rodada nova
+  // precisa continuar chamando "questão 13" de 13, não renumerar 1,2,3..., senão o usuário não
+  // sabe qual questão do caderno externo precisa refazer).
   const porGrupo = GRUPOS.map((g) => {
     const itensDoGrupo = questoes?.resultados.filter((r) => r.grupo === g) ?? [];
     const porBloco = new Map<number, typeof itensDoGrupo>();
@@ -153,9 +155,9 @@ export default function PainelQuestoes({
     }
     const tentativas = tentativasDoGrupo(questoes, g);
     const ultimaTentativa = tentativas[tentativas.length - 1];
-    const errosUltimaTentativa = ultimaTentativa?.erros ?? 0;
-    const podeReforcar = !!ultimaTentativa && ultimaTentativa.pendentes === 0 && ultimaTentativa.perc < LIMIAR_REFORCO_PERC && errosUltimaTentativa > 0;
-    return { grupo: g, porBloco: [...porBloco.entries()].sort(([a], [b]) => a - b), podeReforcar, errosUltimaTentativa };
+    const numerosErrados = ultimaTentativa?.itens.filter((r) => r.acertou === false).map((r) => r.numero) ?? [];
+    const podeReforcar = !!ultimaTentativa && ultimaTentativa.pendentes === 0 && ultimaTentativa.perc < LIMIAR_REFORCO_PERC && numerosErrados.length > 0;
+    return { grupo: g, porBloco: [...porBloco.entries()].sort(([a], [b]) => a - b), podeReforcar, numerosErrados };
   });
   // lista de blocos (número + quantas questões) só pra gerenciar (excluir) — independente do
   // agrupamento por grupo A-D acima, que fatia cada bloco em 4 pedaços
@@ -329,7 +331,7 @@ export default function PainelQuestoes({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
-              {porGrupo.map(({ grupo, porBloco, podeReforcar, errosUltimaTentativa }) => {
+              {porGrupo.map(({ grupo, porBloco, podeReforcar, numerosErrados }) => {
                 const todosItens = porBloco.flatMap(([, itens]) => itens);
                 const acertos = todosItens.filter((r) => r.acertou === true).length;
                 const erros = todosItens.filter((r) => r.acertou === false).length;
@@ -385,10 +387,14 @@ export default function PainelQuestoes({
                       <div className="mt-2.5 pt-2.5 border-t border-border/60">
                         <button
                           type="button"
-                          onClick={() => onAdicionarRodadaReforco(grupo, errosUltimaTentativa)}
+                          onClick={() => onAdicionarRodadaReforco(grupo, numerosErrados)}
                           className="flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400 hover:underline"
+                          title={`Questões: ${numerosErrados.join(", ")}`}
                         >
-                          <RotateCcw className="h-3 w-3" /> Refazer {errosUltimaTentativa === 1 ? "a questão errada" : `as ${errosUltimaTentativa} questões erradas`}
+                          <RotateCcw className="h-3 w-3" />
+                          {numerosErrados.length === 1
+                            ? `Refazer a questão ${numerosErrados[0]}`
+                            : `Refazer as questões ${numerosErrados.join(", ")}`}
                         </button>
                       </div>
                     )}
