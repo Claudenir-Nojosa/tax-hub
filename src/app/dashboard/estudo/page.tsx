@@ -33,7 +33,7 @@ import {
   type DiscursivaResumo, type SimuladoResumo,
 } from "@/lib/trilha-fila";
 import type { AberturaPdfSolicitada } from "@/components/estudo/trilha/TrilhaLinhas";
-import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks, Users, FileStack, NotebookPen, Map } from "lucide-react";
+import { LayoutDashboard, BookOpen, RotateCcw, CalendarDays, Flame, BarChart2, Layers, RefreshCw, GitCompare, FileText, Route, Library, ListChecks, Users, FileStack, NotebookPen, Map, Lightbulb } from "lucide-react";
 import type { ConcursoData, MateriaBase, MateriaConcurso } from "@/lib/estudo-data";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -56,17 +56,19 @@ const TimerEstudo = dynamic(() => import("@/components/estudo/timer/TimerEstudo"
 const CompararEditaisTab = dynamic(() => import("@/components/estudo/CompararEditaisTab"), { ssr: false });
 const ConcurseirosTab = dynamic(() => import("@/components/estudo/ConcurseirosTab"), { ssr: false });
 const MapaTab = dynamic(() => import("@/components/estudo/mapa/MapaTab"), { ssr: false });
+const BizusTab = dynamic(() => import("@/components/estudo/bizus/BizusTab"), { ssr: false });
 
 const storageKey = (concursoId: string | null) =>
   concursoId ? `taxhub_estudo_c_${concursoId}` : "taxhub_estudo_v1";
 
-type Tab = "dashboard" | "edital" | "questoes" | "biblioteca" | "simulados" | "discursivas" | "ciclo" | "trilha" | "mapa" | "calendario" | "relatorios" | "cartas" | "resumos" | "comparar" | "concurseiros";
+type Tab = "dashboard" | "edital" | "questoes" | "biblioteca" | "bizus" | "simulados" | "discursivas" | "ciclo" | "trilha" | "mapa" | "calendario" | "relatorios" | "cartas" | "resumos" | "comparar" | "concurseiros";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "edital", label: "Edital", icon: BookOpen },
   { id: "questoes", label: "Questões", icon: ListChecks },
   { id: "biblioteca", label: "Biblioteca", icon: Library },
+  { id: "bizus", label: "Bizus", icon: Lightbulb },
   { id: "simulados", label: "Simulados", icon: FileStack },
   { id: "discursivas", label: "Discursivas", icon: NotebookPen },
   { id: "ciclo", label: "Ciclo de Estudos", icon: RotateCcw },
@@ -745,6 +747,14 @@ export default function EstudoPage() {
               aberturaSolicitada={aberturaPdf}
               onAberturaConsumida={() => setAberturaPdf(null)}
               capitulosConcluidos={state.capitulosConcluidos}
+            />
+          )}
+
+          {activeTab === "bizus" && (
+            <BizusTab
+              concursoId={concursoAtivo?.id}
+              materias={materiasFiltradas}
+              topicos={state.topicos}
             />
           )}
 
