@@ -2623,40 +2623,79 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
-.nodeImage {
+/* Área de imagem de um node — coluna flex (não mais inset fixo em pixel): a legenda "em cima"/
+   "em baixo" é um item de flex que CRESCE com o próprio conteúdo (até um teto, com rolagem depois
+   disso), a imagem ocupa o espaço que sobra. Corrige o corte que acontecia com fonte grande (G):
+   antes a tarja da legenda tinha 34px fixos e o texto maior simplesmente ficava por baixo da
+   imagem, escondido; agora a imagem que cede espaço, nunca a legenda. */
+.nodeImageArea {
   position: absolute;
   inset: 31px 0 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.nodeImageFrame {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0; /* sem isso um item de flex nunca encolhe além do conteúdo — a imagem ficaria fixa */
+  overflow: hidden;
+}
+
+.nodeImage {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: calc(100% - 31px);
+  height: 100%;
   background: #f4f1f6;
 }
 
 .nodeImageMissing {
   position: absolute;
-  inset: 31px 0 0;
+  inset: 0;
   display: grid;
   place-items: center;
   color: #7b7185;
   font-size: 15px;
 }
 
-/* Legenda de imagem — três posições: em cima (acima da imagem), em baixo (abaixo) ou sobreposta
-   (nele mesmo, tarja translúcida). O tamanho da tarja "em cima"/"em baixo" é fixo (40px) e some do
-   espaço da imagem; "overlay" flutua por cima sem afetar o tamanho dela. */
-.nodeImageCaption {
-  position: absolute;
+/* legenda "em cima"/"em baixo" — item de flex normal (cresce com o texto), com um teto pra nunca
+   engolir o cartão inteiro mesmo com um textão em fonte G; passa a rolar depois desse teto */
+.nodeImageArea > .nodeImageCaption {
+  position: relative;
   z-index: 4;
+  flex: 0 1 auto;
+  max-height: 55%;
+  overflow-y: auto;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.nodeImageArea > .nodeImageCaption:first-child {
+  border-bottom: 1px solid rgba(47, 35, 59, 0.11);
+}
+
+.nodeImageArea > .nodeImageCaption:last-child:not(:first-child) {
+  border-top: 1px solid rgba(47, 35, 59, 0.11);
+}
+
+/* legenda "sobreposta" — flutua dentro da própria imagem (tarja translúcida), mesmo teto/rolagem */
+.nodeImageFrame > .nodeImageCaption {
+  position: absolute;
   right: 0;
+  bottom: 0;
   left: 0;
-  overflow: hidden;
+  z-index: 4;
+  max-height: 70%;
+  overflow-y: auto;
+  padding-top: 14px;
+  color: #fff;
+  background: linear-gradient(to top, rgba(10, 4, 18, 0.82), transparent);
 }
 
 .nodeImageCaption .nodeRichText {
   position: static;
   inset: auto;
-  height: 100%;
   padding: 6px 10px;
-  overflow: hidden;
   font-size: 13px;
   font-weight: 600;
   line-height: 1.3;
@@ -2668,40 +2707,7 @@
   content: "Escreva uma legenda…";
 }
 
-.whiteboardNode[data-caption-position="top"] .nodeImageCaption {
-  top: 31px;
-  height: 34px;
-  background: color-mix(in srgb, currentColor 6%, transparent);
-  border-bottom: 1px solid rgba(47, 35, 59, 0.11);
-}
-
-.whiteboardNode[data-caption-position="top"] .nodeImage,
-.whiteboardNode[data-caption-position="top"] .nodeImageMissing {
-  inset: 65px 0 0;
-  height: calc(100% - 65px);
-}
-
-.whiteboardNode[data-caption-position="bottom"] .nodeImageCaption {
-  bottom: 0;
-  height: 34px;
-  background: color-mix(in srgb, currentColor 6%, transparent);
-  border-top: 1px solid rgba(47, 35, 59, 0.11);
-}
-
-.whiteboardNode[data-caption-position="bottom"] .nodeImage,
-.whiteboardNode[data-caption-position="bottom"] .nodeImageMissing {
-  inset: 31px 0 34px;
-  height: calc(100% - 65px);
-}
-
-.whiteboardNode[data-caption-position="overlay"] .nodeImageCaption {
-  bottom: 0;
-  padding-top: 14px;
-  color: #fff;
-  background: linear-gradient(to top, rgba(10, 4, 18, 0.82), transparent);
-}
-
-.whiteboardNode[data-caption-position="overlay"] .nodeImageCaption .nodeRichText:empty::before {
+.nodeImageFrame > .nodeImageCaption .nodeRichText:empty::before {
   color: #fff;
 }
 
@@ -2755,11 +2761,13 @@
   display: none !important;
 }
 
-.whiteboardCanvas[data-exporting="true"] .nodeRichText,
-.whiteboardCanvas[data-exporting="true"] .nodeImage,
-.whiteboardCanvas[data-exporting="true"] .nodeImageMissing {
+.whiteboardCanvas[data-exporting="true"] .nodeRichText {
   inset: 0;
   height: 100%;
+}
+
+.whiteboardCanvas[data-exporting="true"] .nodeImageArea {
+  inset: 0;
 }
 
 .whiteboardCanvas[data-exporting="true"] .whiteboardNode[data-selected="true"],

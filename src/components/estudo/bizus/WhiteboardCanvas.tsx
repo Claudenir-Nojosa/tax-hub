@@ -443,7 +443,6 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasHandle, WhiteboardCanvasProp
                 data-role={node.role}
                 data-selected={selected}
                 data-connect-origin={isConnectOrigin}
-                data-caption-position={node.kind === "image" ? node.imageCaptionPosition || "bottom" : undefined}
                 style={{
                   left: node.x,
                   top: node.y,
@@ -506,31 +505,43 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasHandle, WhiteboardCanvasProp
                 </button>
 
                 {node.kind === "image" ? (
-                  <>
-                    {node.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        className={styles.nodeImage}
-                        src={node.imageUrl}
-                        alt={node.imageAlt || "Imagem do bizu"}
-                        style={{ objectFit: node.imageFit || "cover" }}
-                        draggable={false}
-                      />
-                    ) : (
-                      <div className={styles.nodeImageMissing}>Imagem indisponível</div>
-                    )}
-                    <div className={styles.nodeImageCaption}>
-                      <RichTextNode
-                        nodeId={node.id}
-                        html={node.html}
-                        fontSize={14}
-                        editable={mode === "select"}
-                        label="Legenda da imagem"
-                        onSelect={() => onSelectionChange({ kind: "node", id: node.id })}
-                        onHtmlChange={(html) => updateNodeHtml(node.id, html)}
-                      />
-                    </div>
-                  </>
+                  (() => {
+                    const position = node.imageCaptionPosition || "bottom";
+                    const caption = (
+                      <div className={styles.nodeImageCaption}>
+                        <RichTextNode
+                          nodeId={node.id}
+                          html={node.html}
+                          fontSize={14}
+                          editable={mode === "select"}
+                          label="Legenda da imagem"
+                          onSelect={() => onSelectionChange({ kind: "node", id: node.id })}
+                          onHtmlChange={(html) => updateNodeHtml(node.id, html)}
+                        />
+                      </div>
+                    );
+                    return (
+                      <div className={styles.nodeImageArea}>
+                        {position === "top" ? caption : null}
+                        <div className={styles.nodeImageFrame}>
+                          {node.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              className={styles.nodeImage}
+                              src={node.imageUrl}
+                              alt={node.imageAlt || "Imagem do bizu"}
+                              style={{ objectFit: node.imageFit || "cover" }}
+                              draggable={false}
+                            />
+                          ) : (
+                            <div className={styles.nodeImageMissing}>Imagem indisponível</div>
+                          )}
+                          {position === "overlay" ? caption : null}
+                        </div>
+                        {position === "bottom" ? caption : null}
+                      </div>
+                    );
+                  })()
                 ) : (
                   <RichTextNode
                     nodeId={node.id}
