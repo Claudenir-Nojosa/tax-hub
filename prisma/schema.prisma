@@ -43,6 +43,7 @@ model User {
   discursivaRespostas DiscursivaResposta[]
   campanhasRPG        CampanhaRPG[]
   respostasRPG        RespostaRPG[]
+  bizusEstudo         BizuEstudo[]
 }
 
 // Resumos gerados por IA na aba "Resumos" do Estudo: o usuário sobe um PDF de material, a IA
@@ -63,6 +64,35 @@ model ResumoEstudo {
   updatedAt   DateTime @updatedAt
 
   @@index([userId, materia])
+}
+
+// Cards/memórias visuais criados na aba "Bizus" do Estudo. Diferente do currículo do concurso,
+// cada Bizu pertence ao usuário que o criou: matéria/tópico apenas o organizam dentro do concurso.
+// A arte pode vir de upload, URL ou geração por IA; URLs e data URLs usam Text para não sofrerem
+// truncamento. O conteúdo estruturado guarda blocos editáveis sem prender o editor a um layout.
+model BizuEstudo {
+  id                   String   @id @default(cuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  concursoId           String
+  concurso             Concurso @relation(fields: [concursoId], references: [id], onDelete: Cascade)
+
+  materia              String
+  topico                String   @default("")
+  titulo                String
+  conteudo              String   @default("") @db.Text
+  conteudoEstruturado   Json?
+  imagemUrl             String?  @db.Text
+  imagemOrigem          String   @default("nenhuma")
+  tema                   String   @default("vice-city")
+  layout                 String   @default("card")
+  poseAvatar             String   @default("apontando")
+  configuracao           Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([userId, concursoId, materia, topico])
+  @@index([concursoId, materia])
 }
 
 
@@ -191,6 +221,7 @@ model Concurso {
   questoesRpg     QuestaoRPG[]
   campanhasRPG    CampanhaRPG[]
   respostasRPG    RespostaRPG[]
+  bizusEstudo     BizuEstudo[]
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 }
