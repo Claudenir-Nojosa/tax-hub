@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Search,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import BizuEditor, { type EditorSaveStatus } from "./BizuEditor";
 import BizuPoster from "./BizuPoster";
@@ -384,26 +385,30 @@ export default function BizusTab({ concursoId, materias = [], topicos = {} }: Bi
     setActionError("");
   }
 
-  async function deleteActive() {
-    if (!active) return;
-    if (isRascunho(active.id)) {
-      await leaveEditor();
+  // usado tanto pelo botão dentro do editor quanto pelo atalho direto no card da biblioteca — a
+  // única diferença é se `bizu` é o que está aberto no editor (precisa fechar depois) ou não.
+  async function deleteBizu(bizu: Bizu) {
+    if (isRascunho(bizu.id)) {
+      if (activeRef.current?.id === bizu.id) await leaveEditor();
       return;
     }
-    if (!window.confirm("Excluir este bizu definitivamente?")) return;
-    setSaveStatus("saving");
+    if (!window.confirm('Excluir "' + bizu.titulo + '" definitivamente?')) return;
+    const editingThisOne = activeRef.current?.id === bizu.id;
+    if (editingThisOne) setSaveStatus("saving");
     try {
-      const response = await fetch("/api/estudo/bizus/" + encodeURIComponent(active.id), { method: "DELETE" });
+      const response = await fetch("/api/estudo/bizus/" + encodeURIComponent(bizu.id), { method: "DELETE" });
       if (!response.ok) {
         const data: unknown = await response.json().catch(() => null);
         throw new Error(isRecord(data) ? stringFrom(data.error, "Não foi possível excluir.") : "Não foi possível excluir.");
       }
-      setBizus((previous) => previous.filter((item) => item.id !== active.id));
-      activeRef.current = null;
-      setActive(null);
+      setBizus((previous) => previous.filter((item) => item.id !== bizu.id));
+      if (editingThisOne) {
+        activeRef.current = null;
+        setActive(null);
+      }
       setActionError("");
     } catch (error) {
-      setSaveStatus("error");
+      if (editingThisOne) setSaveStatus("error");
       setActionError(error instanceof Error ? error.message : "Não foi possível excluir.");
     }
   }
@@ -498,7 +503,7 @@ export default function BizusTab({ concursoId, materias = [], topicos = {} }: Bi
           generatingImage={generatingImage}
           onChange={changeActive}
           onSave={() => void persist(activeRef.current || active)}
-          onDelete={isRascunho(active.id) ? undefined : () => void deleteActive()}
+          onDelete={isRascunho(active.id) ? undefined : () => void deleteBizu(active)}
           onBack={() => void leaveEditor()}
           onToggleAutoSave={setAutoSave}
           onGenerateImage={generateImage}
@@ -625,6 +630,9 @@ export default function BizusTab({ concursoId, materias = [], topicos = {} }: Bi
                   <span><Clock3 /> {formatUpdated(bizu.updatedAt)}</span>
                   <button type="button" onClick={() => duplicateBizu(bizu)} title="Duplicar bizu">
                     <Copy /> Duplicar
+                  </button>
+                  <button type="button" onClick={() => void deleteBizu(bizu)} title="Excluir bizu" className={styles.dangerTextButton}>
+                    <Trash2 /> Excluir
                   </button>
                 </div>
               </div>

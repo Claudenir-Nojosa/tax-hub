@@ -250,8 +250,11 @@ export default function BizuEditor({
     if (next !== "connect") setConnectFrom(null);
   }
 
+  // funciona tanto pro texto de um cartão quanto pra legenda de uma imagem — as duas usam o mesmo
+  // RichTextNode e o mesmo atributo data-node-content com o id do node (a imagem não tem um id
+  // separado só pra legenda, é o texto DELA mesma)
   function editableElement() {
-    if (!selectedNode || selectedNode.kind !== "text") return null;
+    if (!selectedNode) return null;
     return document.querySelector<HTMLElement>(
       '[data-node-content="' + CSS.escape(selectedNode.id) + '"]'
     );
@@ -514,7 +517,7 @@ export default function BizuEditor({
           </button>
         </div>
 
-        {selectedNode?.kind === "text" ? (
+        {selectedNode ? (
           <div className={styles.richTextToolbar} aria-label="Formatação do texto">
             <button
               type="button"
@@ -580,7 +583,7 @@ export default function BizuEditor({
           <div className={styles.toolbarTip}>
             {mode === "connect"
               ? "Clique em dois cartões para ligá-los."
-              : "Selecione um cartão de texto para formatar."}
+              : "Selecione um cartão ou uma imagem para formatar o texto."}
           </div>
         )}
 

@@ -707,6 +707,11 @@
   color: var(--violet);
 }
 
+.cardMeta .dangerTextButton,
+.cardMeta .dangerTextButton:hover {
+  color: #c63348;
+}
+
 .newCard {
   display: grid;
   min-height: 420px;
