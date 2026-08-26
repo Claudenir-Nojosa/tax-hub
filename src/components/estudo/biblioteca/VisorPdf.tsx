@@ -387,12 +387,20 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
     interagiuRef.current = true;
     const PX_POR_SEGUNDO_BASE = 26;
     let ultimoTs: number | null = null;
+    // acumulador PRÓPRIO (não lido de volta de c.scrollTop a cada frame) — em velocidades baixas
+    // o incremento por frame fica bem abaixo de 1px (ex.: 1.05x ≈ 0,45px/frame a 60fps); alguns
+    // navegadores arredondam scrollTop pro pixel inteiro ao ler, então se a gente confiar na
+    // leitura de volta pra acumular a fração, ela nunca passa de 0 e o PDF nunca anda. Somando na
+    // nossa própria variável (double de verdade, nunca arredondado) e só ESCREVENDO o total em
+    // scrollTop, o progresso fica garantido mesmo com incrementos sub-pixel.
+    let acumulado = containerRef.current?.scrollTop ?? 0;
     function tick(ts: number) {
       const c = containerRef.current;
       if (!c) return;
       if (ultimoTs !== null) {
         const dt = (ts - ultimoTs) / 1000;
-        c.scrollTop += PX_POR_SEGUNDO_BASE * velocidadeRef.current * dt;
+        acumulado += PX_POR_SEGUNDO_BASE * velocidadeRef.current * dt;
+        c.scrollTop = acumulado;
         if (c.scrollTop >= c.scrollHeight - c.clientHeight - 1) {
           setAutoScrollAtivo(false);
           return;
@@ -501,8 +509,16 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
               />
             ))}
           </div>
-          {/* controles flutuantes — leitura automática + zoom, o viewer é nosso então os dois são */}
-          <div className="sticky bottom-4 float-right mr-4 -mt-14 flex items-center gap-2">
+          {/* controles flutuantes — leitura automática + zoom, o viewer é nosso então os dois são.
+              onTouchStart para a propagação: esses controles ficam DENTRO do container que escuta
+              toque pra pausar a leitura automática (ver efeito "detecta interação manual" acima) —
+              sem isso, tocar em QUALQUER botão aqui (inclusive os de velocidade, pra tentar mudar
+              o ritmo) já contava como "usuário rolou manualmente" e desligava o auto-scroll na
+              hora, antes de dar tempo de ver rodar. */}
+          <div
+            className="sticky bottom-4 float-right mr-4 -mt-14 flex items-center gap-2"
+            onTouchStart={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center gap-0.5 bg-muted/90 border border-border rounded-lg p-1 shadow-lg">
               <button
                 type="button"
