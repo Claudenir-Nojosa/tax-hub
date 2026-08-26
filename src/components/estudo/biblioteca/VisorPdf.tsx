@@ -513,16 +513,16 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
               </button>
               <button
                 type="button"
-                onClick={() => setVelocidade((v) => Math.max(0.5, Math.round((v - 0.25) * 100) / 100))}
+                onClick={() => setVelocidade((v) => Math.max(0.5, Math.round((v - 0.05) * 100) / 100))}
                 className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
                 title="Diminuir velocidade da leitura automática"
               >
                 <Minus className="h-3.5 w-3.5" />
               </button>
-              <span className="text-[11px] text-muted-foreground w-9 text-center font-mono">{velocidade}x</span>
+              <span className="text-[11px] text-muted-foreground w-10 text-center font-mono">{velocidade.toFixed(2)}x</span>
               <button
                 type="button"
-                onClick={() => setVelocidade((v) => Math.min(3, Math.round((v + 0.25) * 100) / 100))}
+                onClick={() => setVelocidade((v) => Math.min(3, Math.round((v + 0.05) * 100) / 100))}
                 className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
                 title="Aumentar velocidade da leitura automática"
               >
