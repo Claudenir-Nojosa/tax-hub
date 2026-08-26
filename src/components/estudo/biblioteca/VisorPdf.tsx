@@ -208,8 +208,6 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
   // rolar manualmente (roda/toque) — não briga com quem quer voltar pra reler um trecho.
   const [autoScrollAtivo, setAutoScrollAtivo] = useState(false);
   const [velocidade, setVelocidade] = useState(1);
-  const velocidadeRef = useRef(velocidade);
-  velocidadeRef.current = velocidade;
   const autoScrollRafRef = useRef<number | null>(null);
 
   // scrollParaPagina: mesmo padrão da navegação por seta (scrollTo suave até o topo da página
@@ -378,6 +376,9 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
   // loop da leitura automática — anda o scrollTop diretamente (sem passar por estado do React a
   // cada frame, só leitura/escrita direta no DOM) numa velocidade calibrada pra um ritmo de leitura
   // confortável, ajustável pelo multiplicador `velocidade`. Pára sozinho ao chegar no fim.
+  // Depende de `velocidade` diretamente (não de uma ref lida a cada frame) — reinicia o loop a
+  // cada mudança de velocidade, custo imperceptível pra um RAF, mas elimina de vez qualquer
+  // dúvida sobre o valor ficar "preso" no que estava quando a leitura começou.
   useEffect(() => {
     if (!autoScrollAtivo) return;
     // conta como "interação" pro mesmo motivo que roda/toque contam (ver efeito de dims/
@@ -385,21 +386,23 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
     // em PDFs de 100+ páginas ainda carregando) fazia aquele efeito puxar o scroll de volta pra
     // paginaInicial NO MEIO da leitura automática, dando a impressão de "ficar indo e voltando".
     interagiuRef.current = true;
-    const PX_POR_SEGUNDO_BASE = 26;
+    // faixa 0.5x-5x (era 3x): no teto antigo a diferença entre uma velocidade baixa (pra leitura
+    // fina, ex. 1.05x-1.15x pedidas pelo usuário) e uma alta ficava pequena demais pra perceber.
+    const PX_POR_SEGUNDO_BASE = 34;
     let ultimoTs: number | null = null;
     // acumulador PRÓPRIO (não lido de volta de c.scrollTop a cada frame) — em velocidades baixas
-    // o incremento por frame fica bem abaixo de 1px (ex.: 1.05x ≈ 0,45px/frame a 60fps); alguns
-    // navegadores arredondam scrollTop pro pixel inteiro ao ler, então se a gente confiar na
-    // leitura de volta pra acumular a fração, ela nunca passa de 0 e o PDF nunca anda. Somando na
-    // nossa própria variável (double de verdade, nunca arredondado) e só ESCREVENDO o total em
-    // scrollTop, o progresso fica garantido mesmo com incrementos sub-pixel.
+    // o incremento por frame fica bem abaixo de 1px; alguns navegadores arredondam scrollTop pro
+    // pixel inteiro ao ler, então se a gente confiar na leitura de volta pra acumular a fração,
+    // ela nunca passa de 0 e o PDF nunca anda. Somando na nossa própria variável (double de
+    // verdade, nunca arredondado) e só ESCREVENDO o total em scrollTop, o progresso fica
+    // garantido mesmo com incrementos sub-pixel.
     let acumulado = containerRef.current?.scrollTop ?? 0;
     function tick(ts: number) {
       const c = containerRef.current;
       if (!c) return;
       if (ultimoTs !== null) {
         const dt = (ts - ultimoTs) / 1000;
-        acumulado += PX_POR_SEGUNDO_BASE * velocidadeRef.current * dt;
+        acumulado += PX_POR_SEGUNDO_BASE * velocidade * dt;
         c.scrollTop = acumulado;
         if (c.scrollTop >= c.scrollHeight - c.clientHeight - 1) {
           setAutoScrollAtivo(false);
@@ -413,7 +416,7 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
     return () => {
       if (autoScrollRafRef.current) cancelAnimationFrame(autoScrollRafRef.current);
     };
-  }, [autoScrollAtivo]);
+  }, [autoScrollAtivo, velocidade]);
 
   // rola até a página onde o usuário parou — e continua reaplicando essa posição sempre que dims
   // mudar em segundo plano (correção de altura de páginas anteriores à alvo — ver loop "corrige em
@@ -543,7 +546,7 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
               <span className="text-[11px] text-muted-foreground w-10 text-center font-mono">{velocidade.toFixed(2)}x</span>
               <button
                 type="button"
-                onClick={() => setVelocidade((v) => Math.min(3, Math.round((v + 0.05) * 100) / 100))}
+                onClick={() => setVelocidade((v) => Math.min(5, Math.round((v + 0.05) * 100) / 100))}
                 className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
                 title="Aumentar velocidade da leitura automática"
               >
