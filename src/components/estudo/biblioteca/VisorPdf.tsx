@@ -22,7 +22,7 @@ if (typeof window !== "undefined" && !("withResolvers" in Promise)) {
 }
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Loader2, Minus, Plus } from "lucide-react";
+import { Loader2, Minus, Pause, Play, Plus } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 
@@ -203,6 +203,14 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
   // parado, então o mesmo pixel passa a apontar pra outra página ("sair da página" ao dar zoom,
   // reportado pelo usuário)
   const ancoraZoomRef = useRef<{ pagina: number; fracao: number } | null>(null);
+  // leitura automática — rola o pdf sozinho, num ritmo ajustável, pra simular a leitura sem
+  // precisar de scroll/seta manual. Pausa sozinha ao chegar no fim do documento ou se o usuário
+  // rolar manualmente (roda/toque) — não briga com quem quer voltar pra reler um trecho.
+  const [autoScrollAtivo, setAutoScrollAtivo] = useState(false);
+  const [velocidade, setVelocidade] = useState(1);
+  const velocidadeRef = useRef(velocidade);
+  velocidadeRef.current = velocidade;
+  const autoScrollRafRef = useRef<number | null>(null);
 
   // scrollParaPagina: mesmo padrão da navegação por seta (scrollTo suave até o topo da página
   // alvo) — marca interagiuRef pra não ser "puxado" de volta pra paginaInicial pelo efeito abaixo
@@ -343,11 +351,16 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
 
   // detecta interação manual (roda do mouse / toque) pra parar de "puxar" o scroll de volta pra
   // paginaInicial — sem isso, o usuário nunca conseguiria se afastar da página inicial enquanto
-  // dims ainda estiver sendo corrigido em segundo plano (ver efeito abaixo)
+  // dims ainda estiver sendo corrigido em segundo plano (ver efeito abaixo). Também pausa a
+  // leitura automática — rolar manualmente (ex.: voltar pra reler um trecho) não deveria "brigar"
+  // com o auto-scroll continuando a puxar pra frente por baixo.
   useEffect(() => {
     const c = containerRef.current;
     if (!c) return;
-    const marcar = () => { interagiuRef.current = true; };
+    const marcar = () => {
+      interagiuRef.current = true;
+      setAutoScrollAtivo(false);
+    };
     c.addEventListener("wheel", marcar, { passive: true });
     c.addEventListener("touchstart", marcar, { passive: true });
     return () => {
@@ -355,6 +368,39 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
       c.removeEventListener("touchstart", marcar);
     };
   }, []);
+
+  // desliga a leitura automática ao trocar de PDF — cada documento começa com ela desativada,
+  // mesmo espírito do zoom (que também reseta pra 160% a cada abertura, ver efeito de [blob])
+  useEffect(() => {
+    setAutoScrollAtivo(false);
+  }, [blob]);
+
+  // loop da leitura automática — anda o scrollTop diretamente (sem passar por estado do React a
+  // cada frame, só leitura/escrita direta no DOM) numa velocidade calibrada pra um ritmo de leitura
+  // confortável, ajustável pelo multiplicador `velocidade`. Pára sozinho ao chegar no fim.
+  useEffect(() => {
+    if (!autoScrollAtivo) return;
+    const PX_POR_SEGUNDO_BASE = 26;
+    let ultimoTs: number | null = null;
+    function tick(ts: number) {
+      const c = containerRef.current;
+      if (!c) return;
+      if (ultimoTs !== null) {
+        const dt = (ts - ultimoTs) / 1000;
+        c.scrollTop += PX_POR_SEGUNDO_BASE * velocidadeRef.current * dt;
+        if (c.scrollTop >= c.scrollHeight - c.clientHeight - 1) {
+          setAutoScrollAtivo(false);
+          return;
+        }
+      }
+      ultimoTs = ts;
+      autoScrollRafRef.current = requestAnimationFrame(tick);
+    }
+    autoScrollRafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (autoScrollRafRef.current) cancelAnimationFrame(autoScrollRafRef.current);
+    };
+  }, [autoScrollAtivo]);
 
   // rola até a página onde o usuário parou — e continua reaplicando essa posição sempre que dims
   // mudar em segundo plano (correção de altura de páginas anteriores à alvo — ver loop "corrige em
@@ -384,16 +430,28 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
 
   // seta direita/esquerda navega pra próxima/anterior página — a partir da página "visível"
   // atual (mesma referência que já move o indicador "pág. X" da barra), rolando até o topo dela.
-  // Ignorado enquanto o usuário digita em input/textarea/select (ex.: campo "parei na página" ou
-  // o formulário de criar cartão) pra não roubar as setas de quem só está navegando texto/número.
+  // Espaço rola um trecho (~85% da altura visível) pra baixo — o navegador só faz isso sozinho
+  // quando o CONTAINER de scroll está com foco, o que não é garantido aqui, então tratamos à mão.
+  // Ambos ignorados enquanto o usuário digita em input/textarea/select/contentEditable (ex.: campo
+  // "parei na página" ou o formulário de criar cartão) pra não roubar teclas de quem só está
+  // digitando — importante principalmente pro espaço, que é digitável em qualquer texto.
   useEffect(() => {
     if (!doc) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
       const alvoEl = e.target as HTMLElement | null;
       if (alvoEl && /^(INPUT|TEXTAREA|SELECT)$/.test(alvoEl.tagName)) return;
+      if (alvoEl?.isContentEditable) return;
       const c = containerRef.current;
       if (!c) return;
+
+      if (e.code === "Space") {
+        e.preventDefault();
+        interagiuRef.current = true;
+        c.scrollBy({ top: c.clientHeight * 0.85, behavior: "smooth" });
+        return;
+      }
+
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
       const atual = paginaVisivelRef.current || 1;
       const proxima = e.key === "ArrowRight" ? Math.min(doc.numPages, atual + 1) : Math.max(1, atual - 1);
       if (proxima === atual) return;
@@ -438,31 +496,64 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
               />
             ))}
           </div>
-          {/* zoom flutuante — o viewer é nosso, então o zoom também é */}
-          <div className="sticky bottom-4 float-right mr-4 -mt-14 flex items-center gap-0.5 bg-muted/90 border border-border rounded-lg p-1 shadow-lg">
-            <button
-              type="button"
-              onClick={() => {
-                ancoraZoomRef.current = capturarAncora();
-                setScale((s) => Math.max(0.5, Math.round(((s ?? 1) - 0.15) * 100) / 100));
-              }}
-              className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
-              title="Diminuir zoom"
-            >
-              <Minus className="h-3.5 w-3.5" />
-            </button>
-            <span className="text-[11px] text-muted-foreground w-10 text-center font-mono">{Math.round(scale * 100)}%</span>
-            <button
-              type="button"
-              onClick={() => {
-                ancoraZoomRef.current = capturarAncora();
-                setScale((s) => Math.min(3, Math.round(((s ?? 1) + 0.15) * 100) / 100));
-              }}
-              className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
-              title="Aumentar zoom"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </button>
+          {/* controles flutuantes — leitura automática + zoom, o viewer é nosso então os dois são */}
+          <div className="sticky bottom-4 float-right mr-4 -mt-14 flex items-center gap-2">
+            <div className="flex items-center gap-0.5 bg-muted/90 border border-border rounded-lg p-1 shadow-lg">
+              <button
+                type="button"
+                onClick={() => setAutoScrollAtivo((v) => !v)}
+                className={`h-7 w-7 rounded-md flex items-center justify-center transition-colors ${
+                  autoScrollAtivo
+                    ? "text-emerald-400 bg-emerald-500/15"
+                    : "text-muted-foreground hover:text-white hover:bg-white/10"
+                }`}
+                title={autoScrollAtivo ? "Pausar leitura automática" : "Ativar leitura automática (rola o PDF sozinho)"}
+              >
+                {autoScrollAtivo ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setVelocidade((v) => Math.max(0.5, Math.round((v - 0.25) * 100) / 100))}
+                className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
+                title="Diminuir velocidade da leitura automática"
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </button>
+              <span className="text-[11px] text-muted-foreground w-9 text-center font-mono">{velocidade}x</span>
+              <button
+                type="button"
+                onClick={() => setVelocidade((v) => Math.min(3, Math.round((v + 0.25) * 100) / 100))}
+                className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
+                title="Aumentar velocidade da leitura automática"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="flex items-center gap-0.5 bg-muted/90 border border-border rounded-lg p-1 shadow-lg">
+              <button
+                type="button"
+                onClick={() => {
+                  ancoraZoomRef.current = capturarAncora();
+                  setScale((s) => Math.max(0.5, Math.round(((s ?? 1) - 0.15) * 100) / 100));
+                }}
+                className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
+                title="Diminuir zoom"
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </button>
+              <span className="text-[11px] text-muted-foreground w-10 text-center font-mono">{Math.round(scale * 100)}%</span>
+              <button
+                type="button"
+                onClick={() => {
+                  ancoraZoomRef.current = capturarAncora();
+                  setScale((s) => Math.min(3, Math.round(((s ?? 1) + 0.15) * 100) / 100));
+                }}
+                className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-white hover:bg-white/10 transition-colors"
+                title="Aumentar zoom"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </>
       )}
