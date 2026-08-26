@@ -380,6 +380,11 @@ function VisorPdfInner({ blob, paginaInicial, onPaginaVisivel }: Props, ref: Rea
   // confortável, ajustável pelo multiplicador `velocidade`. Pára sozinho ao chegar no fim.
   useEffect(() => {
     if (!autoScrollAtivo) return;
+    // conta como "interação" pro mesmo motivo que roda/toque contam (ver efeito de dims/
+    // paginaInicial acima) — sem isso, cada correção de altura de página em segundo plano (comum
+    // em PDFs de 100+ páginas ainda carregando) fazia aquele efeito puxar o scroll de volta pra
+    // paginaInicial NO MEIO da leitura automática, dando a impressão de "ficar indo e voltando".
+    interagiuRef.current = true;
     const PX_POR_SEGUNDO_BASE = 26;
     let ultimoTs: number | null = null;
     function tick(ts: number) {
