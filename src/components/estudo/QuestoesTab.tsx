@@ -10,7 +10,7 @@ import {
   type StatusRevisaoLink,
 } from "@/lib/trilha-dinamica";
 import { resolverCorMateria } from "./trilha/trilha-ui";
-import { ChevronDown, ChevronRight, ExternalLink, Search, Link2, Trophy, Zap, Layers, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Search, Link2, Trophy, Zap, Layers, Plus, Trash2, X } from "lucide-react";
 
 interface Props {
   topicos: Record<string, TopicoState>;
@@ -67,6 +67,87 @@ function StatusBadge({
         </span>
       );
   }
+}
+
+// Badge + registro de resultado de UM checkpoint — quando disponível ("disponível na Trilha") ou
+// já feito, clicar abre dois campos (acertos/erros) pra registrar/corrigir. Antes disso não existia
+// NENHUMA forma de marcar isso como concluído no app inteiro: o campo `revisoesLink` já existia no
+// modelo e o status já sabia mostrar "disponível", mas nada escrevia nele — clicar na atividade na
+// Trilha só abria o link externo, nunca voltava pra registrar o resultado.
+function RegistroCheckpoint({
+  label, status, onRegistrar,
+}: {
+  label: string;
+  status: StatusRevisaoLink;
+  onRegistrar: (acertos: number, erros: number) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [acertosStr, setAcertosStr] = useState("");
+  const [errosStr, setErrosStr] = useState("");
+
+  if (status.tipo === "sem_link" || status.tipo === "aguardando_grupos" || status.tipo === "aguardando_prazo") {
+    return <StatusBadge label={label} status={status} />;
+  }
+
+  if (!aberto) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAberto(true)}
+        title={status.tipo === "feita" ? "Corrigir resultado" : "Registrar resultado"}
+        className="hover:opacity-80 transition-opacity"
+      >
+        <StatusBadge label={label} status={status} />
+      </button>
+    );
+  }
+
+  const acertos = parseInt(acertosStr);
+  const erros = parseInt(errosStr);
+  const podeSalvar = Number.isFinite(acertos) && acertos >= 0 && Number.isFinite(erros) && erros >= 0 && acertos + erros > 0;
+
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-[10px] text-muted-foreground">{label}:</span>
+      <input
+        type="number"
+        min={0}
+        value={acertosStr}
+        onChange={(e) => setAcertosStr(e.target.value)}
+        placeholder="acertos"
+        className="w-14 text-[11px] border border-border rounded-md px-1.5 py-1 bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+      />
+      <input
+        type="number"
+        min={0}
+        value={errosStr}
+        onChange={(e) => setErrosStr(e.target.value)}
+        placeholder="erros"
+        className="w-14 text-[11px] border border-border rounded-md px-1.5 py-1 bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+      />
+      <button
+        type="button"
+        disabled={!podeSalvar}
+        onClick={() => {
+          onRegistrar(acertos, erros);
+          setAberto(false);
+          setAcertosStr("");
+          setErrosStr("");
+        }}
+        className="text-[11px] font-medium text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:underline"
+      >
+        Salvar
+      </button>
+      <button
+        type="button"
+        onClick={() => { setAberto(false); setAcertosStr(""); setErrosStr(""); }}
+        className="text-muted-foreground hover:text-foreground"
+        title="Cancelar"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  );
 }
 
 // Input de link com botão de abrir — reaproveitado pros 3 tipos de link (7d/30d por tópico e o
@@ -130,6 +211,17 @@ export default function QuestoesTab({
     onUpdate({ ...topicos, [key]: { ...estado, revisaoLinkDispensada: dispensada || undefined } });
   };
 
+  // registra/corrige o resultado de UM checkpoint (7d ou 30d) — por tópico, quando ele não
+  // pertence a nenhum Bloco (ver registrarRevisaoLinkBloco pro caso contrário)
+  const registrarRevisaoLink = (materia: string, topico: string, checkpoint: ChecklistRevisaoLink, acertos: number, erros: number) => {
+    const key = topicoKey(materia, topico);
+    const estado = topicos[key] ?? defaultTopicoState();
+    onUpdate({
+      ...topicos,
+      [key]: { ...estado, revisoesLink: { ...estado.revisoesLink, [checkpoint]: { acertos, erros, atualizadoEm: hoje } } },
+    });
+  };
+
   const updateLinkReforcoImediato = (materia: string, topico: string, link: string) => {
     const key = topicoKey(materia, topico);
     const estado = topicos[key] ?? defaultTopicoState();
@@ -157,6 +249,17 @@ export default function QuestoesTab({
     const bloco = blocos[id];
     if (!bloco) return;
     onUpdateBlocos({ ...blocos, [id]: { ...bloco, ...patch } });
+  };
+
+  // registra/corrige o resultado de UM checkpoint (7d ou 30d) — por Bloco, uma vez só pra todos
+  // os tópicos que ele cobre (ver registrarRevisaoLink pro tópico solto, sem Bloco)
+  const registrarRevisaoLinkBloco = (id: string, checkpoint: ChecklistRevisaoLink, acertos: number, erros: number) => {
+    const bloco = blocos[id];
+    if (!bloco) return;
+    onUpdateBlocos({
+      ...blocos,
+      [id]: { ...bloco, revisoesLink: { ...bloco.revisoesLink, [checkpoint]: { acertos, erros, atualizadoEm: hoje } } },
+    });
   };
 
   const excluirBloco = (id: string) => {
@@ -373,8 +476,24 @@ export default function QuestoesTab({
                                 <StatusBadge status={{ tipo: "aguardando_grupos" }} pendenteLabel={pendenteLabel} />
                               ) : (
                                 <>
-                                  <StatusBadge label="7d" status={status7} />
-                                  <StatusBadge label="30d" status={status30} />
+                                  <RegistroCheckpoint
+                                    label="7d"
+                                    status={status7}
+                                    onRegistrar={(acertos, erros) =>
+                                      bloco
+                                        ? registrarRevisaoLinkBloco(bloco.id, "d7", acertos, erros)
+                                        : registrarRevisaoLink(m.nome, t, "d7", acertos, erros)
+                                    }
+                                  />
+                                  <RegistroCheckpoint
+                                    label="30d"
+                                    status={status30}
+                                    onRegistrar={(acertos, erros) =>
+                                      bloco
+                                        ? registrarRevisaoLinkBloco(bloco.id, "d30", acertos, erros)
+                                        : registrarRevisaoLink(m.nome, t, "d30", acertos, erros)
+                                    }
+                                  />
                                 </>
                               )}
                             </div>
