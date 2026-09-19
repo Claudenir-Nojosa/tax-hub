@@ -26,6 +26,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import WhiteboardCanvas, {
+  alinharNaGrade,
   type WhiteboardCanvasHandle,
   type WhiteboardMode,
   type WhiteboardSelection,
@@ -183,8 +184,10 @@ export default function BizuEditor({
       return;
     }
     const count = bizu.documento.nodes.filter((node) => node.kind === "text").length;
-    const x = 390 + ((count - 1) % 3) * 390;
-    const y = 360 + (Math.floor((count - 1) / 3) % 3) * 220;
+    // sempre alinhado na mesma grade usada pro arraste (ver GRADE_ALINHAMENTO/alinharNaGrade em
+    // WhiteboardCanvas.tsx) — cartão novo já nasce alinhado, não só quando arrastado depois
+    const x = alinharNaGrade(390 + ((count - 1) % 3) * 390);
+    const y = alinharNaGrade(360 + (Math.floor((count - 1) / 3) % 3) * 220);
     const node = createTextNode(x, y);
     updateDocument({ ...bizu.documento, nodes: [...bizu.documento.nodes, node] });
     setSelection({ kind: "node", id: node.id });
