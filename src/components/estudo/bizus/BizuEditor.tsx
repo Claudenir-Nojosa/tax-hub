@@ -194,14 +194,18 @@ export default function BizuEditor({
     setMode("select");
   }
 
+  function deleteConnection(connectionId: string) {
+    updateDocument({
+      ...bizu.documento,
+      connections: bizu.documento.connections.filter((connection) => connection.id !== connectionId),
+    });
+    if (selection?.kind === "connection" && selection.id === connectionId) setSelection(null);
+  }
+
   function deleteSelection() {
     if (!selection) return;
     if (selection.kind === "connection") {
-      updateDocument({
-        ...bizu.documento,
-        connections: bizu.documento.connections.filter((connection) => connection.id !== selection.id),
-      });
-      setSelection(null);
+      deleteConnection(selection.id);
       return;
     }
     const remaining = bizu.documento.nodes.filter((node) => node.id !== selection.id);
@@ -631,6 +635,7 @@ export default function BizuEditor({
             onChange={updateDocument}
             onSelectionChange={setSelection}
             onConnectNode={connectNode}
+            onDeleteConnection={deleteConnection}
           />
         </main>
 

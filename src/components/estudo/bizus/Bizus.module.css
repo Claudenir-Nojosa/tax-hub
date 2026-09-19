@@ -2505,6 +2505,28 @@
   cursor: pointer;
 }
 
+.connectionDeleteButton {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.connectionDeleteButton circle {
+  fill: #ec4899;
+  stroke: #ffffff;
+  stroke-width: 2;
+  filter: drop-shadow(0 2px 4px rgba(45, 32, 58, 0.25));
+}
+
+.connectionDeleteButton path {
+  stroke: #ffffff;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.connectionDeleteButton:hover circle {
+  fill: #db2777;
+}
+
 .whiteboardAvatar {
   position: absolute;
   z-index: 2;
@@ -2757,7 +2779,8 @@
 .whiteboardCanvas[data-exporting="true"] .nodeDragHandle,
 .whiteboardCanvas[data-exporting="true"] .nodeResizeHandle,
 .whiteboardCanvas[data-exporting="true"] .connectModeHint,
-.whiteboardCanvas[data-exporting="true"] .connectionHitbox {
+.whiteboardCanvas[data-exporting="true"] .connectionHitbox,
+.whiteboardCanvas[data-exporting="true"] .connectionDeleteButton {
   display: none !important;
 }
 

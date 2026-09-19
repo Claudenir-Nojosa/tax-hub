@@ -36,6 +36,7 @@ interface WhiteboardCanvasProps {
   onChange: (documento: BizuWhiteboardDocument) => void;
   onSelectionChange: (selection: WhiteboardSelection) => void;
   onConnectNode: (nodeId: string) => void;
+  onDeleteConnection: (connectionId: string) => void;
 }
 
 type Interaction =
@@ -248,9 +249,17 @@ function rotearConexao(from: WhiteboardNode, to: WhiteboardNode, todosOsNos: Whi
   return pontos;
 }
 
-function connectionPath(from: WhiteboardNode, to: WhiteboardNode, todosOsNos: WhiteboardNode[]) {
-  const pontos = rotearConexao(from, to, todosOsNos);
+function pontosParaPath(pontos: Ponto[]) {
   return pontos.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+}
+
+// ponto onde fica o botão de excluir de uma conexão selecionada: a própria dobra do cotovelo
+// quando existe (o lugar mais natural, não em cima de nenhum cartão), ou o meio do segmento único
+// quando a rota não tem dobra
+function pontoMedioDoCaminho(pontos: Ponto[]): Ponto {
+  if (pontos.length >= 3) return pontos[1];
+  const [a, b] = pontos;
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
 interface RichTextNodeProps {
@@ -320,6 +329,7 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasHandle, WhiteboardCanvasProp
       onChange,
       onSelectionChange,
       onConnectNode,
+      onDeleteConnection,
     },
     ref
   ) {
@@ -517,7 +527,9 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasHandle, WhiteboardCanvasProp
               const to = documento.nodes.find((node) => node.id === connection.to);
               if (!from || !to) return null;
               const selected = selection?.kind === "connection" && selection.id === connection.id;
-              const path = connectionPath(from, to, documento.nodes);
+              const pontos = rotearConexao(from, to, documento.nodes);
+              const path = pontosParaPath(pontos);
+              const meio = selected ? pontoMedioDoCaminho(pontos) : null;
               return (
                 <g key={connection.id}>
                   <path
@@ -546,6 +558,27 @@ const WhiteboardCanvas = forwardRef<WhiteboardCanvasHandle, WhiteboardCanvasProp
                     stroke={selected ? "#ec4899" : connection.color}
                     strokeWidth={selected ? connection.width + 2 : connection.width}
                   />
+                  {meio ? (
+                    <g
+                      className={styles.connectionDeleteButton}
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Excluir esta conexão"
+                      transform={`translate(${meio.x}, ${meio.y})`}
+                      onPointerDown={(event) => {
+                        event.stopPropagation();
+                        onDeleteConnection(connection.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        onDeleteConnection(connection.id);
+                      }}
+                    >
+                      <circle r={10} />
+                      <path d="M -4 -4 L 4 4 M 4 -4 L -4 4" />
+                    </g>
+                  ) : null}
                 </g>
               );
             })}
