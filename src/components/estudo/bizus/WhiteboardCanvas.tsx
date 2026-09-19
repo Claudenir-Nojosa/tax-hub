@@ -102,19 +102,56 @@ function retanguloDoNo(node: WhiteboardNode, margem = 16): Retangulo {
   return { x: node.x - margem, y: node.y - margem, width: node.width + margem * 2, height: node.height + margem * 2 };
 }
 
-// ponto na BORDA do cartão mais próximo do alvo (não o centro) — a linha sai/entra rente à
-// borda, resultado mais "reto"/objetivo do que sair sempre do meio do cartão
-function pontoNaBorda(node: WhiteboardNode, alvo: Ponto): Ponto {
+type LadoCartao = "top" | "bottom" | "left" | "right";
+
+// ponto no MEIO de um lado específico do cartão (não o centro) — usado pra sair/entrar sempre
+// perpendicular à borda, nunca na diagonal
+function pontoNoLado(node: WhiteboardNode, lado: LadoCartao): Ponto {
   const c = center(node);
-  const dx = alvo.x - c.x;
-  const dy = alvo.y - c.y;
-  if (dx === 0 && dy === 0) return c;
-  const halfW = node.width / 2;
-  const halfH = node.height / 2;
-  const escalaX = dx !== 0 ? halfW / Math.abs(dx) : Infinity;
-  const escalaY = dy !== 0 ? halfH / Math.abs(dy) : Infinity;
-  const escala = Math.min(escalaX, escalaY);
-  return { x: c.x + dx * escala, y: c.y + dy * escala };
+  switch (lado) {
+    case "top":
+      return { x: c.x, y: node.y };
+    case "bottom":
+      return { x: c.x, y: node.y + node.height };
+    case "left":
+      return { x: node.x, y: c.y };
+    case "right":
+      return { x: node.x + node.width, y: c.y };
+  }
+}
+
+// caminho em "cotovelo" (90°) no estilo mapa mental: se o alvo está mais deslocado NA LATERAL,
+// sai por cima/baixo do cartão de origem (o lado voltado pra direção do alvo), anda reto até a
+// ALTURA do alvo e só então dobra reto até a lateral dele voltada pra origem. Se o alvo está mais
+// deslocado NA VERTICAL, é o espelho: sai pela lateral, anda até a COLUNA do alvo, dobra reto até
+// cima/baixo dele. Sempre 2 segmentos retos com uma única dobra de 90° — nunca diagonal.
+function caminhoBaseEmCotovelo(from: WhiteboardNode, to: WhiteboardNode): Ponto[] {
+  const cFrom = center(from);
+  const cTo = center(to);
+  const dx = cTo.x - cFrom.x;
+  const dy = cTo.y - cFrom.y;
+
+  let saida: Ponto;
+  let cotovelo: Ponto;
+  let entrada: Ponto;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const ladoSaida: LadoCartao = dy <= 0 ? "top" : "bottom";
+    const ladoEntrada: LadoCartao = dx >= 0 ? "left" : "right";
+    saida = pontoNoLado(from, ladoSaida);
+    entrada = pontoNoLado(to, ladoEntrada);
+    cotovelo = { x: saida.x, y: entrada.y };
+  } else {
+    const ladoSaida: LadoCartao = dx >= 0 ? "right" : "left";
+    const ladoEntrada: LadoCartao = dy >= 0 ? "top" : "bottom";
+    saida = pontoNoLado(from, ladoSaida);
+    entrada = pontoNoLado(to, ladoEntrada);
+    cotovelo = { x: entrada.x, y: saida.y };
+  }
+
+  const quaseIgual = (p: Ponto, q: Ponto) => Math.abs(p.x - q.x) < 1 && Math.abs(p.y - q.y) < 1;
+  if (quaseIgual(saida, cotovelo) || quaseIgual(cotovelo, entrada)) return [saida, entrada];
+  return [saida, cotovelo, entrada];
 }
 
 function cross(o: Ponto, a: Ponto, b: Ponto): number {
@@ -149,13 +186,13 @@ function segmentoCruzaRetangulo(p1: Ponto, p2: Ponto, rect: Retangulo): boolean 
   return dentro(p1) && dentro(p2);
 }
 
-// caminho reto entre `from` e `to`, desviando de qualquer OUTRO cartão que esteja no meio do
-// caminho — sem curva (só segmentos retos): quando um segmento cruza um cartão, insere um ponto
-// de desvio pela lateral mais curta (acima/abaixo se o trecho for mais horizontal, do lado se for
-// mais vertical) e repete a checagem, até no máximo 6 desvios (evita loop infinito em layouts
-// muito apertados — nesse caso fica com o desvio parcial já encontrado, não trava).
+// caminho em cotovelo (90°) entre `from` e `to`, desviando de qualquer OUTRO cartão que esteja no
+// meio do caminho — sem curva (só segmentos retos): quando um segmento cruza um cartão, insere um
+// ponto de desvio pela lateral mais curta (acima/abaixo se o trecho for mais horizontal, do lado
+// se for mais vertical) e repete a checagem, até no máximo 6 desvios (evita loop infinito em
+// layouts muito apertados — nesse caso fica com o desvio parcial já encontrado, não trava).
 function rotearConexao(from: WhiteboardNode, to: WhiteboardNode, todosOsNos: WhiteboardNode[]): Ponto[] {
-  let pontos: Ponto[] = [pontoNaBorda(from, center(to)), pontoNaBorda(to, center(from))];
+  let pontos: Ponto[] = caminhoBaseEmCotovelo(from, to);
   const obstaculos = todosOsNos.filter((n) => n.id !== from.id && n.id !== to.id).map((n) => retanguloDoNo(n));
   if (obstaculos.length === 0) return pontos;
 
