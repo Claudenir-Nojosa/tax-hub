@@ -120,38 +120,46 @@ function pontoNoLado(node: WhiteboardNode, lado: LadoCartao): Ponto {
   }
 }
 
-// caminho em "cotovelo" (90°) no estilo mapa mental: se o alvo está mais deslocado NA LATERAL,
-// sai por cima/baixo do cartão de origem (o lado voltado pra direção do alvo), anda reto até a
-// ALTURA do alvo e só então dobra reto até a lateral dele voltada pra origem. Se o alvo está mais
-// deslocado NA VERTICAL, é o espelho: sai pela lateral, anda até a COLUNA do alvo, dobra reto até
-// cima/baixo dele. Sempre 2 segmentos retos com uma única dobra de 90° — nunca diagonal.
+// caminho em "cotovelo" (90°) no estilo mapa mental: quando o par de cartões está mais lado a
+// lado, o cartão da ESQUERDA sempre sai por cima/baixo (o lado voltado pra altura do outro), anda
+// reto até a ALTURA do outro e só então dobra reto até a lateral esquerda dele. Quando o par está
+// mais empilhado, é o espelho: o de CIMA sai pela lateral (voltada pro outro), anda até a COLUNA
+// do outro, dobra reto até o topo dele. Baseado só na posição dos dois cartões (esquerda/direita,
+// cima/baixo) — nunca em qual dos dois é "from"/"to" na conexão salva, senão o mesmo par de
+// cartões desenharia formas diferentes dependendo da direção em que a conexão foi criada.
 function caminhoBaseEmCotovelo(from: WhiteboardNode, to: WhiteboardNode): Ponto[] {
   const cFrom = center(from);
   const cTo = center(to);
   const dx = cTo.x - cFrom.x;
   const dy = cTo.y - cFrom.y;
 
-  let saida: Ponto;
+  let pontoFrom: Ponto;
+  let pontoTo: Ponto;
   let cotovelo: Ponto;
-  let entrada: Ponto;
 
   if (Math.abs(dx) >= Math.abs(dy)) {
-    const ladoSaida: LadoCartao = dy <= 0 ? "top" : "bottom";
-    const ladoEntrada: LadoCartao = dx >= 0 ? "left" : "right";
-    saida = pontoNoLado(from, ladoSaida);
-    entrada = pontoNoLado(to, ladoEntrada);
-    cotovelo = { x: saida.x, y: entrada.y };
+    const fromEhEsquerda = cFrom.x <= cTo.x;
+    const [noEsquerda, noDireita] = fromEhEsquerda ? [from, to] : [to, from];
+    const [cEsquerda, cDireita] = fromEhEsquerda ? [cFrom, cTo] : [cTo, cFrom];
+    const ladoSaidaEsquerda: LadoCartao = cDireita.y <= cEsquerda.y ? "top" : "bottom";
+    const pontoEsquerda = pontoNoLado(noEsquerda, ladoSaidaEsquerda);
+    const pontoDireita = pontoNoLado(noDireita, "left");
+    cotovelo = { x: pontoEsquerda.x, y: pontoDireita.y };
+    [pontoFrom, pontoTo] = fromEhEsquerda ? [pontoEsquerda, pontoDireita] : [pontoDireita, pontoEsquerda];
   } else {
-    const ladoSaida: LadoCartao = dx >= 0 ? "right" : "left";
-    const ladoEntrada: LadoCartao = dy >= 0 ? "top" : "bottom";
-    saida = pontoNoLado(from, ladoSaida);
-    entrada = pontoNoLado(to, ladoEntrada);
-    cotovelo = { x: entrada.x, y: saida.y };
+    const fromEhCima = cFrom.y <= cTo.y;
+    const [noCima, noBaixo] = fromEhCima ? [from, to] : [to, from];
+    const [cCima, cBaixo] = fromEhCima ? [cFrom, cTo] : [cTo, cFrom];
+    const ladoSaidaCima: LadoCartao = cBaixo.x <= cCima.x ? "left" : "right";
+    const pontoCima = pontoNoLado(noCima, ladoSaidaCima);
+    const pontoBaixo = pontoNoLado(noBaixo, "top");
+    cotovelo = { x: pontoBaixo.x, y: pontoCima.y };
+    [pontoFrom, pontoTo] = fromEhCima ? [pontoCima, pontoBaixo] : [pontoBaixo, pontoCima];
   }
 
   const quaseIgual = (p: Ponto, q: Ponto) => Math.abs(p.x - q.x) < 1 && Math.abs(p.y - q.y) < 1;
-  if (quaseIgual(saida, cotovelo) || quaseIgual(cotovelo, entrada)) return [saida, entrada];
-  return [saida, cotovelo, entrada];
+  if (quaseIgual(pontoFrom, cotovelo) || quaseIgual(cotovelo, pontoTo)) return [pontoFrom, pontoTo];
+  return [pontoFrom, cotovelo, pontoTo];
 }
 
 function cross(o: Ponto, a: Ponto, b: Ponto): number {
