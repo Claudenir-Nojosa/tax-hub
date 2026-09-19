@@ -120,6 +120,14 @@ function pontoNoLado(node: WhiteboardNode, lado: LadoCartao): Ponto {
   }
 }
 
+// abaixo desse desnível horizontal, os dois cartões contam como "na mesma coluna" (empilhados) —
+// acima disso, sempre trata como lado a lado, mesmo que o desnível vertical seja bem maior. Sem
+// esse piso, um cartão só um pouco deslocado pro lado (comum numa lista tipo checklist, com vários
+// cartões-filho abaixo de um cartão-título) cai no modo empilhado por ter mais altura que largura
+// de desnível — e cada irmão escolhe um modo diferente, ficando com um "leque" torto em vez de um
+// pente limpo (uma linha embaixo da outra).
+const LIMIAR_LADO_A_LADO = 60;
+
 // caminho em "cotovelo" (90°) no estilo mapa mental: quando o par de cartões está mais lado a
 // lado, o cartão da ESQUERDA sempre sai por cima/baixo (o lado voltado pra altura do outro), anda
 // reto até a ALTURA do outro e só então dobra reto até a lateral esquerda dele. Quando o par está
@@ -137,7 +145,7 @@ function caminhoBaseEmCotovelo(from: WhiteboardNode, to: WhiteboardNode): Ponto[
   let pontoTo: Ponto;
   let cotovelo: Ponto;
 
-  if (Math.abs(dx) >= Math.abs(dy)) {
+  if (Math.abs(dx) >= LIMIAR_LADO_A_LADO || Math.abs(dx) >= Math.abs(dy)) {
     const fromEhEsquerda = cFrom.x <= cTo.x;
     const [noEsquerda, noDireita] = fromEhEsquerda ? [from, to] : [to, from];
     const [cEsquerda, cDireita] = fromEhEsquerda ? [cFrom, cTo] : [cTo, cFrom];
